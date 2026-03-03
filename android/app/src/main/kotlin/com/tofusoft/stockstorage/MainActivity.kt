@@ -1,4 +1,4 @@
-package com.stockstorage.stockstorage
+package com.tofusoft.stockstorage
 
 import io.flutter.embedding.android.FlutterActivity
 

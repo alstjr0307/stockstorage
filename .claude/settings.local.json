@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter devices)",
+      "Bash(flutter run -d chrome)",
+      "Bash(flutterfire --version)",
+      "Bash(dart pub global activate flutterfire_cli)",
+      "Bash(/c/Users/alswp/AppData/Local/Pub/Cache/bin/flutterfire configure --project=stockstorage-13828 --platforms=android,ios,web --yes)",
+      "Read(//c/Users/alswp/AppData/Local/Pub/Cache/bin//**)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\alswp\\stockstorage"
+    ]
+  }
+}

@@ -14,14 +14,22 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> signUp(String email, String password) async {
-    await _authService.signUpWithEmail(email, password);
+  Future<User?> signUp(String email, String password) async {
+    final cred = await _authService.signUpWithEmail(email, password);
     notifyListeners();
+    return cred.user;
   }
 
-  Future<void> signInWithGoogle() async {
-    await _authService.signInWithGoogle();
+  Future<User?> signInWithGoogle() async {
+    final cred = await _authService.signInWithGoogle();
     notifyListeners();
+    return cred?.user;
+  }
+
+  Future<User?> signInWithKakao() async {
+    final cred = await _authService.signInWithKakao();
+    notifyListeners();
+    return cred?.user;
   }
 
   Future<void> signOut() async {

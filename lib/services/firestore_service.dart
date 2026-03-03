@@ -1,4 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/announcement.dart';
+import '../models/comment.dart';
+import '../models/market_analysis.dart';
 import '../models/stock_pick.dart';
 
 class FirestoreService {
@@ -13,8 +16,10 @@ class FirestoreService {
       query = query.where('isPremium', isEqualTo: true);
     }
 
-    return query.snapshots().map((snapshot) =>
-        snapshot.docs.map((doc) => StockPick.fromFirestore(doc)).toList());
+    return query.snapshots().map((snapshot) => snapshot.docs
+        .map((doc) => StockPick.fromFirestore(doc))
+        .where((p) => !p.isCompleted)
+        .toList());
   }
 
   Future<void> addStockPick(StockPick pick) {
@@ -22,13 +27,182 @@ class FirestoreService {
   }
 
   Future<void> updateStockPick(StockPick pick) {
-    return _db
-        .collection('stock_picks')
-        .doc(pick.id)
-        .update(pick.toFirestore());
+    return _db.collection('stock_picks').doc(pick.id).update(pick.toFirestore());
   }
 
   Future<void> deleteStockPick(String id) {
     return _db.collection('stock_picks').doc(id).delete();
+  }
+
+  // ── 공지사항 ──────────────────────────────────────────────────────────
+  Stream<List<Announcement>> getAnnouncements() {
+    return _db
+        .collection('announcements')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((s) {
+          final list = s.docs.map((d) => Announcement.fromFirestore(d)).toList();
+          list.sort((a, b) {
+            if (a.isPinned == b.isPinned) return 0;
+            return a.isPinned ? -1 : 1;
+          });
+          return list;
+        });
+  }
+
+  Future<void> addAnnouncement(Announcement a) {
+    return _db.collection('announcements').add(a.toFirestore());
+  }
+
+  Future<void> updateAnnouncement(Announcement a) {
+    return _db.collection('announcements').doc(a.id).update(a.toFirestore());
+  }
+
+  Future<void> deleteAnnouncement(String id) {
+    return _db.collection('announcements').doc(id).delete();
+  }
+
+  // ── 닉네임 ────────────────────────────────────────────────────────────
+  Future<String?> getNickname(String uid) async {
+    final doc = await _db.collection('users').doc(uid).get();
+    return doc.data()?['nickname'] as String?;
+  }
+
+  Future<void> setNickname(String uid, String nickname) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .set({'nickname': nickname}, SetOptions(merge: true));
+  }
+
+  // ── 관심종목 ──────────────────────────────────────────────────────────
+  Stream<List<String>> getFavoriteIds(String uid) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .snapshots()
+        .map((doc) => List<String>.from(doc.data()?['favorites'] ?? []));
+  }
+
+  Future<void> toggleFavorite(String uid, String pickId, bool isCurrentlyFav) {
+    final ref = _db.collection('users').doc(uid);
+    if (isCurrentlyFav) {
+      return ref.set({'favorites': FieldValue.arrayRemove([pickId])},
+          SetOptions(merge: true));
+    } else {
+      return ref.set({'favorites': FieldValue.arrayUnion([pickId])},
+          SetOptions(merge: true));
+    }
+  }
+
+  // ── 종료 추천주 ───────────────────────────────────────────────────────
+  Future<void> closeStockPick(String id, double closedPrice) {
+    return _db.collection('stock_picks').doc(id).update({
+      'status': 'completed',
+      'closedPrice': closedPrice,
+      'closedAt': Timestamp.fromDate(DateTime.now()),
+    });
+  }
+
+  Stream<List<StockPick>> getCompletedPicks() {
+    return _db
+        .collection('stock_picks')
+        .where('status', isEqualTo: 'completed')
+        .snapshots()
+        .map((s) {
+          final list = s.docs.map((d) => StockPick.fromFirestore(d)).toList();
+          list.sort((a, b) =>
+              (b.closedAt ?? DateTime(0)).compareTo(a.closedAt ?? DateTime(0)));
+          return list;
+        });
+  }
+
+  // ── 시황 분석 ─────────────────────────────────────────────────────────
+  Stream<List<MarketAnalysis>> getMarketAnalyses() {
+    return _db
+        .collection('market_analyses')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((s) => s.docs.map((d) => MarketAnalysis.fromFirestore(d)).toList());
+  }
+
+  Future<void> addMarketAnalysis(MarketAnalysis a) {
+    return _db.collection('market_analyses').add(a.toFirestore());
+  }
+
+  Future<void> updateMarketAnalysis(MarketAnalysis a) {
+    return _db.collection('market_analyses').doc(a.id).update(a.toFirestore());
+  }
+
+  Future<void> deleteMarketAnalysis(String id) {
+    return _db.collection('market_analyses').doc(id).delete();
+  }
+
+  // ── 코멘트 ────────────────────────────────────────────────────────────
+  Stream<List<Comment>> getComments(String pickId) {
+    return _db
+        .collection('stock_picks')
+        .doc(pickId)
+        .collection('comments')
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map((s) => s.docs.map((d) => Comment.fromFirestore(d)).toList());
+  }
+
+  Future<void> addComment(String pickId, Comment comment) {
+    return _db
+        .collection('stock_picks')
+        .doc(pickId)
+        .collection('comments')
+        .add(comment.toFirestore());
+  }
+
+  Future<void> deleteComment(String pickId, String commentId) {
+    return _db
+        .collection('stock_picks')
+        .doc(pickId)
+        .collection('comments')
+        .doc(commentId)
+        .delete();
+  }
+
+  // ── 알림 큐 ───────────────────────────────────────────────────────────
+  Future<void> queueNotification(String title, String body) {
+    return _db.collection('notification_queue').add({
+      'title': title,
+      'body': body,
+      'createdAt': Timestamp.fromDate(DateTime.now()),
+    });
+  }
+
+  // ── FCM 토큰 ─────────────────────────────────────────────────────────
+  Future<void> saveFcmToken(String token) {
+    return _db.collection('fcm_tokens').doc(token).set({
+      'token': token,
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    });
+  }
+
+  // ── 투자 메모 (users/{uid}/memos/{pickId}) ────────────────────────────
+  Future<String?> getMemo(String uid, String pickId) async {
+    final doc = await _db
+        .collection('users')
+        .doc(uid)
+        .collection('memos')
+        .doc(pickId)
+        .get();
+    return doc.data()?['text'] as String?;
+  }
+
+  Future<void> saveMemo(String uid, String pickId, String text) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('memos')
+        .doc(pickId)
+        .set({
+      'text': text,
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    });
   }
 }

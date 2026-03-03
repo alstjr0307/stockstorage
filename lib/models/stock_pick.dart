@@ -7,11 +7,15 @@ class StockPick {
   final double buyPrice;
   final double targetPrice;
   final String reason;
-  final String category; // 단기, 중기, 장기
+  final String category; // 단기, 장기
+  final String market;   // KS(KOSPI), KQ(KOSDAQ), US(미국)
   final bool isPremium;
   final DateTime createdAt;
   final String? imageUrl;
   double? currentPrice;
+  final String status; // active, completed
+  final double? closedPrice;
+  final DateTime? closedAt;
 
   StockPick({
     required this.id,
@@ -21,13 +25,21 @@ class StockPick {
     required this.targetPrice,
     required this.reason,
     required this.category,
+    this.market = 'KS',
     required this.isPremium,
     required this.createdAt,
     this.imageUrl,
     this.currentPrice,
+    this.status = 'active',
+    this.closedPrice,
+    this.closedAt,
   });
 
   double get returnRate => ((targetPrice - buyPrice) / buyPrice) * 100;
+  double get actualReturnRate => closedPrice != null
+      ? ((closedPrice! - buyPrice) / buyPrice) * 100
+      : returnRate;
+  bool get isCompleted => status == 'completed';
 
   factory StockPick.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -39,10 +51,14 @@ class StockPick {
       targetPrice: (data['targetPrice'] ?? 0).toDouble(),
       reason: data['reason'] ?? '',
       category: data['category'] ?? '단기',
+      market: data['market'] ?? 'KS',
       isPremium: data['isPremium'] ?? false,
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       imageUrl: data['imageUrl'],
       currentPrice: data['currentPrice']?.toDouble(),
+      status: data['status'] ?? 'active',
+      closedPrice: data['closedPrice']?.toDouble(),
+      closedAt: (data['closedAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -54,10 +70,14 @@ class StockPick {
       'targetPrice': targetPrice,
       'reason': reason,
       'category': category,
+      'market': market,
       'isPremium': isPremium,
       'createdAt': Timestamp.fromDate(createdAt),
       'imageUrl': imageUrl,
       'currentPrice': currentPrice,
+      'status': status,
+      if (closedPrice != null) 'closedPrice': closedPrice,
+      if (closedAt != null) 'closedAt': Timestamp.fromDate(closedAt!),
     };
   }
 }
