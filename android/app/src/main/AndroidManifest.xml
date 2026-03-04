@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <application
         android:label="stockstorage"
         android:name="${applicationName}"
@@ -23,6 +24,17 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <!-- 카카오 로그인 리다이렉트 URI -->
+        <activity android:name="com.kakao.sdk.flutter.AuthCodeCustomTabsActivity"
+            android:exported="true"
+            tools:node="merge">
+            <intent-filter android:label="flutter_web_auth">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="kakao23dd91427bb7ac2055aab304681da522" />
             </intent-filter>
         </activity>
         <!-- AdMob App ID -->

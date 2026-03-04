@@ -49,7 +49,12 @@ class AuthService {
     // 카카오 앱 또는 웹으로 로그인
     try {
       if (await kakao.isKakaoTalkInstalled()) {
-        await kakao.UserApi.instance.loginWithKakaoTalk();
+        try {
+          await kakao.UserApi.instance.loginWithKakaoTalk();
+        } catch (_) {
+          // 카카오톡 앱 로그인 실패 시 웹 로그인으로 폴백
+          await kakao.UserApi.instance.loginWithKakaoAccount();
+        }
       } else {
         await kakao.UserApi.instance.loginWithKakaoAccount();
       }
