@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -17,6 +18,12 @@ class NotificationService {
       badge: true,
       sound: true,
     );
+
+    // iOS에서 APNS 토큰 대기 후 FCM 토큰 요청
+    if (Platform.isIOS) {
+      final apnsToken = await messaging.getAPNSToken();
+      if (apnsToken == null) return; // 시뮬레이터 등 APNS 미지원 환경
+    }
 
     // FCM 토큰 저장
     final token = await messaging.getToken();

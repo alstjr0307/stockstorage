@@ -83,7 +83,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
   final Set<String> _loadingIds = {};
 
   void _fetchPriceIfNeeded(StockPick pick) {
-    if (_loadingIds.contains(pick.id)) return;
+    if (_loadingIds.contains(pick.id) || _prices.containsKey(pick.id)) return;
     _loadingIds.add(pick.id);
     StockPriceService.fetchPrice(pick.ticker, pick.market).then((result) {
       if (mounted) {

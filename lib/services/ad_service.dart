@@ -18,7 +18,7 @@ class AdService {
           : 'ca-app-pub-3940256099942544/2934735716';
     }
     if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/8465933202';
-    return 'ca-app-pub-3940256099942544/2934735716'; // iOS 실제 ID로 교체
+    return 'ca-app-pub-6925657557995580/6772176184';
   }
 
   static String get _interstitialAdUnitId {
@@ -29,7 +29,7 @@ class AdService {
           : 'ca-app-pub-3940256099942544/4411468910';
     }
     if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/5598098844';
-    return 'ca-app-pub-3940256099942544/4411468910'; // iOS 실제 ID로 교체
+    return 'ca-app-pub-6925657557995580/5025289757';
   }
 
   // ── 배너 광고 ─────────────────────────────────────────────────────────

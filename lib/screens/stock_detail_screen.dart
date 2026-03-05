@@ -1,5 +1,5 @@
+import 'dart:ui' as ui show TextDirection;
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -12,6 +12,19 @@ import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
 
+typedef _OHLC = ({DateTime date, double open, double high, double low, double close});
+
+enum _Period {
+  day1('1일봉', '1d', '1mo'),
+  week('주봉', '1wk', '6mo'),
+  month('월봉', '1mo', '2y');
+
+  const _Period(this.label, this.interval, this.range);
+  final String label;
+  final String interval;
+  final String range;
+}
+
 class StockDetailScreen extends StatefulWidget {
   final StockPick pick;
   const StockDetailScreen({super.key, required this.pick});
@@ -23,8 +36,25 @@ class StockDetailScreen extends StatefulWidget {
 class _StockDetailScreenState extends State<StockDetailScreen> {
   PriceResult? _livePrice;
   bool _loadingPrice = true;
-  List<double> _chartData = [];
+  List<_OHLC> _candles = [];
   bool _loadingChart = true;
+  int? _touchedIndex;
+  _Period _selectedPeriod = _Period.day1;
+
+  // 줌/패닝 상태
+  int _visibleCount = 0;
+  int _startIdx = 0;
+  int _visibleCountAtScaleStart = 0;
+  int _startIdxAtScaleStart = 0;
+  double _focalFractionAtScaleStart = 0;
+  Offset? _lastFocalPoint;
+
+  List<_OHLC> get _displayCandles {
+    if (_candles.isEmpty) return [];
+    final count = _visibleCount > 0 ? _visibleCount.clamp(1, _candles.length) : _candles.length;
+    final start = _startIdx.clamp(0, _candles.length - count);
+    return _candles.sublist(start, start + count);
+  }
 
   final _commentController = TextEditingController();
   final _memoController = TextEditingController();
@@ -32,6 +62,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   bool _submitting = false;
   bool _memoSaving = false;
   bool _memoChanged = false;
+  bool _showComments = false;
 
   User? get _currentUser => FirebaseAuth.instance.currentUser;
 
@@ -95,11 +126,89 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   }
 
   Future<void> _fetchChart() async {
-    final data = await StockPriceService.fetchHistory(
+    final data = await StockPriceService.fetchOHLC(
       widget.pick.ticker,
       widget.pick.market,
+      interval: _selectedPeriod.interval,
+      range: _selectedPeriod.range,
     );
-    if (mounted) setState(() { _chartData = data; _loadingChart = false; });
+    if (mounted) setState(() {
+      _candles = data;
+      _loadingChart = false;
+      _visibleCount = 0;
+      _startIdx = 0;
+    });
+  }
+
+  void _selectPeriod(_Period period) {
+    if (_selectedPeriod == period) return;
+    setState(() {
+      _selectedPeriod = period;
+      _loadingChart = true;
+      _touchedIndex = null;
+      _visibleCount = 0;
+      _startIdx = 0;
+    });
+    _fetchChart();
+  }
+
+  void _onTouch(double localX, double chartW) {
+    final dc = _displayCandles;
+    if (dc.isEmpty) return;
+    const yAxisW = 46.0;
+    final candleAreaW = chartW - yAxisW;
+    final adjustedX = (localX - yAxisW).clamp(0.0, candleAreaW);
+    final candleWidth = candleAreaW / dc.length;
+    final idx = (adjustedX / candleWidth).floor().clamp(0, dc.length - 1);
+    if (_touchedIndex != idx) setState(() => _touchedIndex = idx);
+  }
+
+  void _onScaleStart(ScaleStartDetails d, double chartW) {
+    const yAxisW = 46.0;
+    final candleAreaW = chartW - yAxisW;
+    _visibleCountAtScaleStart = _visibleCount > 0 ? _visibleCount : _candles.length;
+    _startIdxAtScaleStart = _startIdx;
+    final adjustedX = (d.localFocalPoint.dx - yAxisW).clamp(0.0, candleAreaW);
+    _focalFractionAtScaleStart = (adjustedX / candleAreaW).clamp(0.0, 1.0);
+    _lastFocalPoint = d.localFocalPoint;
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails d, double chartW) {
+    const yAxisW = 46.0;
+    final candleAreaW = chartW - yAxisW;
+    if (d.pointerCount >= 2) {
+      final newCount = (_visibleCountAtScaleStart / d.scale)
+          .round()
+          .clamp(5, _candles.length);
+      final focalCandle = _startIdxAtScaleStart +
+          (_focalFractionAtScaleStart * _visibleCountAtScaleStart).round();
+      final newStart = (focalCandle - (_focalFractionAtScaleStart * newCount).round())
+          .clamp(0, (_candles.length - newCount).clamp(0, _candles.length));
+      setState(() {
+        _visibleCount = newCount;
+        _startIdx = newStart;
+        _touchedIndex = null;
+        _lastFocalPoint = d.localFocalPoint;
+      });
+    } else {
+      final prev = _lastFocalPoint;
+      _lastFocalPoint = d.localFocalPoint;
+      final vc = _visibleCount > 0 ? _visibleCount : _candles.length;
+      if (prev != null && vc < _candles.length) {
+        final dx = prev.dx - d.localFocalPoint.dx;
+        final candleWidth = candleAreaW / vc;
+        final delta = (dx / candleWidth).round();
+        final maxStart = _candles.length - vc;
+        final newStart = (_startIdx + delta).clamp(0, maxStart);
+        if (newStart != _startIdx) setState(() => _startIdx = newStart);
+      }
+      _onTouch(d.localFocalPoint.dx, chartW);
+    }
+  }
+
+  void _onScaleEnd(ScaleEndDetails d) {
+    _lastFocalPoint = null;
+    setState(() => _touchedIndex = null);
   }
 
   void _shareStock() {
@@ -310,7 +419,11 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             ],
 
             // 코멘트 섹션
-            _commentSection(),
+            _commentToggleButton(),
+            if (_showComments) ...[
+              const SizedBox(height: 10),
+              _commentSection(),
+            ],
             const SizedBox(height: 8),
           ],
         ),
@@ -325,35 +438,31 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   Widget _chartCard() {
     if (_loadingChart) {
       return Container(
-        height: 140,
+        height: 280,
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
           color: const Color(0xFF1A2035),
           borderRadius: BorderRadius.circular(16),
         ),
         child: const Center(
-          child: CircularProgressIndicator(
-              strokeWidth: 2, color: Color(0xFF4ADE80)),
+          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4ADE80)),
         ),
       );
     }
-    if (_chartData.length < 2) return const SizedBox.shrink();
+    if (_candles.length < 2) return const SizedBox.shrink();
 
-    final spots = _chartData
-        .asMap()
-        .entries
-        .map((e) => FlSpot(e.key.toDouble(), e.value))
-        .toList();
-    final minY = _chartData.reduce((a, b) => a < b ? a : b);
-    final maxY = _chartData.reduce((a, b) => a > b ? a : b);
-    final isPositive = _chartData.last >= _chartData.first;
-    final lineColor =
-        isPositive ? const Color(0xFF4ADE80) : Colors.redAccent;
+    final dc = _displayCandles;
+    final firstClose = dc.first.close;
+    final lastClose = dc.last.close;
+    final changePct = ((lastClose - firstClose) / firstClose) * 100;
+    final sign = changePct >= 0 ? '+' : '';
+    final touched = _touchedIndex != null && _touchedIndex! < dc.length
+        ? dc[_touchedIndex!]
+        : null;
 
     return Container(
-      height: 140,
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+      padding: const EdgeInsets.fromLTRB(8, 16, 12, 12),
       decoration: BoxDecoration(
         color: const Color(0xFF1A2035),
         borderRadius: BorderRadius.circular(16),
@@ -361,40 +470,127 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '1개월 차트',
-            style: GoogleFonts.inter(
-                color: Colors.white54,
-                fontSize: 11,
-                fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 6),
-          Expanded(
-            child: LineChart(
-              LineChartData(
-                minY: minY * 0.995,
-                maxY: maxY * 1.005,
-                gridData: const FlGridData(show: false),
-                titlesData: const FlTitlesData(show: false),
-                borderData: FlBorderData(show: false),
-                lineTouchData: const LineTouchData(enabled: false),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: spots,
-                    isCurved: true,
-                    color: lineColor,
-                    barWidth: 2,
-                    dotData: const FlDotData(show: false),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: lineColor.withValues(alpha: 0.08),
+          // 헤더: 기간 선택 + 변동률
+          Padding(
+            padding: const EdgeInsets.only(left: 8, bottom: 10),
+            child: Row(
+              children: [
+                ..._Period.values.map((p) => GestureDetector(
+                  onTap: () => _selectPeriod(p),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _selectedPeriod == p
+                          ? const Color(0xFF4ADE80).withValues(alpha: 0.2)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: _selectedPeriod == p
+                            ? const Color(0xFF4ADE80).withValues(alpha: 0.5)
+                            : Colors.white12,
+                      ),
+                    ),
+                    child: Text(
+                      p.label,
+                      style: GoogleFonts.inter(
+                        color: _selectedPeriod == p
+                            ? const Color(0xFF4ADE80)
+                            : Colors.white38,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ],
-              ),
+                )),
+                const Spacer(),
+                Text('$sign${changePct.toStringAsFixed(2)}%',
+                    style: GoogleFonts.inter(
+                      color: changePct >= 0 ? const Color(0xFF4ADE80) : Colors.redAccent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    )),
+              ],
             ),
           ),
+
+          // 터치 툴팁
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 150),
+            child: touched != null
+                ? Padding(
+                    key: ValueKey(_touchedIndex),
+                    padding: const EdgeInsets.only(left: 8, bottom: 8),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          Text(
+                            _selectedPeriod == _Period.month
+                                ? DateFormat('yyyy년 MM월').format(touched.date)
+                                : DateFormat('MM월 dd일').format(touched.date),
+                            style: GoogleFonts.inter(color: Colors.white54, fontSize: 10),
+                          ),
+                          const SizedBox(width: 12),
+                          _ohlcLabel('시', touched.open),
+                          _ohlcLabel('고', touched.high, color: const Color(0xFF4ADE80)),
+                          _ohlcLabel('저', touched.low, color: Colors.redAccent),
+                          _ohlcLabel('종', touched.close,
+                              color: touched.close >= touched.open
+                                  ? const Color(0xFF4ADE80)
+                                  : Colors.redAccent),
+                        ],
+                      ),
+                    ),
+                  )
+                : const SizedBox(key: ValueKey('empty'), height: 18),
+          ),
+
+          // 차트
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final chartW = constraints.maxWidth;
+              return GestureDetector(
+                onTapDown: (d) => _onTouch(d.localPosition.dx, chartW),
+                onScaleStart: (d) => _onScaleStart(d, chartW),
+                onScaleUpdate: (d) => _onScaleUpdate(d, chartW),
+                onScaleEnd: _onScaleEnd,
+                child: CustomPaint(
+                  size: Size(chartW, 200),
+                  painter: _StockCandlePainter(
+                    candles: dc,
+                    touchedIndex: _touchedIndex,
+                    formatValue: (v) => _formatPrice(v, widget.pick.market),
+                    formatDate: _selectedPeriod == _Period.month
+                        ? (d) => DateFormat('yy/MM').format(d)
+                        : (d) => DateFormat('MM/dd').format(d),
+                  ),
+                ),
+              );
+            },
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _ohlcLabel(String label, double value, {Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 10),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+                text: '$label ',
+                style: GoogleFonts.inter(color: Colors.white38, fontSize: 10)),
+            TextSpan(
+                text: _formatPrice(value, widget.pick.market),
+                style: GoogleFonts.robotoMono(
+                    color: color ?? Colors.white70,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600)),
+          ],
+        ),
       ),
     );
   }
@@ -414,41 +610,42 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
           Text('현재가',
               style: GoogleFonts.inter(color: Colors.white38, fontSize: 12)),
           const SizedBox(width: 12),
-          if (_loadingPrice)
-            const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Color(0xFF4ADE80)),
-            )
-          else if (_livePrice == null)
-            Text('조회 불가',
-                style: GoogleFonts.inter(color: Colors.white24, fontSize: 13))
-          else ...[
-            Text(
-              _livePrice!.formattedPrice,
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 18,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              _livePrice!.formattedChange,
-              style: GoogleFonts.inter(
-                color: _livePrice!.isUp
-                    ? const Color(0xFF4ADE80)
-                    : Colors.redAccent,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-          const Spacer(),
-          Text(
-            '3분 캐시',
-            style: GoogleFonts.inter(color: Colors.white12, fontSize: 10),
+          Expanded(
+            child: _loadingPrice
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Color(0xFF4ADE80)),
+                  )
+                : _livePrice == null
+                    ? Text('조회 불가',
+                        style: GoogleFonts.inter(
+                            color: Colors.white24, fontSize: 13))
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _livePrice!.formattedPrice,
+                            style: GoogleFonts.inter(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 18,
+                            ),
+                          ),
+                          Text(
+                            _livePrice!.formattedChange,
+                            style: GoogleFonts.inter(
+                              color: _livePrice!.isUp
+                                  ? const Color(0xFF4ADE80)
+                                  : Colors.redAccent,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
           ),
         ],
       ),
@@ -579,6 +776,41 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     );
   }
 
+  // ── 코멘트 토글 버튼 ─────────────────────────────────────────────────────
+  Widget _commentToggleButton() {
+    return GestureDetector(
+      onTap: () => setState(() => _showComments = !_showComments),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A2035),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.chat_bubble_outline,
+                color: Colors.white38, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              '코멘트',
+              style: GoogleFonts.inter(
+                  color: Colors.white54,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            Icon(
+              _showComments ? Icons.expand_less : Icons.expand_more,
+              color: Colors.white38,
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── 코멘트 목록 ──────────────────────────────────────────────────────────
   Widget _commentSection() {
     return Column(
@@ -590,9 +822,9 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
           stream: _firestoreService.getComments(widget.pick.id),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
+              return const SizedBox(
+                height: 48,
+                child: Center(
                   child: CircularProgressIndicator(
                       strokeWidth: 2, color: Color(0xFF4ADE80)),
                 ),
@@ -760,7 +992,129 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         createdAt: DateTime.now(),
       ),
     );
-    _commentController.clear();
-    if (mounted) setState(() => _submitting = false);
+    if (mounted) {
+      _commentController.clear();
+      setState(() => _submitting = false);
+    }
   }
+}
+
+class _StockCandlePainter extends CustomPainter {
+  final List<_OHLC> candles;
+  final int? touchedIndex;
+  final String Function(double) formatValue;
+  final String Function(DateTime) formatDate;
+
+  _StockCandlePainter({
+    required this.candles,
+    required this.touchedIndex,
+    required this.formatValue,
+    required this.formatDate,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (candles.isEmpty) return;
+
+    const xLabelH = 18.0;
+    const yAxisW = 46.0;
+    final chartH = size.height - xLabelH;
+    final chartW = size.width - yAxisW;
+
+    final allHigh = candles.map((c) => c.high).reduce((a, b) => a > b ? a : b);
+    final allLow = candles.map((c) => c.low).reduce((a, b) => a < b ? a : b);
+    final range = allHigh - allLow;
+    if (range == 0) return;
+
+    final pad = range * 0.08;
+    final minY = allLow - pad;
+    final maxY = allHigh + pad;
+    final yRange = maxY - minY;
+
+    double toY(double v) => chartH - ((v - minY) / yRange) * chartH;
+    double toX(int i, int n) => yAxisW + chartW * i / n + chartW / n / 2;
+
+    canvas.save();
+    canvas.clipRect(Rect.fromLTWH(yAxisW, 0, chartW, chartH));
+
+    // 그리드
+    final gridPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.05)
+      ..strokeWidth = 1;
+    for (int i = 1; i <= 3; i++) {
+      final y = chartH * i / 4;
+      canvas.drawLine(Offset(yAxisW, y), Offset(size.width, y), gridPaint);
+    }
+
+    final n = candles.length;
+    for (int i = 0; i < n; i++) {
+      final c = candles[i];
+      final isGreen = c.close >= c.open;
+      final baseColor = isGreen ? const Color(0xFF4ADE80) : Colors.redAccent;
+      final color = touchedIndex == i ? Colors.white : baseColor;
+
+      final totalCandleW = chartW / n;
+      final bodyW = (totalCandleW * 0.6).clamp(2.0, 10.0);
+      final cx = toX(i, n);
+
+      canvas.drawLine(Offset(cx, toY(c.high)), Offset(cx, toY(c.low)),
+          Paint()..color = color..strokeWidth = 1);
+
+      final top = toY(isGreen ? c.close : c.open);
+      final bottom = toY(isGreen ? c.open : c.close);
+      final bodyH = (bottom - top).abs().clamp(1.0, double.infinity);
+      canvas.drawRect(
+        Rect.fromLTWH(cx - bodyW / 2, top, bodyW, bodyH),
+        Paint()..color = color,
+      );
+    }
+
+    // 십자선
+    if (touchedIndex != null) {
+      final cx = toX(touchedIndex!, n);
+      canvas.drawLine(Offset(cx, 0), Offset(cx, chartH),
+          Paint()
+            ..color = Colors.white.withValues(alpha: 0.2)
+            ..strokeWidth = 1);
+    }
+
+    canvas.restore();
+
+    // Y축 레이블
+    for (int i = 1; i <= 3; i++) {
+      final v = minY + yRange * (1 - i / 4);
+      final tp = TextPainter(
+        text: TextSpan(
+          text: formatValue(v),
+          style: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 8,
+              fontFamily: 'RobotoMono'),
+        ),
+        textDirection: ui.TextDirection.ltr,
+      )..layout();
+      final y = (chartH * i / 4 - tp.height / 2).clamp(0.0, chartH - tp.height);
+      tp.paint(canvas, Offset(0, y));
+    }
+
+    // X축 레이블
+    const labelCount = 5;
+    final labelStyle = TextStyle(
+      color: Colors.white.withValues(alpha: 0.35),
+      fontSize: 8,
+      fontFamily: 'RobotoMono',
+    );
+    for (int i = 0; i < labelCount; i++) {
+      final idx = ((n - 1) * i / (labelCount - 1)).round().clamp(0, n - 1);
+      final cx = toX(idx, n);
+      final tp = TextPainter(
+        text: TextSpan(text: formatDate(candles[idx].date), style: labelStyle),
+        textDirection: ui.TextDirection.ltr,
+      )..layout();
+      final x = (cx - tp.width / 2).clamp(yAxisW, size.width - tp.width);
+      tp.paint(canvas, Offset(x, chartH + 4));
+    }
+  }
+
+  @override
+  bool shouldRepaint(_StockCandlePainter old) =>
+      old.candles != candles || old.touchedIndex != touchedIndex;
 }

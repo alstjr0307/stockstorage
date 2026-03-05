@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/market_analysis.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
+import 'index_detail_screen.dart';
 
 class MarketAnalysisScreen extends StatefulWidget {
   const MarketAnalysisScreen({super.key});
@@ -90,7 +91,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             physics: const NeverScrollableScrollPhysics(),
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
-            childAspectRatio: 2.4,
+            childAspectRatio: 2.0,
             children: _indices.map((e) => _buildIndexCard(e.$1)).toList(),
           ),
           const SizedBox(height: 28),
@@ -140,11 +141,23 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   }
 
   Widget _buildIndexCard(String name) {
+    final entry = _indices.firstWhere((e) => e.$1 == name);
     final result = _prices[name];
     final isUp = result?.isUp ?? true;
     final color = isUp ? const Color(0xFF4ADE80) : Colors.redAccent;
 
-    return Container(
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => IndexDetailScreen(
+            name: name,
+            symbol: entry.$2,
+            initialPrice: result,
+          ),
+        ),
+      ),
+      child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFF1A2035),
@@ -176,6 +189,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           else ...[
             Text(
               _formatValue(name, result),
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.inter(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
@@ -183,11 +197,13 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             ),
             Text(
               '${isUp ? '+' : ''}${result.changeRate.toStringAsFixed(2)}%',
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.inter(
                   color: color, fontSize: 10, fontWeight: FontWeight.w500),
             ),
           ],
         ],
+      ),
       ),
     );
   }

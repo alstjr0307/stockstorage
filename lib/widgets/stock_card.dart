@@ -84,8 +84,6 @@ class _StockCardState extends State<StockCard> {
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
               child: Row(
                 children: [
-                  _buildTickerBadge(),
-                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

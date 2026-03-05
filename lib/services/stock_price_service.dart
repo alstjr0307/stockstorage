@@ -133,6 +133,8 @@ class StockPriceService {
   static final _cache = <String, _CachedPrice>{};
   static const _cacheDuration = Duration(minutes: 3);
 
+  static void invalidateCache(String symbol) => _cache.remove(symbol);
+
   /// ticker + market으로 Yahoo Finance 심볼 생성
   static String toSymbol(String ticker, String market) {
     return switch (market) {
@@ -208,6 +210,56 @@ class StockPriceService {
 
   /// 1개월 일봉 종가 배열 반환. 실패 시 빈 리스트.
   static Future<List<double>> fetchHistory(String ticker, String market) async {
+    final result = await fetchHistoryDetailed(ticker, market);
+    return result.map((e) => e.$2).toList();
+  }
+
+  /// OHLC 캔들 데이터 반환. 실패 시 빈 리스트.
+  static Future<List<({DateTime date, double open, double high, double low, double close})>>
+      fetchOHLC(String ticker, String market, {String interval = '1d', String range = '1mo'}) async {
+    final symbol = toSymbol(ticker, market);
+    try {
+      final uri = Uri.parse(
+        'https://query1.finance.yahoo.com/v8/finance/chart/$symbol'
+        '?interval=$interval&range=$range',
+      );
+      final response = await http.get(uri, headers: {
+        'User-Agent': 'Mozilla/5.0',
+      }).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode != 200) return [];
+      final json = jsonDecode(response.body);
+      final result = json['chart']?['result']?[0];
+      if (result == null) return [];
+
+      final timestamps = (result['timestamp'] as List<dynamic>?)
+          ?.whereType<num>()
+          .map((v) => DateTime.fromMillisecondsSinceEpoch(v.toInt() * 1000))
+          .toList();
+      final quote = result['indicators']?['quote']?[0];
+      final opens = (quote?['open'] as List<dynamic>?)?.map((v) => v is num ? v.toDouble() : null).toList();
+      final highs = (quote?['high'] as List<dynamic>?)?.map((v) => v is num ? v.toDouble() : null).toList();
+      final lows = (quote?['low'] as List<dynamic>?)?.map((v) => v is num ? v.toDouble() : null).toList();
+      final closes = (quote?['close'] as List<dynamic>?)?.map((v) => v is num ? v.toDouble() : null).toList();
+
+      if (timestamps == null || opens == null || highs == null || lows == null || closes == null) return [];
+
+      final out = <({DateTime date, double open, double high, double low, double close})>[];
+      for (var i = 0; i < timestamps.length; i++) {
+        final o = opens[i]; final h = highs[i]; final l = lows[i]; final c = closes[i];
+        if (o != null && h != null && l != null && c != null) {
+          out.add((date: timestamps[i], open: o, high: h, low: l, close: c));
+        }
+      }
+      return out;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// 1개월 일봉 (날짜, 종가) 배열 반환. 실패 시 빈 리스트.
+  static Future<List<(DateTime, double)>> fetchHistoryDetailed(
+      String ticker, String market) async {
     final symbol = toSymbol(ticker, market);
     try {
       final uri = Uri.parse(
@@ -223,12 +275,23 @@ class StockPriceService {
       final result = json['chart']?['result']?[0];
       if (result == null) return [];
 
+      final timestamps = (result['timestamp'] as List<dynamic>?)
+          ?.whereType<num>()
+          .map((v) => DateTime.fromMillisecondsSinceEpoch(v.toInt() * 1000))
+          .toList();
       final closes =
           (result['indicators']?['quote']?[0]?['close'] as List<dynamic>?)
-              ?.whereType<num>()
-              .map((v) => v.toDouble())
+              ?.map((v) => v is num ? v.toDouble() : null)
               .toList();
-      return closes ?? [];
+
+      if (timestamps == null || closes == null) return [];
+
+      final List<(DateTime, double)> out = [];
+      for (var i = 0; i < timestamps.length && i < closes.length; i++) {
+        final c = closes[i];
+        if (c != null) out.add((timestamps[i], c));
+      }
+      return out;
     } catch (_) {
       return [];
     }
