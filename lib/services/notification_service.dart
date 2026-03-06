@@ -31,6 +31,9 @@ class NotificationService {
       FirestoreService().saveFcmToken(token).catchError((_) {});
     }
 
+    // 새 종목 알림 토픽 구독
+    messaging.subscribeToTopic('stock_alerts').catchError((_) {});
+
     // 토큰 갱신 시 재저장
     messaging.onTokenRefresh.listen(
       (t) => FirestoreService().saveFcmToken(t).catchError((_) {}),

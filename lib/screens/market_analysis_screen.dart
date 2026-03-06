@@ -20,7 +20,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     ('S&P 500', '^GSPC'),
     ('NASDAQ', '^IXIC'),
     ('USD/KRW', 'KRW=X'),
-    ('환율(엔)', 'JPY=X'),
+    ('나스닥100 선물', 'NQ=F'),
   ];
 
   final Map<String, PriceResult?> _prices = {};
@@ -209,7 +209,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   }
 
   String _formatValue(String name, PriceResult result) {
-    if (name == 'USD/KRW' || name == '환율(엔)') {
+    if (name == 'USD/KRW') {
       return '₩${NumberFormat('#,###').format(result.price.toInt())}';
     }
     if (result.isKrw) {

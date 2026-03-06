@@ -1,4 +1,5 @@
 import 'dart:ui' as ui;
+import 'package:stockstorage/screens/chart_visible_range.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -43,18 +44,15 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
   _Period _selectedPeriod = _Period.day1;
 
   // 줌/패닝 상태
-  int _visibleCount = 0; // 0 = 전체 표시
-  int _startIdx = 0;
-  int _visibleCountAtScaleStart = 0;
-  int _startIdxAtScaleStart = 0;
-  double _focalFractionAtScaleStart = 0;
-  Offset? _lastFocalPoint;
+  ChartVisibleRange _visibleRange = const ChartVisibleRange(0, 0);
+  ChartVisibleRange? _rangeAtScaleStart;
+  Offset? _focalPointAtScaleStart;
 
   List<_OHLC> get _displayCandles {
-    if (_candles.isEmpty) return [];
-    final count = _visibleCount > 0 ? _visibleCount.clamp(1, _candles.length) : _candles.length;
-    final start = _startIdx.clamp(0, _candles.length - count);
-    return _candles.sublist(start, start + count);
+    if (_candles.isEmpty || _visibleRange.width <= 0) return [];
+    final start = _visibleRange.start.floor().clamp(0, _candles.length);
+    final end = _visibleRange.end.ceil().clamp(start, _candles.length);
+    return _candles.sublist(start, end);
   }
 
   @override
@@ -80,8 +78,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
     if (mounted) setState(() {
       _candles = data;
       _loadingChart = false;
-      _visibleCount = 0;
-      _startIdx = 0;
+      _visibleRange = ChartVisibleRange(0, data.length.toDouble());
     });
   }
 
@@ -97,15 +94,14 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
       _selectedPeriod = period;
       _loadingChart = true;
       _touchedIndex = null;
-      _visibleCount = 0;
-      _startIdx = 0;
+      _visibleRange = const ChartVisibleRange(0, 0);
     });
     _fetchCandles();
   }
 
   String _formatValue(double v) {
     final name = widget.name;
-    if (name == 'USD/KRW' || name == '환율(엔)') {
+    if (name == 'USD/KRW') {
       return '₩${NumberFormat('#,###').format(v.toInt())}';
     }
     if (_price?.isKrw ?? false) return NumberFormat('#,###').format(v.toInt());
@@ -114,7 +110,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
 
   String _formatChange(PriceResult r) {
     final name = widget.name;
-    if (name == 'USD/KRW' || name == '환율(엔)') {
+    if (name == 'USD/KRW') {
       return NumberFormat('#,###.##').format(r.change.abs());
     }
     if (r.isKrw) return NumberFormat('#,###').format(r.change.abs().toInt());
@@ -219,6 +215,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
     if (_candles.length < 2) return const SizedBox.shrink();
 
     final dc = _displayCandles;
+    if (dc.isEmpty) return const SizedBox.shrink();
     final firstClose = dc.first.close;
     final lastClose = dc.last.close;
     final changePct = ((lastClose - firstClose) / firstClose) * 100;
@@ -319,8 +316,10 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
             builder: (context, constraints) {
               final chartW = constraints.maxWidth;
               return GestureDetector(
-                onTapDown: (d) => _onTouch(d.localPosition.dx, chartW),
-                onScaleStart: (d) => _onScaleStart(d, chartW),
+                onLongPressStart: (d) => _onTouch(d.localPosition.dx, chartW),
+                onLongPressMoveUpdate: (d) => _onTouch(d.localPosition.dx, chartW),
+                onLongPressEnd: (_) => setState(() => _touchedIndex = null),
+                onScaleStart: _onScaleStart,
                 onScaleUpdate: (d) => _onScaleUpdate(d, chartW),
                 onScaleEnd: _onScaleEnd,
                 child: CustomPaint(
@@ -367,64 +366,70 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
   }
 
   void _onTouch(double localX, double chartW) {
-    final dc = _displayCandles;
-    if (dc.isEmpty) return;
+    if (_candles.isEmpty) return;
+    
     const yAxisW = 46.0;
     final candleAreaW = chartW - yAxisW;
     final adjustedX = (localX - yAxisW).clamp(0.0, candleAreaW);
-    final candleWidth = candleAreaW / dc.length;
-    final idx = (adjustedX / candleWidth).floor().clamp(0, dc.length - 1);
-    if (_touchedIndex != idx) setState(() => _touchedIndex = idx);
-  }
+    
+    // Convert screen x to a candle index within the visible range
+    final visibleWidth = _visibleRange.width;
+    if (visibleWidth <= 0) return;
+    final fractionalIndex = _visibleRange.start + (adjustedX / candleAreaW) * visibleWidth;
+    
+    // The index relative to the start of the full _candles list
+    final overallIndex = fractionalIndex.floor().clamp(0, _candles.length - 1);
 
-  void _onScaleStart(ScaleStartDetails d, double chartW) {
-    const yAxisW = 46.0;
-    final candleAreaW = chartW - yAxisW;
-    _visibleCountAtScaleStart = _visibleCount > 0 ? _visibleCount : _candles.length;
-    _startIdxAtScaleStart = _startIdx;
-    final adjustedX = (d.localFocalPoint.dx - yAxisW).clamp(0.0, candleAreaW);
-    _focalFractionAtScaleStart = (adjustedX / candleAreaW).clamp(0.0, 1.0);
-    _lastFocalPoint = d.localFocalPoint;
-  }
+    // We need to find the index within the _displayCandles list
+    final displayStartIdx = _visibleRange.start.floor();
+    final displayTouchedIdx = overallIndex - displayStartIdx;
 
-  void _onScaleUpdate(ScaleUpdateDetails d, double chartW) {
-    const yAxisW = 46.0;
-    final candleAreaW = chartW - yAxisW;
-    if (d.pointerCount >= 2) {
-      // 핀치 줌
-      final newCount = (_visibleCountAtScaleStart / d.scale)
-          .round()
-          .clamp(5, _candles.length);
-      final focalCandle = _startIdxAtScaleStart +
-          (_focalFractionAtScaleStart * _visibleCountAtScaleStart).round();
-      final newStart = (focalCandle - (_focalFractionAtScaleStart * newCount).round())
-          .clamp(0, (_candles.length - newCount).clamp(0, _candles.length));
-      setState(() {
-        _visibleCount = newCount;
-        _startIdx = newStart;
-        _touchedIndex = null;
-        _lastFocalPoint = d.localFocalPoint;
-      });
-    } else {
-      // 한 손가락: 패닝 + 툴팁
-      final prev = _lastFocalPoint;
-      _lastFocalPoint = d.localFocalPoint;
-      final vc = _visibleCount > 0 ? _visibleCount : _candles.length;
-      if (prev != null && vc < _candles.length) {
-        final dx = prev.dx - d.localFocalPoint.dx;
-        final candleWidth = candleAreaW / vc;
-        final delta = (dx / candleWidth).round();
-        final maxStart = _candles.length - vc;
-        final newStart = (_startIdx + delta).clamp(0, maxStart);
-        if (newStart != _startIdx) setState(() => _startIdx = newStart);
-      }
-      _onTouch(d.localFocalPoint.dx, chartW);
+    if (_touchedIndex != displayTouchedIdx) {
+      setState(() => _touchedIndex = displayTouchedIdx);
     }
   }
 
+  void _onScaleStart(ScaleStartDetails d) {
+    _rangeAtScaleStart = _visibleRange;
+    _focalPointAtScaleStart = d.localFocalPoint;
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails d, double chartW) {
+    if (_rangeAtScaleStart == null || _focalPointAtScaleStart == null || _candles.isEmpty) return;
+
+    const yAxisW = 46.0;
+    final candleAreaW = chartW - yAxisW;
+
+    // 1. Calculate new width from zoom
+    final newWidth = (_rangeAtScaleStart!.width / d.scale).clamp(5.0, _candles.length.toDouble());
+
+    // 2. Find the anchor candle (the one that should stay under the focal point)
+    final focalFraction = ((_focalPointAtScaleStart!.dx - yAxisW) / candleAreaW).clamp(0.0, 1.0);
+    final anchorCandle = _rangeAtScaleStart!.start + focalFraction * _rangeAtScaleStart!.width;
+    
+    // 3. Calculate pan delta in terms of candles
+    final panDeltaX = d.localFocalPoint.dx - _focalPointAtScaleStart!.dx;
+    final panDeltaCandles = (panDeltaX / candleAreaW) * newWidth;
+
+    // 4. Calculate new start position
+    var newStart = anchorCandle - (focalFraction * newWidth) - panDeltaCandles;
+
+    // 5. Clamp to bounds
+    if (newStart < 0) newStart = 0;
+    if (newStart + newWidth > _candles.length) {
+      newStart = _candles.length - newWidth;
+    }
+    final newEnd = newStart + newWidth;
+
+    setState(() {
+      _visibleRange = ChartVisibleRange(newStart, newEnd);
+      _touchedIndex = null; // 줌/팬 중 툴팁 숨김
+    });
+  }
+
   void _onScaleEnd(ScaleEndDetails d) {
-    _lastFocalPoint = null;
-    setState(() => _touchedIndex = null);
+    _rangeAtScaleStart = null;
+    _focalPointAtScaleStart = null;
   }
 }
 

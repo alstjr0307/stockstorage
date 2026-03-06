@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter install --release)",
+      "Bash(keytool -list -v -keystore /c/Users/alswp/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android)",
+      "Read(//c/Program Files/Android/**)",
+      "Bash(\"/c/Program Files/Android/Android Studio/jbr/bin/keytool.exe\" -list -v -keystore \"/c/Users/alswp/.android/debug.keystore\" -alias androiddebugkey -storepass android -keypass android)",
+      "Bash(export PATH=\"$PATH:/c/Users/alswp/flutter/bin:/c/Program Files/flutter/bin\")",
+      "Read(//c//**)",
+      "Read(//c/flutter//**)",
+      "Bash(export PATH=\"/c/flutter/bin:$PATH\")"
+    ]
+  }
+}

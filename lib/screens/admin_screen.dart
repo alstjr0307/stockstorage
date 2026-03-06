@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/announcement.dart';
 import '../models/market_analysis.dart';
 import '../models/stock_pick.dart';
+import '../services/fcm_direct_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
 
@@ -300,10 +301,9 @@ class _UploadTabState extends State<_UploadTab> {
         await _firestoreService.updateStockPick(pick);
       } else {
         await _firestoreService.addStockPick(pick);
-        // 새 종목 등록 시 알림 큐에 추가 (FCM 발송은 Cloud Function에서 처리)
-        await _firestoreService.queueNotification(
-          '📈 새 추천 종목',
-          '${pick.name}(${pick.ticker}) 종목이 새로 등록되었습니다. 지금 확인해보세요!',
+        FcmDirectService.sendTopicNotification(
+          title: '📈 새 추천 종목',
+          body: '${pick.name}(${pick.ticker}) 종목이 새로 등록되었습니다. 지금 확인해보세요!',
         );
       }
 
