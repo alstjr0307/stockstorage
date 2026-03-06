@@ -1,0 +1,67 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 관리자 UID
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == '1KzEXKZMoFaYOymYyoI283AR3Y32';
+    }
+
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    // ─── _admin: 관리자만 접근 ──────────────────────────────────────────
+    match /_admin/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    // ─── stock_picks: 읽기 전체, 쓰기 관리자만 ─────────────────────────
+    match /stock_picks/{pickId} {
+      allow read: if true;
+      allow write: if isAdmin();
+
+      // 댓글: 읽기 전체, 쓰기 로그인 유저, 삭제 작성자 또는 관리자
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isLoggedIn();
+        allow delete: if isLoggedIn() &&
+          (resource.data.userId == request.auth.uid || isAdmin());
+        allow update: if false;
+      }
+    }
+
+    // ─── announcements: 읽기 전체, 쓰기 관리자만 ──────────────────────
+    match /announcements/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ─── market_analyses: 읽기 전체, 쓰기 관리자만 ────────────────────
+    match /market_analyses/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ─── users: 본인 데이터만 읽기/쓰기 ───────────────────────────────
+    match /users/{uid} {
+      allow read, write: if isLoggedIn() && request.auth.uid == uid;
+
+      match /memos/{pickId} {
+        allow read, write: if isLoggedIn() && request.auth.uid == uid;
+      }
+    }
+
+    // ─── fcm_tokens: 로그인 유저 쓰기, 관리자 읽기 ───────────────────
+    match /fcm_tokens/{token} {
+      allow create, update: if isLoggedIn();
+      allow read, delete: if isAdmin();
+    }
+
+    // ─── notification_queue: 관리자만 ─────────────────────────────────
+    match /notification_queue/{docId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

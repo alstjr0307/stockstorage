@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:ui' as ui show TextDirection;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -67,8 +68,10 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   @override
   void initState() {
     super.initState();
-    AdService.instance.showInterstitialIfReady();
-    AdService.instance.loadInterstitial();
+    if (Random().nextBool()) {
+      AdService.instance.showRewardedInterstitialIfReady();
+    }
+    AdService.instance.loadRewardedInterstitial();
     _fetchPrice();
     _fetchChart();
     _loadMemo();

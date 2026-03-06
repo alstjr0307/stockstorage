@@ -1,3 +1,4 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
@@ -6,6 +7,7 @@ import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
 class AuthService {
   final _auth = FirebaseAuth.instance;
   final _googleSignIn = GoogleSignIn();
+  final _functions = FirebaseFunctions.instanceFor(region: 'asia-northeast3');
 
   // 관리자 UID (Firebase에서 확인 후 입력)
   static const String adminUid = '1KzEXKZMoFaYOymYyoI283AR3Y32';
@@ -43,16 +45,14 @@ class AuthService {
   }
 
   /// 카카오 로그인
-  /// 주의: 프로덕션에서는 Cloud Function으로 Firebase 커스텀 토큰을 발급받아 사용하세요.
-  /// https://firebase.google.com/docs/auth/admin/create-custom-tokens
+  /// Cloud Function에서 카카오 액세스 토큰을 서버 검증 후 Firebase 커스텀 토큰 발급
   Future<UserCredential?> signInWithKakao() async {
-    // 카카오 앱 또는 웹으로 로그인
+    // 1. 카카오 앱/웹 로그인으로 액세스 토큰 획득
     try {
       if (await kakao.isKakaoTalkInstalled()) {
         try {
           await kakao.UserApi.instance.loginWithKakaoTalk();
         } catch (_) {
-          // 카카오톡 앱 로그인 실패 시 웹 로그인으로 폴백
           await kakao.UserApi.instance.loginWithKakaoAccount();
         }
       } else {
@@ -62,39 +62,27 @@ class AuthService {
       throw Exception('카카오 로그인 실패: $e');
     }
 
-    // 카카오 사용자 정보 가져오기 (이메일 동의 없이 UID만 사용)
-    final kakaoUser = await kakao.UserApi.instance.me();
-    final kakaoId = kakaoUser.id;
-
-    // 카카오 UID 기반 가상 이메일 생성 (이메일 동의 불필요)
-    final email = 'kakao_$kakaoId@kakao.tofusoft.com';
-    final password = 'kakao_${kakaoId}_ss';
-
-    // Firebase 이메일 로그인 (이미 계정 있으면 로그인, 없으면 생성)
-    try {
-      return await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
-        return await _auth.createUserWithEmailAndPassword(
-          email: email,
-          password: password,
-        );
-      }
-      rethrow;
+    // 2. 카카오 액세스 토큰 획득
+    final tokenInfo = await kakao.TokenManagerProvider.instance.manager.getToken();
+    final accessToken = tokenInfo?.accessToken;
+    if (accessToken == null) {
+      throw Exception('카카오 토큰을 가져올 수 없습니다.');
     }
+
+    // 3. Cloud Function으로 Firebase 커스텀 토큰 발급 (서버에서 카카오 토큰 검증)
+    final callable = _functions.httpsCallable('createKakaoCustomToken');
+    final result = await callable.call({'accessToken': accessToken});
+    final customToken = result.data['customToken'] as String;
+
+    // 4. 커스텀 토큰으로 Firebase 로그인
+    return _auth.signInWithCustomToken(customToken);
   }
 
   Future<void> signOut() async {
     await _googleSignIn.signOut();
-    // 카카오 로그아웃 (카카오로 로그인한 경우만)
     try {
       await kakao.UserApi.instance.logout();
-    } catch (_) {
-      // 카카오로 로그인하지 않은 경우 무시
-    }
+    } catch (_) {}
     await _auth.signOut();
   }
 }

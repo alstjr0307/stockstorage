@@ -35,7 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
 
-  static const _tabTitles = ['StockStorage', '내 포트폴리오', '추천 실적', '시황 분석'];
+  static const _tabTitles = ['주식저장소', '내 포트폴리오', '추천 실적', '시황 분석'];
 
   @override
   void dispose() {
@@ -166,13 +166,20 @@ class _HomeScreenState extends State<HomeScreen> {
           const BannerAdWidget(),
         ],
       ),
-      body: IndexedStack(
-        index: _currentPage,
+      body: Column(
         children: [
-          _buildStockPicksPage(auth),
-          const PortfolioScreen(),
-          const LeaderboardScreen(),
-          const MarketAnalysisScreen(),
+          Expanded(
+            child: IndexedStack(
+              index: _currentPage,
+              children: [
+                _buildStockPicksPage(auth),
+                const PortfolioScreen(),
+                const LeaderboardScreen(),
+                const MarketAnalysisScreen(),
+              ],
+            ),
+          ),
+          _buildDisclaimer(),
         ],
       ),
     );
@@ -463,6 +470,23 @@ class _HomeScreenState extends State<HomeScreen> {
           },
         );
       },
+    );
+  }
+
+  // ─── 면책 조항 ────────────────────────────────────────────────────────────
+
+  Widget _buildDisclaimer() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: Text(
+        '본 앱의 종목 정보는 참고용이며 투자 권유가 아닙니다. 투자 손실에 대한 책임은 투자자 본인에게 있습니다.',
+        style: GoogleFonts.inter(
+          fontSize: 10,
+          color: isDark ? Colors.white24 : Colors.black26,
+        ),
+        textAlign: TextAlign.center,
+      ),
     );
   }
 

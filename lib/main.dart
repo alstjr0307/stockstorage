@@ -49,7 +49,7 @@ class StockStorageApp extends StatelessWidget {
       child: Consumer<ThemeProvider>(
         builder: (_, themeProvider, child) => MaterialApp(
           navigatorKey: navigatorKey,
-          title: 'StockStorage',
+          title: '주식저장소',
           debugShowCheckedModeBanner: false,
           themeMode: themeProvider.themeMode,
           // 라이트 테마

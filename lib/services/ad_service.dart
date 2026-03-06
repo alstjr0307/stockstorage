@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 const bool _useTestAds = false;
-const bool _adsEnabled = false; // 개발 중 광고 비활성화 (출시 전 true로 변경)
+const bool _adsEnabled = true;
 
 class AdService {
   AdService._();
@@ -30,6 +30,17 @@ class AdService {
     }
     if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/5598098844';
     return 'ca-app-pub-6925657557995580/5025289757';
+  }
+
+  static String get _rewardedInterstitialAdUnitId {
+    if (kIsWeb) return '';
+    if (_useTestAds) {
+      return Platform.isAndroid
+          ? 'ca-app-pub-3940256099942544/5354046379'
+          : 'ca-app-pub-3940256099942544/6978759866';
+    }
+    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/7973491496';
+    return 'ca-app-pub-6925657557995580/2170500475';
   }
 
   // ── 배너 광고 ─────────────────────────────────────────────────────────
@@ -74,6 +85,47 @@ class AdService {
     if (!_adsEnabled) return;
     if (_isInterstitialReady && _interstitialAd != null) {
       _interstitialAd!.show();
+    }
+  }
+
+  // ── 보상형 전면광고 ────────────────────────────────────────────────────
+  RewardedInterstitialAd? _rewardedInterstitialAd;
+  bool _isRewardedInterstitialReady = false;
+
+  void loadRewardedInterstitial() {
+    if (kIsWeb || !_adsEnabled) return;
+    RewardedInterstitialAd.load(
+      adUnitId: _rewardedInterstitialAdUnitId,
+      request: const AdRequest(),
+      rewardedInterstitialAdLoadCallback: RewardedInterstitialAdLoadCallback(
+        onAdLoaded: (ad) {
+          _rewardedInterstitialAd = ad;
+          _isRewardedInterstitialReady = true;
+          ad.fullScreenContentCallback = FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (ad) {
+              ad.dispose();
+              _rewardedInterstitialAd = null;
+              _isRewardedInterstitialReady = false;
+              loadRewardedInterstitial();
+            },
+            onAdFailedToShowFullScreenContent: (ad, error) {
+              ad.dispose();
+              _rewardedInterstitialAd = null;
+              _isRewardedInterstitialReady = false;
+            },
+          );
+        },
+        onAdFailedToLoad: (error) {
+          _isRewardedInterstitialReady = false;
+        },
+      ),
+    );
+  }
+
+  void showRewardedInterstitialIfReady() {
+    if (!_adsEnabled) return;
+    if (_isRewardedInterstitialReady && _rewardedInterstitialAd != null) {
+      _rewardedInterstitialAd!.show(onUserEarnedReward: (_, __) {});
     }
   }
 }

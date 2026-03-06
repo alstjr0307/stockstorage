@@ -1,6 +1,6 @@
 {
-    "name": "stockstorage",
-    "short_name": "stockstorage",
+    "name": "주식저장소",
+    "short_name": "주식저장소",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

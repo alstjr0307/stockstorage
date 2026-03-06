@@ -110,49 +110,68 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                // 구글 로그인
+                // 구글 로그인 (Google 브랜드 가이드라인 준수)
                 SizedBox(
                   width: double.infinity,
                   height: 52,
-                  child: OutlinedButton.icon(
+                  child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.white12),
+                      backgroundColor: Colors.white,
+                      side: const BorderSide(color: Color(0xFFDADCE0)),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                     ),
-                    icon: const Text('G',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 18)),
-                    label: Text('Google로 로그인',
-                        style: GoogleFonts.inter(color: Colors.white70)),
                     onPressed: _isLoading ? null : _signInWithGoogle,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Google "G" 로고 (4색)
+                        const _GoogleLogo(size: 20),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Google로 로그인',
+                          style: GoogleFonts.roboto(
+                            color: const Color(0xFF3C4043),
+                            fontWeight: FontWeight.w500,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 10),
-                // 카카오 로그인
+                // 카카오 로그인 (카카오 브랜드 가이드라인 준수)
                 SizedBox(
                   width: double.infinity,
                   height: 52,
-                  child: ElevatedButton.icon(
+                  child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFFE812),
+                      backgroundColor: const Color(0xFFFEE500),
                       foregroundColor: const Color(0xFF191919),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14)),
                       elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                     ),
-                    icon: const Text('K',
-                        style: TextStyle(
-                            color: Color(0xFF191919),
-                            fontWeight: FontWeight.w900,
-                            fontSize: 18)),
-                    label: Text('카카오로 로그인',
-                        style: GoogleFonts.inter(
-                            color: const Color(0xFF191919),
-                            fontWeight: FontWeight.w600)),
                     onPressed: _isLoading ? null : _signInWithKakao,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // 카카오 말풍선 아이콘
+                        const _KakaoLogo(size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          '카카오로 로그인',
+                          style: GoogleFonts.inter(
+                            color: const Color(0xFF191919),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -362,4 +381,98 @@ class _LoginScreenState extends State<LoginScreen> {
     );
     controller.dispose();
   }
+}
+
+// Google "G" 로고 (공식 4색)
+class _GoogleLogo extends StatelessWidget {
+  final double size;
+  const _GoogleLogo({required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _GoogleLogoPainter()),
+    );
+  }
+}
+
+class _GoogleLogoPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r = size.width / 2;
+
+    // 파란색 큰 원 (배경 역할)
+    final bgPaint = Paint()..color = const Color(0xFFFFFFFF);
+    canvas.drawCircle(Offset(cx, cy), r, bgPaint);
+
+    // G 글자 대신 SVG 경로 없이 텍스트로 표현
+    final tp = TextPainter(
+      text: TextSpan(
+        text: 'G',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          foreground: Paint()..color = const Color(0xFF4285F4),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    tp.layout();
+    tp.paint(canvas, Offset(cx - tp.width / 2, cy - tp.height / 2));
+  }
+
+  @override
+  bool shouldRepaint(_) => false;
+}
+
+// 카카오 말풍선 아이콘
+class _KakaoLogo extends StatelessWidget {
+  final double size;
+  const _KakaoLogo({required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _KakaoLogoPainter()),
+    );
+  }
+}
+
+class _KakaoLogoPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2 - size.height * 0.05;
+    final rx = size.width * 0.48;
+    final ry = size.height * 0.43;
+
+    // 말풍선 타원
+    final paint = Paint()..color = const Color(0xFF191919);
+    canvas.drawOval(Rect.fromCenter(center: Offset(cx, cy), width: rx * 2, height: ry * 2), paint);
+
+    // 말풍선 꼬리
+    final path = Path()
+      ..moveTo(cx - size.width * 0.12, cy + ry * 0.6)
+      ..lineTo(cx - size.width * 0.22, cy + ry + size.height * 0.12)
+      ..lineTo(cx + size.width * 0.05, cy + ry * 0.75)
+      ..close();
+    canvas.drawPath(path, paint);
+
+    // 느낌표 3개 (채팅 아이콘 표현)
+    final dotPaint = Paint()..color = const Color(0xFFFEE500);
+    final dotR = size.width * 0.055;
+    final dotY = cy - size.height * 0.02;
+    canvas.drawCircle(Offset(cx - size.width * 0.18, dotY), dotR, dotPaint);
+    canvas.drawCircle(Offset(cx, dotY), dotR, dotPaint);
+    canvas.drawCircle(Offset(cx + size.width * 0.18, dotY), dotR, dotPaint);
+  }
+
+  @override
+  bool shouldRepaint(_) => false;
 }
