@@ -52,6 +52,7 @@ dependencies:
 
   # Utils
   http: ^1.2.0
+  dart_jsonwebtoken: ^2.0.0
   share_plus: ^10.1.4
   fl_chart: ^0.70.2
   shared_preferences: ^2.5.2

@@ -31,6 +31,7 @@ void main() async {
 
   await MobileAds.instance.initialize();
   AdService.instance.loadInterstitial();
+  AdService.instance.loadRewardedInterstitial();
   await NotificationService.instance.init();
   timeago.setLocaleMessages('ko', timeago.KoMessages());
   runApp(const StockStorageApp());
