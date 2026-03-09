@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:stockstorage/screens/chart_visible_range.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'package:url_launcher/url_launcher.dart';
 import '../models/comment.dart';
 import '../models/stock_pick.dart';
 import '../services/ad_service.dart';
@@ -63,6 +64,14 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   bool _memoChanged = false;
   bool _showComments = false;
 
+  // 투표
+  String? _userVote; // 'up', 'down', null
+  StockPick? _livePick;
+
+  // 뉴스
+  List<StockNews> _news = [];
+  bool _loadingNews = true;
+
   User? get _currentUser => FirebaseAuth.instance.currentUser;
 
   @override
@@ -75,13 +84,47 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     _fetchPrice();
     _fetchChart();
     _loadMemo();
+    _loadVote();
+    _loadNews();
+    _subscribePick();
   }
+
+  late final _pickSub = _firestoreService
+      .getPickStream(widget.pick.id)
+      .listen((p) { if (mounted) setState(() => _livePick = p); });
 
   @override
   void dispose() {
+    _pickSub.cancel();
     _commentController.dispose();
     _memoController.dispose();
     super.dispose();
+  }
+
+  void _subscribePick() {
+    // subscription is initialized lazily via late field above
+    _livePick = widget.pick;
+  }
+
+  Future<void> _loadVote() async {
+    final user = _currentUser;
+    if (user == null) return;
+    final vote = await _firestoreService.getUserVote(user.uid, widget.pick.id);
+    if (mounted) setState(() => _userVote = vote);
+  }
+
+  Future<void> _loadNews() async {
+    final items = await StockPriceService.fetchNews(
+        widget.pick.ticker, widget.pick.market);
+    if (mounted) setState(() { _news = items; _loadingNews = false; });
+  }
+
+  Future<void> _castVote(String? newVote) async {
+    final user = _currentUser;
+    if (user == null) return;
+    final prev = _userVote;
+    setState(() => _userVote = newVote);
+    await _firestoreService.setVote(user.uid, widget.pick.id, newVote, prev);
   }
 
   Future<void> _loadMemo() async {
@@ -362,7 +405,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFF1A2035),
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Row(
@@ -396,7 +439,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               decoration: BoxDecoration(
-                color: const Color(0xFF1A2035),
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(pick.category,
@@ -411,7 +454,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF1A2035),
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Text(
@@ -420,6 +463,14 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                     color: cs.onSurface.withValues(alpha: 0.7), fontSize: 14, height: 1.8),
               ),
             ),
+            const SizedBox(height: 20),
+
+            // 투표 섹션
+            _voteSection(),
+            const SizedBox(height: 20),
+
+            // 뉴스 섹션
+            _newsSection(),
             const SizedBox(height: 24),
 
             // 투자 메모 섹션
@@ -452,7 +503,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         height: 280,
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFF1A2035),
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
         ),
         child: const Center(
@@ -476,7 +527,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.fromLTRB(8, 16, 12, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2035),
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -578,6 +629,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                     formatDate: _selectedPeriod == _Period.month
                         ? (d) => DateFormat('yy/MM').format(d)
                         : (d) => DateFormat('MM/dd').format(d),
+                    labelColor: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
               );
@@ -615,7 +667,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2035),
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
       ),
@@ -719,6 +771,167 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     );
   }
 
+  // ── 투표 ──────────────────────────────────────────────────────────────────
+  Widget _voteSection() {
+    final cs = Theme.of(context).colorScheme;
+    final pick = _livePick ?? widget.pick;
+    final upCount = pick.upVotes;
+    final downCount = pick.downVotes;
+    final isUp = _userVote == 'up';
+    final isDown = _userVote == 'down';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionLabel('커뮤니티 의견'),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: _currentUser == null ? null : () => _castVote(isUp ? null : 'up'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isUp
+                        ? const Color(0xFF4ADE80).withValues(alpha: 0.15)
+                        : cs.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isUp
+                          ? const Color(0xFF4ADE80).withValues(alpha: 0.5)
+                          : cs.onSurface.withValues(alpha: 0.1),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.thumb_up_outlined,
+                          color: isUp ? const Color(0xFF4ADE80) : cs.onSurface.withValues(alpha: 0.38),
+                          size: 18),
+                      const SizedBox(width: 6),
+                      Text('상승 $upCount',
+                          style: GoogleFonts.inter(
+                              color: isUp ? const Color(0xFF4ADE80) : cs.onSurface.withValues(alpha: 0.6),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: GestureDetector(
+                onTap: _currentUser == null ? null : () => _castVote(isDown ? null : 'down'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isDown
+                        ? Colors.redAccent.withValues(alpha: 0.15)
+                        : cs.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDown
+                          ? Colors.redAccent.withValues(alpha: 0.5)
+                          : cs.onSurface.withValues(alpha: 0.1),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.thumb_down_outlined,
+                          color: isDown ? Colors.redAccent : cs.onSurface.withValues(alpha: 0.38),
+                          size: 18),
+                      const SizedBox(width: 6),
+                      Text('하락 $downCount',
+                          style: GoogleFonts.inter(
+                              color: isDown ? Colors.redAccent : cs.onSurface.withValues(alpha: 0.6),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (_currentUser == null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('로그인 후 투표할 수 있습니다',
+                style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.3), fontSize: 11)),
+          ),
+      ],
+    );
+  }
+
+  // ── 뉴스 ──────────────────────────────────────────────────────────────────
+  Widget _newsSection() {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionLabel('관련 뉴스'),
+        const SizedBox(height: 8),
+        if (_loadingNews)
+          Container(
+            height: 80,
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Center(
+              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4ADE80)),
+            ),
+          )
+        else if (_news.isEmpty)
+          Text('관련 뉴스가 없습니다',
+              style: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.3), fontSize: 13))
+        else
+          ...(_news.map((n) => GestureDetector(
+            onTap: () => launchUrl(Uri.parse(n.url), mode: LaunchMode.externalApplication),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(n.title,
+                      style: GoogleFonts.inter(
+                          color: cs.onSurface, fontSize: 13, fontWeight: FontWeight.w500, height: 1.4),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(n.publisher,
+                          style: GoogleFonts.inter(
+                              color: cs.onSurface.withValues(alpha: 0.38), fontSize: 11)),
+                      const SizedBox(width: 8),
+                      Text(timeago.format(n.publishedAt, locale: 'ko'),
+                          style: GoogleFonts.inter(
+                              color: cs.onSurface.withValues(alpha: 0.3), fontSize: 11)),
+                      const Spacer(),
+                      Icon(Icons.open_in_new,
+                          size: 12, color: cs.onSurface.withValues(alpha: 0.25)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ))),
+      ],
+    );
+  }
+
   // ── 투자 메모 ─────────────────────────────────────────────────────────────
   Widget _memoSection() {
     final cs = Theme.of(context).colorScheme;
@@ -729,7 +942,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF1A2035),
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: _memoChanged
@@ -803,7 +1016,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFF1A2035),
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
         ),
@@ -880,7 +1093,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2035),
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -929,7 +1142,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     if (user == null) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        color: const Color(0xFF0A0E1A),
+        color: Theme.of(context).scaffoldBackgroundColor,
         child: Text(
           '로그인 후 코멘트를 남길 수 있습니다',
           style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.24), fontSize: 13),
@@ -945,7 +1158,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         bottom: MediaQuery.of(context).viewInsets.bottom + 10,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFF0A0E1A),
+        color: Theme.of(context).scaffoldBackgroundColor,
         border: Border(top: BorderSide(color: cs.onSurface.withValues(alpha: 0.06))),
       ),
       child: Row(
@@ -962,7 +1175,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                 hintStyle:
                     GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.24), fontSize: 14),
                 filled: true,
-                fillColor: const Color(0xFF1A2035),
+                fillColor: Theme.of(context).colorScheme.surface,
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 10),
                 border: OutlineInputBorder(
@@ -1026,12 +1239,14 @@ class _StockCandlePainter extends CustomPainter {
   final int? touchedIndex;
   final String Function(double) formatValue;
   final String Function(DateTime) formatDate;
+  final Color labelColor;
 
   _StockCandlePainter({
     required this.candles,
     required this.touchedIndex,
     required this.formatValue,
     required this.formatDate,
+    required this.labelColor,
   });
 
   @override
@@ -1061,7 +1276,7 @@ class _StockCandlePainter extends CustomPainter {
 
     // 그리드
     final gridPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.05)
+      ..color = labelColor.withValues(alpha: 0.05)
       ..strokeWidth = 1;
     for (int i = 1; i <= 3; i++) {
       final y = chartH * i / 4;
@@ -1073,7 +1288,7 @@ class _StockCandlePainter extends CustomPainter {
       final c = candles[i];
       final isGreen = c.close >= c.open;
       final baseColor = isGreen ? const Color(0xFF4ADE80) : Colors.redAccent;
-      final color = touchedIndex == i ? Colors.white : baseColor;
+      final color = touchedIndex == i ? labelColor : baseColor;
 
       final totalCandleW = chartW / n;
       final bodyW = (totalCandleW * 0.6).clamp(2.0, 10.0);
@@ -1096,7 +1311,7 @@ class _StockCandlePainter extends CustomPainter {
       final cx = toX(touchedIndex!, n);
       canvas.drawLine(Offset(cx, 0), Offset(cx, chartH),
           Paint()
-            ..color = Colors.white.withValues(alpha: 0.2)
+            ..color = labelColor.withValues(alpha: 0.2)
             ..strokeWidth = 1);
     }
 
@@ -1108,7 +1323,7 @@ class _StockCandlePainter extends CustomPainter {
       final tp = TextPainter(
         text: TextSpan(
           text: formatValue(v),
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 8,
+          style: TextStyle(color: labelColor.withValues(alpha: 0.35), fontSize: 8,
               fontFamily: 'RobotoMono'),
         ),
         textDirection: ui.TextDirection.ltr,
@@ -1120,7 +1335,7 @@ class _StockCandlePainter extends CustomPainter {
     // X축 레이블
     const labelCount = 5;
     final labelStyle = TextStyle(
-      color: Colors.white.withValues(alpha: 0.35),
+      color: labelColor.withValues(alpha: 0.35),
       fontSize: 8,
       fontFamily: 'RobotoMono',
     );
@@ -1138,5 +1353,5 @@ class _StockCandlePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_StockCandlePainter old) =>
-      old.candles != candles || old.touchedIndex != touchedIndex;
+      old.candles != candles || old.touchedIndex != touchedIndex || old.labelColor != labelColor;
 }

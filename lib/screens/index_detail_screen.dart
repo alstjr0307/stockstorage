@@ -151,7 +151,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: const Color(0xFF1A2035),
+                color: Theme.of(context).colorScheme.surface,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: color.withValues(alpha: 0.2)),
               ),
@@ -205,7 +205,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
       return Container(
         height: 280,
         decoration: BoxDecoration(
-          color: const Color(0xFF1A2035),
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(16),
         ),
         child: const Center(
@@ -228,7 +228,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 16, 12, 12),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2035),
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -334,6 +334,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                         : _selectedPeriod == _Period.month
                             ? (d) => DateFormat('yy/MM').format(d)
                             : (d) => DateFormat('MM/dd').format(d),
+                    labelColor: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
               );
@@ -440,12 +441,14 @@ class _CandlePainter extends CustomPainter {
   final int? touchedIndex;
   final String Function(double) formatValue;
   final String Function(DateTime) formatDate;
+  final Color labelColor;
 
   _CandlePainter({
     required this.candles,
     required this.touchedIndex,
     required this.formatValue,
     required this.formatDate,
+    required this.labelColor,
   });
 
   @override
@@ -477,7 +480,7 @@ class _CandlePainter extends CustomPainter {
 
     // Y축 그리드 (3줄)
     final gridPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.05)
+      ..color = labelColor.withValues(alpha: 0.05)
       ..strokeWidth = 1;
     for (int i = 1; i <= 3; i++) {
       final y = chartH * i / 4;
@@ -491,7 +494,7 @@ class _CandlePainter extends CustomPainter {
       final isGreen = c.close >= c.open;
       final baseColor = isGreen ? const Color(0xFF4ADE80) : Colors.redAccent;
       final isTouched = touchedIndex == i;
-      final color = isTouched ? Colors.white : baseColor;
+      final color = isTouched ? labelColor : baseColor;
 
       final totalCandleW = chartW / n;
       final bodyW = (totalCandleW * 0.6).clamp(2.0, 10.0);
@@ -515,7 +518,7 @@ class _CandlePainter extends CustomPainter {
     if (touchedIndex != null) {
       final cx = toX(touchedIndex!, n);
       final linePaint = Paint()
-        ..color = Colors.white.withValues(alpha: 0.2)
+        ..color = labelColor.withValues(alpha: 0.2)
         ..strokeWidth = 1
         ..style = PaintingStyle.stroke;
       canvas.drawLine(Offset(cx, 0), Offset(cx, chartH), linePaint);
@@ -529,7 +532,7 @@ class _CandlePainter extends CustomPainter {
       final tp = TextPainter(
         text: TextSpan(
           text: formatValue(v),
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.35), fontSize: 8,
+          style: TextStyle(color: labelColor.withValues(alpha: 0.35), fontSize: 8,
               fontFamily: 'RobotoMono'),
         ),
         textDirection: ui.TextDirection.ltr,
@@ -541,7 +544,7 @@ class _CandlePainter extends CustomPainter {
     // X축 레이블
     const labelCount = 5;
     final labelStyle = TextStyle(
-      color: Colors.white.withValues(alpha: 0.35),
+      color: labelColor.withValues(alpha: 0.35),
       fontSize: 8,
       fontFamily: 'RobotoMono',
     );
@@ -559,5 +562,5 @@ class _CandlePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_CandlePainter old) =>
-      old.candles != candles || old.touchedIndex != touchedIndex;
+      old.candles != candles || old.touchedIndex != touchedIndex || old.labelColor != labelColor;
 }
