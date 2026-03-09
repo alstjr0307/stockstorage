@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../models/market_analysis.dart';
+import '../models/stock_pick.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
 import 'index_detail_screen.dart';
@@ -26,10 +27,32 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   final Map<String, PriceResult?> _prices = {};
   bool _loadingIndices = true;
 
+  // 실적 캘린더
+  List<({StockPick pick, DateTime earningsDate})> _earnings = [];
+  bool _loadingEarnings = true;
+
   @override
   void initState() {
     super.initState();
     _fetchIndices();
+    _fetchEarnings();
+  }
+
+  Future<void> _fetchEarnings() async {
+    final picks = await FirestoreService().getRecentActivePicks();
+    final usPicks = picks.where((p) => p.market == 'US').toList();
+    final futures = usPicks.map((p) => StockPriceService.fetchEarningsDate(p.ticker, p.market));
+    final dates = await Future.wait(futures);
+    final now = DateTime.now();
+    final result = <({StockPick pick, DateTime earningsDate})>[];
+    for (var i = 0; i < usPicks.length; i++) {
+      final d = dates[i];
+      if (d != null && d.isAfter(now.subtract(const Duration(days: 1)))) {
+        result.add((pick: usPicks[i], earningsDate: d));
+      }
+    }
+    result.sort((a, b) => a.earningsDate.compareTo(b.earningsDate));
+    if (mounted) setState(() { _earnings = result; _loadingEarnings = false; });
   }
 
   Future<void> _fetchIndices() async {
@@ -52,7 +75,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     final cs = Theme.of(context).colorScheme;
     return RefreshIndicator(
       color: const Color(0xFF4ADE80),
-      backgroundColor: const Color(0xFF1A2035),
+      backgroundColor: Theme.of(context).colorScheme.surface,
       onRefresh: _fetchIndices,
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
@@ -96,6 +119,75 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             children: _indices.map((e) => _buildIndexCard(context, e.$1)).toList(),
           ),
           const SizedBox(height: 28),
+
+          // ── 실적 캘린더 섹션 ──
+          Text(
+            '실적 발표 일정 (US)',
+            style: GoogleFonts.inter(
+              color: cs.onSurface.withValues(alpha: 0.54),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (_loadingEarnings)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4ADE80))),
+            )
+          else if (_earnings.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text('예정된 실적 발표가 없습니다',
+                  style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38), fontSize: 13)),
+            )
+          else
+            ...(_earnings.map((e) {
+              final daysLeft = e.earningsDate.difference(DateTime.now()).inDays;
+              final label = daysLeft == 0 ? '오늘' : 'D-$daysLeft';
+              final urgent = daysLeft <= 3;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(e.pick.name,
+                              style: GoogleFonts.inter(
+                                  color: cs.onSurface, fontWeight: FontWeight.w600, fontSize: 13)),
+                          Text(e.pick.ticker,
+                              style: GoogleFonts.inter(
+                                  color: cs.onSurface.withValues(alpha: 0.38), fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(DateFormat('MM/dd').format(e.earningsDate),
+                            style: GoogleFonts.inter(
+                                color: cs.onSurface.withValues(alpha: 0.54), fontSize: 12)),
+                        Text(label,
+                            style: GoogleFonts.inter(
+                                color: urgent ? Colors.orangeAccent : const Color(0xFF4ADE80),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13)),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            })),
+          const SizedBox(height: 20),
 
           // ── 시황 분석 포스트 섹션 ──
           Text(
@@ -162,7 +254,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2035),
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: cs.onSurface.withValues(alpha: 0.05)),
       ),
@@ -225,7 +317,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     return GestureDetector(
       onTap: () => showModalBottomSheet(
         context: context,
-        backgroundColor: const Color(0xFF1A2035),
+        backgroundColor: Theme.of(context).colorScheme.surface,
         isScrollControlled: true,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -269,7 +361,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFF1A2035),
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: cs.onSurface.withValues(alpha: 0.05)),
         ),

@@ -14,6 +14,7 @@ import '../services/ad_service.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
+import 'stock_compare_screen.dart';
 
 typedef _OHLC = ({DateTime date, double open, double high, double low, double close});
 
@@ -302,6 +303,12 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
               color: cs.onSurface, fontWeight: FontWeight.w700),
         ),
         actions: [
+          IconButton(
+            icon: Icon(Icons.compare_arrows, color: cs.onSurface.withValues(alpha: 0.54), size: 20),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => StockCompareScreen(basePick: widget.pick),
+            )),
+          ),
           IconButton(
             icon: Icon(Icons.share_outlined, color: cs.onSurface.withValues(alpha: 0.54), size: 20),
             onPressed: _shareStock,

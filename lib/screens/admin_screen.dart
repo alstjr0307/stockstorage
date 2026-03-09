@@ -503,6 +503,15 @@ class _ManageCard extends StatelessWidget {
 
   Future<void> _confirmClose(BuildContext context) async {
     final controller = TextEditingController();
+    // 현재가 자동 fetch 후 pre-fill
+    StockPriceService.fetchPrice(pick.ticker, pick.market).then((result) {
+      if (result != null && controller.text.isEmpty) {
+        final val = pick.market == 'US'
+            ? result.price.toStringAsFixed(2)
+            : result.price.toInt().toString();
+        controller.text = val;
+      }
+    });
     final closedPrice = await showDialog<double>(
       context: context,
       builder: (_) => AlertDialog(
