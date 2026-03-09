@@ -30,13 +30,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0E1A),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0E1A),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 18),
+          icon: Icon(Icons.arrow_back_ios, color: cs.onSurface, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -52,7 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Text(
                   _isLogin ? '로그인' : '회원가입',
                   style: GoogleFonts.inter(
-                    color: Colors.white,
+                    color: cs.onSurface,
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
                   ),
@@ -60,7 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 8),
                 Text(
                   '매수 관심종목 상세 정보를 확인하세요',
-                  style: GoogleFonts.inter(color: Colors.white38, fontSize: 14),
+                  style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38), fontSize: 14),
                 ),
                 const SizedBox(height: 40),
                 _buildField('이메일', _emailController, hint: 'email@example.com'),
@@ -99,14 +100,14 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    const Expanded(child: Divider(color: Colors.white12)),
+                    Expanded(child: Divider(color: cs.onSurface.withValues(alpha: 0.12))),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Text('또는',
                           style: GoogleFonts.inter(
-                              color: Colors.white24, fontSize: 12)),
+                              color: cs.onSurface.withValues(alpha: 0.24), fontSize: 12)),
                     ),
-                    const Expanded(child: Divider(color: Colors.white12)),
+                    Expanded(child: Divider(color: cs.onSurface.withValues(alpha: 0.12))),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -183,7 +184,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     }),
                     child: Text(
                       _isLogin ? '계정이 없으신가요? 회원가입' : '이미 계정이 있으신가요? 로그인',
-                      style: GoogleFonts.inter(color: Colors.white38),
+                      style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38)),
                     ),
                   ),
                 ),
@@ -201,19 +202,20 @@ class _LoginScreenState extends State<LoginScreen> {
     String? hint,
     bool isPassword = false,
   }) {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: GoogleFonts.inter(color: Colors.white54, fontSize: 12)),
+            style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.54), fontSize: 12)),
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
           obscureText: isPassword,
-          style: GoogleFonts.inter(color: Colors.white),
+          style: GoogleFonts.inter(color: cs.onSurface),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.inter(color: Colors.white24),
+            hintStyle: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.24)),
             filled: true,
             fillColor: const Color(0xFF1A2035),
             border: OutlineInputBorder(
@@ -326,7 +328,7 @@ class _LoginScreenState extends State<LoginScreen> {
         title: Text(
           '닉네임 설정',
           style: GoogleFonts.inter(
-              color: Colors.white, fontWeight: FontWeight.w700),
+              color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w700),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -334,16 +336,16 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             Text(
               '댓글에 표시될 닉네임을 입력하세요.',
-              style: GoogleFonts.inter(color: Colors.white54, fontSize: 13),
+              style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54), fontSize: 13),
             ),
             const SizedBox(height: 14),
             TextField(
               controller: controller,
               autofocus: true,
-              style: GoogleFonts.inter(color: Colors.white),
+              style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface),
               decoration: InputDecoration(
                 hintText: '닉네임',
-                hintStyle: GoogleFonts.inter(color: Colors.white24),
+                hintStyle: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24)),
                 filled: true,
                 fillColor: const Color(0xFF0A0E1A),
                 border: OutlineInputBorder(

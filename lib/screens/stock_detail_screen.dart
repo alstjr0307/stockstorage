@@ -236,6 +236,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   Widget build(BuildContext context) {
     final pick = widget.pick;
     final formatter = NumberFormat('#,###');
+    final cs = Theme.of(context).colorScheme;
 
     final livePrice = _livePrice?.price;
     final returnRate = livePrice != null
@@ -244,26 +245,26 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     final isPositive = returnRate >= 0;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0E1A),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0E1A),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 18),
+          icon: Icon(Icons.arrow_back_ios, color: cs.onSurface, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           pick.ticker,
           style: GoogleFonts.robotoMono(
-              color: Colors.white, fontWeight: FontWeight.w700),
+              color: cs.onSurface, fontWeight: FontWeight.w700),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.share_outlined, color: Colors.white54, size: 20),
+            icon: Icon(Icons.share_outlined, color: cs.onSurface.withValues(alpha: 0.54), size: 20),
             onPressed: _shareStock,
           ),
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white38, size: 20),
+            icon: Icon(Icons.refresh, color: cs.onSurface.withValues(alpha: 0.38), size: 20),
             onPressed: () {
               setState(() { _loadingPrice = true; _loadingChart = true; });
               _fetchPrice();
@@ -290,7 +291,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                       Text(
                         pick.name,
                         style: GoogleFonts.inter(
-                          color: Colors.white,
+                          color: cs.onSurface,
                           fontSize: 24,
                           fontWeight: FontWeight.w700,
                         ),
@@ -303,7 +304,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                           Text(
                             DateFormat('yyyy.MM.dd HH:mm').format(pick.createdAt),
                             style: GoogleFonts.inter(
-                                color: Colors.white38, fontSize: 12),
+                                color: cs.onSurface.withValues(alpha: 0.38), fontSize: 12),
                           ),
                         ],
                       ),
@@ -342,7 +343,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                     Text(
                       '매수가 대비',
                       style: GoogleFonts.inter(
-                          color: Colors.white24, fontSize: 10),
+                          color: cs.onSurface.withValues(alpha: 0.24), fontSize: 10),
                     ),
                   ],
                 ),
@@ -368,14 +369,16 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                 children: [
                   Expanded(
                     child: _priceItem(
+                      context,
                       '매수가',
                       _formatPrice(pick.buyPrice, pick.market),
-                      Colors.white70,
+                      cs.onSurface.withValues(alpha: 0.7),
                     ),
                   ),
-                  Container(width: 1, height: 40, color: Colors.white12),
+                  Container(width: 1, height: 40, color: cs.onSurface.withValues(alpha: 0.12)),
                   Expanded(
                     child: _priceItem(
+                      context,
                       '목표가',
                       _formatPrice(pick.targetPrice, pick.market),
                       const Color(0xFF4ADE80),
@@ -397,7 +400,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(pick.category,
-                  style: GoogleFonts.inter(color: Colors.white70)),
+                  style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.7))),
             ),
             const SizedBox(height: 20),
 
@@ -414,7 +417,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
               child: Text(
                 pick.reason,
                 style: GoogleFonts.inter(
-                    color: Colors.white70, fontSize: 14, height: 1.8),
+                    color: cs.onSurface.withValues(alpha: 0.7), fontSize: 14, height: 1.8),
               ),
             ),
             const SizedBox(height: 24),
@@ -443,6 +446,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   }
 
   Widget _chartCard() {
+    final cs = Theme.of(context).colorScheme;
     if (_loadingChart) {
       return Container(
         height: 280,
@@ -496,7 +500,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                       border: Border.all(
                         color: _selectedPeriod == p
                             ? const Color(0xFF4ADE80).withValues(alpha: 0.5)
-                            : Colors.white12,
+                            : cs.onSurface.withValues(alpha: 0.12),
                       ),
                     ),
                     child: Text(
@@ -504,7 +508,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                       style: GoogleFonts.inter(
                         color: _selectedPeriod == p
                             ? const Color(0xFF4ADE80)
-                            : Colors.white38,
+                            : cs.onSurface.withValues(alpha: 0.38),
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                       ),
@@ -537,7 +541,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                             _selectedPeriod == _Period.month
                                 ? DateFormat('yyyy년 MM월').format(touched.date)
                                 : DateFormat('MM월 dd일').format(touched.date),
-                            style: GoogleFonts.inter(color: Colors.white54, fontSize: 10),
+                            style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.54), fontSize: 10),
                           ),
                           const SizedBox(width: 12),
                           _ohlcLabel('시', touched.open),
@@ -585,6 +589,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   }
 
   Widget _ohlcLabel(String label, double value, {Color? color}) {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(right: 10),
       child: RichText(
@@ -592,11 +597,11 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
           children: [
             TextSpan(
                 text: '$label ',
-                style: GoogleFonts.inter(color: Colors.white38, fontSize: 10)),
+                style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38), fontSize: 10)),
             TextSpan(
                 text: _formatPrice(value, widget.pick.market),
                 style: GoogleFonts.robotoMono(
-                    color: color ?? Colors.white70,
+                    color: color ?? cs.onSurface.withValues(alpha: 0.7),
                     fontSize: 10,
                     fontWeight: FontWeight.w600)),
           ],
@@ -606,19 +611,20 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   }
 
   Widget _livePriceCard(StockPick pick, NumberFormat formatter) {
+    final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFF1A2035),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
       ),
       child: Row(
         children: [
           const Icon(Icons.show_chart, color: Color(0xFF4ADE80), size: 18),
           const SizedBox(width: 10),
           Text('현재가',
-              style: GoogleFonts.inter(color: Colors.white38, fontSize: 12)),
+              style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38), fontSize: 12)),
           const SizedBox(width: 12),
           Expanded(
             child: _loadingPrice
@@ -631,7 +637,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                 : _livePrice == null
                     ? Text('조회 불가',
                         style: GoogleFonts.inter(
-                            color: Colors.white24, fontSize: 13))
+                            color: cs.onSurface.withValues(alpha: 0.24), fontSize: 13))
                     : Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
@@ -639,7 +645,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                           Text(
                             _livePrice!.formattedPrice,
                             style: GoogleFonts.inter(
-                              color: Colors.white,
+                              color: cs.onSurface,
                               fontWeight: FontWeight.w700,
                               fontSize: 18,
                             ),
@@ -687,11 +693,12 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     return '₩${formatter.format(price.toInt())}';
   }
 
-  Widget _priceItem(String label, String value, Color color) {
+  Widget _priceItem(BuildContext context, String label, String value, Color color) {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       children: [
         Text(label,
-            style: GoogleFonts.inter(color: Colors.white38, fontSize: 11)),
+            style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38), fontSize: 11)),
         const SizedBox(height: 6),
         Text(value,
             style: GoogleFonts.inter(
@@ -701,10 +708,11 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   }
 
   Widget _sectionLabel(String text) {
+    final cs = Theme.of(context).colorScheme;
     return Text(
       text,
       style: GoogleFonts.inter(
-          color: Colors.white54,
+          color: cs.onSurface.withValues(alpha: 0.54),
           fontSize: 12,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.5),
@@ -713,6 +721,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
 
   // ── 투자 메모 ─────────────────────────────────────────────────────────────
   Widget _memoSection() {
+    final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -725,7 +734,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             border: Border.all(
               color: _memoChanged
                   ? const Color(0xFF4ADE80).withValues(alpha: 0.4)
-                  : Colors.white.withValues(alpha: 0.06),
+                  : cs.onSurface.withValues(alpha: 0.06),
             ),
           ),
           child: Column(
@@ -733,7 +742,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
               TextField(
                 controller: _memoController,
                 style: GoogleFonts.inter(
-                    color: Colors.white70, fontSize: 14, height: 1.7),
+                    color: cs.onSurface.withValues(alpha: 0.7), fontSize: 14, height: 1.7),
                 maxLines: 5,
                 minLines: 3,
                 onChanged: (_) {
@@ -742,7 +751,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                 decoration: InputDecoration(
                   hintText: '이 종목에 대한 나만의 메모를 남겨보세요\n(매수 이유, 목표, 주의사항 등)',
                   hintStyle: GoogleFonts.inter(
-                      color: Colors.white24, fontSize: 13, height: 1.6),
+                      color: cs.onSurface.withValues(alpha: 0.24), fontSize: 13, height: 1.6),
                   filled: true,
                   fillColor: Colors.transparent,
                   border: OutlineInputBorder(
@@ -788,6 +797,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
 
   // ── 코멘트 토글 버튼 ─────────────────────────────────────────────────────
   Widget _commentToggleButton() {
+    final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () => setState(() => _showComments = !_showComments),
       child: Container(
@@ -795,24 +805,24 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         decoration: BoxDecoration(
           color: const Color(0xFF1A2035),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.chat_bubble_outline,
-                color: Colors.white38, size: 16),
+            Icon(Icons.chat_bubble_outline,
+                color: cs.onSurface.withValues(alpha: 0.38), size: 16),
             const SizedBox(width: 8),
             Text(
               '코멘트',
               style: GoogleFonts.inter(
-                  color: Colors.white54,
+                  color: cs.onSurface.withValues(alpha: 0.54),
                   fontSize: 13,
                   fontWeight: FontWeight.w600),
             ),
             const Spacer(),
             Icon(
               _showComments ? Icons.expand_less : Icons.expand_more,
-              color: Colors.white38,
+              color: cs.onSurface.withValues(alpha: 0.38),
               size: 18,
             ),
           ],
@@ -847,7 +857,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
                 child: Text(
                   '첫 번째 코멘트를 남겨보세요',
                   style: GoogleFonts.inter(
-                      color: Colors.white24, fontSize: 13),
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24), fontSize: 13),
                 ),
               );
             }
@@ -865,6 +875,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   Widget _commentItem(Comment comment) {
     final isOwn = _currentUser?.uid == comment.uid;
     final isAdmin = _currentUser?.uid == AuthService.adminUid;
+    final cs = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
@@ -880,7 +891,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
               Text(
                 comment.displayName,
                 style: GoogleFonts.inter(
-                    color: Colors.white70,
+                    color: cs.onSurface.withValues(alpha: 0.7),
                     fontSize: 12,
                     fontWeight: FontWeight.w600),
               ),
@@ -888,15 +899,15 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
               Text(
                 timeago.format(comment.createdAt, locale: 'ko'),
                 style: GoogleFonts.inter(
-                    color: Colors.white24, fontSize: 11),
+                    color: cs.onSurface.withValues(alpha: 0.24), fontSize: 11),
               ),
               const Spacer(),
               if (isOwn || isAdmin)
                 GestureDetector(
                   onTap: () => _firestoreService.deleteComment(
                       widget.pick.id, comment.id),
-                  child: const Icon(Icons.close,
-                      color: Colors.white24, size: 16),
+                  child: Icon(Icons.close,
+                      color: cs.onSurface.withValues(alpha: 0.24), size: 16),
                 ),
             ],
           ),
@@ -904,7 +915,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
           Text(
             comment.text,
             style: GoogleFonts.inter(
-                color: Colors.white, fontSize: 13, height: 1.5),
+                color: cs.onSurface, fontSize: 13, height: 1.5),
           ),
         ],
       ),
@@ -914,13 +925,14 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   // ── 코멘트 입력창 (하단 고정) ────────────────────────────────────────────
   Widget _commentInput() {
     final user = _currentUser;
+    final cs = Theme.of(context).colorScheme;
     if (user == null) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         color: const Color(0xFF0A0E1A),
         child: Text(
           '로그인 후 코멘트를 남길 수 있습니다',
-          style: GoogleFonts.inter(color: Colors.white24, fontSize: 13),
+          style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.24), fontSize: 13),
           textAlign: TextAlign.center,
         ),
       );
@@ -934,21 +946,21 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       ),
       decoration: BoxDecoration(
         color: const Color(0xFF0A0E1A),
-        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.06))),
+        border: Border(top: BorderSide(color: cs.onSurface.withValues(alpha: 0.06))),
       ),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _commentController,
-              style: GoogleFonts.inter(color: Colors.white, fontSize: 14),
+              style: GoogleFonts.inter(color: cs.onSurface, fontSize: 14),
               maxLines: null,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _submitComment(user),
               decoration: InputDecoration(
                 hintText: '코멘트를 입력하세요...',
                 hintStyle:
-                    GoogleFonts.inter(color: Colors.white24, fontSize: 14),
+                    GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.24), fontSize: 14),
                 filled: true,
                 fillColor: const Color(0xFF1A2035),
                 contentPadding: const EdgeInsets.symmetric(

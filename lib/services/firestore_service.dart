@@ -75,6 +75,17 @@ class FirestoreService {
         .set({'nickname': nickname}, SetOptions(merge: true));
   }
 
+  Future<bool> isNicknameTaken(String nickname, String currentUid) async {
+    final query = await _db
+        .collection('users')
+        .where('nickname', isEqualTo: nickname)
+        .limit(1)
+        .get();
+    if (query.docs.isEmpty) return false;
+    // 자기 자신 닉네임은 중복 허용
+    return query.docs.first.id != currentUid;
+  }
+
   // ── 관심종목 ──────────────────────────────────────────────────────────
   Stream<List<String>> getFavoriteIds(String uid) {
     return _db
@@ -204,5 +215,65 @@ class FirestoreService {
       'text': text,
       'updatedAt': Timestamp.fromDate(DateTime.now()),
     });
+  }
+
+  // ── pick 실시간 스트림 (투표 카운트 반영) ──────────────────────────────────
+  Stream<StockPick> getPickStream(String pickId) {
+    return _db
+        .collection('stock_picks')
+        .doc(pickId)
+        .snapshots()
+        .map((doc) => StockPick.fromFirestore(doc));
+  }
+
+  // ── 투표 ──────────────────────────────────────────────────────────────────
+  Future<String?> getUserVote(String uid, String pickId) async {
+    final doc = await _db
+        .collection('users')
+        .doc(uid)
+        .collection('votes')
+        .doc(pickId)
+        .get();
+    return doc.data()?['vote'] as String?;
+  }
+
+  Future<void> setVote(
+      String uid, String pickId, String? newVote, String? previousVote) async {
+    final batch = _db.batch();
+    final pickRef = _db.collection('stock_picks').doc(pickId);
+    final voteRef =
+        _db.collection('users').doc(uid).collection('votes').doc(pickId);
+
+    if (previousVote == 'up') {
+      batch.update(pickRef, {'upVotes': FieldValue.increment(-1)});
+    } else if (previousVote == 'down') {
+      batch.update(pickRef, {'downVotes': FieldValue.increment(-1)});
+    }
+
+    if (newVote == 'up') {
+      batch.update(pickRef, {'upVotes': FieldValue.increment(1)});
+      batch.set(voteRef, {'vote': 'up'});
+    } else if (newVote == 'down') {
+      batch.update(pickRef, {'downVotes': FieldValue.increment(1)});
+      batch.set(voteRef, {'vote': 'down'});
+    } else {
+      batch.delete(voteRef);
+    }
+
+    await batch.commit();
+  }
+
+  // ── 3개월 이내 활성 픽 (실적 탭 자동화용) ────────────────────────────────
+  Future<List<StockPick>> getRecentActivePicks() async {
+    final threeMonthsAgo =
+        DateTime.now().subtract(const Duration(days: 90));
+    final snapshot = await _db
+        .collection('stock_picks')
+        .where('status', isEqualTo: 'active')
+        .where('createdAt',
+            isGreaterThan: Timestamp.fromDate(threeMonthsAgo))
+        .orderBy('createdAt', descending: true)
+        .get();
+    return snapshot.docs.map((d) => StockPick.fromFirestore(d)).toList();
   }
 }

@@ -128,58 +128,45 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          BottomNavigationBar(
-            currentIndex: _currentPage,
-            onTap: (i) {
-              if (i != 0) _closeSearch();
-              setState(() => _currentPage = i);
-            },
-            backgroundColor: bgColor,
-            selectedItemColor: const Color(0xFF4ADE80),
-            unselectedItemColor: isDark ? Colors.white38 : Colors.black38,
-            type: BottomNavigationBarType.fixed,
-            selectedLabelStyle: GoogleFonts.inter(
-                fontSize: 10, fontWeight: FontWeight.w600),
-            unselectedLabelStyle: GoogleFonts.inter(fontSize: 10),
-            items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.show_chart),
-                label: '관심종목',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.account_balance_wallet_outlined),
-                label: '포트폴리오',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.emoji_events_outlined),
-                label: '추천 실적',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.analytics_outlined),
-                label: '시황 분석',
-              ),
-            ],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentPage,
+        onTap: (i) {
+          if (i != 0) _closeSearch();
+          setState(() => _currentPage = i);
+        },
+        backgroundColor: bgColor,
+        selectedItemColor: const Color(0xFF4ADE80),
+        unselectedItemColor: isDark ? Colors.white38 : Colors.black38,
+        type: BottomNavigationBarType.fixed,
+        selectedLabelStyle: GoogleFonts.inter(
+            fontSize: 10, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: GoogleFonts.inter(fontSize: 10),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.show_chart),
+            label: '관심종목',
           ),
-          const BannerAdWidget(),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            label: '포트폴리오',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.emoji_events_outlined),
+            label: '추천 실적',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.analytics_outlined),
+            label: '시황 분석',
+          ),
         ],
       ),
-      body: Column(
+      body: IndexedStack(
+        index: _currentPage,
         children: [
-          Expanded(
-            child: IndexedStack(
-              index: _currentPage,
-              children: [
-                _buildStockPicksPage(auth),
-                const PortfolioScreen(),
-                const LeaderboardScreen(),
-                const MarketAnalysisScreen(),
-              ],
-            ),
-          ),
-          _buildDisclaimer(),
+          _buildStockPicksPage(auth),
+          const PortfolioScreen(),
+          const LeaderboardScreen(),
+          const MarketAnalysisScreen(),
         ],
       ),
     );
@@ -201,49 +188,30 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildHeader() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF4ADE80).withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                  color: const Color(0xFF4ADE80).withValues(alpha: 0.4)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF4ADE80),
-                    shape: BoxShape.circle,
-                  ),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.orangeAccent.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent, size: 14),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                '본 정보는 투자 권유가 아니며, 투자 손실에 대한 책임은 투자자 본인에게 있습니다.',
+                style: GoogleFonts.inter(
+                  color: isDark ? Colors.orangeAccent.withValues(alpha: 0.85) : Colors.deepOrange,
+                  fontSize: 11,
+                  height: 1.4,
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  'LIVE',
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF4ADE80),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            '매수 관심종목',
-            style: GoogleFonts.inter(
-                color: isDark ? Colors.white54 : Colors.black45,
-                fontSize: 13),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -446,11 +414,29 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             }
 
+            // 광고 슬롯: 매 4번째 카드 다음에 배너 삽입
+            const adInterval = 4;
+            final adCount = picks.length ~/ adInterval;
+            final totalCount = picks.length + adCount;
+
             return ListView.builder(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
-              itemCount: picks.length,
+              itemCount: totalCount,
               itemBuilder: (context, index) {
-                final pick = picks[index];
+                // 광고 슬롯 여부 판별: adInterval 카드마다 1개 광고
+                final adsBefore = index ~/ (adInterval + 1);
+                final actualIndex = index - adsBefore;
+                final isAdSlot = (index + 1) % (adInterval + 1) == 0 &&
+                    adsBefore < adCount;
+
+                if (isAdSlot) {
+                  return const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 4),
+                    child: BannerAdWidget(),
+                  );
+                }
+
+                final pick = picks[actualIndex];
                 return StockCard(
                   pick: pick,
                   isLoggedIn: auth.isLoggedIn,
@@ -473,28 +459,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ─── 면책 조항 ────────────────────────────────────────────────────────────
-
-  Widget _buildDisclaimer() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Text(
-        '본 앱의 종목 정보는 참고용이며 투자 권유가 아닙니다. 투자 손실에 대한 책임은 투자자 본인에게 있습니다.',
-        style: GoogleFonts.inter(
-          fontSize: 10,
-          color: isDark ? Colors.white24 : Colors.black26,
-        ),
-        textAlign: TextAlign.center,
-      ),
-    );
-  }
-
   // ─── 프로필 메뉴 ──────────────────────────────────────────────────────────
 
   void _showProfileMenu(BuildContext context, AuthProvider auth) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = isDark ? const Color(0xFF1A2035) : Colors.white;
+    final uid = auth.user!.uid;
 
     showModalBottomSheet(
       context: context,
@@ -516,11 +486,46 @@ class _HomeScreenState extends State<HomeScreen> {
                     color: Color(0xFF4ADE80), size: 28),
               ),
               const SizedBox(height: 10),
+              // 닉네임 표시
+              FutureBuilder<String?>(
+                future: _firestoreService.getNickname(uid),
+                builder: (ctx, snap) {
+                  final nickname = snap.data;
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        nickname ?? '닉네임 없음',
+                        style: GoogleFonts.inter(
+                          color: nickname != null
+                              ? (isDark ? Colors.white : Colors.black87)
+                              : (isDark ? Colors.white38 : Colors.black38),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pop(context);
+                          _showNicknameDialog(auth, nickname);
+                        },
+                        child: Icon(
+                          Icons.edit_outlined,
+                          size: 16,
+                          color: isDark ? Colors.white38 : Colors.black38,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 4),
               Text(
                 auth.user?.email ?? '',
                 style: GoogleFonts.inter(
-                    color: isDark ? Colors.white54 : Colors.black45,
-                    fontSize: 13),
+                    color: isDark ? Colors.white38 : Colors.black38,
+                    fontSize: 12),
               ),
               const SizedBox(height: 20),
               // 테마 토글
@@ -575,6 +580,116 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showNicknameDialog(AuthProvider auth, String? currentNickname) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final uid = auth.user!.uid;
+    final controller = TextEditingController(text: currentNickname ?? '');
+    String? errorMsg;
+    bool checking = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final cardColor = isDark ? const Color(0xFF1A2035) : Colors.white;
+          return AlertDialog(
+            backgroundColor: cardColor,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16)),
+            title: Text(
+              '닉네임 설정',
+              style: GoogleFonts.inter(
+                color: isDark ? Colors.white : Colors.black87,
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+              ),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: controller,
+                  style: GoogleFonts.inter(
+                      color: isDark ? Colors.white : Colors.black87),
+                  decoration: InputDecoration(
+                    hintText: '닉네임 입력 (2~12자)',
+                    hintStyle: GoogleFonts.inter(
+                        color: isDark ? Colors.white38 : Colors.black38,
+                        fontSize: 13),
+                    filled: true,
+                    fillColor: isDark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.black.withValues(alpha: 0.04),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                    errorText: errorMsg,
+                  ),
+                  onChanged: (_) {
+                    if (errorMsg != null) {
+                      setDialogState(() => errorMsg = null);
+                    }
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('취소',
+                    style: GoogleFonts.inter(
+                        color: isDark ? Colors.white54 : Colors.black45)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4ADE80),
+                  foregroundColor: Colors.black,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: checking
+                    ? null
+                    : () async {
+                        final nick = controller.text.trim();
+                        if (nick.length < 2 || nick.length > 12) {
+                          setDialogState(() =>
+                              errorMsg = '닉네임은 2~12자여야 합니다');
+                          return;
+                        }
+                        setDialogState(() => checking = true);
+                        final taken = await _firestoreService
+                            .isNicknameTaken(nick, uid);
+                        if (taken) {
+                          setDialogState(() {
+                            errorMsg = '이미 사용 중인 닉네임입니다';
+                            checking = false;
+                          });
+                          return;
+                        }
+                        await _firestoreService.setNickname(uid, nick);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      },
+                child: checking
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.black),
+                      )
+                    : Text('저장',
+                        style:
+                            GoogleFonts.inter(fontWeight: FontWeight.w600)),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

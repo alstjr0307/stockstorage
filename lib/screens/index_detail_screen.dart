@@ -124,19 +124,19 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
     final color = isUp ? const Color(0xFF4ADE80) : Colors.redAccent;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0E1A),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF0A0E1A),
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 18),
+          icon: Icon(Icons.arrow_back_ios, color: Theme.of(context).colorScheme.onSurface, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(widget.name,
-            style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.w700)),
+            style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w700)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white38, size: 20),
+            icon: Icon(Icons.refresh, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38), size: 20),
             onPressed: _refresh,
           ),
         ],
@@ -169,7 +169,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                         Text(
                           _formatValue(price.price),
                           style: GoogleFonts.robotoMono(
-                            color: Colors.white,
+                            color: Theme.of(context).colorScheme.onSurface,
                             fontWeight: FontWeight.w700,
                             fontSize: 32,
                           ),
@@ -200,6 +200,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
   }
 
   Widget _buildCandleChart() {
+    final cs = Theme.of(context).colorScheme;
     if (_loadingChart) {
       return Container(
         height: 280,
@@ -251,7 +252,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                       border: Border.all(
                         color: _selectedPeriod == p
                             ? const Color(0xFF4ADE80).withValues(alpha: 0.5)
-                            : Colors.white12,
+                            : cs.onSurface.withValues(alpha: 0.12),
                       ),
                     ),
                     child: Text(
@@ -259,7 +260,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                       style: GoogleFonts.inter(
                         color: _selectedPeriod == p
                             ? const Color(0xFF4ADE80)
-                            : Colors.white38,
+                            : cs.onSurface.withValues(alpha: 0.38),
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                       ),
@@ -294,7 +295,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                                 : _selectedPeriod == _Period.month
                                     ? DateFormat('yyyy년 MM월').format(touched.date)
                                     : DateFormat('MM월 dd일').format(touched.date),
-                            style: GoogleFonts.inter(color: Colors.white54, fontSize: 10),
+                            style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.54), fontSize: 10),
                           ),
                           const SizedBox(width: 12),
                           _ohlcLabel('시', touched.open),
@@ -345,6 +346,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
   }
 
   Widget _ohlcLabel(String label, double value, {Color? color}) {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(right: 10),
       child: RichText(
@@ -352,11 +354,11 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
           children: [
             TextSpan(
                 text: '$label ',
-                style: GoogleFonts.inter(color: Colors.white38, fontSize: 10)),
+                style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38), fontSize: 10)),
             TextSpan(
                 text: _formatValue(value),
                 style: GoogleFonts.robotoMono(
-                    color: color ?? Colors.white70,
+                    color: color ?? cs.onSurface.withValues(alpha: 0.7),
                     fontSize: 10,
                     fontWeight: FontWeight.w600)),
           ],

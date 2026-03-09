@@ -49,3 +49,5 @@ lib/firebase_options.dart
 ios/Runner/GoogleService-Info.plist
 android/app/google-services.json
 functions/node_modules/
+android/key.properties
+android/app/upload-keystore.jks

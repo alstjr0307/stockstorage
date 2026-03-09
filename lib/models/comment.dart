@@ -6,6 +6,7 @@ class Comment {
   final String displayName;
   final String text;
   final DateTime createdAt;
+  final String? parentId;
 
   const Comment({
     required this.id,
@@ -13,6 +14,7 @@ class Comment {
     required this.displayName,
     required this.text,
     required this.createdAt,
+    this.parentId,
   });
 
   factory Comment.fromFirestore(DocumentSnapshot doc) {
@@ -23,6 +25,7 @@ class Comment {
       displayName: data['displayName'] ?? '익명',
       text: data['text'] ?? '',
       createdAt: (data['createdAt'] as Timestamp).toDate(),
+      parentId: data['parentId'] as String?,
     );
   }
 
@@ -31,5 +34,6 @@ class Comment {
         'displayName': displayName,
         'text': text,
         'createdAt': Timestamp.fromDate(createdAt),
+        if (parentId != null) 'parentId': parentId,
       };
 }

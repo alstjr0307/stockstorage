@@ -257,6 +257,66 @@ class StockPriceService {
     }
   }
 
+  /// Yahoo Finance 뉴스 (심볼 기준, 최대 5건)
+  static Future<List<StockNews>> fetchNews(String ticker, String market) async {
+    final symbol = toSymbol(ticker, market);
+    try {
+      final uri = Uri.parse(
+        'https://query1.finance.yahoo.com/v1/finance/search'
+        '?q=${Uri.encodeComponent(symbol)}&quotesCount=0&newsCount=5',
+      );
+      final response = await http
+          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) return [];
+      final json = jsonDecode(response.body);
+      final items = json['news'] as List<dynamic>? ?? [];
+      return items
+          .map((item) {
+            if (item == null) return null;
+            final title = item['title'] as String? ?? '';
+            final url = item['link'] as String? ?? '';
+            if (title.isEmpty || url.isEmpty) return null;
+            final ts = item['providerPublishTime'] as int? ?? 0;
+            return StockNews(
+              title: title,
+              url: url,
+              publisher: item['publisher'] as String? ?? '',
+              publishedAt: DateTime.fromMillisecondsSinceEpoch(ts * 1000),
+            );
+          })
+          .whereType<StockNews>()
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Yahoo Finance 실적 발표 예정일 (US 종목만)
+  static Future<DateTime?> fetchEarningsDate(String ticker, String market) async {
+    if (market != 'US') return null;
+    final symbol = toSymbol(ticker, market);
+    try {
+      final uri = Uri.parse(
+        'https://query1.finance.yahoo.com/v10/finance/quoteSummary/$symbol'
+        '?modules=calendarEvents',
+      );
+      final response = await http
+          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) return null;
+      final json = jsonDecode(response.body);
+      final dates = json['quoteSummary']?['result']?[0]
+          ?['calendarEvents']?['earnings']?['earningsDate'] as List<dynamic>?;
+      if (dates == null || dates.isEmpty) return null;
+      final raw = dates[0]?['raw'] as int?;
+      if (raw == null) return null;
+      return DateTime.fromMillisecondsSinceEpoch(raw * 1000);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// 1개월 일봉 (날짜, 종가) 배열 반환. 실패 시 빈 리스트.
   static Future<List<(DateTime, double)>> fetchHistoryDetailed(
       String ticker, String market) async {
@@ -336,4 +396,17 @@ class _CachedPrice {
   final PriceResult result;
   final DateTime fetchedAt;
   const _CachedPrice({required this.result, required this.fetchedAt});
+}
+
+class StockNews {
+  final String title;
+  final String url;
+  final String publisher;
+  final DateTime publishedAt;
+  const StockNews({
+    required this.title,
+    required this.url,
+    required this.publisher,
+    required this.publishedAt,
+  });
 }

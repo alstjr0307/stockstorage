@@ -49,6 +49,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return RefreshIndicator(
       color: const Color(0xFF4ADE80),
       backgroundColor: const Color(0xFF1A2035),
@@ -62,7 +63,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
               Text(
                 '주요 지수',
                 style: GoogleFonts.inter(
-                  color: Colors.white54,
+                  color: cs.onSurface.withValues(alpha: 0.54),
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.5,
@@ -79,8 +80,8 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
               else
                 GestureDetector(
                   onTap: _fetchIndices,
-                  child: const Icon(Icons.refresh,
-                      color: Colors.white38, size: 16),
+                  child: Icon(Icons.refresh,
+                      color: cs.onSurface.withValues(alpha: 0.38), size: 16),
                 ),
             ],
           ),
@@ -92,7 +93,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
             childAspectRatio: 2.0,
-            children: _indices.map((e) => _buildIndexCard(e.$1)).toList(),
+            children: _indices.map((e) => _buildIndexCard(context, e.$1)).toList(),
           ),
           const SizedBox(height: 28),
 
@@ -100,7 +101,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           Text(
             '시황 분석',
             style: GoogleFonts.inter(
-              color: Colors.white54,
+              color: cs.onSurface.withValues(alpha: 0.54),
               fontSize: 12,
               fontWeight: FontWeight.w600,
               letterSpacing: 0.5,
@@ -125,13 +126,13 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                   child: Center(
                     child: Text(
                       '등록된 시황 분석이 없습니다',
-                      style: GoogleFonts.inter(color: Colors.white38),
+                      style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38)),
                     ),
                   ),
                 );
               }
               return Column(
-                children: list.map(_buildAnalysisCard).toList(),
+                children: list.map((a) => _buildAnalysisCard(context, a)).toList(),
               );
             },
           ),
@@ -140,11 +141,12 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     );
   }
 
-  Widget _buildIndexCard(String name) {
+  Widget _buildIndexCard(BuildContext context, String name) {
     final entry = _indices.firstWhere((e) => e.$1 == name);
     final result = _prices[name];
     final isUp = result?.isUp ?? true;
     final color = isUp ? const Color(0xFF4ADE80) : Colors.redAccent;
+    final cs = Theme.of(context).colorScheme;
 
     return GestureDetector(
       onTap: () => Navigator.push(
@@ -162,7 +164,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF1A2035),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.05)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -171,7 +173,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           Text(
             name,
             style: GoogleFonts.inter(
-                color: Colors.white54,
+                color: cs.onSurface.withValues(alpha: 0.54),
                 fontSize: 10,
                 fontWeight: FontWeight.w500),
           ),
@@ -185,13 +187,13 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             )
           else if (result == null)
             Text('--',
-                style: GoogleFonts.inter(color: Colors.white38, fontSize: 13))
+                style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38), fontSize: 13))
           else ...[
             Text(
               _formatValue(name, result),
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.inter(
-                  color: Colors.white,
+                  color: cs.onSurface,
                   fontWeight: FontWeight.w700,
                   fontSize: 13),
             ),
@@ -218,7 +220,8 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     return NumberFormat('#,##0.00').format(result.price);
   }
 
-  Widget _buildAnalysisCard(MarketAnalysis a) {
+  Widget _buildAnalysisCard(BuildContext context, MarketAnalysis a) {
+    final cs = Theme.of(context).colorScheme;
     return GestureDetector(
       onTap: () => showModalBottomSheet(
         context: context,
@@ -241,13 +244,13 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                 Text(
                   DateFormat('yyyy년 MM월 dd일').format(a.createdAt),
                   style: GoogleFonts.inter(
-                      color: Colors.white38, fontSize: 12),
+                      color: cs.onSurface.withValues(alpha: 0.38), fontSize: 12),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   a.title,
                   style: GoogleFonts.inter(
-                      color: Colors.white,
+                      color: cs.onSurface,
                       fontWeight: FontWeight.w700,
                       fontSize: 18),
                 ),
@@ -255,7 +258,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                 Text(
                   a.body,
                   style: GoogleFonts.inter(
-                      color: Colors.white70, fontSize: 14, height: 1.9),
+                      color: cs.onSurface.withValues(alpha: 0.7), fontSize: 14, height: 1.9),
                 ),
               ],
             ),
@@ -268,20 +271,20 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
         decoration: BoxDecoration(
           color: const Color(0xFF1A2035),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          border: Border.all(color: cs.onSurface.withValues(alpha: 0.05)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               DateFormat('yyyy.MM.dd').format(a.createdAt),
-              style: GoogleFonts.inter(color: Colors.white38, fontSize: 11),
+              style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38), fontSize: 11),
             ),
             const SizedBox(height: 5),
             Text(
               a.title,
               style: GoogleFonts.inter(
-                  color: Colors.white,
+                  color: cs.onSurface,
                   fontWeight: FontWeight.w600,
                   fontSize: 14),
             ),
@@ -291,7 +294,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: GoogleFonts.inter(
-                  color: Colors.white54, fontSize: 13, height: 1.5),
+                  color: cs.onSurface.withValues(alpha: 0.54), fontSize: 13, height: 1.5),
             ),
           ],
         ),

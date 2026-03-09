@@ -16,6 +16,8 @@ class StockPick {
   final String status; // active, completed
   final double? closedPrice;
   final DateTime? closedAt;
+  final int upVotes;
+  final int downVotes;
 
   StockPick({
     required this.id,
@@ -33,6 +35,8 @@ class StockPick {
     this.status = 'active',
     this.closedPrice,
     this.closedAt,
+    this.upVotes = 0,
+    this.downVotes = 0,
   });
 
   double get returnRate => ((targetPrice - buyPrice) / buyPrice) * 100;
@@ -59,6 +63,8 @@ class StockPick {
       status: data['status'] ?? 'active',
       closedPrice: data['closedPrice']?.toDouble(),
       closedAt: (data['closedAt'] as Timestamp?)?.toDate(),
+      upVotes: (data['upVotes'] ?? 0).toInt(),
+      downVotes: (data['downVotes'] ?? 0).toInt(),
     );
   }
 

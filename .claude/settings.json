@@ -8,7 +8,25 @@
       "Bash(export PATH=\"$PATH:/c/Users/alswp/flutter/bin:/c/Program Files/flutter/bin\")",
       "Read(//c//**)",
       "Read(//c/flutter//**)",
-      "Bash(export PATH=\"/c/flutter/bin:$PATH\")"
+      "Bash(export PATH=\"/c/flutter/bin:$PATH\")",
+      "Bash(git add lib/services/auth_service.dart android/app/src/main/AndroidManifest.xml pubspec.yaml)",
+      "Bash(git commit:*)",
+      "Bash(git push origin main)",
+      "Bash(python -c \"from PIL import Image; print\\(''PIL ok''\\)\")",
+      "Bash(py --version)",
+      "Bash(py -c \"from PIL import Image; print\\(''ok''\\)\")",
+      "Bash(py -m pip install Pillow -q)",
+      "Bash(py -c \":*)",
+      "Bash(flutter pub run flutter_launcher_icons)",
+      "Bash(export PATH=\"$PATH:/c/Users/alswp/fvm/default/bin:/c/flutter/bin\")",
+      "Bash(flutter devices)",
+      "Bash(flutter run -d R3CT3128Z4K --debug)",
+      "Bash(keytool -list -v -keystore \"C:/Users/alswp/.android/debug.keystore\" -alias androiddebugkey -storepass android -keypass android)",
+      "Bash(\"/c/Program Files/Android/Android Studio/jbr/bin/keytool\" -list -v -keystore \"C:/Users/alswp/.android/debug.keystore\" -alias androiddebugkey -storepass android -keypass android)",
+      "Bash(findstr /i sha)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\alswp\\Downloads"
     ]
   }
 }
