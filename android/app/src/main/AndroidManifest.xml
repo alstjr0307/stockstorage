@@ -5,7 +5,7 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
-            android:name="com.tofusoft.stockstorage.MainActivity"
+            android:name="www.stockstorage.stockdiary.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""
@@ -37,6 +37,10 @@
                 <data android:scheme="kakao23dd91427bb7ac2055aab304681da522" />
             </intent-filter>
         </activity>
+        <!-- FCM 기본 알림 채널 -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="stockstorage_alerts"/>
         <!-- AdMob App ID -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"

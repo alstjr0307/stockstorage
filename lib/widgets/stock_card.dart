@@ -156,7 +156,6 @@ class _StockCardState extends State<StockCard> {
                                 ],
                               ),
                             ),
-                            _buildCategoryBadge(),
                             if (pick.isPremium) ...[
                               const SizedBox(width: 6),
                               _buildPremiumBadge(),
@@ -350,28 +349,6 @@ class _StockCardState extends State<StockCard> {
     );
   }
 
-  Widget _buildCategoryBadge() {
-    final colors = {
-      '단기': Colors.orangeAccent,
-      '장기': Colors.purpleAccent,
-    };
-    final color = colors[pick.category] ?? Colors.grey;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        pick.category,
-        style: GoogleFonts.inter(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
 
   Widget _buildPremiumBadge() {
     return const Icon(Icons.star, color: Color(0xFFFFD700), size: 16);

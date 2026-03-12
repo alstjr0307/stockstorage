@@ -208,9 +208,11 @@ class StockPriceService {
     }
   }
 
-  /// 1개월 일봉 종가 배열 반환. 실패 시 빈 리스트.
-  static Future<List<double>> fetchHistory(String ticker, String market) async {
-    final result = await fetchHistoryDetailed(ticker, market);
+  /// 종가 배열 반환. range: 1mo/3mo/6mo/1y/3y/5y, interval: 1d/1wk/1mo
+  static Future<List<double>> fetchHistory(String ticker, String market,
+      {String range = '1mo', String interval = '1d'}) async {
+    final result =
+        await fetchHistoryDetailed(ticker, market, range: range, interval: interval);
     return result.map((e) => e.$2).toList();
   }
 
@@ -257,8 +259,81 @@ class StockPriceService {
     }
   }
 
-  /// Yahoo Finance 뉴스 (심볼 기준, 최대 5건)
-  static Future<List<StockNews>> fetchNews(String ticker, String market) async {
+  /// 뉴스: 한국 종목은 Google News 한국어, 미국 종목은 Yahoo Finance
+  static Future<List<StockNews>> fetchNews(String ticker, String market,
+      {String? name}) async {
+    if (market != 'US' && name != null && name.isNotEmpty) {
+      return _fetchGoogleNewsKr(name);
+    }
+    return _fetchYahooNews(ticker, market);
+  }
+
+  static Future<List<StockNews>> _fetchGoogleNewsKr(String name) async {
+    try {
+      final query = Uri.encodeComponent('$name 주식');
+      final uri = Uri.parse(
+          'https://news.google.com/rss/search?q=$query&hl=ko&gl=KR&ceid=KR:ko');
+      final response = await http
+          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) return [];
+
+      final body = response.body;
+      final items = <StockNews>[];
+      final itemPattern = RegExp(r'<item>([\s\S]*?)</item>');
+      for (final match in itemPattern.allMatches(body).take(5)) {
+        final item = match.group(1)!;
+        // 제목 끝 " - 출처" 제거
+        final title = _xmlTag(item, 'title')
+            .replaceAll(RegExp(r'\s*-\s*[^-]+$'), '')
+            .trim();
+        final link = _xmlTag(item, 'link');
+        final pubDateStr = _xmlTag(item, 'pubDate');
+        final source = RegExp(r'<source[^>]*>([^<]*)</source>')
+                .firstMatch(item)
+                ?.group(1)
+                ?.trim() ??
+            '';
+        if (title.isEmpty || link.isEmpty) continue;
+        DateTime publishedAt;
+        try {
+          publishedAt = _parseRssDate(pubDateStr);
+        } catch (_) {
+          publishedAt = DateTime.now();
+        }
+        items.add(StockNews(
+            title: title, url: link, publisher: source, publishedAt: publishedAt));
+      }
+      return items;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static String _xmlTag(String xml, String tag) {
+    final m = RegExp(
+            '<$tag>(?:<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|([\\s\\S]*?))</$tag>')
+        .firstMatch(xml);
+    return (m?.group(1) ?? m?.group(2) ?? '').trim();
+  }
+
+  static DateTime _parseRssDate(String s) {
+    // "Mon, 10 Mar 2026 10:00:00 GMT"
+    final p = s.trim().split(' ');
+    const months = {
+      'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+      'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+    };
+    final day = int.tryParse(p[1]) ?? 1;
+    final month = months[p[2]] ?? 1;
+    final year = int.tryParse(p[3]) ?? 2024;
+    final t = p.length > 4 ? p[4].split(':') : ['0', '0'];
+    return DateTime.utc(year, month, day, int.tryParse(t[0]) ?? 0,
+        int.tryParse(t.length > 1 ? t[1] : '0') ?? 0).toLocal();
+  }
+
+  static Future<List<StockNews>> _fetchYahooNews(
+      String ticker, String market) async {
     final symbol = toSymbol(ticker, market);
     try {
       final uri = Uri.parse(
@@ -317,14 +392,15 @@ class StockPriceService {
     }
   }
 
-  /// 1개월 일봉 (날짜, 종가) 배열 반환. 실패 시 빈 리스트.
+  /// (날짜, 종가) 배열 반환. 실패 시 빈 리스트.
   static Future<List<(DateTime, double)>> fetchHistoryDetailed(
-      String ticker, String market) async {
+      String ticker, String market,
+      {String range = '1mo', String interval = '1d'}) async {
     final symbol = toSymbol(ticker, market);
     try {
       final uri = Uri.parse(
         'https://query1.finance.yahoo.com/v8/finance/chart/$symbol'
-        '?interval=1d&range=1mo',
+        '?interval=$interval&range=$range',
       );
       final response = await http.get(uri, headers: {
         'User-Agent': 'Mozilla/5.0',

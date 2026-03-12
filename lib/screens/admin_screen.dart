@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import '../models/announcement.dart';
 import '../models/market_analysis.dart';
 import '../models/stock_pick.dart';
@@ -94,10 +95,10 @@ class _UploadTabState extends State<_UploadTab> {
   late final TextEditingController _targetPriceController;
   late final TextEditingController _reasonController;
 
-  String _category = '단기';
   String _market = 'KS';
   bool _isPremium = false;
   bool _isLoading = false;
+  DateTime? _earningsDate;
 
   bool get _isEdit => widget.editPick != null;
 
@@ -113,9 +114,9 @@ class _UploadTabState extends State<_UploadTab> {
         TextEditingController(text: p != null ? p.targetPrice.toInt().toString() : '');
     _reasonController = TextEditingController(text: p?.reason ?? '');
     if (p != null) {
-      _category = p.category;
       _market = p.market;
       _isPremium = p.isPremium;
+      _earningsDate = p.earningsDate;
     }
   }
 
@@ -154,43 +155,8 @@ class _UploadTabState extends State<_UploadTab> {
           const SizedBox(height: 14),
           _buildField('매수 근거', _reasonController,
               hint: '매수 근거를 입력하세요...', maxLines: 5),
-          const SizedBox(height: 20),
-          Text('투자 기간',
-              style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54), fontSize: 12)),
-          const SizedBox(height: 8),
-          Row(
-            children: ['단기', '장기'].map((cat) {
-              final isSelected = _category == cat;
-              final cs = Theme.of(context).colorScheme;
-              return GestureDetector(
-                onTap: () => setState(() => _category = cat),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  margin: const EdgeInsets.only(right: 10),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? const Color(0xFF4ADE80)
-                        : const Color(0xFF1A2035),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: isSelected
-                          ? const Color(0xFF4ADE80)
-                          : cs.onSurface.withValues(alpha: 0.12),
-                    ),
-                  ),
-                  child: Text(
-                    cat,
-                    style: GoogleFonts.inter(
-                      color: isSelected ? Colors.black : cs.onSurface.withValues(alpha: 0.6),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
+          const SizedBox(height: 14),
+          _buildEarningsDatePicker(),
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -279,6 +245,71 @@ class _UploadTabState extends State<_UploadTab> {
     );
   }
 
+  Widget _buildEarningsDatePicker() {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('실적 발표일',
+            style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.54), fontSize: 12)),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: _earningsDate ?? DateTime.now(),
+              firstDate: DateTime(2020),
+              lastDate: DateTime(2030),
+              builder: (context, child) => Theme(
+                data: Theme.of(context).copyWith(
+                  colorScheme: Theme.of(context).colorScheme.copyWith(
+                    primary: const Color(0xFF4ADE80),
+                    onPrimary: Colors.black,
+                  ),
+                ),
+                child: child!,
+              ),
+            );
+            if (picked != null) setState(() => _earningsDate = picked);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A2035),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.calendar_today,
+                    color: cs.onSurface.withValues(alpha: 0.38), size: 16),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _earningsDate != null
+                        ? DateFormat('yyyy년 MM월 dd일').format(_earningsDate!)
+                        : '선택사항',
+                    style: GoogleFonts.inter(
+                      color: _earningsDate != null
+                          ? cs.onSurface
+                          : cs.onSurface.withValues(alpha: 0.38),
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                if (_earningsDate != null)
+                  GestureDetector(
+                    onTap: () => setState(() => _earningsDate = null),
+                    child: Icon(Icons.close,
+                        color: cs.onSurface.withValues(alpha: 0.38), size: 16),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
@@ -293,10 +324,11 @@ class _UploadTabState extends State<_UploadTab> {
         targetPrice:
             double.parse(_targetPriceController.text.replaceAll(',', '')),
         reason: _reasonController.text.trim(),
-        category: _category,
+        category: '',
         market: _market,
         isPremium: _isPremium,
         createdAt: widget.editPick?.createdAt ?? DateTime.now(),
+        earningsDate: _earningsDate,
       );
 
       if (_isEdit) {
@@ -329,8 +361,8 @@ class _UploadTabState extends State<_UploadTab> {
           _targetPriceController.clear();
           _reasonController.clear();
           setState(() {
-            _category = '단기';
             _isPremium = false;
+            _earningsDate = null;
           });
         }
       }
@@ -355,40 +387,67 @@ class _ManageTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final firestoreService = FirestoreService();
+    final cs = Theme.of(context).colorScheme;
 
     return StreamBuilder<List<StockPick>>(
       stream: firestoreService.getStockPicks(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-              child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
-        }
-        if (snapshot.hasError) {
-          return Center(
-            child: Text('오류: ${snapshot.error}',
-                style: GoogleFonts.inter(color: Colors.redAccent)),
-          );
-        }
-        final picks = snapshot.data ?? [];
-        if (picks.isEmpty) {
-          return Center(
-            child: Text('등록된 종목이 없습니다',
-                style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38))),
-          );
-        }
+      builder: (context, activeSnap) {
+        return StreamBuilder<List<StockPick>>(
+          stream: firestoreService.getCompletedPicks(),
+          builder: (context, completedSnap) {
+            if (activeSnap.connectionState == ConnectionState.waiting ||
+                completedSnap.connectionState == ConnectionState.waiting) {
+              return const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+            }
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: picks.length,
-          itemBuilder: (context, index) {
-            final pick = picks[index];
-            return _ManageCard(
-              pick: pick,
-              firestoreService: firestoreService,
+            final activePicks = activeSnap.data ?? [];
+            final completedPicks = completedSnap.data ?? [];
+
+            if (activePicks.isEmpty && completedPicks.isEmpty) {
+              return Center(
+                child: Text('등록된 종목이 없습니다',
+                    style: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.38))),
+              );
+            }
+
+            return ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (activePicks.isNotEmpty) ...[
+                  _sectionLabel(cs, '진행 중 (${activePicks.length})'),
+                  const SizedBox(height: 8),
+                  ...activePicks.map((pick) => _ManageCard(
+                        pick: pick,
+                        firestoreService: firestoreService,
+                      )),
+                ],
+                if (completedPicks.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  _sectionLabel(cs, '종료 종목 (${completedPicks.length})'),
+                  const SizedBox(height: 8),
+                  ...completedPicks.map((pick) => _ManageCard(
+                        pick: pick,
+                        firestoreService: firestoreService,
+                      )),
+                ],
+              ],
             );
           },
         );
       },
+    );
+  }
+
+  Widget _sectionLabel(ColorScheme cs, String text) {
+    return Text(
+      text,
+      style: GoogleFonts.inter(
+          color: cs.onSurface.withValues(alpha: 0.45),
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.5),
     );
   }
 }
@@ -400,12 +459,6 @@ class _ManageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final categoryColors = {
-      '단기': Colors.orangeAccent,
-      '장기': Colors.purpleAccent,
-    };
-    final catColor = categoryColors[pick.category] ?? Colors.grey;
-
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
@@ -433,22 +486,6 @@ class _ManageCard extends StatelessWidget {
                           color: Theme.of(context).colorScheme.onSurface,
                           fontWeight: FontWeight.w700,
                           fontSize: 14),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: catColor.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        pick.category,
-                        style: GoogleFonts.inter(
-                            color: catColor,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600),
-                      ),
                     ),
                     if (pick.isPremium) ...[
                       const SizedBox(width: 4),
@@ -479,17 +516,18 @@ class _ManageCard extends StatelessWidget {
               tooltip: '종료 처리',
               onPressed: () => _confirmClose(context),
             ),
-          // 편집 버튼
-          IconButton(
-            icon: const Icon(Icons.edit_outlined,
-                color: Color(0xFF4ADE80), size: 20),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => _EditScreen(pick: pick),
+          // 편집 버튼 (진행 중만)
+          if (!pick.isCompleted)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined,
+                  color: Color(0xFF4ADE80), size: 20),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => _EditScreen(pick: pick),
+                ),
               ),
             ),
-          ),
           // 삭제 버튼
           IconButton(
             icon: const Icon(Icons.delete_outline,

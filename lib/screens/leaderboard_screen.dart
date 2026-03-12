@@ -3,277 +3,72 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../models/stock_pick.dart';
 import '../services/firestore_service.dart';
-import '../services/stock_price_service.dart';
 
-class LeaderboardScreen extends StatefulWidget {
+class LeaderboardScreen extends StatelessWidget {
   const LeaderboardScreen({super.key});
-
-  @override
-  State<LeaderboardScreen> createState() => _LeaderboardScreenState();
-}
-
-class _LeaderboardScreenState extends State<LeaderboardScreen> {
-  final _fs = FirestoreService();
-  List<StockPick> _activePicks = [];
-  final Map<String, PriceResult?> _activePrices = {};
-  bool _loadingActive = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadActivePicks();
-  }
-
-  Future<void> _loadActivePicks() async {
-    setState(() => _loadingActive = true);
-    final picks = await _fs.getRecentActivePicks();
-    final prices = await Future.wait(
-      picks.map((p) => StockPriceService.fetchPrice(p.ticker, p.market)),
-    );
-    if (mounted) {
-      setState(() {
-        _activePicks = picks;
-        for (var i = 0; i < picks.length; i++) {
-          _activePrices[picks[i].id] = prices[i];
-        }
-        _loadingActive = false;
-      });
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final fs = FirestoreService();
 
     return StreamBuilder<List<StockPick>>(
-      stream: _fs.getCompletedPicks(),
+      stream: fs.getCompletedPicks(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting &&
-            _loadingActive) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
               child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
         }
 
         final completedPicks = snapshot.data ?? [];
-        return RefreshIndicator(
-          color: const Color(0xFF4ADE80),
-          backgroundColor: cs.surface,
-          onRefresh: _loadActivePicks,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-            children: [
-              // ── 진행 중 픽 수익률 (3개월 이내) ──
-              _buildActiveSection(cs),
-              const SizedBox(height: 28),
-
-              // ── 완료 픽 실적 ──
-              if (completedPicks.isNotEmpty) ...[
-                _buildCompletedSection(cs, completedPicks),
-              ] else ...[
-                Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(height: 40),
-                      Icon(Icons.emoji_events_outlined,
-                          color: cs.onSurface.withValues(alpha: 0.2), size: 64),
-                      const SizedBox(height: 16),
-                      Text(
-                        '아직 완료된 추천 종목이 없습니다',
-                        style: GoogleFonts.inter(
-                            color: cs.onSurface.withValues(alpha: 0.4),
-                            fontSize: 15),
-                      ),
-                    ],
-                  ),
+        if (completedPicks.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.emoji_events_outlined,
+                    color: cs.onSurface.withValues(alpha: 0.2), size: 64),
+                const SizedBox(height: 16),
+                Text(
+                  '아직 완료된 추천 종목이 없습니다',
+                  style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.4),
+                      fontSize: 15),
                 ),
               ],
-            ],
-          ),
-        );
+            ),
+          );
+        }
+
+        return _LeaderboardContent(cs: cs, completedPicks: completedPicks);
       },
     );
   }
+}
 
-  Widget _buildActiveSection(ColorScheme cs) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              '진행 중 수익률',
-              style: GoogleFonts.inter(
-                  color: cs.onSurface.withValues(alpha: 0.5),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              '(최근 3개월 추천)',
-              style: GoogleFonts.inter(
-                  color: cs.onSurface.withValues(alpha: 0.3), fontSize: 11),
-            ),
-            const Spacer(),
-            if (_loadingActive)
-              const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 1.5, color: Color(0xFF4ADE80)))
-            else
-              GestureDetector(
-                onTap: _loadActivePicks,
-                child: const Icon(Icons.refresh,
-                    color: Colors.white38, size: 16),
-              ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        if (!_loadingActive && _activePicks.isEmpty)
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Center(
-              child: Text(
-                '최근 3개월 내 진행 중인 추천이 없습니다',
-                style: GoogleFonts.inter(
-                    color: cs.onSurface.withValues(alpha: 0.3), fontSize: 13),
-              ),
-            ),
-          )
-        else
-          ...(_activePicks.map((pick) {
-            final priceResult = _activePrices[pick.id];
-            final livePrice = priceResult?.price;
-            final returnRate = livePrice != null
-                ? ((livePrice - pick.buyPrice) / pick.buyPrice) * 100
-                : pick.returnRate;
-            return _buildActiveCard(cs, pick, returnRate, priceResult);
-          })),
-      ],
-    );
-  }
+class _LeaderboardContent extends StatelessWidget {
+  final ColorScheme cs;
+  final List<StockPick> completedPicks;
 
-  Widget _buildActiveCard(ColorScheme cs, StockPick pick, double returnRate,
-      PriceResult? priceResult) {
-    final isPositive = returnRate >= 0;
-    final retColor =
-        isPositive ? const Color(0xFF4ADE80) : Colors.redAccent;
-    final daysAgo =
-        DateTime.now().difference(pick.createdAt).inDays;
+  const _LeaderboardContent(
+      {required this.cs, required this.completedPicks});
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: retColor.withValues(alpha: 0.2),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      pick.name,
-                      style: GoogleFonts.inter(
-                          color: cs.onSurface,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 5, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF4ADE80).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(
-                            color: const Color(0xFF4ADE80)
-                                .withValues(alpha: 0.3)),
-                      ),
-                      child: Text('진행중',
-                          style: GoogleFonts.inter(
-                              color: const Color(0xFF4ADE80),
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${pick.ticker}  추천 $daysAgo일 전',
-                  style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.38),
-                      fontSize: 11),
-                ),
-                if (priceResult != null)
-                  Text(
-                    '현재가 ${priceResult.formattedPrice}',
-                    style: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.5),
-                        fontSize: 11),
-                  ),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: retColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
-                  style: GoogleFonts.inter(
-                      color: retColor,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                priceResult != null ? '실시간' : '목표가 기준',
-                style: GoogleFonts.inter(
-                    color: cs.onSurface.withValues(alpha: 0.25),
-                    fontSize: 10),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCompletedSection(
-      ColorScheme cs, List<StockPick> picks) {
-    final total = picks.length;
-    final wins = picks.where((p) => p.actualReturnRate > 0).length;
+  @override
+  Widget build(BuildContext context) {
+    final total = completedPicks.length;
+    final wins = completedPicks.where((p) => p.actualReturnRate > 0).length;
     final winRate = (wins / total) * 100;
-    final avgReturn =
-        picks.map((p) => p.actualReturnRate).reduce((a, b) => a + b) / total;
-    final best = picks
-        .reduce((a, b) => a.actualReturnRate > b.actualReturnRate ? a : b);
-    final sorted = [...picks]
+    final avgReturn = completedPicks
+            .map((p) => p.actualReturnRate)
+            .reduce((a, b) => a + b) /
+        total;
+    final best = completedPicks.reduce(
+        (a, b) => a.actualReturnRate > b.actualReturnRate ? a : b);
+    final sorted = [...completedPicks]
       ..sort((a, b) => b.actualReturnRate.compareTo(a.actualReturnRate));
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
       children: [
         _buildStatsCard(cs, total, wins, winRate, avgReturn, best),
         const SizedBox(height: 20),
@@ -312,7 +107,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   color: Color(0xFFFFD700), size: 20),
               const SizedBox(width: 8),
               Text(
-                '전체 추천 실적',
+                '이전 관심종목 실적',
                 style: GoogleFonts.inter(
                     color: cs.onSurface,
                     fontWeight: FontWeight.w700,

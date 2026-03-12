@@ -32,17 +32,6 @@ class AdService {
     return 'ca-app-pub-6925657557995580/5025289757';
   }
 
-  static String get _rewardedInterstitialAdUnitId {
-    if (kIsWeb) return '';
-    if (_useTestAds) {
-      return Platform.isAndroid
-          ? 'ca-app-pub-3940256099942544/5354046379'
-          : 'ca-app-pub-3940256099942544/6978759866';
-    }
-    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/7973491496';
-    return 'ca-app-pub-6925657557995580/2170500475';
-  }
-
   // ── 배너 광고 ─────────────────────────────────────────────────────────
   static bool get adsEnabled => _adsEnabled;
   static String get bannerAdUnitId => _bannerAdUnitId;
@@ -88,44 +77,4 @@ class AdService {
     }
   }
 
-  // ── 보상형 전면광고 ────────────────────────────────────────────────────
-  RewardedInterstitialAd? _rewardedInterstitialAd;
-  bool _isRewardedInterstitialReady = false;
-
-  void loadRewardedInterstitial() {
-    if (kIsWeb || !_adsEnabled) return;
-    RewardedInterstitialAd.load(
-      adUnitId: _rewardedInterstitialAdUnitId,
-      request: const AdRequest(),
-      rewardedInterstitialAdLoadCallback: RewardedInterstitialAdLoadCallback(
-        onAdLoaded: (ad) {
-          _rewardedInterstitialAd = ad;
-          _isRewardedInterstitialReady = true;
-          ad.fullScreenContentCallback = FullScreenContentCallback(
-            onAdDismissedFullScreenContent: (ad) {
-              ad.dispose();
-              _rewardedInterstitialAd = null;
-              _isRewardedInterstitialReady = false;
-              loadRewardedInterstitial();
-            },
-            onAdFailedToShowFullScreenContent: (ad, error) {
-              ad.dispose();
-              _rewardedInterstitialAd = null;
-              _isRewardedInterstitialReady = false;
-            },
-          );
-        },
-        onAdFailedToLoad: (error) {
-          _isRewardedInterstitialReady = false;
-        },
-      ),
-    );
-  }
-
-  void showRewardedInterstitialIfReady() {
-    if (!_adsEnabled) return;
-    if (_isRewardedInterstitialReady && _rewardedInterstitialAd != null) {
-      _rewardedInterstitialAd!.show(onUserEarnedReward: (_, __) {});
-    }
-  }
 }

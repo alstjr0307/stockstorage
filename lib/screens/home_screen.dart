@@ -13,6 +13,7 @@ import 'leaderboard_screen.dart';
 import 'login_screen.dart';
 import 'market_analysis_screen.dart';
 import 'portfolio_screen.dart';
+import 'stock_compare_screen.dart';
 import 'stock_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -24,10 +25,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final FirestoreService _firestoreService = FirestoreService();
-  String _selectedCategory = '전체';
-  final List<String> _categories = ['전체', '단기', '장기'];
 
-  // 탭: 0=종목, 1=포트폴리오, 2=실적, 3=시황
+  // 탭: 0=주식저장소, 1=내 종목, 2=종목비교, 3=시황분석
   int _currentPage = 0;
 
   // 검색
@@ -35,7 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
 
-  static const _tabTitles = ['주식저장소', '내 포트폴리오', '추천 실적', '시황 분석'];
+  static const _tabTitles = ['주식저장소', '내 종목', '종목 비교', '시황 분석'];
 
   @override
   void dispose() {
@@ -148,11 +147,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.account_balance_wallet_outlined),
-            label: '포트폴리오',
+            label: '내 종목',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.emoji_events_outlined),
-            label: '추천 실적',
+            icon: Icon(Icons.compare_arrows),
+            label: '종목비교',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.analytics_outlined),
@@ -164,298 +163,58 @@ class _HomeScreenState extends State<HomeScreen> {
         index: _currentPage,
         children: [
           _buildStockPicksPage(auth),
-          const PortfolioScreen(),
-          const LeaderboardScreen(),
+          _buildMyStocksPage(),
+          const StockCompareScreen(),
           const MarketAnalysisScreen(),
         ],
       ),
     );
   }
 
-  // ─── 관심종목 페이지 ──────────────────────────────────────────────────────
+  // ─── 내 종목 페이지 (포트폴리오 + 이전 관심종목 실적) ───────────────────
+  Widget _buildMyStocksPage() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          Container(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            child: TabBar(
+              indicatorColor: const Color(0xFF4ADE80),
+              indicatorWeight: 2,
+              labelColor: const Color(0xFF4ADE80),
+              unselectedLabelColor: isDark ? Colors.white38 : Colors.black38,
+              labelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+              unselectedLabelStyle: GoogleFonts.inter(fontSize: 13),
+              dividerColor: cs.onSurface.withValues(alpha: 0.08),
+              tabs: const [
+                Tab(text: '내 종목'),
+                Tab(text: '이전 관심종목 실적'),
+              ],
+            ),
+          ),
+          const Expanded(
+            child: TabBarView(
+              children: [
+                PortfolioScreen(),
+                LeaderboardScreen(),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── 주식저장소 페이지 ────────────────────────────────────────────────────
 
   Widget _buildStockPicksPage(AuthProvider auth) {
-    return Column(
-      children: [
-        _buildHeader(),
-        _buildAnnouncements(),
-        _buildCategoryFilter(),
-        Expanded(child: _buildStockList(auth)),
-      ],
-    );
-  }
-
-  Widget _buildHeader() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.orangeAccent.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.25)),
-        ),
-        child: Row(
-          children: [
-            const Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent, size: 14),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                '본 정보는 투자 권유가 아니며, 투자 손실에 대한 책임은 투자자 본인에게 있습니다.',
-                style: GoogleFonts.inter(
-                  color: isDark ? Colors.orangeAccent.withValues(alpha: 0.85) : Colors.deepOrange,
-                  fontSize: 11,
-                  height: 1.4,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAnnouncements() {
-    return StreamBuilder<List<Announcement>>(
-      stream: _firestoreService.getAnnouncements(),
-      builder: (context, snapshot) {
-        final list = snapshot.data ?? [];
-        if (list.isEmpty) return const SizedBox.shrink();
-        return Column(
-          children: list.map((a) => _buildAnnouncementCard(a)).toList(),
-        );
-      },
-    );
-  }
-
-  Widget _buildAnnouncementCard(Announcement a) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? const Color(0xFF1A2035) : Colors.white;
-
-    return GestureDetector(
-      onTap: () => showModalBottomSheet(
-        context: context,
-        backgroundColor: cardColor,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (_) => Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (a.isPinned)
-                Row(children: [
-                  const Icon(Icons.push_pin,
-                      color: Color(0xFF4ADE80), size: 14),
-                  const SizedBox(width: 4),
-                  Text('고정 공지',
-                      style: GoogleFonts.inter(
-                          color: const Color(0xFF4ADE80), fontSize: 11)),
-                ]),
-              if (a.isPinned) const SizedBox(height: 8),
-              Text(a.title,
-                  style: GoogleFonts.inter(
-                      color: isDark ? Colors.white : Colors.black87,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 17)),
-              const SizedBox(height: 12),
-              Text(a.body,
-                  style: GoogleFonts.inter(
-                      color: isDark ? Colors.white70 : Colors.black54,
-                      fontSize: 14,
-                      height: 1.7)),
-            ],
-          ),
-        ),
-      ),
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: a.isPinned
-                ? const Color(0xFF4ADE80).withValues(alpha: 0.4)
-                : (isDark
-                    ? Colors.white.withValues(alpha: 0.05)
-                    : Colors.black.withValues(alpha: 0.06)),
-          ),
-        ),
-        child: Row(
-          children: [
-            if (a.isPinned)
-              const Padding(
-                padding: EdgeInsets.only(right: 6),
-                child: Icon(Icons.push_pin,
-                    color: Color(0xFF4ADE80), size: 13),
-              ),
-            Expanded(
-              child: Text(
-                a.title,
-                style: GoogleFonts.inter(
-                    color: isDark ? Colors.white70 : Colors.black54,
-                    fontSize: 13,
-                    fontWeight:
-                        a.isPinned ? FontWeight.w600 : FontWeight.w400),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Icon(Icons.chevron_right,
-                color: isDark ? Colors.white24 : Colors.black26, size: 16),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCategoryFilter() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return SizedBox(
-      height: 48,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: _categories.length,
-        itemBuilder: (context, index) {
-          final cat = _categories[index];
-          final isSelected = _selectedCategory == cat;
-          return GestureDetector(
-            onTap: () => setState(() => _selectedCategory = cat),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? const Color(0xFF4ADE80)
-                    : (isDark ? const Color(0xFF1A2035) : Colors.white),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isSelected
-                      ? const Color(0xFF4ADE80)
-                      : (isDark ? Colors.white12 : Colors.black12),
-                ),
-              ),
-              child: Center(
-                child: Text(
-                  cat,
-                  style: GoogleFonts.inter(
-                    color: isSelected
-                        ? Colors.black
-                        : (isDark ? Colors.white60 : Colors.black54),
-                    fontSize: 13,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.w400,
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildStockList(AuthProvider auth) {
-    final uid = auth.user?.uid;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return StreamBuilder<List<String>>(
-      stream: uid != null
-          ? _firestoreService.getFavoriteIds(uid)
-          : Stream.value([]),
-      builder: (context, favSnapshot) {
-        final favIds = favSnapshot.data?.toSet() ?? <String>{};
-
-        return StreamBuilder<List<StockPick>>(
-          stream: _firestoreService.getStockPicks(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                  child: CircularProgressIndicator(
-                      color: Color(0xFF4ADE80)));
-            }
-            if (snapshot.hasError) {
-              return Center(
-                  child: Text('오류: ${snapshot.error}',
-                      style: GoogleFonts.inter(color: Colors.redAccent)));
-            }
-
-            final allPicks = snapshot.data ?? [];
-
-            // 카테고리 + 검색 필터
-            final picks = allPicks.where((p) {
-              if (_selectedCategory != '전체' &&
-                  p.category != _selectedCategory) {
-                return false;
-              }
-              if (_searchQuery.isNotEmpty) {
-                final q = _searchQuery.toLowerCase();
-                return p.name.toLowerCase().contains(q) ||
-                    p.ticker.toLowerCase().contains(q);
-              }
-              return true;
-            }).toList();
-
-            if (picks.isEmpty) {
-              return Center(
-                child: Text(
-                  _searchQuery.isNotEmpty
-                      ? "'$_searchQuery' 검색 결과가 없습니다"
-                      : '아직 등록된 종목이 없습니다',
-                  style: GoogleFonts.inter(
-                      color: isDark ? Colors.white38 : Colors.black38),
-                ),
-              );
-            }
-
-            // 광고 슬롯: 매 4번째 카드 다음에 배너 삽입
-            const adInterval = 4;
-            final adCount = picks.length ~/ adInterval;
-            final totalCount = picks.length + adCount;
-
-            return ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
-              itemCount: totalCount,
-              itemBuilder: (context, index) {
-                // 광고 슬롯 여부 판별: adInterval 카드마다 1개 광고
-                final adsBefore = index ~/ (adInterval + 1);
-                final actualIndex = index - adsBefore;
-                final isAdSlot = (index + 1) % (adInterval + 1) == 0 &&
-                    adsBefore < adCount;
-
-                if (isAdSlot) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 4),
-                    child: BannerAdWidget(),
-                  );
-                }
-
-                final pick = picks[actualIndex];
-                return StockCard(
-                  pick: pick,
-                  isLoggedIn: auth.isLoggedIn,
-                  isFavorite: favIds.contains(pick.id),
-                  onFavoriteToggle: auth.isLoggedIn && uid != null
-                      ? () => _firestoreService.toggleFavorite(
-                          uid, pick.id, favIds.contains(pick.id))
-                      : null,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => StockDetailScreen(pick: pick)),
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
+    return _StockStoragePage(
+      auth: auth,
+      searchQuery: _searchQuery,
+      firestoreService: _firestoreService,
     );
   }
 
@@ -585,6 +344,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showNicknameDialog(AuthProvider auth, String? currentNickname) {
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final uid = auth.user!.uid;
     final controller = TextEditingController(text: currentNickname ?? '');
@@ -690,6 +450,373 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+// ─── 주식저장소 서브탭 페이지 (관심종목 + 공지사항) ─────────────────────────
+
+class _StockStoragePage extends StatefulWidget {
+  const _StockStoragePage({
+    required this.auth,
+    required this.searchQuery,
+    required this.firestoreService,
+  });
+  final AuthProvider auth;
+  final String searchQuery;
+  final FirestoreService firestoreService;
+
+  @override
+  State<_StockStoragePage> createState() => _StockStoragePageState();
+}
+
+class _StockStoragePageState extends State<_StockStoragePage>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        _buildHeader(isDark),
+        const SizedBox(height: 12),
+        Container(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          child: TabBar(
+            controller: _tabController,
+            indicatorColor: const Color(0xFF4ADE80),
+            indicatorWeight: 2,
+            labelColor: const Color(0xFF4ADE80),
+            unselectedLabelColor: isDark ? Colors.white38 : Colors.black38,
+            labelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+            unselectedLabelStyle: GoogleFonts.inter(fontSize: 13),
+            dividerColor: cs.onSurface.withValues(alpha: 0.08),
+            tabs: const [
+              Tab(text: '관심종목'),
+              Tab(text: '공지사항'),
+            ],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _StockListTab(
+                auth: widget.auth,
+                searchQuery: widget.searchQuery,
+                firestoreService: widget.firestoreService,
+              ),
+              _AnnouncementsTab(firestoreService: widget.firestoreService),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeader(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.orangeAccent.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.25)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent, size: 14),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                '본 정보는 투자 권유가 아니며, 투자 손실에 대한 책임은 투자자 본인에게 있습니다.',
+                style: GoogleFonts.inter(
+                  color: isDark ? Colors.orangeAccent.withValues(alpha: 0.85) : Colors.deepOrange,
+                  fontSize: 11,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+}
+
+// ─── 관심종목 탭 ──────────────────────────────────────────────────────────────
+
+class _StockListTab extends StatefulWidget {
+  const _StockListTab({
+    required this.auth,
+    required this.searchQuery,
+    required this.firestoreService,
+  });
+  final AuthProvider auth;
+  final String searchQuery;
+  final FirestoreService firestoreService;
+
+  @override
+  State<_StockListTab> createState() => _StockListTabState();
+}
+
+class _StockListTabState extends State<_StockListTab>
+    with AutomaticKeepAliveClientMixin {
+  late Stream<List<StockPick>> _picksStream;
+  late Stream<List<String>> _favStream;
+  String? _trackedUid;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _picksStream = widget.firestoreService.getStockPicks();
+    _trackedUid = widget.auth.user?.uid;
+    _favStream = _trackedUid != null
+        ? widget.firestoreService.getFavoriteIds(_trackedUid!)
+        : Stream.value([]);
+  }
+
+  @override
+  void didUpdateWidget(_StockListTab old) {
+    super.didUpdateWidget(old);
+    // old.auth와 widget.auth는 동일 인스턴스이므로 _trackedUid로 비교
+    final newUid = widget.auth.user?.uid;
+    if (_trackedUid != newUid) {
+      _trackedUid = newUid;
+      _favStream = newUid != null
+          ? widget.firestoreService.getFavoriteIds(newUid)
+          : Stream.value([]);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final auth = widget.auth;
+    final uid = auth.user?.uid;
+
+    return StreamBuilder<List<String>>(
+      stream: _favStream,
+      builder: (context, favSnapshot) {
+        final favIds = favSnapshot.data?.toSet() ?? <String>{};
+        return StreamBuilder<List<StockPick>>(
+          stream: _picksStream,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+            }
+            if (snapshot.hasError) {
+              return Center(child: Text('오류: ${snapshot.error}', style: GoogleFonts.inter(color: Colors.redAccent)));
+            }
+
+            final allPicks = snapshot.data ?? [];
+            final q = widget.searchQuery.toLowerCase();
+            final picks = widget.searchQuery.isEmpty
+                ? allPicks
+                : allPicks.where((p) =>
+                    p.name.toLowerCase().contains(q) ||
+                    p.ticker.toLowerCase().contains(q)).toList();
+
+            if (picks.isEmpty) {
+              return Center(
+                child: Text(
+                  widget.searchQuery.isNotEmpty
+                      ? "'${widget.searchQuery}' 검색 결과가 없습니다"
+                      : '아직 등록된 종목이 없습니다',
+                  style: GoogleFonts.inter(color: isDark ? Colors.white38 : Colors.black38),
+                ),
+              );
+            }
+
+            const adInterval = 4;
+            final adCount = picks.length ~/ adInterval;
+            final totalCount = picks.length + adCount;
+
+            return ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+              itemCount: totalCount,
+              itemBuilder: (context, index) {
+                final adsBefore = index ~/ (adInterval + 1);
+                final actualIndex = index - adsBefore;
+                final isAdSlot = (index + 1) % (adInterval + 1) == 0 && adsBefore < adCount;
+
+                if (isAdSlot) {
+                  return const Padding(padding: EdgeInsets.symmetric(vertical: 4), child: BannerAdWidget());
+                }
+
+                final pick = picks[actualIndex];
+                return StockCard(
+                  key: ValueKey(pick.id),
+                  pick: pick,
+                  isLoggedIn: auth.isLoggedIn,
+                  isFavorite: favIds.contains(pick.id),
+                  onFavoriteToggle: auth.isLoggedIn && uid != null
+                      ? () => widget.firestoreService.toggleFavorite(uid, pick.id, favIds.contains(pick.id))
+                      : null,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => StockDetailScreen(pick: pick)),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+// ─── 공지사항 탭 ──────────────────────────────────────────────────────────────
+
+class _AnnouncementsTab extends StatefulWidget {
+  const _AnnouncementsTab({required this.firestoreService});
+  final FirestoreService firestoreService;
+
+  @override
+  State<_AnnouncementsTab> createState() => _AnnouncementsTabState();
+}
+
+class _AnnouncementsTabState extends State<_AnnouncementsTab>
+    with AutomaticKeepAliveClientMixin {
+  late final Stream<List<Announcement>> _stream;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = widget.firestoreService.getAnnouncements();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return StreamBuilder<List<Announcement>>(
+      stream: _stream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+        }
+        final list = snapshot.data ?? [];
+        if (list.isEmpty) {
+          return Center(
+            child: Text('등록된 공지사항이 없습니다',
+                style: GoogleFonts.inter(color: isDark ? Colors.white38 : Colors.black38)),
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(0, 8, 0, 20),
+          itemCount: list.length,
+          itemBuilder: (context, index) => _AnnouncementCard(a: list[index]),
+        );
+      },
+    );
+  }
+}
+
+class _AnnouncementCard extends StatelessWidget {
+  const _AnnouncementCard({required this.a});
+  final Announcement a;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1A2035) : Colors.white;
+
+    return GestureDetector(
+      onTap: () => showModalBottomSheet(
+        context: context,
+        backgroundColor: cardColor,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (_) => Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (a.isPinned) ...[
+                Row(children: [
+                  const Icon(Icons.push_pin, color: Color(0xFF4ADE80), size: 14),
+                  const SizedBox(width: 4),
+                  Text('고정 공지', style: GoogleFonts.inter(color: const Color(0xFF4ADE80), fontSize: 11)),
+                ]),
+                const SizedBox(height: 8),
+              ],
+              Text(a.title,
+                  style: GoogleFonts.inter(
+                      color: isDark ? Colors.white : Colors.black87,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 17)),
+              const SizedBox(height: 12),
+              Text(a.body,
+                  style: GoogleFonts.inter(
+                      color: isDark ? Colors.white70 : Colors.black54,
+                      fontSize: 14,
+                      height: 1.7)),
+            ],
+          ),
+        ),
+      ),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: a.isPinned
+                ? const Color(0xFF4ADE80).withValues(alpha: 0.4)
+                : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.06)),
+          ),
+        ),
+        child: Row(
+          children: [
+            if (a.isPinned)
+              const Padding(
+                padding: EdgeInsets.only(right: 6),
+                child: Icon(Icons.push_pin, color: Color(0xFF4ADE80), size: 13),
+              ),
+            Expanded(
+              child: Text(
+                a.title,
+                style: GoogleFonts.inter(
+                    color: isDark ? Colors.white70 : Colors.black54,
+                    fontSize: 13,
+                    fontWeight: a.isPinned ? FontWeight.w600 : FontWeight.w400),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Icon(Icons.chevron_right, color: isDark ? Colors.white24 : Colors.black26, size: 16),
+          ],
+        ),
       ),
     );
   }

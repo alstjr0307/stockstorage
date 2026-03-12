@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../models/market_analysis.dart';
-import '../models/stock_pick.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
+import 'earnings_calendar_screen.dart';
 import 'index_detail_screen.dart';
 
 class MarketAnalysisScreen extends StatefulWidget {
@@ -27,32 +27,10 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   final Map<String, PriceResult?> _prices = {};
   bool _loadingIndices = true;
 
-  // 실적 캘린더
-  List<({StockPick pick, DateTime earningsDate})> _earnings = [];
-  bool _loadingEarnings = true;
-
   @override
   void initState() {
     super.initState();
     _fetchIndices();
-    _fetchEarnings();
-  }
-
-  Future<void> _fetchEarnings() async {
-    final picks = await FirestoreService().getRecentActivePicks();
-    final usPicks = picks.where((p) => p.market == 'US').toList();
-    final futures = usPicks.map((p) => StockPriceService.fetchEarningsDate(p.ticker, p.market));
-    final dates = await Future.wait(futures);
-    final now = DateTime.now();
-    final result = <({StockPick pick, DateTime earningsDate})>[];
-    for (var i = 0; i < usPicks.length; i++) {
-      final d = dates[i];
-      if (d != null && d.isAfter(now.subtract(const Duration(days: 1)))) {
-        result.add((pick: usPicks[i], earningsDate: d));
-      }
-    }
-    result.sort((a, b) => a.earningsDate.compareTo(b.earningsDate));
-    if (mounted) setState(() { _earnings = result; _loadingEarnings = false; });
   }
 
   Future<void> _fetchIndices() async {
@@ -121,73 +99,54 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           const SizedBox(height: 28),
 
           // ── 실적 캘린더 섹션 ──
-          Text(
-            '실적 발표 일정 (US)',
-            style: GoogleFonts.inter(
-              color: cs.onSurface.withValues(alpha: 0.54),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const EarningsCalendarScreen()),
             ),
-          ),
-          const SizedBox(height: 10),
-          if (_loadingEarnings)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4ADE80))),
-            )
-          else if (_earnings.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: Text('예정된 실적 발표가 없습니다',
-                  style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38), fontSize: 13)),
-            )
-          else
-            ...(_earnings.map((e) {
-              final daysLeft = e.earningsDate.difference(DateTime.now()).inDays;
-              final label = daysLeft == 0 ? '오늘' : 'D-$daysLeft';
-              final urgent = daysLeft <= 3;
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(e.pick.name,
-                              style: GoogleFonts.inter(
-                                  color: cs.onSurface, fontWeight: FontWeight.w600, fontSize: 13)),
-                          Text(e.pick.ticker,
-                              style: GoogleFonts.inter(
-                                  color: cs.onSurface.withValues(alpha: 0.38), fontSize: 11)),
-                        ],
-                      ),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: cs.onSurface.withValues(alpha: 0.05)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4ADE80).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                    child: const Icon(Icons.calendar_month,
+                        color: Color(0xFF4ADE80), size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(DateFormat('MM/dd').format(e.earningsDate),
+                        Text('실적 발표 캘린더',
                             style: GoogleFonts.inter(
-                                color: cs.onSurface.withValues(alpha: 0.54), fontSize: 12)),
-                        Text(label,
+                                color: cs.onSurface,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14)),
+                        Text('추천 종목의 실적 발표 일정 확인',
                             style: GoogleFonts.inter(
-                                color: urgent ? Colors.orangeAccent : const Color(0xFF4ADE80),
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13)),
+                                color: cs.onSurface.withValues(alpha: 0.54),
+                                fontSize: 12)),
                       ],
                     ),
-                  ],
-                ),
-              );
-            })),
-          const SizedBox(height: 20),
+                  ),
+                  Icon(Icons.chevron_right,
+                      color: cs.onSurface.withValues(alpha: 0.38)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 28),
 
           // ── 시황 분석 포스트 섹션 ──
           Text(

@@ -18,6 +18,7 @@ class StockPick {
   final DateTime? closedAt;
   final int upVotes;
   final int downVotes;
+  final DateTime? earningsDate;
 
   StockPick({
     required this.id,
@@ -37,6 +38,7 @@ class StockPick {
     this.closedAt,
     this.upVotes = 0,
     this.downVotes = 0,
+    this.earningsDate,
   });
 
   double get returnRate => ((targetPrice - buyPrice) / buyPrice) * 100;
@@ -65,6 +67,7 @@ class StockPick {
       closedAt: (data['closedAt'] as Timestamp?)?.toDate(),
       upVotes: (data['upVotes'] ?? 0).toInt(),
       downVotes: (data['downVotes'] ?? 0).toInt(),
+      earningsDate: (data['earningsDate'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -84,6 +87,7 @@ class StockPick {
       'status': status,
       if (closedPrice != null) 'closedPrice': closedPrice,
       if (closedAt != null) 'closedAt': Timestamp.fromDate(closedAt!),
+      if (earningsDate != null) 'earningsDate': Timestamp.fromDate(earningsDate!),
     };
   }
 }

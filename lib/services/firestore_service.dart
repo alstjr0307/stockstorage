@@ -263,6 +263,15 @@ class FirestoreService {
     await batch.commit();
   }
 
+  // ── 실적 발표일 있는 픽 (캘린더용) ───────────────────────────────────────
+  Stream<List<StockPick>> getPicksWithEarnings() {
+    return _db
+        .collection('stock_picks')
+        .where('earningsDate', isGreaterThan: Timestamp(0, 0))
+        .snapshots()
+        .map((s) => s.docs.map((d) => StockPick.fromFirestore(d)).toList());
+  }
+
   // ── 3개월 이내 활성 픽 (실적 탭 자동화용) ────────────────────────────────
   Future<List<StockPick>> getRecentActivePicks() async {
     final threeMonthsAgo =

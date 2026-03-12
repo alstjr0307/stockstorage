@@ -9,7 +9,11 @@ class NotificationService {
   NotificationService._();
   static final instance = NotificationService._();
 
+  bool _initialized = false;
+
   Future<void> init() async {
+    if (_initialized) return;
+    _initialized = true;
     final messaging = FirebaseMessaging.instance;
 
     // iOS 권한 요청
@@ -25,10 +29,14 @@ class NotificationService {
       if (apnsToken == null) return; // 시뮬레이터 등 APNS 미지원 환경
     }
 
-    // FCM 토큰 저장
-    final token = await messaging.getToken();
-    if (token != null) {
-      FirestoreService().saveFcmToken(token).catchError((_) {});
+    // FCM 토큰 저장 (Google Play Services 없는 환경에서는 건너뜀)
+    try {
+      final token = await messaging.getToken();
+      if (token != null) {
+        FirestoreService().saveFcmToken(token).catchError((_) {});
+      }
+    } catch (_) {
+      return; // SERVICE_NOT_AVAILABLE 등 FCM 미지원 환경
     }
 
     // 새 종목 알림 토픽 구독
