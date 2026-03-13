@@ -15,6 +15,7 @@ import 'market_analysis_screen.dart';
 import 'portfolio_screen.dart';
 import 'stock_compare_screen.dart';
 import 'stock_detail_screen.dart';
+import '../main.dart' show initAds;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -35,6 +36,12 @@ class _HomeScreenState extends State<HomeScreen> {
   String _searchQuery = '';
 
   static const _tabTitles = ['주식저장소', '내 종목', '종목 비교', '시황 분석'];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => initAds());
+  }
 
   @override
   void dispose() {

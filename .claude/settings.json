@@ -23,7 +23,17 @@
       "Bash(flutter run -d R3CT3128Z4K --debug)",
       "Bash(keytool -list -v -keystore \"C:/Users/alswp/.android/debug.keystore\" -alias androiddebugkey -storepass android -keypass android)",
       "Bash(\"/c/Program Files/Android/Android Studio/jbr/bin/keytool\" -list -v -keystore \"C:/Users/alswp/.android/debug.keystore\" -alias androiddebugkey -storepass android -keypass android)",
-      "Bash(findstr /i sha)"
+      "Bash(findstr /i sha)",
+      "Read(//Users/alswp/stockstorage/**)",
+      "Bash(dart run:*)",
+      "Bash(sips -s format png --setProperty hasAlpha false /Users/alswp/stockstorage/assets/icon.png)",
+      "Bash(sips -s format jpeg /Users/alswp/stockstorage/assets/icon.png --out /tmp/icon_noa.jpg)",
+      "Bash(sips -s format png /tmp/icon_noa.jpg --out /Users/alswp/stockstorage/assets/icon_noalpha.png)",
+      "Bash(open /Users/alswp/stockstorage/build/ios/archive/Runner.xcarchive)",
+      "Bash(sips -g hasAlpha /Users/alswp/stockstorage/assets/icon.png)",
+      "Bash(xcrun simctl:*)",
+      "Bash(open -a Simulator)",
+      "Bash(git add:*)"
     ],
     "additionalDirectories": [
       "C:\\Users\\alswp\\Downloads"

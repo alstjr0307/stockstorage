@@ -175,6 +175,38 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 10),
+                // Apple 로그인 (Apple 브랜드 가이드라인 준수)
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.black,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                    onPressed: _isLoading ? null : _signInWithApple,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.apple, size: 22, color: Colors.white),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Apple로 로그인',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 16),
                 Center(
                   child: TextButton(
@@ -255,6 +287,28 @@ class _LoginScreenState extends State<LoginScreen> {
           SnackBar(
               content: Text(e.toString()),
               backgroundColor: Colors.redAccent),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _signInWithApple() async {
+    setState(() => _isLoading = true);
+    try {
+      final user = await context.read<AuthProvider>().signInWithApple();
+      if (user != null && mounted) {
+        final existing = await _firestoreService.getNickname(user.uid);
+        if (existing == null && mounted) {
+          await _showNicknameDialog(user.uid);
+        }
+      }
+      if (mounted) Navigator.pop(context);
+    } on Exception catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString()), backgroundColor: Colors.redAccent),
         );
       }
     } finally {

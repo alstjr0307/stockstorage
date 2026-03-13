@@ -87,6 +87,13 @@ class AuthService {
     }
   }
 
+  Future<UserCredential?> signInWithApple() async {
+    final provider = AppleAuthProvider()
+      ..addScope('email')
+      ..addScope('name');
+    return _auth.signInWithProvider(provider);
+  }
+
   Future<void> signOut() async {
     await _googleSignIn.signOut();
     // 카카오 로그아웃 (카카오로 로그인한 경우만)

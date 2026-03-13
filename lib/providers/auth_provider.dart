@@ -32,6 +32,12 @@ class AuthProvider extends ChangeNotifier {
     return cred?.user;
   }
 
+  Future<User?> signInWithApple() async {
+    final cred = await _authService.signInWithApple();
+    notifyListeners();
+    return cred?.user;
+  }
+
   Future<void> signOut() async {
     await _authService.signOut();
     notifyListeners();

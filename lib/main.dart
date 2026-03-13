@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:provider/provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
@@ -29,11 +31,20 @@ void main() async {
   // AndroidManifest.xml 및 Info.plist 도 함께 설정이 필요합니다.
   KakaoSdk.init(nativeAppKey: '23dd91427bb7ac2055aab304681da522');
 
-  await MobileAds.instance.initialize();
-  AdService.instance.loadInterstitial();
   await NotificationService.instance.init();
   timeago.setLocaleMessages('ko', timeago.KoMessages());
   runApp(const StockStorageApp());
+}
+
+Future<void> initAds() async {
+  if (Platform.isIOS) {
+    final status = await AppTrackingTransparency.trackingAuthorizationStatus;
+    if (status == TrackingStatus.notDetermined) {
+      await AppTrackingTransparency.requestTrackingAuthorization();
+    }
+  }
+  await MobileAds.instance.initialize();
+  AdService.instance.loadInterstitial();
 }
 
 class StockStorageApp extends StatelessWidget {
