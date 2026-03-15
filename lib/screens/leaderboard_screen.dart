@@ -73,7 +73,7 @@ class _LeaderboardContent extends StatelessWidget {
         _buildStatsCard(cs, total, wins, winRate, avgReturn, best),
         const SizedBox(height: 20),
         Text(
-          '완료 종목 순위',
+          '종료 종목 순위',
           style: GoogleFonts.inter(
               color: cs.onSurface.withValues(alpha: 0.5),
               fontSize: 12,
@@ -107,7 +107,7 @@ class _LeaderboardContent extends StatelessWidget {
                   color: Color(0xFFFFD700), size: 20),
               const SizedBox(width: 8),
               Text(
-                '이전 관심종목 실적',
+                '종료 추천주 실적',
                 style: GoogleFonts.inter(
                     color: cs.onSurface,
                     fontWeight: FontWeight.w700,

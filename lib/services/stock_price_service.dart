@@ -367,6 +367,198 @@ class StockPriceService {
     }
   }
 
+  static final _fundamentalsCache = <String, _CachedFundamentals>{};
+  static const _fundamentalsCacheDuration = Duration(hours: 6);
+
+  // Yahoo Finance 크럼 캐시
+  static String? _yahoocrumb;
+  static String? _yahooCookie;
+
+  /// PER / PBR 반환
+  /// 한국(KS/KQ): sise.nhn(PER 실시간) + main.nhn(BPS) → PBR = 현재가/BPS
+  /// 미국(US):    Yahoo Finance quoteSummary (crumb 방식)
+  /// [currentPrice]: 한국주식 PBR 계산용 현재가 (없으면 PBR 생략)
+  static Future<FundamentalsResult?> fetchFundamentals(
+      String ticker, String market, {double? currentPrice}) async {
+    final symbol = toSymbol(ticker, market);
+
+    // 캐시는 가격 변동과 무관한 PER/BPS 기준으로 유지
+    // currentPrice가 달라져도 캐시 무효화 안 함 (PER은 서버에서 이미 현재가 반영)
+    final cached = _fundamentalsCache[symbol];
+    if (cached != null &&
+        DateTime.now().difference(cached.fetchedAt) < _fundamentalsCacheDuration) {
+      // PBR은 현재가로 재계산
+      if (currentPrice != null && cached.result.bps != null) {
+        return FundamentalsResult(
+          per: cached.result.per,
+          pbr: currentPrice / cached.result.bps!,
+          bps: cached.result.bps,
+        );
+      }
+      return cached.result;
+    }
+
+    try {
+      final FundamentalsResult? fundamentals;
+      if (market == 'KS' || market == 'KQ') {
+        fundamentals = await _fetchNaverFundamentals(ticker, currentPrice);
+      } else {
+        fundamentals = await _fetchYahooFundamentals(symbol);
+      }
+      if (fundamentals == null) return null;
+      _fundamentalsCache[symbol] =
+          _CachedFundamentals(result: fundamentals, fetchedAt: DateTime.now());
+      return fundamentals;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 네이버 금융:
+  ///   PER  → sise.nhn (id="_sise_per", 현재가 기반 실시간)
+  ///   BPS  → main.nhn (최근 연간 BPS)
+  ///   PBR  → currentPrice / BPS
+  static Future<FundamentalsResult?> _fetchNaverFundamentals(
+      String ticker, double? currentPrice) async {
+    // PER: sise.nhn
+    final siseUri = Uri.parse('https://finance.naver.com/item/sise.nhn?code=$ticker');
+    final siseRes = await http.get(siseUri, headers: {
+      'User-Agent': 'Mozilla/5.0',
+      'Referer': 'https://finance.naver.com',
+    }).timeout(const Duration(seconds: 8));
+
+    double? per;
+    if (siseRes.statusCode == 200) {
+      final perMatch = RegExp(r'id="_sise_per"[^>]*>\s*([\d.,]+)')
+          .firstMatch(siseRes.body);
+      per = double.tryParse(perMatch?.group(1)?.replaceAll(',', '') ?? '');
+    }
+
+    // BPS: main.nhn
+    double? bps;
+    double? pbr;
+    final mainUri = Uri.parse('https://finance.naver.com/item/main.nhn?code=$ticker');
+    final mainRes = await http.get(mainUri, headers: {
+      'User-Agent': 'Mozilla/5.0',
+      'Referer': 'https://finance.naver.com',
+    }).timeout(const Duration(seconds: 8));
+
+    if (mainRes.statusCode == 200) {
+      final bpsMatch = RegExp(r'BPS\(\uc6d0\)</strong></th>[\s\S]{0,300}<td[^>]*>\s*([\d.,]+)')
+          .firstMatch(mainRes.body);
+      bps = double.tryParse(bpsMatch?.group(1)?.replaceAll(',', '') ?? '');
+      if (bps != null && currentPrice != null) {
+        pbr = currentPrice / bps;
+      }
+    }
+
+    if (per == null && pbr == null) return null;
+    return FundamentalsResult(per: per, pbr: pbr, bps: bps);
+  }
+
+  /// Yahoo Finance quoteSummary (crumb 방식, 미국주식)
+  static Future<FundamentalsResult?> _fetchYahooFundamentals(String symbol) async {
+    // 크럼이 없으면 발급
+    if (_yahoocrumb == null) {
+      final cookieRes = await http.get(
+        Uri.parse('https://fc.yahoo.com'),
+        headers: {'User-Agent': 'Mozilla/5.0'},
+      ).timeout(const Duration(seconds: 6));
+      _yahooCookie = cookieRes.headers['set-cookie']
+          ?.split(',')
+          .map((c) => c.split(';').first.trim())
+          .join('; ');
+
+      final crumbRes = await http.get(
+        Uri.parse('https://query2.finance.yahoo.com/v1/test/getcrumb'),
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          'Cookie': _yahooCookie ?? '',
+        },
+      ).timeout(const Duration(seconds: 6));
+      _yahoocrumb = crumbRes.body.trim();
+    }
+
+    final uri = Uri.parse(
+      'https://query1.finance.yahoo.com/v10/finance/quoteSummary/$symbol'
+      '?modules=summaryDetail,defaultKeyStatistics&crumb=${Uri.encodeComponent(_yahoocrumb!)}',
+    );
+    final response = await http.get(uri, headers: {
+      'User-Agent': 'Mozilla/5.0',
+      'Cookie': _yahooCookie ?? '',
+    }).timeout(const Duration(seconds: 8));
+
+    if (response.statusCode == 401) {
+      // 크럼 만료 시 초기화 후 재시도
+      _yahoocrumb = null;
+      _yahooCookie = null;
+      return null;
+    }
+    if (response.statusCode != 200) return null;
+
+    final json = jsonDecode(response.body);
+    final result = json['quoteSummary']?['result']?[0];
+    if (result == null) return null;
+
+    final per = (result['summaryDetail']?['trailingPE']?['raw'] as num?)?.toDouble();
+    final pbr = (result['defaultKeyStatistics']?['priceToBook']?['raw'] as num?)?.toDouble();
+
+    if (per == null && pbr == null) return null;
+    return FundamentalsResult(per: per, pbr: pbr);
+  }
+
+  /// 네이버 종목토론방 게시글 (한국주식 전용, 최대 20개)
+  static Future<List<DiscussionPost>> fetchDiscussionPosts(
+      String ticker, String market) async {
+    if (market != 'KS' && market != 'KQ') return [];
+    try {
+      final uri = Uri.parse(
+          'https://finance.naver.com/item/board.nhn?code=$ticker&ordertype=&searchtype=&page=1');
+      final response = await http.get(uri, headers: {
+        'User-Agent': 'Mozilla/5.0',
+        'Referer': 'https://finance.naver.com',
+      }).timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) return [];
+
+      // latin1로 디코딩 (EUC-KR 페이지를 latin1로 읽으면 한글 깨짐 → utf8 시도)
+      String body;
+      try {
+        body = utf8.decode(response.bodyBytes);
+      } catch (_) {
+        body = response.body;
+      }
+
+      final rowPattern = RegExp(
+        r'<tr onMouseOver[^>]*>[\s\S]*?'
+        r'<span class="tah p10 gray03">(\d{4}\.\d{2}\.\d{2} \d{2}:\d{2})</span>'
+        r'[\s\S]*?nid=(\d+)[^"]*"[^>]*title="([^"]+)"'
+        r'[\s\S]*?<td><span class="tah p10 gray03">(\d+)</span></td>',
+      );
+
+      final posts = <DiscussionPost>[];
+      for (final m in rowPattern.allMatches(body)) {
+        final dateParts = m.group(1)!.split(RegExp(r'[. :]'));
+        final date = DateTime(
+          int.parse(dateParts[0]),
+          int.parse(dateParts[1]),
+          int.parse(dateParts[2]),
+          int.parse(dateParts[3]),
+          int.parse(dateParts[4]),
+        );
+        posts.add(DiscussionPost(
+          nid: m.group(2)!,
+          title: m.group(3)!,
+          date: date,
+          viewCount: int.tryParse(m.group(4)!) ?? 0,
+          ticker: ticker,
+        ));
+      }
+      return posts;
+    } catch (_) {
+      return [];
+    }
+  }
+
   /// Yahoo Finance 실적 발표 예정일 (US 종목만)
   static Future<DateTime?> fetchEarningsDate(String ticker, String market) async {
     if (market != 'US') return null;
@@ -472,6 +664,38 @@ class _CachedPrice {
   final PriceResult result;
   final DateTime fetchedAt;
   const _CachedPrice({required this.result, required this.fetchedAt});
+}
+
+class FundamentalsResult {
+  final double? per;
+  final double? pbr;
+  final double? bps;   // BPS 캐시용 (PBR 재계산에 사용)
+  const FundamentalsResult({this.per, this.pbr, this.bps});
+}
+
+class _CachedFundamentals {
+  final FundamentalsResult result;
+  final DateTime fetchedAt;
+  const _CachedFundamentals({required this.result, required this.fetchedAt});
+}
+
+class DiscussionPost {
+  final String nid;
+  final String title;
+  final DateTime date;
+  final int viewCount;
+  final String ticker;
+
+  const DiscussionPost({
+    required this.nid,
+    required this.title,
+    required this.date,
+    required this.viewCount,
+    required this.ticker,
+  });
+
+  String get readUrl =>
+      'https://finance.naver.com/item/board_read.naver?code=$ticker&nid=$nid&page=1';
 }
 
 class StockNews {

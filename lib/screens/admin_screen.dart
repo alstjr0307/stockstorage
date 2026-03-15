@@ -23,7 +23,7 @@ class _AdminScreenState extends State<AdminScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -54,11 +54,13 @@ class _AdminScreenState extends State<AdminScreen>
           unselectedLabelColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
           labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14),
           unselectedLabelStyle: GoogleFonts.inter(fontSize: 14),
+          isScrollable: true,
           tabs: const [
             Tab(text: '종목 등록'),
             Tab(text: '목록 관리'),
             Tab(text: '공지사항'),
             Tab(text: '시황 분석'),
+            Tab(text: '알림 발송'),
           ],
         ),
       ),
@@ -69,8 +71,10 @@ class _AdminScreenState extends State<AdminScreen>
           _ManageTab(),
           _AnnouncementTab(),
           _MarketAnalysisAdminTab(),
+          _PushNotificationTab(),
         ],
       ),
+
     );
   }
 }
@@ -1438,5 +1442,128 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       );
+  }
+}
+
+// ─── 알림 발송 탭 ───────────────────────────────────────────────────────────
+
+class _PushNotificationTab extends StatefulWidget {
+  const _PushNotificationTab();
+
+  @override
+  State<_PushNotificationTab> createState() => _PushNotificationTabState();
+}
+
+class _PushNotificationTabState extends State<_PushNotificationTab> {
+  final _titleController = TextEditingController();
+  final _bodyController = TextEditingController();
+  bool _sending = false;
+  String? _lastResult;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _bodyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final title = _titleController.text.trim();
+    final body = _bodyController.text.trim();
+    if (title.isEmpty || body.isEmpty) return;
+
+    setState(() {
+      _sending = true;
+      _lastResult = null;
+    });
+
+    try {
+      await FirestoreService().sendPushNotification(title: title, body: body);
+      _titleController.clear();
+      _bodyController.clear();
+      setState(() => _lastResult = '✅ 발송 완료! 전체 유저에게 전송됩니다.');
+    } catch (e) {
+      setState(() => _lastResult = '❌ 오류: $e');
+    } finally {
+      setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '전체 유저에게 푸시 알림을 보냅니다',
+            style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 13),
+          ),
+          const SizedBox(height: 24),
+          Text('제목', style: GoogleFonts.inter(color: cs.onSurface, fontWeight: FontWeight.w600, fontSize: 14)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _titleController,
+            style: GoogleFonts.inter(color: cs.onSurface, fontSize: 14),
+            decoration: InputDecoration(
+              hintText: '예) 📈 새 추천주 등록!',
+              hintStyle: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.3), fontSize: 14),
+              filled: true,
+              fillColor: cs.surface,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text('내용', style: GoogleFonts.inter(color: cs.onSurface, fontWeight: FontWeight.w600, fontSize: 14)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _bodyController,
+            style: GoogleFonts.inter(color: cs.onSurface, fontSize: 14),
+            maxLines: 4,
+            decoration: InputDecoration(
+              hintText: '예) 지금 바로 확인해보세요!',
+              hintStyle: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.3), fontSize: 14),
+              filled: true,
+              fillColor: cs.surface,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: _sending ? null : _send,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4ADE80),
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                disabledBackgroundColor: const Color(0xFF4ADE80).withValues(alpha: 0.4),
+              ),
+              icon: _sending
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                  : const Icon(Icons.send_rounded, size: 18),
+              label: Text(
+                _sending ? '발송 중...' : '전체 발송',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 15),
+              ),
+            ),
+          ),
+          if (_lastResult != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(10)),
+              child: Text(_lastResult!, style: GoogleFonts.inter(color: cs.onSurface, fontSize: 13)),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }

@@ -60,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '매수 관심종목 상세 정보를 확인하세요',
+                  '추천주 상세 정보를 확인하세요',
                   style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38), fontSize: 14),
                 ),
                 const SizedBox(height: 40),

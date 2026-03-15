@@ -40,7 +40,7 @@ class _NotLoggedIn extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            '관심종목을 추가하고 수익률을 확인하세요',
+            '추천주을 추가하고 수익률을 확인하세요',
             style: GoogleFonts.inter(
                 color: cs.onSurface.withValues(alpha: 0.25), fontSize: 13),
           ),
@@ -130,7 +130,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                         color: cs.onSurface.withValues(alpha: 0.2), size: 52),
                     const SizedBox(height: 14),
                     Text(
-                      '관심종목을 추가해보세요',
+                      '추천주을 추가해보세요',
                       style: GoogleFonts.inter(
                           color: cs.onSurface.withValues(alpha: 0.4),
                           fontSize: 15),
@@ -168,7 +168,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                     withPrice.length, avgReturn),
                 const SizedBox(height: 20),
                 Text(
-                  '보유 관심종목',
+                  '관심 추천주',
                   style: GoogleFonts.inter(
                       color: cs.onSurface.withValues(alpha: 0.5),
                       fontSize: 12,
@@ -221,7 +221,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  '관심종목 $total개',
+                  '추천주 $total개',
                   style: GoogleFonts.inter(
                       color: cs.onSurface.withValues(alpha: 0.5),
                       fontSize: 11),
@@ -280,6 +280,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
       ],
     );
   }
+
 
   Widget _buildPickCard(BuildContext context, StockPick pick) {
     final cs = Theme.of(context).colorScheme;

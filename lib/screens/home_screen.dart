@@ -5,6 +5,7 @@ import '../models/stock_pick.dart';
 import '../models/announcement.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
+import '../services/analytics_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/banner_ad_widget.dart';
 import '../widgets/stock_card.dart';
@@ -83,6 +84,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   border: InputBorder.none,
                 ),
                 onChanged: (v) => setState(() => _searchQuery = v),
+                onSubmitted: (v) {
+                  if (v.trim().isNotEmpty) {
+                    AnalyticsService.instance.logSearch(v.trim());
+                  }
+                },
               )
             : Text(
                 _tabTitles[_currentPage],
@@ -150,7 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.show_chart),
-            label: '관심종목',
+            label: '추천주',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.account_balance_wallet_outlined),
@@ -178,41 +184,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ─── 내 종목 페이지 (포트폴리오 + 이전 관심종목 실적) ───────────────────
+  // ─── 내 종목 페이지 ───────────────────────────────────────────────────
   Widget _buildMyStocksPage() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cs = Theme.of(context).colorScheme;
-    return DefaultTabController(
-      length: 2,
-      child: Column(
-        children: [
-          Container(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            child: TabBar(
-              indicatorColor: const Color(0xFF4ADE80),
-              indicatorWeight: 2,
-              labelColor: const Color(0xFF4ADE80),
-              unselectedLabelColor: isDark ? Colors.white38 : Colors.black38,
-              labelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
-              unselectedLabelStyle: GoogleFonts.inter(fontSize: 13),
-              dividerColor: cs.onSurface.withValues(alpha: 0.08),
-              tabs: const [
-                Tab(text: '내 종목'),
-                Tab(text: '이전 관심종목 실적'),
-              ],
-            ),
-          ),
-          const Expanded(
-            child: TabBarView(
-              children: [
-                PortfolioScreen(),
-                LeaderboardScreen(),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    return const PortfolioScreen();
   }
 
   // ─── 주식저장소 페이지 ────────────────────────────────────────────────────
@@ -343,9 +317,69 @@ class _HomeScreenState extends State<HomeScreen> {
                           GoogleFonts.inter(fontWeight: FontWeight.w600)),
                 ),
               ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  style: TextButton.styleFrom(
+                    foregroundColor: isDark ? Colors.white24 : Colors.black26,
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _showDeleteAccountDialog(auth);
+                  },
+                  child: Text('계정 삭제',
+                      style: GoogleFonts.inter(fontSize: 13)),
+                ),
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showDeleteAccountDialog(AuthProvider auth) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1A2035) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('계정 삭제',
+            style: GoogleFonts.inter(
+                color: isDark ? Colors.white : Colors.black87,
+                fontWeight: FontWeight.w700)),
+        content: Text(
+          '계정을 삭제하면 모든 데이터(관심 추천주, 메모, 댓글 등)가 영구적으로 삭제됩니다.\n\n정말 삭제하시겠습니까?',
+          style: GoogleFonts.inter(
+              color: isDark ? Colors.white70 : Colors.black54, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('취소',
+                style: GoogleFonts.inter(
+                    color: isDark ? Colors.white54 : Colors.black45)),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await auth.deleteAccount();
+              } on Exception catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('삭제 실패: $e')),
+                  );
+                }
+              }
+            },
+            child: Text('삭제',
+                style: GoogleFonts.inter(
+                    color: Colors.redAccent, fontWeight: FontWeight.w700)),
+          ),
+        ],
       ),
     );
   }
@@ -462,7 +496,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ─── 주식저장소 서브탭 페이지 (관심종목 + 공지사항) ─────────────────────────
+// ─── 주식저장소 서브탭 페이지 (추천주 + 공지사항) ─────────────────────────
 
 class _StockStoragePage extends StatefulWidget {
   const _StockStoragePage({
@@ -485,7 +519,7 @@ class _StockStoragePageState extends State<_StockStoragePage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -514,7 +548,8 @@ class _StockStoragePageState extends State<_StockStoragePage>
             unselectedLabelStyle: GoogleFonts.inter(fontSize: 13),
             dividerColor: cs.onSurface.withValues(alpha: 0.08),
             tabs: const [
-              Tab(text: '관심종목'),
+              Tab(text: '추천주'),
+              Tab(text: '종료 추천주'),
               Tab(text: '공지사항'),
             ],
           ),
@@ -528,6 +563,7 @@ class _StockStoragePageState extends State<_StockStoragePage>
                 searchQuery: widget.searchQuery,
                 firestoreService: widget.firestoreService,
               ),
+              const LeaderboardScreen(),
               _AnnouncementsTab(firestoreService: widget.firestoreService),
             ],
           ),
@@ -568,7 +604,7 @@ class _StockStoragePageState extends State<_StockStoragePage>
 
 }
 
-// ─── 관심종목 탭 ──────────────────────────────────────────────────────────────
+// ─── 추천주 탭 ──────────────────────────────────────────────────────────────
 
 class _StockListTab extends StatefulWidget {
   const _StockListTab({
@@ -679,7 +715,15 @@ class _StockListTabState extends State<_StockListTab>
                   isLoggedIn: auth.isLoggedIn,
                   isFavorite: favIds.contains(pick.id),
                   onFavoriteToggle: auth.isLoggedIn && uid != null
-                      ? () => widget.firestoreService.toggleFavorite(uid, pick.id, favIds.contains(pick.id))
+                      ? () {
+                          final isFav = favIds.contains(pick.id);
+                          widget.firestoreService.toggleFavorite(uid, pick.id, isFav);
+                          AnalyticsService.instance.logToggleFavorite(
+                            ticker: pick.ticker,
+                            name: pick.name,
+                            added: !isFav,
+                          );
+                        }
                       : null,
                   onTap: () => Navigator.push(
                     context,

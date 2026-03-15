@@ -42,4 +42,9 @@ class AuthProvider extends ChangeNotifier {
     await _authService.signOut();
     notifyListeners();
   }
+
+  Future<void> deleteAccount() async {
+    await _authService.deleteAccount();
+    notifyListeners();
+  }
 }

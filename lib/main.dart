@@ -10,6 +10,7 @@ import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
 import 'services/ad_service.dart';
+import 'services/analytics_service.dart';
 import 'services/notification_service.dart';
 import 'firebase_options.dart';
 import 'utils/globals.dart';
@@ -38,6 +39,8 @@ void main() async {
 
 Future<void> initAds() async {
   if (Platform.isIOS) {
+    // UI가 완전히 로드된 후 ATT 팝업 표시 (Apple 심사 요건)
+    await Future.delayed(const Duration(milliseconds: 300));
     final status = await AppTrackingTransparency.trackingAuthorizationStatus;
     if (status == TrackingStatus.notDetermined) {
       await AppTrackingTransparency.requestTrackingAuthorization();
@@ -60,6 +63,7 @@ class StockStorageApp extends StatelessWidget {
       child: Consumer<ThemeProvider>(
         builder: (_, themeProvider, child) => MaterialApp(
           navigatorKey: navigatorKey,
+          navigatorObservers: [AnalyticsService.instance.observer],
           title: '주식저장소',
           debugShowCheckedModeBanner: false,
           themeMode: themeProvider.themeMode,

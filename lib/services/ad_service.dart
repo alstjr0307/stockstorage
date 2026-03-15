@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 const bool _useTestAds = false;
-const bool _adsEnabled = true;
+final bool _adsEnabled = !kDebugMode; // 디버그(테스트) 모드에서는 광고 비활성화
 
 class AdService {
   AdService._();
@@ -39,6 +39,8 @@ class AdService {
   // ── 전면 광고 ─────────────────────────────────────────────────────────
   InterstitialAd? _interstitialAd;
   bool _isInterstitialReady = false;
+  int _stockViewCount = 0;
+  static const int _interstitialEvery = 3; // 3번 중 1번만 전면광고
 
   void loadInterstitial() {
     if (kIsWeb || !_adsEnabled) return;
@@ -72,6 +74,8 @@ class AdService {
 
   void showInterstitialIfReady() {
     if (!_adsEnabled) return;
+    _stockViewCount++;
+    if (_stockViewCount % _interstitialEvery != 0) return;
     if (_isInterstitialReady && _interstitialAd != null) {
       _interstitialAd!.show();
     }

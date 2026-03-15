@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/comment.dart';
 import '../models/stock_pick.dart';
 import '../services/ad_service.dart';
+import '../services/analytics_service.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
@@ -43,9 +44,12 @@ class StockDetailScreen extends StatefulWidget {
   State<StockDetailScreen> createState() => _StockDetailScreenState();
 }
 
-class _StockDetailScreenState extends State<StockDetailScreen> {
+class _StockDetailScreenState extends State<StockDetailScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
   PriceResult? _livePrice;
   bool _loadingPrice = true;
+  FundamentalsResult? _fundamentals;
   List<_OHLC> _candles = [];
   bool _loadingChart = true;
   int? _touchedIndex;
@@ -63,6 +67,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     return _candles.sublist(start, end);
   }
 
+  final _shareButtonKey = GlobalKey();
   final _commentController = TextEditingController();
   final _memoController = TextEditingController();
   final _firestoreService = FirestoreService();
@@ -80,20 +85,32 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
   List<StockNews> _news = [];
   bool _loadingNews = true;
 
+  // 종목토론방
+  List<DiscussionPost> _discussionPosts = [];
+  bool _loadingDiscussion = true;
+
   User? get _currentUser => FirebaseAuth.instance.currentUser;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 3, vsync: this);
     if (Random().nextBool()) {
       AdService.instance.showInterstitialIfReady();
     }
     AdService.instance.loadInterstitial();
+    AnalyticsService.instance.logViewStock(
+      ticker: widget.pick.ticker,
+      name: widget.pick.name,
+      market: widget.pick.market,
+    );
     _fetchPrice();
     _fetchChart();
+    _fetchFundamentals();
     _loadMemo();
     _loadVote();
     _loadNews();
+    _loadDiscussion();
     _subscribePick();
   }
 
@@ -105,6 +122,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
 
   @override
   void dispose() {
+    _tabController.dispose();
     _pickSub.cancel();
     _commentController.dispose();
     _memoController.dispose();
@@ -137,6 +155,18 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       });
   }
 
+  Future<void> _loadDiscussion() async {
+    final posts = await StockPriceService.fetchDiscussionPosts(
+      widget.pick.ticker,
+      widget.pick.market,
+    );
+    if (mounted)
+      setState(() {
+        _discussionPosts = posts;
+        _loadingDiscussion = false;
+      });
+  }
+
   Future<void> _castVote(String? newVote) async {
     final user = _currentUser;
     if (user == null) return;
@@ -163,6 +193,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       widget.pick.id,
       _memoController.text.trim(),
     );
+    AnalyticsService.instance.logSaveMemo(widget.pick.ticker);
     if (mounted) {
       setState(() {
         _memoSaving = false;
@@ -195,6 +226,23 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         _livePrice = result;
         _loadingPrice = false;
       });
+  }
+
+  Future<void> _fetchFundamentals() async {
+    // 현재가가 준비된 후 호출되도록 가격 먼저 기다림
+    if (_loadingPrice) {
+      await Future.doWhile(() async {
+        await Future.delayed(const Duration(milliseconds: 200));
+        return _loadingPrice && mounted;
+      });
+    }
+    if (!mounted) return;
+    final result = await StockPriceService.fetchFundamentals(
+      widget.pick.ticker,
+      widget.pick.market,
+      currentPrice: _livePrice?.price ?? widget.pick.currentPrice,
+    );
+    if (mounted) setState(() => _fundamentals = result);
   }
 
   Future<void> _fetchChart() async {
@@ -324,7 +372,11 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         '📝 매수 근거:\n${pick.reason}\n'
         '$divider\n'
         'StockStorage 앱에서 더 많은 종목을 확인하세요! 🚀';
-    Share.share(text);
+    final box = _shareButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    final origin = box != null
+        ? box.localToGlobal(Offset.zero) & box.size
+        : Rect.fromLTWH(0, 0, 100, 100);
+    Share.share(text, sharePositionOrigin: origin);
   }
 
   @override
@@ -338,6 +390,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         ? ((livePrice - pick.buyPrice) / pick.buyPrice) * 100
         : pick.returnRate;
     final isPositive = returnRate >= 0;
+    final isKorean = pick.market == 'KS' || pick.market == 'KQ';
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -376,11 +429,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(
-                    Icons.compare_arrows,
-                    color: Color(0xFF4ADE80),
-                    size: 15,
-                  ),
+                  const Icon(Icons.compare_arrows, color: Color(0xFF4ADE80), size: 15),
                   const SizedBox(width: 4),
                   Text(
                     '종목비교',
@@ -395,19 +444,12 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
             ),
           ),
           IconButton(
-            icon: Icon(
-              Icons.share_outlined,
-              color: cs.onSurface.withValues(alpha: 0.54),
-              size: 20,
-            ),
+            key: _shareButtonKey,
+            icon: Icon(Icons.share_outlined, color: cs.onSurface.withValues(alpha: 0.54), size: 20),
             onPressed: _shareStock,
           ),
           IconButton(
-            icon: Icon(
-              Icons.refresh,
-              color: cs.onSurface.withValues(alpha: 0.38),
-              size: 20,
-            ),
+            icon: Icon(Icons.refresh, color: cs.onSurface.withValues(alpha: 0.38), size: 20),
             onPressed: () {
               setState(() {
                 _loadingPrice = true;
@@ -421,224 +463,233 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
       ),
       body: Column(
         children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 종목 헤더
+          // ── 상단 고정 영역 ──────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 종목 헤더
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            pick.name,
+                            style: GoogleFonts.inter(
+                              color: cs.onSurface,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              _marketBadge(pick.market),
+                              const SizedBox(width: 8),
+                              Text(
+                                DateFormat('yyyy.MM.dd').format(pick.createdAt),
+                                style: GoogleFonts.inter(
+                                  color: cs.onSurface.withValues(alpha: 0.38),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isPositive
+                            ? const Color(0xFF4ADE80).withValues(alpha: 0.12)
+                            : Colors.redAccent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isPositive
+                              ? const Color(0xFF4ADE80).withValues(alpha: 0.4)
+                              : Colors.redAccent.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '매수가 대비',
+                            style: GoogleFonts.inter(
+                              color: isPositive
+                                  ? const Color(0xFF4ADE80).withValues(alpha: 0.7)
+                                  : Colors.redAccent.withValues(alpha: 0.7),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
+                            style: GoogleFonts.inter(
+                              color: isPositive ? const Color(0xFF4ADE80) : Colors.redAccent,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 22,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // 실시간 현재가 카드
+                _livePriceCard(pick, formatter),
+                // PER/PBR 칩
+                if (_fundamentals != null &&
+                    (_fundamentals!.per != null || _fundamentals!.pbr != null)) ...[
+                  const SizedBox(height: 8),
                   Row(
                     children: [
-                      Expanded(
+                      if (_fundamentals!.per != null)
+                        _fundamentalChip('PER', _fundamentals!.per!.toStringAsFixed(1), cs),
+                      if (_fundamentals!.per != null && _fundamentals!.pbr != null)
+                        const SizedBox(width: 8),
+                      if (_fundamentals!.pbr != null)
+                        _fundamentalChip('PBR', _fundamentals!.pbr!.toStringAsFixed(2), cs),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 12),
+              ],
+            ),
+          ),
+
+          // ── 탭바 ────────────────────────────────────────────────
+          TabBar(
+            controller: _tabController,
+            labelColor: const Color(0xFF4ADE80),
+            unselectedLabelColor: cs.onSurface.withValues(alpha: 0.4),
+            indicatorColor: const Color(0xFF4ADE80),
+            indicatorSize: TabBarIndicatorSize.label,
+            labelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+            unselectedLabelStyle: GoogleFonts.inter(fontSize: 13),
+            tabs: [
+              const Tab(text: '개요'),
+              const Tab(text: '관련 뉴스'),
+              Tab(text: isKorean ? '종목토론방' : ''),
+            ],
+          ),
+          Divider(height: 1, color: cs.onSurface.withValues(alpha: 0.08)),
+
+          // ── 탭 콘텐츠 ────────────────────────────────────────────
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                // ① 개요 탭
+                Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              pick.name,
-                              style: GoogleFonts.inter(
-                                color: cs.onSurface,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                _marketBadge(pick.market),
-                                const SizedBox(width: 8),
-                                Text(
-                                  DateFormat(
-                                    'yyyy.MM.dd HH:mm',
-                                  ).format(pick.createdAt),
-                                  style: GoogleFonts.inter(
-                                    color: cs.onSurface.withValues(alpha: 0.38),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: isPositive
-                              ? const Color(0xFF4ADE80).withValues(alpha: 0.12)
-                              : Colors.redAccent.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: isPositive
-                                ? const Color(0xFF4ADE80).withValues(alpha: 0.4)
-                                : Colors.redAccent.withValues(alpha: 0.4),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '매수가 대비',
-                              style: GoogleFonts.inter(
-                                color: isPositive
-                                    ? const Color(
-                                        0xFF4ADE80,
-                                      ).withValues(alpha: 0.7)
-                                    : Colors.redAccent.withValues(alpha: 0.7),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
-                                  style: GoogleFonts.inter(
-                                    color: isPositive
-                                        ? const Color(0xFF4ADE80)
-                                        : Colors.redAccent,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 22,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  // 실시간 현재가 카드
-                  _livePriceCard(pick, formatter),
-                  const SizedBox(height: 12),
-
-                  // 1개월 차트
-                  _chartCard(),
-
-                  // 매수가 / 현재가 / 목표가 카드
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 16,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _priceItem(
-                                context,
-                                '매수가',
-                                _formatPrice(pick.buyPrice, pick.market),
-                                cs.onSurface.withValues(alpha: 0.6),
-                              ),
-                            ),
+                            // 차트
+                            _chartCard(),
+                            // 매수가 / 현재가 / 목표가
                             Container(
-                              width: 1,
-                              height: 40,
-                              color: cs.onSurface.withValues(alpha: 0.1),
-                            ),
-                            Expanded(
-                              child: _priceItem(
-                                context,
-                                '현재가',
-                                _livePrice != null
-                                    ? _livePrice!.formattedPrice
-                                    : (_loadingPrice ? '로딩중' : '--'),
-                                isPositive
-                                    ? const Color(0xFF4ADE80)
-                                    : Colors.redAccent,
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                              decoration: BoxDecoration(
+                                color: cs.surface,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(child: _priceItem(context, '매수가', _formatPrice(pick.buyPrice, pick.market), cs.onSurface.withValues(alpha: 0.6))),
+                                      Container(width: 1, height: 40, color: cs.onSurface.withValues(alpha: 0.1)),
+                                      Expanded(
+                                        child: _priceItem(
+                                          context,
+                                          '현재가',
+                                          _livePrice != null ? _livePrice!.formattedPrice : (_loadingPrice ? '로딩중' : '--'),
+                                          isPositive ? const Color(0xFF4ADE80) : Colors.redAccent,
+                                        ),
+                                      ),
+                                      Container(width: 1, height: 40, color: cs.onSurface.withValues(alpha: 0.1)),
+                                      Expanded(child: _priceItem(context, '목표가', _formatPrice(pick.targetPrice, pick.market), const Color(0xFF4ADE80))),
+                                    ],
+                                  ),
+                                  if (_livePrice != null && pick.targetPrice > pick.buyPrice) ...[
+                                    const SizedBox(height: 12),
+                                    _priceProgressBar(pick.buyPrice, _livePrice!.price, pick.targetPrice, isPositive),
+                                  ],
+                                ],
                               ),
                             ),
+                            const SizedBox(height: 16),
+                            // 매수 근거
+                            _sectionLabel('매수 근거'),
+                            const SizedBox(height: 8),
                             Container(
-                              width: 1,
-                              height: 40,
-                              color: cs.onSurface.withValues(alpha: 0.1),
-                            ),
-                            Expanded(
-                              child: _priceItem(
-                                context,
-                                '목표가',
-                                _formatPrice(pick.targetPrice, pick.market),
-                                const Color(0xFF4ADE80),
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: cs.surface,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                pick.reason,
+                                style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.7), fontSize: 14, height: 1.8),
                               ),
                             ),
+                            const SizedBox(height: 20),
+                            // 투표
+                            _voteSection(),
+                            const SizedBox(height: 20),
+                            // 메모
+                            if (_currentUser != null) ...[
+                              _memoSection(),
+                              const SizedBox(height: 20),
+                            ],
+                            // 댓글
+                            _commentToggleButton(),
+                            if (_showComments) ...[
+                              const SizedBox(height: 10),
+                              _commentSection(),
+                            ],
+                            const SizedBox(height: 8),
                           ],
                         ),
-                        if (_livePrice != null &&
-                            pick.targetPrice > pick.buyPrice) ...[
-                          const SizedBox(height: 12),
-                          _priceProgressBar(
-                            pick.buyPrice,
-                            _livePrice!.price,
-                            pick.targetPrice,
-                            isPositive,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // 카테고리
-                  // 매수 근거
-                  _sectionLabel('매수 근거'),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Text(
-                      pick.reason,
-                      style: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.7),
-                        fontSize: 14,
-                        height: 1.8,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // 투표 섹션
-                  _voteSection(),
-                  const SizedBox(height: 20),
-
-                  // 뉴스 섹션
-                  _newsSection(),
-                  const SizedBox(height: 24),
-
-                  // 투자 메모 섹션
-                  if (_currentUser != null) ...[
-                    _memoSection(),
-                    const SizedBox(height: 24),
+                    _commentInput(),
                   ],
+                ),
 
-                  // 코멘트 섹션
-                  _commentToggleButton(),
-                  if (_showComments) ...[
-                    const SizedBox(height: 10),
-                    _commentSection(),
-                  ],
-                  const SizedBox(height: 8),
-                ],
-              ),
+                // ② 관련 뉴스 탭
+                SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                  child: _newsSection(),
+                ),
+
+                // ③ 종목토론방 탭
+                isKorean
+                    ? SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                        child: _discussionSection(),
+                      )
+                    : Center(
+                        child: Text(
+                          '한국 주식에서만 제공됩니다',
+                          style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.3)),
+                        ),
+                      ),
+              ],
             ),
           ),
-          _commentInput(),
         ],
       ),
     );
@@ -936,6 +987,39 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
     final formatter = NumberFormat('#,###');
     if (market == 'US') return '\$${price.toStringAsFixed(2)}';
     return '₩${formatter.format(price.toInt())}';
+  }
+
+  Widget _fundamentalChip(String label, String value, ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: cs.onSurface.withValues(alpha: 0.45),
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            value,
+            style: GoogleFonts.robotoMono(
+              color: cs.onSurface.withValues(alpha: 0.85),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _priceItem(
@@ -1250,6 +1334,115 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
               ),
             ),
           )),
+      ],
+    );
+  }
+
+  // ── 종목토론방 ────────────────────────────────────────────────────────────
+  Widget _discussionSection() {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            _sectionLabel('종목토론방'),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => launchUrl(
+                Uri.parse(
+                    'https://finance.naver.com/item/board.nhn?code=${widget.pick.ticker}'),
+                mode: LaunchMode.externalApplication,
+              ),
+              child: Text(
+                '네이버에서 보기',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF4ADE80),
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_loadingDiscussion)
+          Container(
+            height: 80,
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Color(0xFF4ADE80),
+              ),
+            ),
+          )
+        else if (_discussionPosts.isEmpty)
+          Text(
+            '게시글이 없습니다',
+            style: GoogleFonts.inter(
+              color: cs.onSurface.withValues(alpha: 0.3),
+              fontSize: 13,
+            ),
+          )
+        else
+          ...(_discussionPosts.take(10).map(
+                (p) => GestureDetector(
+                  onTap: () => launchUrl(
+                    Uri.parse(p.readUrl),
+                    mode: LaunchMode.externalApplication,
+                  ),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: cs.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: cs.onSurface.withValues(alpha: 0.06)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            p.title,
+                            style: GoogleFonts.inter(
+                              color: cs.onSurface.withValues(alpha: 0.85),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${p.date.month}/${p.date.day} ${p.date.hour.toString().padLeft(2, '0')}:${p.date.minute.toString().padLeft(2, '0')}',
+                          style: GoogleFonts.inter(
+                            color: cs.onSurface.withValues(alpha: 0.3),
+                            fontSize: 11,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(Icons.visibility_outlined,
+                            size: 11,
+                            color: cs.onSurface.withValues(alpha: 0.25)),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${p.viewCount}',
+                          style: GoogleFonts.inter(
+                            color: cs.onSurface.withValues(alpha: 0.3),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              )),
       ],
     );
   }
@@ -1659,6 +1852,7 @@ class _StockDetailScreenState extends State<StockDetailScreen> {
         createdAt: DateTime.now(),
       ),
     );
+    AnalyticsService.instance.logAddComment(widget.pick.ticker);
     if (mounted) {
       _commentController.clear();
       setState(() => _submitting = false);

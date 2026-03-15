@@ -86,7 +86,7 @@ class FirestoreService {
     return query.docs.first.id != currentUid;
   }
 
-  // ── 관심종목 ──────────────────────────────────────────────────────────
+  // ── 추천주 ────────────────────────────────────────────────────────────
   Stream<List<String>> getFavoriteIds(String uid) {
     return _db
         .collection('users')
@@ -184,6 +184,11 @@ class FirestoreService {
       'body': body,
       'createdAt': Timestamp.fromDate(DateTime.now()),
     });
+  }
+
+  /// 관리자 수동 알림 발송 (notification_queue → Cloud Function → FCM 전송)
+  Future<void> sendPushNotification({required String title, required String body}) {
+    return queueNotification(title, body);
   }
 
   // ── FCM 토큰 ─────────────────────────────────────────────────────────
