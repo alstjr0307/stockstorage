@@ -305,38 +305,34 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
 
         // 반원 게이지
         Center(
-          child: SizedBox(
-            width: 220,
-            height: 130,
-            child: CustomPaint(
-              painter: _SemicircleGaugePainter(
-                score: fg.score,
-                color: color,
-                trackColor: cs.onSurface.withValues(alpha: 0.08),
-              ),
-              child: Align(
-                alignment: const Alignment(0, 0.7),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      fg.score.toStringAsFixed(0),
-                      style: GoogleFonts.inter(
-                          color: color,
-                          fontSize: 44,
-                          fontWeight: FontWeight.w800,
-                          height: 1),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(label,
-                        style: GoogleFonts.inter(
-                            color: color,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600)),
-                  ],
+          child: Column(
+            children: [
+              SizedBox(
+                width: 220,
+                height: 115,
+                child: CustomPaint(
+                  painter: _SemicircleGaugePainter(
+                    score: fg.score,
+                    trackColor: cs.onSurface.withValues(alpha: 0.08),
+                  ),
                 ),
               ),
-            ),
+              const SizedBox(height: 4),
+              Text(
+                fg.score.toStringAsFixed(0),
+                style: GoogleFonts.inter(
+                    color: color,
+                    fontSize: 44,
+                    fontWeight: FontWeight.w800,
+                    height: 1),
+              ),
+              const SizedBox(height: 4),
+              Text(label,
+                  style: GoogleFonts.inter(
+                      color: color,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600)),
+            ],
           ),
         ),
         const SizedBox(height: 4),
@@ -563,78 +559,87 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
 
 class _SemicircleGaugePainter extends CustomPainter {
   final double score;
-  final Color color;
   final Color trackColor;
 
   const _SemicircleGaugePainter({
     required this.score,
-    required this.color,
     required this.trackColor,
   });
+
+  static const _segments = [
+    (0.0,  0.25, Color(0xFFEF4444)),
+    (0.25, 0.45, Color(0xFFF97316)),
+    (0.45, 0.55, Color(0xFFEAB308)),
+    (0.55, 0.75, Color(0xFF84CC16)),
+    (0.75, 1.0,  Color(0xFF4ADE80)),
+  ];
+
+  Color get _needleColor {
+    for (final s in _segments) {
+      if (score / 100 <= s.$2) return s.$3;
+    }
+    return _segments.last.$3;
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
-    final cy = size.height * 0.92;
-    final radius = size.width * 0.46;
-    const strokeWidth = 16.0;
-
-    final rect = Rect.fromCircle(center: Offset(cx, cy), radius: radius);
+    final cy = size.height;          // 바닥에 중심
+    final radius = size.width * 0.44;
+    const strokeWidth = 14.0;
     const startAngle = math.pi;
     const sweepAngle = math.pi;
 
-    // 트랙
-    final trackPaint = Paint()
-      ..color = trackColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(rect, startAngle, sweepAngle, false, trackPaint);
+    final rect = Rect.fromCircle(center: Offset(cx, cy), radius: radius);
 
-    // 그라디언트 아크 (극도공포→탐욕 5단계 색상)
-    final gradientPaint = Paint()
-      ..shader = SweepGradient(
-        startAngle: startAngle,
-        endAngle: startAngle + sweepAngle,
-        colors: const [
-          Color(0xFFEF4444),
-          Color(0xFFF97316),
-          Color(0xFFEAB308),
-          Color(0xFF84CC16),
-          Color(0xFF4ADE80),
-        ],
-        transform: GradientRotation(startAngle),
-      ).createShader(rect)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = strokeWidth
-      ..strokeCap = StrokeCap.round;
-    canvas.drawArc(rect, startAngle, sweepAngle * (score / 100), false, gradientPaint);
+    // 트랙 (전체 반원)
+    canvas.drawArc(
+      rect, startAngle, sweepAngle, false,
+      Paint()
+        ..color = trackColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = strokeWidth
+        ..strokeCap = StrokeCap.butt,
+    );
 
-    // 바늘 (needle)
-    final needleAngle = startAngle + sweepAngle * (score / 100);
-    final needleLength = radius - strokeWidth / 2 - 6;
-    final needlePaint = Paint()
-      ..color = color
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round;
+    // 구간별 색상 아크 (score까지만)
+    final pct = (score / 100).clamp(0.0, 1.0);
+    for (final seg in _segments) {
+      final segStart = seg.$1;
+      final segEnd = seg.$2;
+      final segColor = seg.$3;
+      if (pct <= segStart) break;
+      final drawEnd = pct < segEnd ? pct : segEnd;
+      canvas.drawArc(
+        rect,
+        startAngle + sweepAngle * segStart,
+        sweepAngle * (drawEnd - segStart),
+        false,
+        Paint()
+          ..color = segColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth
+          ..strokeCap = StrokeCap.butt,
+      );
+    }
+
+    // 바늘
+    final needleAngle = startAngle + sweepAngle * pct;
+    final needleLen = radius - strokeWidth - 4;
     canvas.drawLine(
       Offset(cx, cy),
-      Offset(
-        cx + needleLength * math.cos(needleAngle),
-        cy + needleLength * math.sin(needleAngle),
-      ),
-      needlePaint,
+      Offset(cx + needleLen * math.cos(needleAngle),
+             cy + needleLen * math.sin(needleAngle)),
+      Paint()
+        ..color = _needleColor
+        ..strokeWidth = 2.5
+        ..strokeCap = StrokeCap.round,
     );
 
     // 중심 원
-    canvas.drawCircle(
-      Offset(cx, cy),
-      5,
-      Paint()..color = color,
-    );
+    canvas.drawCircle(Offset(cx, cy), 5, Paint()..color = _needleColor);
   }
 
   @override
-  bool shouldRepaint(_SemicircleGaugePainter old) =>
-      old.score != score || old.color != color;
+  bool shouldRepaint(_SemicircleGaugePainter old) => old.score != score;
 }
