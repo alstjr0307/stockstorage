@@ -133,7 +133,10 @@ class StockPriceService {
   static final _cache = <String, _CachedPrice>{};
   static const _cacheDuration = Duration(minutes: 3);
 
-  static void invalidateCache(String symbol) => _cache.remove(symbol);
+  static void invalidateCache(String symbol) {
+    _cache.remove(symbol);
+    _ohlcCache.removeWhere((k, _) => k.startsWith('$symbol:'));
+  }
 
   /// ticker + market으로 Yahoo Finance 심볼 생성
   static String toSymbol(String ticker, String market) {
@@ -216,10 +219,15 @@ class StockPriceService {
     return result.map((e) => e.$2).toList();
   }
 
+  static final _ohlcCache = <String,
+      List<({DateTime date, double open, double high, double low, double close})>>{};
+
   /// OHLC 캔들 데이터 반환. 실패 시 빈 리스트.
   static Future<List<({DateTime date, double open, double high, double low, double close})>>
       fetchOHLC(String ticker, String market, {String interval = '1d', String range = '1mo'}) async {
     final symbol = toSymbol(ticker, market);
+    final cacheKey = '$symbol:$interval:$range';
+    if (_ohlcCache.containsKey(cacheKey)) return _ohlcCache[cacheKey]!;
     try {
       final uri = Uri.parse(
         'https://query1.finance.yahoo.com/v8/finance/chart/$symbol'
@@ -249,10 +257,12 @@ class StockPriceService {
       final out = <({DateTime date, double open, double high, double low, double close})>[];
       for (var i = 0; i < timestamps.length; i++) {
         final o = opens[i]; final h = highs[i]; final l = lows[i]; final c = closes[i];
-        if (o != null && h != null && l != null && c != null) {
+        if (o != null && h != null && l != null && c != null &&
+            o > 0 && h > 0 && l > 0 && c > 0) {
           out.add((date: timestamps[i], open: o, high: h, low: l, close: c));
         }
       }
+      if (out.isNotEmpty) _ohlcCache[cacheKey] = out;
       return out;
     } catch (_) {
       return [];
@@ -625,6 +635,36 @@ class StockPriceService {
   }
 
   /// (날짜, 종가) 배열 반환. 실패 시 빈 리스트.
+  static Future<List<double>> fetchHistoryByDates(
+      String ticker, String market, DateTime start, DateTime end) async {
+    final symbol = toSymbol(ticker, market);
+    final days = end.difference(start).inDays;
+    final interval = days <= 90 ? '1d' : days <= 730 ? '1wk' : '1mo';
+    final period1 = start.millisecondsSinceEpoch ~/ 1000;
+    final period2 = end.millisecondsSinceEpoch ~/ 1000;
+    try {
+      final uri = Uri.parse(
+        'https://query1.finance.yahoo.com/v8/finance/chart/$symbol'
+        '?interval=$interval&period1=$period1&period2=$period2',
+      );
+      final response = await http
+          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) return [];
+      final json = jsonDecode(response.body);
+      final result = json['chart']?['result']?[0];
+      if (result == null) return [];
+      final closes =
+          (result['indicators']?['quote']?[0]?['close'] as List<dynamic>?)
+              ?.map((v) => v is num ? v.toDouble() : null)
+              .toList();
+      if (closes == null) return [];
+      return closes.whereType<double>().toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   static Future<List<(DateTime, double)>> fetchHistoryDetailed(
       String ticker, String market,
       {String range = '1mo', String interval = '1d'}) async {

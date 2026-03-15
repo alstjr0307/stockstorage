@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../models/market_analysis.dart';
+import 'package:share_plus/share_plus.dart';
+import '../services/deep_link_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
 import 'index_detail_screen.dart';
@@ -86,10 +88,6 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         children: [
-          // ── 공포탐욕지수 섹션 ──
-          _buildFearAndGreedCard(context),
-          const SizedBox(height: 24),
-
           // ── 주요 지수 섹션 ──
           Row(
             children: [
@@ -137,6 +135,8 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.5)),
+          const SizedBox(height: 10),
+          _buildFearAndGreedCard(context),
           const SizedBox(height: 10),
           _buildSentimentCard(
             context,
@@ -284,6 +284,22 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             Text('S&P 500 기준 · CNN',
                 style: GoogleFonts.inter(
                     color: cs.onSurface.withValues(alpha: 0.3), fontSize: 11)),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => Share.share(
+                '😱 CNN 공포탐욕지수 (S&P 500 기준)\n'
+                '━━━━━━━━━━━━━━━━━━\n'
+                '현재: ${fg.score.toStringAsFixed(0)} · $label\n\n'
+                '전일:  ${fg.previousClose.toStringAsFixed(0)}\n'
+                '1주전: ${fg.previousWeek.toStringAsFixed(0)}\n'
+                '1달전: ${fg.previousMonth.toStringAsFixed(0)}\n'
+                '1년전: ${fg.previousYear.toStringAsFixed(0)}\n'
+                '━━━━━━━━━━━━━━━━━━\n'
+                '주식저장소 앱에서 시장 심리를 확인하세요 📈',
+              ),
+              child: Icon(Icons.share_outlined,
+                  size: 16, color: cs.onSurface.withValues(alpha: 0.35)),
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -556,10 +572,27 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  DateFormat('yyyy년 MM월 dd일').format(a.createdAt),
-                  style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.38), fontSize: 12),
+                Row(
+                  children: [
+                    Text(
+                      DateFormat('yyyy년 MM월 dd일').format(a.createdAt),
+                      style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.38), fontSize: 12),
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () => Share.share(
+                        '📊 주식저장소 시황 분석\n'
+                        '━━━━━━━━━━━━━━━━━━\n'
+                        '${a.title}\n\n'
+                        '${a.body.length > 100 ? '${a.body.substring(0, 100)}...' : a.body}\n'
+                        '━━━━━━━━━━━━━━━━━━\n'
+                        '👉 ${DeepLinkService.analysisUrl(a)}',
+                      ),
+                      child: Icon(Icons.share_outlined,
+                          size: 20, color: cs.onSurface.withValues(alpha: 0.45)),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 10),
                 Text(

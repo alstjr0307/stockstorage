@@ -11,6 +11,7 @@ import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
 import 'services/ad_service.dart';
 import 'services/analytics_service.dart';
+import 'services/deep_link_service.dart';
 import 'services/notification_service.dart';
 import 'firebase_options.dart';
 import 'utils/globals.dart';
@@ -33,6 +34,7 @@ void main() async {
   KakaoSdk.init(nativeAppKey: '23dd91427bb7ac2055aab304681da522');
 
   await NotificationService.instance.init();
+  await DeepLinkService.init();
   timeago.setLocaleMessages('ko', timeago.KoMessages());
   runApp(const StockStorageApp());
 }

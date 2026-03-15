@@ -160,21 +160,71 @@ class FirestoreService {
         .map((s) => s.docs.map((d) => Comment.fromFirestore(d)).toList());
   }
 
-  Future<void> addComment(String pickId, Comment comment) {
-    return _db
+  Future<void> addComment(String pickId, Comment comment) async {
+    final batch = _db.batch();
+    final pickCommentRef = _db
         .collection('stock_picks')
         .doc(pickId)
         .collection('comments')
-        .add(comment.toFirestore());
+        .doc();
+    batch.set(pickCommentRef, comment.toFirestore());
+    // 내 댓글 목록용 사본
+    batch.set(
+      _db.collection('users').doc(comment.uid).collection('myComments').doc(pickCommentRef.id),
+      {
+        'pickId': pickId,
+        'text': comment.text,
+        'createdAt': Timestamp.fromDate(comment.createdAt),
+      },
+    );
+    return batch.commit();
   }
 
-  Future<void> deleteComment(String pickId, String commentId) {
-    return _db
+  Future<void> deleteComment(String pickId, String commentId, {String? uid}) {
+    final batch = _db.batch();
+    batch.delete(_db
         .collection('stock_picks')
         .doc(pickId)
         .collection('comments')
-        .doc(commentId)
-        .delete();
+        .doc(commentId));
+    if (uid != null) {
+      batch.delete(_db
+          .collection('users')
+          .doc(uid)
+          .collection('myComments')
+          .doc(commentId));
+    }
+    return batch.commit();
+  }
+
+  Future<List<({String pickId, String text, DateTime createdAt})>>
+      getMyComments(String uid) async {
+    final snap = await _db
+        .collection('users')
+        .doc(uid)
+        .collection('myComments')
+        .orderBy('createdAt', descending: true)
+        .get();
+    return snap.docs.map((doc) {
+      final d = doc.data();
+      return (
+        pickId: d['pickId'] as String,
+        text: d['text'] as String,
+        createdAt: (d['createdAt'] as Timestamp).toDate(),
+      );
+    }).toList();
+  }
+
+  Future<StockPick?> getStockPickOnce(String id) async {
+    final doc = await _db.collection('stock_picks').doc(id).get();
+    if (!doc.exists) return null;
+    return StockPick.fromFirestore(doc);
+  }
+
+  Future<MarketAnalysis?> getMarketAnalysisOnce(String id) async {
+    final doc = await _db.collection('market_analyses').doc(id).get();
+    if (!doc.exists) return null;
+    return MarketAnalysis.fromFirestore(doc);
   }
 
   // ── 알림 큐 ───────────────────────────────────────────────────────────

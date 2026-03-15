@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>주식저장소</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; background: #0A0E1A; color: #fff;
+           display: flex; flex-direction: column; align-items: center;
+           justify-content: center; min-height: 100vh; margin: 0; text-align: center; padding: 20px; }
+    h1 { color: #4ADE80; font-size: 24px; margin-bottom: 8px; }
+    p  { color: rgba(255,255,255,0.6); margin-bottom: 32px; }
+    a  { display: inline-block; background: #4ADE80; color: #000;
+         padding: 14px 32px; border-radius: 12px; text-decoration: none;
+         font-weight: 700; margin: 8px; }
+  </style>
+</head>
+<body>
+  <h1>📈 주식저장소</h1>
+  <p>앱에서 추천 종목을 확인하세요</p>
+  <a id="store-link" href="#">앱 다운로드</a>
+  <script>
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    const el = document.getElementById('store-link');
+    if (isIOS) {
+      el.href = 'https://apps.apple.com/app/id여기에iOS앱ID';
+      el.textContent = 'App Store에서 다운로드';
+    } else {
+      el.href = 'https://play.google.com/store/apps/details?id=www.stockstorage.stockdiary';
+      el.textContent = 'Google Play에서 다운로드';
+    }
+  </script>
+</body>
+</html>

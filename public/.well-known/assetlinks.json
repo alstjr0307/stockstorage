@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "www.stockstorage.stockdiary",
+      "sha256_cert_fingerprints": [
+        "CB:C9:9D:8B:4C:A4:25:E7:9B:13:E6:FD:45:D6:87:79:4E:12:75:58:48:0D:03:95:F8:63:C3:A1:B6:9A:31:5D",
+        "9E:34:D5:C3:27:C0:C7:D5:02:DC:E3:F6:1E:A2:C8:C4:BA:D5:86:B9:D8:DD:E8:7F:42:B6:AB:5E:68:43:B4:B4"
+      ]
+    }
+  }
+]

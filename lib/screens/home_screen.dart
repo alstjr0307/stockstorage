@@ -14,6 +14,7 @@ import 'leaderboard_screen.dart';
 import 'login_screen.dart';
 import 'market_analysis_screen.dart';
 import 'portfolio_screen.dart';
+import 'my_comments_screen.dart';
 import 'stock_compare_screen.dart';
 import 'stock_detail_screen.dart';
 import '../main.dart' show initAds;
@@ -213,127 +214,158 @@ class _HomeScreenState extends State<HomeScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (_) => Consumer<ThemeProvider>(
-        builder: (ctx, themeProvider, _) => Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircleAvatar(
-                backgroundColor:
-                    const Color(0xFF4ADE80).withValues(alpha: 0.15),
-                radius: 28,
-                child: const Icon(Icons.person,
-                    color: Color(0xFF4ADE80), size: 28),
-              ),
-              const SizedBox(height: 10),
-              // 닉네임 표시
-              FutureBuilder<String?>(
-                future: _firestoreService.getNickname(uid),
-                builder: (ctx, snap) {
-                  final nickname = snap.data;
-                  return Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        nickname ?? '닉네임 없음',
-                        style: GoogleFonts.inter(
-                          color: nickname != null
-                              ? (isDark ? Colors.white : Colors.black87)
-                              : (isDark ? Colors.white38 : Colors.black38),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.pop(context);
-                          _showNicknameDialog(auth, nickname);
-                        },
-                        child: Icon(
-                          Icons.edit_outlined,
-                          size: 16,
-                          color: isDark ? Colors.white38 : Colors.black38,
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 4),
-              Text(
-                auth.user?.email ?? '',
-                style: GoogleFonts.inter(
-                    color: isDark ? Colors.white38 : Colors.black38,
-                    fontSize: 12),
-              ),
-              const SizedBox(height: 20),
-              // 테마 토글
-              Container(
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.05)
-                      : Colors.black.withValues(alpha: 0.04),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: SwitchListTile(
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16),
-                  secondary: Icon(
-                    themeProvider.isDark
-                        ? Icons.dark_mode_outlined
-                        : Icons.wb_sunny_outlined,
-                    color: isDark ? Colors.white54 : Colors.black45,
-                  ),
-                  title: Text(
-                    themeProvider.isDark ? '다크 모드' : '라이트 모드',
-                    style: GoogleFonts.inter(
-                        color: isDark ? Colors.white70 : Colors.black54,
-                        fontSize: 14),
-                  ),
-                  activeThumbColor: const Color(0xFF4ADE80),
-                  value: themeProvider.isDark,
-                  onChanged: (_) => themeProvider.toggle(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
+        builder: (ctx, themeProvider, _) => Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircleAvatar(
                     backgroundColor:
-                        Colors.redAccent.withValues(alpha: 0.15),
-                    foregroundColor: Colors.redAccent,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                        const Color(0xFF4ADE80).withValues(alpha: 0.15),
+                    radius: 28,
+                    child: const Icon(Icons.person,
+                        color: Color(0xFF4ADE80), size: 28),
                   ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    auth.signOut();
-                  },
-                  child: Text('로그아웃',
-                      style:
-                          GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 10),
+                  FutureBuilder<String?>(
+                    future: _firestoreService.getNickname(uid),
+                    builder: (ctx, snap) {
+                      final nickname = snap.data;
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            nickname ?? '닉네임 없음',
+                            style: GoogleFonts.inter(
+                              color: nickname != null
+                                  ? (isDark ? Colors.white : Colors.black87)
+                                  : (isDark ? Colors.white38 : Colors.black38),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.pop(context);
+                              _showNicknameDialog(auth, nickname);
+                            },
+                            child: Icon(
+                              Icons.edit_outlined,
+                              size: 16,
+                              color: isDark ? Colors.white38 : Colors.black38,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    auth.user?.email ?? '',
+                    style: GoogleFonts.inter(
+                        color: isDark ? Colors.white38 : Colors.black38,
+                        fontSize: 12),
+                  ),
+                  const SizedBox(height: 16),
+                  // 내 댓글
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: isDark ? Colors.white70 : Colors.black54,
+                        side: BorderSide(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : Colors.black.withValues(alpha: 0.1)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                      label: Text('내 댓글',
+                          style: GoogleFonts.inter(
+                              fontSize: 14, fontWeight: FontWeight.w500)),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => MyCommentsScreen(uid: uid)),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            Colors.redAccent.withValues(alpha: 0.15),
+                        foregroundColor: Colors.redAccent,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        auth.signOut();
+                      },
+                      child: Text('로그아웃',
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      style: TextButton.styleFrom(
+                        foregroundColor:
+                            isDark ? Colors.white24 : Colors.black26,
+                      ),
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _showDeleteAccountDialog(auth);
+                      },
+                      child: Text('계정 삭제',
+                          style: GoogleFonts.inter(fontSize: 13)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // 다크모드 토글 — 오른쪽 상단
+            Positioned(
+              top: 12,
+              right: 8,
+              child: GestureDetector(
+                onTap: themeProvider.toggle,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      themeProvider.isDark ? '라이트 모드' : '다크 모드',
+                      style: GoogleFonts.inter(
+                        color: isDark ? Colors.white38 : Colors.black38,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      themeProvider.isDark
+                          ? Icons.wb_sunny_outlined
+                          : Icons.dark_mode_outlined,
+                      size: 18,
+                      color: isDark ? Colors.white38 : Colors.black38,
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  style: TextButton.styleFrom(
-                    foregroundColor: isDark ? Colors.white24 : Colors.black26,
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    _showDeleteAccountDialog(auth);
-                  },
-                  child: Text('계정 삭제',
-                      style: GoogleFonts.inter(fontSize: 13)),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
