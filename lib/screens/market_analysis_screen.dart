@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -275,8 +276,6 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       BuildContext context, FearAndGreedResult fg, ColorScheme cs) {
     final color = _fearAndGreedColor(fg.score);
     final label = _fearAndGreedLabel(fg.rating);
-
-    // comparison chips data
     final comparisons = [
       ('전일', fg.previousClose),
       ('1주전', fg.previousWeek),
@@ -287,105 +286,108 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header row
+        // 헤더
         Row(
           children: [
-            Text(
-              '공포탐욕지수',
-              style: GoogleFonts.inter(
-                color: cs.onSurface.withValues(alpha: 0.54),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
-              ),
-            ),
+            Text('공포탐욕지수',
+                style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.54),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5)),
             const Spacer(),
-            Text(
-              'CNN 출처',
-              style: GoogleFonts.inter(
-                color: cs.onSurface.withValues(alpha: 0.38),
-                fontSize: 11,
-              ),
-            ),
+            Text('S&P 500 기준 · CNN',
+                style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.3), fontSize: 11)),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
 
-        // Score + label (centered)
+        // 반원 게이지
         Center(
-          child: Column(
+          child: SizedBox(
+            width: 220,
+            height: 130,
+            child: CustomPaint(
+              painter: _SemicircleGaugePainter(
+                score: fg.score,
+                color: color,
+                trackColor: cs.onSurface.withValues(alpha: 0.08),
+              ),
+              child: Align(
+                alignment: const Alignment(0, 0.7),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      fg.score.toStringAsFixed(0),
+                      style: GoogleFonts.inter(
+                          color: color,
+                          fontSize: 44,
+                          fontWeight: FontWeight.w800,
+                          height: 1),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(label,
+                        style: GoogleFonts.inter(
+                            color: color,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+
+        // 구간 라벨
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                fg.score.toStringAsFixed(1),
-                style: GoogleFonts.inter(
-                  color: color,
-                  fontSize: 52,
-                  fontWeight: FontWeight.w700,
-                  height: 1,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                style: GoogleFonts.inter(
-                  color: color,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              Text('극도 공포',
+                  style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.3),
+                      fontSize: 10)),
+              Text('극도 탐욕',
+                  style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.3),
+                      fontSize: 10)),
             ],
           ),
         ),
         const SizedBox(height: 16),
 
-        // Progress bar
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: fg.score / 100,
-            minHeight: 8,
-            backgroundColor: cs.onSurface.withValues(alpha: 0.08),
-            valueColor: AlwaysStoppedAnimation<Color>(color),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // Comparison chips
+        // 비교 칩
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: comparisons.map((c) {
-            final label = c.$1;
             final prev = c.$2;
             final isUp = fg.score >= prev;
-            final arrow = isUp ? '↑' : '↓';
-            final chipColor =
-                isUp ? const Color(0xFF4ADE80) : Colors.redAccent;
+            final chipColor = isUp ? const Color(0xFF4ADE80) : Colors.redAccent;
             return Expanded(
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 2),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                 decoration: BoxDecoration(
                   color: cs.onSurface.withValues(alpha: 0.05),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
                   children: [
-                    Text(
-                      label,
-                      style: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.54),
-                        fontSize: 10,
-                      ),
-                    ),
+                    Text(c.$1,
+                        style: GoogleFonts.inter(
+                            color: cs.onSurface.withValues(alpha: 0.45),
+                            fontSize: 10)),
                     const SizedBox(height: 2),
                     Text(
-                      '$arrow ${prev.toStringAsFixed(1)}',
+                      '${isUp ? '▲' : '▼'} ${prev.toStringAsFixed(0)}',
                       style: GoogleFonts.inter(
-                        color: chipColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                      ),
+                          color: chipColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -557,4 +559,82 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       ),
     );
   }
+}
+
+class _SemicircleGaugePainter extends CustomPainter {
+  final double score;
+  final Color color;
+  final Color trackColor;
+
+  const _SemicircleGaugePainter({
+    required this.score,
+    required this.color,
+    required this.trackColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height * 0.92;
+    final radius = size.width * 0.46;
+    const strokeWidth = 16.0;
+
+    final rect = Rect.fromCircle(center: Offset(cx, cy), radius: radius);
+    const startAngle = math.pi;
+    const sweepAngle = math.pi;
+
+    // 트랙
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, startAngle, sweepAngle, false, trackPaint);
+
+    // 그라디언트 아크 (극도공포→탐욕 5단계 색상)
+    final gradientPaint = Paint()
+      ..shader = SweepGradient(
+        startAngle: startAngle,
+        endAngle: startAngle + sweepAngle,
+        colors: const [
+          Color(0xFFEF4444),
+          Color(0xFFF97316),
+          Color(0xFFEAB308),
+          Color(0xFF84CC16),
+          Color(0xFF4ADE80),
+        ],
+        transform: GradientRotation(startAngle),
+      ).createShader(rect)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(rect, startAngle, sweepAngle * (score / 100), false, gradientPaint);
+
+    // 바늘 (needle)
+    final needleAngle = startAngle + sweepAngle * (score / 100);
+    final needleLength = radius - strokeWidth / 2 - 6;
+    final needlePaint = Paint()
+      ..color = color
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(
+      Offset(cx, cy),
+      Offset(
+        cx + needleLength * math.cos(needleAngle),
+        cy + needleLength * math.sin(needleAngle),
+      ),
+      needlePaint,
+    );
+
+    // 중심 원
+    canvas.drawCircle(
+      Offset(cx, cy),
+      5,
+      Paint()..color = color,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_SemicircleGaugePainter old) =>
+      old.score != score || old.color != color;
 }
