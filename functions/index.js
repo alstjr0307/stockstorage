@@ -8,6 +8,74 @@ const https = require('https');
 
 initializeApp();
 
+// ── 댓글 알림 (새 댓글 → 같은 종목 댓글 작성자들에게 푸시) ──────────────────
+exports.sendCommentNotification = onDocumentCreated(
+  { document: 'stock_picks/{pickId}/comments/{commentId}', region: 'asia-northeast3' },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const { uid: commenterUid, nickname, text } = data;
+    const { pickId } = event.params;
+    const db = getFirestore();
+
+    // 종목 이름 조회
+    const pickSnap = await db.collection('stock_picks').doc(pickId).get();
+    const pickName = pickSnap.data()?.name ?? '종목';
+
+    // 같은 종목에 댓글 단 다른 유저 uid 수집
+    const commentsSnap = await db
+      .collection('stock_picks').doc(pickId).collection('comments').get();
+    const uids = new Set(
+      commentsSnap.docs
+        .map((d) => d.data().uid)
+        .filter((u) => u && u !== commenterUid)
+    );
+    if (uids.size === 0) return;
+
+    // uid → FCM 토큰 조회
+    const tokensSnap = await db.collection('fcm_tokens').get();
+    const tokens = tokensSnap.docs
+      .filter((d) => uids.has(d.data().uid))
+      .map((d) => d.data().token)
+      .filter((t) => typeof t === 'string' && t.length > 0);
+    if (tokens.length === 0) return;
+
+    const senderName = nickname || '누군가';
+    const preview = text?.length > 30 ? text.slice(0, 30) + '…' : text;
+
+    // FCM 발송
+    const chunkSize = 500;
+    const invalidTokens = [];
+    for (let i = 0; i < tokens.length; i += chunkSize) {
+      const chunk = tokens.slice(i, i + chunkSize);
+      const response = await getMessaging().sendEachForMulticast({
+        notification: {
+          title: `💬 ${pickName} 새 댓글`,
+          body: `${senderName}: ${preview}`,
+        },
+        android: { notification: { sound: 'default', channelId: 'stockstorage_alerts' } },
+        apns: { payload: { aps: { sound: 'default' } } },
+        tokens: chunk,
+      });
+      response.responses.forEach((r, idx) => {
+        if (!r.success &&
+          (r.error?.code === 'messaging/invalid-registration-token' ||
+           r.error?.code === 'messaging/registration-token-not-registered')) {
+          invalidTokens.push(chunk[idx]);
+        }
+      });
+    }
+
+    // 만료 토큰 정리
+    if (invalidTokens.length > 0) {
+      await Promise.all(
+        invalidTokens.map((t) => db.collection('fcm_tokens').doc(t).delete())
+      );
+    }
+  }
+);
+
 // ── 카카오 커스텀 토큰 발급 ────────────────────────────────────────────────
 // 클라이언트에서 카카오 액세스 토큰을 보내면 서버에서 검증 후 Firebase 커스텀 토큰 반환
 exports.createKakaoCustomToken = onCall(

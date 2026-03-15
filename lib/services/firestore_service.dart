@@ -192,11 +192,12 @@ class FirestoreService {
   }
 
   // ── FCM 토큰 ─────────────────────────────────────────────────────────
-  Future<void> saveFcmToken(String token) {
+  Future<void> saveFcmToken(String token, {String? uid}) {
     return _db.collection('fcm_tokens').doc(token).set({
       'token': token,
+      'uid': uid,
       'updatedAt': Timestamp.fromDate(DateTime.now()),
-    });
+    }, SetOptions(merge: true));
   }
 
   // ── 투자 메모 (users/{uid}/memos/{pickId}) ────────────────────────────

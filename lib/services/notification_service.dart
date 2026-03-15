@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -33,7 +34,8 @@ class NotificationService {
     try {
       final token = await messaging.getToken();
       if (token != null) {
-        FirestoreService().saveFcmToken(token).catchError((_) {});
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        FirestoreService().saveFcmToken(token, uid: uid).catchError((_) {});
       }
     } catch (_) {
       return; // SERVICE_NOT_AVAILABLE 등 FCM 미지원 환경
@@ -43,9 +45,10 @@ class NotificationService {
     messaging.subscribeToTopic('stock_alerts').catchError((_) {});
 
     // 토큰 갱신 시 재저장
-    messaging.onTokenRefresh.listen(
-      (t) => FirestoreService().saveFcmToken(t).catchError((_) {}),
-    );
+    messaging.onTokenRefresh.listen((t) {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      FirestoreService().saveFcmToken(t, uid: uid).catchError((_) {});
+    });
 
     // 포그라운드 메시지 수신 처리
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
