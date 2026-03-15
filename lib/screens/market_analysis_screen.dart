@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import '../models/market_analysis.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
-import 'earnings_calendar_screen.dart';
 import 'index_detail_screen.dart';
 
 class MarketAnalysisScreen extends StatefulWidget {
@@ -23,7 +22,18 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     ('NASDAQ', '^IXIC'),
     ('USD/KRW', 'KRW=X'),
     ('나스닥100 선물', 'NQ=F'),
+    ('VIX 공포지수', '^VIX'),
+    ('미 10년 국채금리', '^TNX'),
   ];
+
+  static const _indexDescriptions = {
+    'KOSPI': '한국 대형주 종합지수',
+    'KOSDAQ': '한국 기술·성장주 지수',
+    'S&P 500': '미국 500대 기업 지수',
+    'NASDAQ': '미국 기술주 중심 지수',
+    'USD/KRW': '원달러 환율',
+    '나스닥100 선물': '미국 장전 방향성',
+  };
 
   final Map<String, PriceResult?> _prices = {};
   bool _loadingIndices = true;
@@ -116,57 +126,32 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
             childAspectRatio: 2.0,
-            children: _indices.map((e) => _buildIndexCard(context, e.$1)).toList(),
+            children: _indices.take(6).map((e) => _buildIndexCard(context, e.$1)).toList(),
           ),
           const SizedBox(height: 28),
 
-          // ── 실적 캘린더 섹션 ──
-          GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const EarningsCalendarScreen()),
-            ),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: cs.onSurface.withValues(alpha: 0.05)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF4ADE80).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.calendar_month,
-                        color: Color(0xFF4ADE80), size: 20),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('실적 발표 캘린더',
-                            style: GoogleFonts.inter(
-                                color: cs.onSurface,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14)),
-                        Text('추천 종목의 실적 발표 일정 확인',
-                            style: GoogleFonts.inter(
-                                color: cs.onSurface.withValues(alpha: 0.54),
-                                fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  Icon(Icons.chevron_right,
-                      color: cs.onSurface.withValues(alpha: 0.38)),
-                ],
-              ),
-            ),
+          // ── 시장 심리 지표 섹션 ──
+          Text('시장 심리 지표',
+              style: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.54),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5)),
+          const SizedBox(height: 10),
+          _buildSentimentCard(
+            context,
+            name: 'VIX 공포지수',
+            symbol: '^VIX',
+            description: '시장 변동성 지수. 20 이상이면 불안감 고조, 30+ 이면 극도의 공포로 역발상 매수 기회 신호',
+            unit: '',
+          ),
+          const SizedBox(height: 10),
+          _buildSentimentCard(
+            context,
+            name: '미 10년 국채금리',
+            symbol: '^TNX',
+            description: '금리 상승 시 성장주·기술주 하락 압박. 4% 이상이면 채권 매력이 주식 대비 높아짐',
+            unit: '%',
           ),
           const SizedBox(height: 28),
 
@@ -395,6 +380,74 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     );
   }
 
+  Widget _buildSentimentCard(BuildContext context, {
+    required String name,
+    required String symbol,
+    required String description,
+    required String unit,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final result = _prices[name];
+    final isUp = result?.isUp ?? true;
+    final color = isUp ? const Color(0xFF4ADE80) : Colors.redAccent;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.05)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: GoogleFonts.inter(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14)),
+                const SizedBox(height: 4),
+                Text(description,
+                    style: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.45),
+                        fontSize: 11,
+                        height: 1.5)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          if (_loadingIndices)
+            const SizedBox(width: 14, height: 14,
+                child: CircularProgressIndicator(strokeWidth: 1.5, color: Color(0xFF4ADE80)))
+          else if (result == null)
+            Text('--', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38), fontSize: 14))
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${result.price.toStringAsFixed(2)}$unit',
+                  style: GoogleFonts.inter(
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 18),
+                ),
+                Text(
+                  '${isUp ? '+' : ''}${result.changeRate.toStringAsFixed(2)}%',
+                  style: GoogleFonts.inter(
+                      color: color, fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildIndexCard(BuildContext context, String name) {
     final entry = _indices.firstWhere((e) => e.$1 == name);
     final result = _prices[name];
@@ -431,6 +484,14 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                 fontSize: 10,
                 fontWeight: FontWeight.w500),
           ),
+          if (_indexDescriptions[name] != null)
+            Text(
+              _indexDescriptions[name]!,
+              style: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.3),
+                  fontSize: 9),
+              overflow: TextOverflow.ellipsis,
+            ),
           const SizedBox(height: 3),
           if (_loadingIndices)
             const SizedBox(
