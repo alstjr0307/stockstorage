@@ -370,6 +370,46 @@ class StockPriceService {
   static final _fundamentalsCache = <String, _CachedFundamentals>{};
   static const _fundamentalsCacheDuration = Duration(hours: 6);
 
+  static _CachedFearAndGreed? _fearAndGreedCache;
+  static const _fearAndGreedCacheDuration = Duration(minutes: 5);
+
+  /// CNN Fear & Greed Index 반환. 실패 시 null. 5분 캐시.
+  static Future<FearAndGreedResult?> fetchFearAndGreed() async {
+    final cached = _fearAndGreedCache;
+    if (cached != null &&
+        DateTime.now().difference(cached.fetchedAt) < _fearAndGreedCacheDuration) {
+      return cached.result;
+    }
+    try {
+      final uri = Uri.parse(
+        'https://production.dataviz.cnn.io/index/fearandgreed/graphdata',
+      );
+      final response = await http.get(uri, headers: {
+        'User-Agent':
+            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+        'Referer': 'https://www.cnn.com/markets/fear-and-greed',
+      }).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode != 200) return null;
+      final json = jsonDecode(response.body);
+      final fg = json['fear_and_greed'];
+      if (fg == null) return null;
+
+      final result = FearAndGreedResult(
+        score: (fg['score'] as num).toDouble(),
+        rating: fg['rating'] as String? ?? '',
+        previousClose: (fg['previous_close'] as num).toDouble(),
+        previousWeek: (fg['previous_1_week'] as num).toDouble(),
+        previousMonth: (fg['previous_1_month'] as num).toDouble(),
+        previousYear: (fg['previous_1_year'] as num).toDouble(),
+      );
+      _fearAndGreedCache = _CachedFearAndGreed(result: result, fetchedAt: DateTime.now());
+      return result;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // Yahoo Finance 크럼 캐시
   static String? _yahoocrumb;
   static String? _yahooCookie;
@@ -709,4 +749,28 @@ class StockNews {
     required this.publisher,
     required this.publishedAt,
   });
+}
+
+class FearAndGreedResult {
+  final double score;
+  final String rating;
+  final double previousClose;
+  final double previousWeek;
+  final double previousMonth;
+  final double previousYear;
+
+  const FearAndGreedResult({
+    required this.score,
+    required this.rating,
+    required this.previousClose,
+    required this.previousWeek,
+    required this.previousMonth,
+    required this.previousYear,
+  });
+}
+
+class _CachedFearAndGreed {
+  final FearAndGreedResult result;
+  final DateTime fetchedAt;
+  const _CachedFearAndGreed({required this.result, required this.fetchedAt});
 }

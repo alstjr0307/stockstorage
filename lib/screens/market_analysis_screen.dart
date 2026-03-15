@@ -27,10 +27,14 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   final Map<String, PriceResult?> _prices = {};
   bool _loadingIndices = true;
 
+  FearAndGreedResult? _fearAndGreed;
+  bool _loadingFearAndGreed = true;
+
   @override
   void initState() {
     super.initState();
     _fetchIndices();
+    _fetchFearAndGreed();
   }
 
   Future<void> _fetchIndices() async {
@@ -48,16 +52,33 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     }
   }
 
+  Future<void> _fetchFearAndGreed() async {
+    setState(() => _loadingFearAndGreed = true);
+    final result = await StockPriceService.fetchFearAndGreed();
+    if (mounted) {
+      setState(() {
+        _fearAndGreed = result;
+        _loadingFearAndGreed = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return RefreshIndicator(
       color: const Color(0xFF4ADE80),
       backgroundColor: Theme.of(context).colorScheme.surface,
-      onRefresh: _fetchIndices,
+      onRefresh: () async {
+        await Future.wait([_fetchIndices(), _fetchFearAndGreed()]);
+      },
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         children: [
+          // ── 공포탐욕지수 섹션 ──
+          _buildFearAndGreedCard(context),
+          const SizedBox(height: 24),
+
           // ── 주요 지수 섹션 ──
           Row(
             children: [
@@ -189,6 +210,190 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Color _fearAndGreedColor(double score) {
+    if (score < 25) return const Color(0xFFEF4444);
+    if (score < 45) return const Color(0xFFF97316);
+    if (score < 56) return const Color(0xFFEAB308);
+    if (score < 75) return const Color(0xFF84CC16);
+    return const Color(0xFF4ADE80);
+  }
+
+  String _fearAndGreedLabel(String rating) {
+    switch (rating.toLowerCase()) {
+      case 'extreme fear':
+        return '극단적 공포';
+      case 'fear':
+        return '공포';
+      case 'neutral':
+        return '중립';
+      case 'greed':
+        return '탐욕';
+      case 'extreme greed':
+        return '극단적 탐욕';
+      default:
+        return rating;
+    }
+  }
+
+  Widget _buildFearAndGreedCard(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.05)),
+      ),
+      child: _loadingFearAndGreed
+          ? const SizedBox(
+              height: 80,
+              child: Center(
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Color(0xFF4ADE80)),
+              ),
+            )
+          : _fearAndGreed == null
+              ? SizedBox(
+                  height: 80,
+                  child: Center(
+                    child: Text(
+                      '데이터 없음',
+                      style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.38),
+                          fontSize: 13),
+                    ),
+                  ),
+                )
+              : _buildFearAndGreedContent(context, _fearAndGreed!, cs),
+    );
+  }
+
+  Widget _buildFearAndGreedContent(
+      BuildContext context, FearAndGreedResult fg, ColorScheme cs) {
+    final color = _fearAndGreedColor(fg.score);
+    final label = _fearAndGreedLabel(fg.rating);
+
+    // comparison chips data
+    final comparisons = [
+      ('전일', fg.previousClose),
+      ('1주전', fg.previousWeek),
+      ('1달전', fg.previousMonth),
+      ('1년전', fg.previousYear),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header row
+        Row(
+          children: [
+            Text(
+              '공포탐욕지수',
+              style: GoogleFonts.inter(
+                color: cs.onSurface.withValues(alpha: 0.54),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              'CNN 출처',
+              style: GoogleFonts.inter(
+                color: cs.onSurface.withValues(alpha: 0.38),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Score + label (centered)
+        Center(
+          child: Column(
+            children: [
+              Text(
+                fg.score.toStringAsFixed(1),
+                style: GoogleFonts.inter(
+                  color: color,
+                  fontSize: 52,
+                  fontWeight: FontWeight.w700,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                style: GoogleFonts.inter(
+                  color: color,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Progress bar
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: fg.score / 100,
+            minHeight: 8,
+            backgroundColor: cs.onSurface.withValues(alpha: 0.08),
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Comparison chips
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: comparisons.map((c) {
+            final label = c.$1;
+            final prev = c.$2;
+            final isUp = fg.score >= prev;
+            final arrow = isUp ? '↑' : '↓';
+            final chipColor =
+                isUp ? const Color(0xFF4ADE80) : Colors.redAccent;
+            return Expanded(
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                decoration: BoxDecoration(
+                  color: cs.onSurface.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      label,
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.54),
+                        fontSize: 10,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$arrow ${prev.toStringAsFixed(1)}',
+                      style: GoogleFonts.inter(
+                        color: chipColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 
