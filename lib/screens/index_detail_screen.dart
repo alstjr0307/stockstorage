@@ -9,8 +9,10 @@ import '../services/stock_price_service.dart';
 typedef _OHLC = ({DateTime date, double open, double high, double low, double close});
 
 enum _Period {
-  min1('1분봉', '1m', '1d'),
-  day1('1일봉', '1d', '2y'),
+  min1('1분', '1m', '1d'),
+  min5('5분', '5m', '5d'),
+  min60('60분', '60m', '1mo'),
+  day1('일봉', '1d', '2y'),
   week('주봉', '1wk', 'max'),
   month('월봉', '1mo', 'max');
 
@@ -18,6 +20,8 @@ enum _Period {
   final String label;
   final String interval;
   final String range;
+
+  bool get isMinute => this == min1 || this == min5 || this == min60;
 }
 
 class IndexDetailScreen extends StatefulWidget {
@@ -43,10 +47,8 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
   bool _loadingChart = true;
   int? _touchedIndex;
   _Period _selectedPeriod = _Period.day1;
-
   int _fetchSeq = 0;
 
-  // 줌/패닝 상태
   ChartVisibleRange _visibleRange = const ChartVisibleRange(0, 0);
   ChartVisibleRange? _rangeAtScaleStart;
   Offset? _focalPointAtScaleStart;
@@ -108,20 +110,22 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
 
   String _formatValue(double v) {
     final name = widget.name;
-    if (name == 'USD/KRW') {
-      return '₩${NumberFormat('#,###').format(v.toInt())}';
-    }
+    if (name == 'USD/KRW') return '₩${NumberFormat('#,###').format(v.toInt())}';
     if (_price?.isKrw ?? false) return NumberFormat('#,###').format(v.toInt());
     return NumberFormat('#,##0.00').format(v);
   }
 
   String _formatChange(PriceResult r) {
     final name = widget.name;
-    if (name == 'USD/KRW') {
-      return NumberFormat('#,###.##').format(r.change.abs());
-    }
+    if (name == 'USD/KRW') return NumberFormat('#,###.##').format(r.change.abs());
     if (r.isKrw) return NumberFormat('#,###').format(r.change.abs().toInt());
     return r.change.abs().toStringAsFixed(2);
+  }
+
+  String _formatDate(DateTime d) {
+    if (_selectedPeriod.isMinute) return DateFormat('HH:mm').format(d);
+    if (_selectedPeriod == _Period.month) return DateFormat('yy/MM').format(d);
+    return DateFormat('MM/dd').format(d);
   }
 
   @override
@@ -136,14 +140,19 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: Theme.of(context).colorScheme.onSurface, size: 18),
+          icon: Icon(Icons.arrow_back_ios,
+              color: Theme.of(context).colorScheme.onSurface, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(widget.name,
-            style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w700)),
+            style: GoogleFonts.inter(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontWeight: FontWeight.w700)),
         actions: [
           IconButton(
-            icon: Icon(Icons.refresh, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38), size: 20),
+            icon: Icon(Icons.refresh,
+                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+                size: 20),
             onPressed: _refresh,
           ),
         ],
@@ -153,7 +162,6 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 현재가 카드
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -183,7 +191,8 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                         ),
                         const SizedBox(height: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
                             color: color.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8),
@@ -192,7 +201,9 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                             '${isUp ? '+' : ''}${price.changeRate.toStringAsFixed(2)}%  '
                             '(${isUp ? '+' : ''}${_formatChange(price)})',
                             style: GoogleFonts.inter(
-                                color: color, fontSize: 13, fontWeight: FontWeight.w600),
+                                color: color,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600),
                           ),
                         ),
                       ],
@@ -218,11 +229,6 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
     final touched = hasData && _touchedIndex != null && _touchedIndex! < dc.length
         ? dc[_touchedIndex!]
         : null;
-    final formatDate = _selectedPeriod == _Period.min1
-        ? (DateTime d) => DateFormat('HH:mm').format(d)
-        : _selectedPeriod == _Period.month
-            ? (DateTime d) => DateFormat('yy/MM').format(d)
-            : (DateTime d) => DateFormat('MM/dd').format(d);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(8, 16, 12, 12),
@@ -233,79 +239,81 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 헤더 — 로딩 중에도 항상 표시
           Padding(
             padding: const EdgeInsets.only(left: 8, bottom: 10),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ..._Period.values.map((p) => GestureDetector(
-                      onTap: () => _selectPeriod(p),
-                      child: Container(
-                        margin: const EdgeInsets.only(right: 6),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: _selectedPeriod == p
-                              ? const Color(0xFF4ADE80).withValues(alpha: 0.2)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: _selectedPeriod == p
-                                ? const Color(0xFF4ADE80).withValues(alpha: 0.5)
-                                : cs.onSurface.withValues(alpha: 0.12),
-                          ),
-                        ),
-                        child: Text(
-                          p.label,
-                          style: GoogleFonts.inter(
-                            color: _selectedPeriod == p
-                                ? const Color(0xFF4ADE80)
-                                : cs.onSurface.withValues(alpha: 0.38),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    )),
-                const Spacer(),
-                if (hasData) ...[
-                  Text('$sign${changePct.toStringAsFixed(2)}%',
-                      style: GoogleFonts.inter(
-                        color: changePct >= 0
-                            ? const Color(0xFF4ADE80)
-                            : Colors.redAccent,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      )),
-                  const SizedBox(width: 8),
-                ],
-                GestureDetector(
-                  onTap: hasData
-                      ? () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              fullscreenDialog: true,
-                              builder: (_) => _FullscreenCandleChartPage(
-                                candles: _candles,
-                                formatValue: _formatValue,
-                                formatDate: formatDate,
-                                labelColor: cs.onSurface,
-                                initialRange: _visibleRange,
-                              ),
-                            ),
-                          )
-                      : null,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                          color: cs.onSurface.withValues(alpha: 0.15)),
-                      borderRadius: BorderRadius.circular(6),
+                // 메인 버튼: 분봉 / 일봉 / 주봉 / 월봉
+                Row(
+                  children: [
+                    _periodBtn('분봉', _selectedPeriod.isMinute, cs, () {
+                      if (!_selectedPeriod.isMinute) _selectPeriod(_Period.min1);
+                    }),
+                    ...[_Period.day1, _Period.week, _Period.month].map(
+                      (p) => _periodBtn(p.label, _selectedPeriod == p, cs,
+                          () => _selectPeriod(p)),
                     ),
-                    child: Icon(Icons.fullscreen,
-                        size: 16,
-                        color: cs.onSurface.withValues(alpha: 0.45)),
-                  ),
+                    const Spacer(),
+                    if (hasData) ...[
+                      Text('$sign${changePct.toStringAsFixed(2)}%',
+                          style: GoogleFonts.inter(
+                            color: changePct >= 0
+                                ? const Color(0xFF4ADE80)
+                                : Colors.redAccent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          )),
+                      const SizedBox(width: 8),
+                    ],
+                    GestureDetector(
+                      onTap: hasData
+                          ? () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  fullscreenDialog: true,
+                                  builder: (_) => _FullscreenCandleChartPage(
+                                    symbol: widget.symbol,
+                                    initialPeriod: _selectedPeriod,
+                                    initialCandles: _candles,
+                                    formatValue: _formatValue,
+                                    labelColor: cs.onSurface,
+                                    initialRange: _visibleRange,
+                                  ),
+                                ),
+                              )
+                          : null,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                              color: cs.onSurface.withValues(alpha: 0.15)),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(Icons.fullscreen,
+                            size: 16,
+                            color: cs.onSurface.withValues(alpha: 0.45)),
+                      ),
+                    ),
+                  ],
+                ),
+                // 분봉 서브 선택: 1분 / 5분 / 60분
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeInOut,
+                  alignment: Alignment.topCenter,
+                  child: _selectedPeriod.isMinute
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Row(
+                            children: [_Period.min1, _Period.min5, _Period.min60]
+                                .map((p) => _periodBtn(p.label,
+                                    _selectedPeriod == p, cs,
+                                    () => _selectPeriod(p), small: true))
+                                .toList(),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
                 ),
               ],
             ),
@@ -333,11 +341,10 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                         scrollDirection: Axis.horizontal,
                         child: Row(children: [
                           Text(
-                            _selectedPeriod == _Period.min1
-                                ? DateFormat('HH:mm').format(touched.date)
+                            _selectedPeriod.isMinute
+                                ? DateFormat('MM월 dd일 HH:mm').format(touched.date)
                                 : _selectedPeriod == _Period.month
-                                    ? DateFormat('yyyy년 MM월')
-                                        .format(touched.date)
+                                    ? DateFormat('yyyy년 MM월').format(touched.date)
                                     : DateFormat('MM월 dd일').format(touched.date),
                             style: GoogleFonts.inter(
                                 color: cs.onSurface.withValues(alpha: 0.54),
@@ -347,8 +354,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                           _ohlcLabel('시', touched.open),
                           _ohlcLabel('고', touched.high,
                               color: const Color(0xFF4ADE80)),
-                          _ohlcLabel('저', touched.low,
-                              color: Colors.redAccent),
+                          _ohlcLabel('저', touched.low, color: Colors.redAccent),
                           _ohlcLabel('종', touched.close,
                               color: touched.close >= touched.open
                                   ? const Color(0xFF4ADE80)
@@ -374,7 +380,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                     candles: dc,
                     touchedIndex: _touchedIndex,
                     formatValue: _formatValue,
-                    formatDate: formatDate,
+                    formatDate: _formatDate,
                     labelColor: cs.onSurface,
                   ),
                 ),
@@ -382,6 +388,39 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
             }),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _periodBtn(String label, bool active, ColorScheme cs,
+      VoidCallback onTap, {bool small = false}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(right: 6),
+        padding: EdgeInsets.symmetric(
+            horizontal: small ? 8 : 10, vertical: small ? 3 : 4),
+        decoration: BoxDecoration(
+          color: active
+              ? const Color(0xFF4ADE80).withValues(alpha: 0.2)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: active
+                ? const Color(0xFF4ADE80).withValues(alpha: 0.5)
+                : cs.onSurface.withValues(alpha: 0.12),
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            color: active
+                ? const Color(0xFF4ADE80)
+                : cs.onSurface.withValues(alpha: 0.38),
+            fontSize: small ? 10 : 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }
@@ -395,7 +434,8 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
           children: [
             TextSpan(
                 text: '$label ',
-                style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38), fontSize: 10)),
+                style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.38), fontSize: 10)),
             TextSpan(
                 text: _formatValue(value),
                 style: GoogleFonts.robotoMono(
@@ -410,23 +450,17 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
 
   void _onTouch(double localX, double chartW) {
     if (_candles.isEmpty) return;
-    
     const yAxisW = 46.0;
     final candleAreaW = chartW - yAxisW;
     final adjustedX = (localX - yAxisW).clamp(0.0, candleAreaW);
-    
-    // Convert screen x to a candle index within the visible range
     final visibleWidth = _visibleRange.width;
     if (visibleWidth <= 0) return;
-    final fractionalIndex = _visibleRange.start + (adjustedX / candleAreaW) * visibleWidth;
-    
-    // The index relative to the start of the full _candles list
-    final overallIndex = fractionalIndex.floor().clamp(0, _candles.length - 1);
-
-    // We need to find the index within the _displayCandles list
+    final fractionalIndex =
+        _visibleRange.start + (adjustedX / candleAreaW) * visibleWidth;
+    final overallIndex =
+        fractionalIndex.floor().clamp(0, _candles.length - 1);
     final displayStartIdx = _visibleRange.start.floor();
     final displayTouchedIdx = overallIndex - displayStartIdx;
-
     if (_touchedIndex != displayTouchedIdx) {
       setState(() => _touchedIndex = displayTouchedIdx);
     }
@@ -438,35 +472,27 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
   }
 
   void _onScaleUpdate(ScaleUpdateDetails d, double chartW) {
-    if (_rangeAtScaleStart == null || _focalPointAtScaleStart == null || _candles.isEmpty) return;
-
+    if (_rangeAtScaleStart == null ||
+        _focalPointAtScaleStart == null ||
+        _candles.isEmpty) return;
     const yAxisW = 46.0;
     final candleAreaW = chartW - yAxisW;
-
-    // 1. Calculate new width from zoom
-    final newWidth = (_rangeAtScaleStart!.width / d.scale).clamp(5.0, _candles.length.toDouble());
-
-    // 2. Find the anchor candle (the one that should stay under the focal point)
-    final focalFraction = ((_focalPointAtScaleStart!.dx - yAxisW) / candleAreaW).clamp(0.0, 1.0);
-    final anchorCandle = _rangeAtScaleStart!.start + focalFraction * _rangeAtScaleStart!.width;
-    
-    // 3. Calculate pan delta in terms of candles
+    final newWidth = (_rangeAtScaleStart!.width / d.scale)
+        .clamp(5.0, _candles.length.toDouble());
+    final focalFraction =
+        ((_focalPointAtScaleStart!.dx - yAxisW) / candleAreaW).clamp(0.0, 1.0);
+    final anchorCandle =
+        _rangeAtScaleStart!.start + focalFraction * _rangeAtScaleStart!.width;
     final panDeltaX = d.localFocalPoint.dx - _focalPointAtScaleStart!.dx;
     final panDeltaCandles = (panDeltaX / candleAreaW) * newWidth;
-
-    // 4. Calculate new start position
     var newStart = anchorCandle - (focalFraction * newWidth) - panDeltaCandles;
-
-    // 5. Clamp to bounds
     if (newStart < 0) newStart = 0;
     if (newStart + newWidth > _candles.length) {
       newStart = _candles.length - newWidth;
     }
-    final newEnd = newStart + newWidth;
-
     setState(() {
-      _visibleRange = ChartVisibleRange(newStart, newEnd);
-      _touchedIndex = null; // 줌/팬 중 툴팁 숨김
+      _visibleRange = ChartVisibleRange(newStart, newStart + newWidth);
+      _touchedIndex = null;
     });
   }
 
@@ -476,12 +502,15 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
   }
 }
 
+// ── Candle Painter ────────────────────────────────────────────────────────────
 class _CandlePainter extends CustomPainter {
   final List<_OHLC> candles;
   final int? touchedIndex;
   final String Function(double) formatValue;
   final String Function(DateTime) formatDate;
   final Color labelColor;
+  final List<_OHLC>? allCandles;
+  final int visibleStart;
 
   _CandlePainter({
     required this.candles,
@@ -489,6 +518,8 @@ class _CandlePainter extends CustomPainter {
     required this.formatValue,
     required this.formatDate,
     required this.labelColor,
+    this.allCandles,
+    this.visibleStart = 0,
   });
 
   @override
@@ -496,7 +527,7 @@ class _CandlePainter extends CustomPainter {
     if (candles.isEmpty) return;
 
     const xLabelH = 18.0;
-    const yAxisW = 46.0; // Y축 레이블 영역 너비
+    const yAxisW = 46.0;
     final chartH = size.height - xLabelH;
     final chartW = size.width - yAxisW;
 
@@ -510,15 +541,13 @@ class _CandlePainter extends CustomPainter {
     final maxY = allHigh + pad;
     final yRange = maxY - minY;
 
-    // 캔들 영역 좌측 오프셋 적용
     double toY(double v) => chartH - ((v - minY) / yRange) * chartH;
     double toX(int i, int n) => yAxisW + chartW * i / n + chartW / n / 2;
 
-    // 클리핑: 캔들이 차트 영역 밖으로 나가지 않도록
     canvas.save();
     canvas.clipRect(Rect.fromLTWH(yAxisW, 0, chartW, chartH));
 
-    // Y축 그리드 (3줄)
+    // 그리드
     final gridPaint = Paint()
       ..color = labelColor.withValues(alpha: 0.05)
       ..strokeWidth = 1;
@@ -528,51 +557,81 @@ class _CandlePainter extends CustomPainter {
     }
 
     final n = candles.length;
-
     for (int i = 0; i < n; i++) {
       final c = candles[i];
       final isGreen = c.close >= c.open;
       final baseColor = isGreen ? const Color(0xFF4ADE80) : Colors.redAccent;
-      final isTouched = touchedIndex == i;
-      final color = isTouched ? labelColor : baseColor;
-
+      final color = touchedIndex == i ? labelColor : baseColor;
       final totalCandleW = chartW / n;
       final bodyW = (totalCandleW * 0.6).clamp(2.0, 10.0);
       final cx = toX(i, n);
-
-      // 심지 (wick)
-      final wickPaint = Paint()..color = color..strokeWidth = 1;
-      canvas.drawLine(Offset(cx, toY(c.high)), Offset(cx, toY(c.low)), wickPaint);
-
-      // 몸통 (body)
+      canvas.drawLine(Offset(cx, toY(c.high)), Offset(cx, toY(c.low)),
+          Paint()..color = color..strokeWidth = 1);
       final top = toY(isGreen ? c.close : c.open);
       final bottom = toY(isGreen ? c.open : c.close);
       final bodyH = (bottom - top).abs().clamp(1.0, double.infinity);
-
-      final bodyRect = Rect.fromLTWH(cx - bodyW / 2, top, bodyW, bodyH);
-      final bodyPaint = Paint()..color = color;
-      canvas.drawRect(bodyRect, bodyPaint);
+      canvas.drawRect(Rect.fromLTWH(cx - bodyW / 2, top, bodyW, bodyH),
+          Paint()..color = color);
     }
 
-    // 터치 십자선
+    // 이동평균선 (allCandles가 있을 때만)
+    if (allCandles != null && allCandles!.isNotEmpty) {
+      const maConfigs = [
+        (5,   Color(0xFFFFA726)),
+        (20,  Color(0xFF42A5F5)),
+        (60,  Color(0xFFAB47BC)),
+        (120, Color(0xFFEF5350)),
+      ];
+      for (final (period, color) in maConfigs) {
+        final path = Path();
+        bool started = false;
+        for (int i = 0; i < n; i++) {
+          final g = visibleStart + i;
+          if (g < period - 1) continue;
+          double sum = 0;
+          for (int k = g - period + 1; k <= g; k++) {
+            sum += allCandles![k].close;
+          }
+          final ma = sum / period;
+          final cx = toX(i, n);
+          final cy = toY(ma);
+          if (!started) {
+            path.moveTo(cx, cy);
+            started = true;
+          } else {
+            path.lineTo(cx, cy);
+          }
+        }
+        if (started) {
+          canvas.drawPath(
+            path,
+            Paint()
+              ..color = color.withValues(alpha: 0.85)
+              ..strokeWidth = 1.2
+              ..style = PaintingStyle.stroke,
+          );
+        }
+      }
+    }
+
+    // 십자선
     if (touchedIndex != null) {
       final cx = toX(touchedIndex!, n);
-      final linePaint = Paint()
-        ..color = labelColor.withValues(alpha: 0.2)
-        ..strokeWidth = 1
-        ..style = PaintingStyle.stroke;
-      canvas.drawLine(Offset(cx, 0), Offset(cx, chartH), linePaint);
+      canvas.drawLine(Offset(cx, 0), Offset(cx, chartH),
+          Paint()..color = labelColor.withValues(alpha: 0.2)..strokeWidth = 1);
     }
 
     canvas.restore();
 
-    // Y축 레이블 (3개) - 클리핑 밖에서 그려서 항상 보임
+    // Y축 레이블
     for (int i = 1; i <= 3; i++) {
       final v = minY + yRange * (1 - i / 4);
       final tp = TextPainter(
         text: TextSpan(
           text: formatValue(v),
-          style: TextStyle(color: labelColor.withValues(alpha: 0.35), fontSize: 8,
+          style: TextStyle(
+              color: labelColor.withValues(alpha: 0.35),
+              fontSize: 8,
               fontFamily: 'RobotoMono'),
         ),
         textDirection: ui.TextDirection.ltr,
@@ -602,21 +661,27 @@ class _CandlePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_CandlePainter old) =>
-      old.candles != candles || old.touchedIndex != touchedIndex || old.labelColor != labelColor;
+      old.candles != candles ||
+      old.touchedIndex != touchedIndex ||
+      old.labelColor != labelColor ||
+      old.allCandles != allCandles ||
+      old.visibleStart != visibleStart;
 }
 
-// ── 가로 전체화면 차트 페이지 ──────────────────────────────────────────────
+// ── 풀스크린 차트 ─────────────────────────────────────────────────────────────
 class _FullscreenCandleChartPage extends StatefulWidget {
-  final List<_OHLC> candles;
+  final String symbol;
+  final _Period initialPeriod;
+  final List<_OHLC> initialCandles;
   final String Function(double) formatValue;
-  final String Function(DateTime) formatDate;
   final Color labelColor;
   final ChartVisibleRange initialRange;
 
   const _FullscreenCandleChartPage({
-    required this.candles,
+    required this.symbol,
+    required this.initialPeriod,
+    required this.initialCandles,
     required this.formatValue,
-    required this.formatDate,
     required this.labelColor,
     required this.initialRange,
   });
@@ -628,21 +693,27 @@ class _FullscreenCandleChartPage extends StatefulWidget {
 
 class _FullscreenCandleChartPageState
     extends State<_FullscreenCandleChartPage> {
+  late _Period _period;
+  late List<_OHLC> _candles;
+  bool _loading = false;
+  int _fetchSeq = 0;
   int? _touchedIndex;
   late ChartVisibleRange _visibleRange;
   ChartVisibleRange? _rangeAtScaleStart;
   Offset? _focalPointAtScaleStart;
 
   List<_OHLC> get _displayCandles {
-    if (widget.candles.isEmpty || _visibleRange.width <= 0) return [];
-    final start = _visibleRange.start.floor().clamp(0, widget.candles.length);
-    final end = _visibleRange.end.ceil().clamp(start, widget.candles.length);
-    return widget.candles.sublist(start, end);
+    if (_candles.isEmpty || _visibleRange.width <= 0) return [];
+    final start = _visibleRange.start.floor().clamp(0, _candles.length);
+    final end = _visibleRange.end.ceil().clamp(start, _candles.length);
+    return _candles.sublist(start, end);
   }
 
   @override
   void initState() {
     super.initState();
+    _period = widget.initialPeriod;
+    _candles = widget.initialCandles;
     _visibleRange = widget.initialRange;
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
@@ -656,8 +727,43 @@ class _FullscreenCandleChartPageState
     super.dispose();
   }
 
+  Future<void> _fetchCandles(int seq) async {
+    final data = await StockPriceService.fetchOHLC(
+      widget.symbol, 'US',
+      interval: _period.interval,
+      range: _period.range,
+    );
+    if (mounted && _fetchSeq == seq) {
+      setState(() {
+        _candles = data;
+        _loading = false;
+        final defaultView = _period == _Period.day1 ? 120 : data.length;
+        final startIdx =
+            (data.length - defaultView).clamp(0, data.length).toDouble();
+        _visibleRange = ChartVisibleRange(startIdx, data.length.toDouble());
+      });
+    }
+  }
+
+  void _selectPeriod(_Period p) {
+    if (_period == p) return;
+    setState(() {
+      _period = p;
+      _loading = true;
+      _touchedIndex = null;
+      _visibleRange = const ChartVisibleRange(0, 0);
+    });
+    _fetchCandles(++_fetchSeq);
+  }
+
+  String _formatDate(DateTime d) {
+    if (_period.isMinute) return DateFormat('HH:mm').format(d);
+    if (_period == _Period.month) return DateFormat('yy/MM').format(d);
+    return DateFormat('MM/dd').format(d);
+  }
+
   void _onTouch(double localX, double chartW) {
-    if (widget.candles.isEmpty) return;
+    if (_candles.isEmpty) return;
     const yAxisW = 46.0;
     final candleAreaW = chartW - yAxisW;
     final adjustedX = (localX - yAxisW).clamp(0.0, candleAreaW);
@@ -666,7 +772,7 @@ class _FullscreenCandleChartPageState
     final fractionalIndex =
         _visibleRange.start + (adjustedX / candleAreaW) * visibleWidth;
     final overallIndex =
-        fractionalIndex.floor().clamp(0, widget.candles.length - 1);
+        fractionalIndex.floor().clamp(0, _candles.length - 1);
     final displayStartIdx = _visibleRange.start.floor();
     final displayTouchedIdx = overallIndex - displayStartIdx;
     if (_touchedIndex != displayTouchedIdx) {
@@ -682,11 +788,11 @@ class _FullscreenCandleChartPageState
   void _onScaleUpdate(ScaleUpdateDetails d, double chartW) {
     if (_rangeAtScaleStart == null ||
         _focalPointAtScaleStart == null ||
-        widget.candles.isEmpty) { return; }
+        _candles.isEmpty) return;
     const yAxisW = 46.0;
     final candleAreaW = chartW - yAxisW;
     final newWidth = (_rangeAtScaleStart!.width / d.scale)
-        .clamp(5.0, widget.candles.length.toDouble());
+        .clamp(5.0, _candles.length.toDouble());
     final focalFraction =
         ((_focalPointAtScaleStart!.dx - yAxisW) / candleAreaW).clamp(0.0, 1.0);
     final anchorCandle =
@@ -695,8 +801,8 @@ class _FullscreenCandleChartPageState
     final panDeltaCandles = (panDeltaX / candleAreaW) * newWidth;
     var newStart = anchorCandle - (focalFraction * newWidth) - panDeltaCandles;
     if (newStart < 0) newStart = 0;
-    if (newStart + newWidth > widget.candles.length) {
-      newStart = widget.candles.length - newWidth;
+    if (newStart + newWidth > _candles.length) {
+      newStart = _candles.length - newWidth;
     }
     setState(() {
       _visibleRange = ChartVisibleRange(newStart, newStart + newWidth);
@@ -707,6 +813,30 @@ class _FullscreenCandleChartPageState
   void _onScaleEnd(ScaleEndDetails _) {
     _rangeAtScaleStart = null;
     _focalPointAtScaleStart = null;
+  }
+
+  Widget _fsBtn(String label, bool active, ColorScheme cs, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: active
+              ? const Color(0xFF4ADE80)
+              : cs.onSurface.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            color: active ? Colors.black : cs.onSurface.withValues(alpha: 0.6),
+            fontSize: 12,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -724,6 +854,7 @@ class _FullscreenCandleChartPageState
           children: [
             Column(
               children: [
+                // OHLC 정보
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 150),
                   child: touched != null
@@ -735,7 +866,7 @@ class _FullscreenCandleChartPageState
                             scrollDirection: Axis.horizontal,
                             child: Row(children: [
                               Text(
-                                DateFormat('MM/dd').format(touched.date),
+                                _formatDate(touched.date),
                                 style: GoogleFonts.inter(
                                     color: cs.onSurface.withValues(alpha: 0.54),
                                     fontSize: 11),
@@ -755,34 +886,86 @@ class _FullscreenCandleChartPageState
                         )
                       : const SizedBox(key: ValueKey('empty'), height: 26),
                 ),
+                // 차트
                 Expanded(
-                  child: LayoutBuilder(builder: (ctx, constraints) {
-                    final chartW = constraints.maxWidth;
-                    return GestureDetector(
-                      onLongPressStart: (d) =>
-                          _onTouch(d.localPosition.dx, chartW),
-                      onLongPressMoveUpdate: (d) =>
-                          _onTouch(d.localPosition.dx, chartW),
-                      onLongPressEnd: (_) =>
-                          setState(() => _touchedIndex = null),
-                      onScaleStart: _onScaleStart,
-                      onScaleUpdate: (d) => _onScaleUpdate(d, chartW),
-                      onScaleEnd: _onScaleEnd,
-                      child: CustomPaint(
-                        size: Size(chartW, constraints.maxHeight),
-                        painter: _CandlePainter(
-                          candles: dc,
-                          touchedIndex: _touchedIndex,
-                          formatValue: widget.formatValue,
-                          formatDate: widget.formatDate,
-                          labelColor: widget.labelColor,
-                        ),
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : LayoutBuilder(builder: (ctx, constraints) {
+                          final chartW = constraints.maxWidth;
+                          return GestureDetector(
+                            onLongPressStart: (d) =>
+                                _onTouch(d.localPosition.dx, chartW),
+                            onLongPressMoveUpdate: (d) =>
+                                _onTouch(d.localPosition.dx, chartW),
+                            onLongPressEnd: (_) =>
+                                setState(() => _touchedIndex = null),
+                            onScaleStart: _onScaleStart,
+                            onScaleUpdate: (d) => _onScaleUpdate(d, chartW),
+                            onScaleEnd: _onScaleEnd,
+                            child: CustomPaint(
+                              size: Size(chartW, constraints.maxHeight),
+                              painter: _CandlePainter(
+                                candles: dc,
+                                touchedIndex: _touchedIndex,
+                                formatValue: widget.formatValue,
+                                formatDate: _formatDate,
+                                labelColor: widget.labelColor,
+                                allCandles: _candles,
+                                visibleStart: _visibleRange.start
+                                    .floor()
+                                    .clamp(0, _candles.length),
+                              ),
+                            ),
+                          );
+                        }),
+                ),
+                // 기간 버튼 (위로 슬라이드)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Column(
+                    children: [
+                      // 서브: 1분 / 5분 / 60분 — 위로 슬라이드
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeInOut,
+                        alignment: Alignment.bottomCenter,
+                        child: _period.isMinute
+                            ? Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    _Period.min1,
+                                    _Period.min5,
+                                    _Period.min60
+                                  ]
+                                      .map((p) => _fsBtn(p.label, _period == p,
+                                          cs, () => _selectPeriod(p)))
+                                      .toList(),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
                       ),
-                    );
-                  }),
+                      // 메인: 분봉 / 일봉 / 주봉 / 월봉
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _fsBtn('분봉', _period.isMinute, cs, () {
+                            if (!_period.isMinute) _selectPeriod(_Period.min1);
+                          }),
+                          ...[_Period.day1, _Period.week, _Period.month].map(
+                            (p) => _fsBtn(p.label, _period == p, cs,
+                                () => _selectPeriod(p)),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
+            // 닫기 버튼
             Positioned(
               top: 4,
               right: 4,
