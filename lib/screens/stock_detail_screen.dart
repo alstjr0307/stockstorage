@@ -28,7 +28,8 @@ typedef _OHLC = ({
 });
 
 enum _Period {
-  day1('1일봉', '1d', '2y'),
+  min1('분봉', '1m', '1d'),
+  day1('일봉', '1d', '2y'),
   week('주봉', '1wk', 'max'),
   month('월봉', '1mo', 'max');
 
@@ -768,12 +769,12 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                             MaterialPageRoute(
                               fullscreenDialog: true,
                               builder: (_) => _FullscreenCandleChartPage(
-                                candles: _candles,
+                                ticker: widget.pick.ticker,
+                                market: widget.pick.market,
+                                initialPeriod: _selectedPeriod,
+                                initialCandles: _candles,
                                 formatValue: (v) =>
                                     _formatPrice(v, widget.pick.market),
-                                formatDate: _selectedPeriod == _Period.month
-                                    ? (d) => DateFormat('yy/MM').format(d)
-                                    : (d) => DateFormat('MM/dd').format(d),
                                 labelColor: cs.onSurface,
                                 initialRange: _visibleRange,
                               ),
@@ -2026,16 +2027,20 @@ class _StockCandlePainter extends CustomPainter {
 
 // ── 가로 전체화면 차트 페이지 ──────────────────────────────────────────────
 class _FullscreenCandleChartPage extends StatefulWidget {
-  final List<_OHLC> candles;
+  final String ticker;
+  final String market;
+  final _Period initialPeriod;
+  final List<_OHLC> initialCandles;
   final String Function(double) formatValue;
-  final String Function(DateTime) formatDate;
   final Color labelColor;
   final ChartVisibleRange initialRange;
 
   const _FullscreenCandleChartPage({
-    required this.candles,
+    required this.ticker,
+    required this.market,
+    required this.initialPeriod,
+    required this.initialCandles,
     required this.formatValue,
-    required this.formatDate,
     required this.labelColor,
     required this.initialRange,
   });
@@ -2047,21 +2052,27 @@ class _FullscreenCandleChartPage extends StatefulWidget {
 
 class _FullscreenCandleChartPageState
     extends State<_FullscreenCandleChartPage> {
+  late _Period _period;
+  late List<_OHLC> _candles;
+  bool _loading = false;
+  int _fetchSeq = 0;
   int? _touchedIndex;
   late ChartVisibleRange _visibleRange;
   ChartVisibleRange? _rangeAtScaleStart;
   Offset? _focalPointAtScaleStart;
 
   List<_OHLC> get _displayCandles {
-    if (widget.candles.isEmpty || _visibleRange.width <= 0) return [];
-    final start = _visibleRange.start.floor().clamp(0, widget.candles.length);
-    final end = _visibleRange.end.ceil().clamp(start, widget.candles.length);
-    return widget.candles.sublist(start, end);
+    if (_candles.isEmpty || _visibleRange.width <= 0) return [];
+    final start = _visibleRange.start.floor().clamp(0, _candles.length);
+    final end = _visibleRange.end.ceil().clamp(start, _candles.length);
+    return _candles.sublist(start, end);
   }
 
   @override
   void initState() {
     super.initState();
+    _period = widget.initialPeriod;
+    _candles = widget.initialCandles;
     _visibleRange = widget.initialRange;
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
@@ -2075,8 +2086,38 @@ class _FullscreenCandleChartPageState
     super.dispose();
   }
 
+  Future<void> _fetchCandles(int seq) async {
+    final data = await StockPriceService.fetchOHLC(
+      widget.ticker,
+      widget.market,
+      interval: _period.interval,
+      range: _period.range,
+    );
+    if (mounted && _fetchSeq == seq) {
+      setState(() {
+        _candles = data;
+        _loading = false;
+        final defaultView = _period == _Period.day1 ? 120 : data.length;
+        final startIdx =
+            (data.length - defaultView).clamp(0, data.length).toDouble();
+        _visibleRange = ChartVisibleRange(startIdx, data.length.toDouble());
+      });
+    }
+  }
+
+  void _selectPeriod(_Period p) {
+    if (_period == p) return;
+    setState(() {
+      _period = p;
+      _loading = true;
+      _touchedIndex = null;
+      _visibleRange = const ChartVisibleRange(0, 0);
+    });
+    _fetchCandles(++_fetchSeq);
+  }
+
   void _onTouch(double localX, double chartW) {
-    if (widget.candles.isEmpty) return;
+    if (_candles.isEmpty) return;
     const yAxisW = 46.0;
     final candleAreaW = chartW - yAxisW;
     final adjustedX = (localX - yAxisW).clamp(0.0, candleAreaW);
@@ -2085,7 +2126,7 @@ class _FullscreenCandleChartPageState
     final fractionalIndex =
         _visibleRange.start + (adjustedX / candleAreaW) * visibleWidth;
     final overallIndex =
-        fractionalIndex.floor().clamp(0, widget.candles.length - 1);
+        fractionalIndex.floor().clamp(0, _candles.length - 1);
     final displayStartIdx = _visibleRange.start.floor();
     final displayTouchedIdx = overallIndex - displayStartIdx;
     if (_touchedIndex != displayTouchedIdx) {
@@ -2101,11 +2142,11 @@ class _FullscreenCandleChartPageState
   void _onScaleUpdate(ScaleUpdateDetails d, double chartW) {
     if (_rangeAtScaleStart == null ||
         _focalPointAtScaleStart == null ||
-        widget.candles.isEmpty) return;
+        _candles.isEmpty) return;
     const yAxisW = 46.0;
     final candleAreaW = chartW - yAxisW;
     final newWidth = (_rangeAtScaleStart!.width / d.scale)
-        .clamp(5.0, widget.candles.length.toDouble());
+        .clamp(5.0, _candles.length.toDouble());
     final focalFraction =
         ((_focalPointAtScaleStart!.dx - yAxisW) / candleAreaW).clamp(0.0, 1.0);
     final anchorCandle =
@@ -2114,8 +2155,8 @@ class _FullscreenCandleChartPageState
     final panDeltaCandles = (panDeltaX / candleAreaW) * newWidth;
     var newStart = anchorCandle - (focalFraction * newWidth) - panDeltaCandles;
     if (newStart < 0) newStart = 0;
-    if (newStart + newWidth > widget.candles.length) {
-      newStart = widget.candles.length - newWidth;
+    if (newStart + newWidth > _candles.length) {
+      newStart = _candles.length - newWidth;
     }
     setState(() {
       _visibleRange = ChartVisibleRange(newStart, newStart + newWidth);
@@ -2126,6 +2167,12 @@ class _FullscreenCandleChartPageState
   void _onScaleEnd(ScaleEndDetails _) {
     _rangeAtScaleStart = null;
     _focalPointAtScaleStart = null;
+  }
+
+  String _formatDate(DateTime d) {
+    if (_period == _Period.min1) return DateFormat('HH:mm').format(d);
+    if (_period == _Period.month) return DateFormat('yy/MM').format(d);
+    return DateFormat('MM/dd').format(d);
   }
 
   @override
@@ -2143,6 +2190,7 @@ class _FullscreenCandleChartPageState
           children: [
             Column(
               children: [
+                // 상단 정보 행 (터치 OHLC 또는 빈 공간)
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 150),
                   child: touched != null
@@ -2154,7 +2202,7 @@ class _FullscreenCandleChartPageState
                             scrollDirection: Axis.horizontal,
                             child: Row(children: [
                               Text(
-                                DateFormat('MM/dd').format(touched.date),
+                                _formatDate(touched.date),
                                 style: GoogleFonts.inter(
                                     color:
                                         cs.onSurface.withValues(alpha: 0.54),
@@ -2173,37 +2221,77 @@ class _FullscreenCandleChartPageState
                             ]),
                           ),
                         )
-                      : SizedBox(
-                          key: const ValueKey('empty'), height: 26),
+                      : SizedBox(key: const ValueKey('empty'), height: 26),
                 ),
+                // 차트 영역
                 Expanded(
-                  child: LayoutBuilder(builder: (ctx, constraints) {
-                    final chartW = constraints.maxWidth;
-                    return GestureDetector(
-                      onLongPressStart: (d) =>
-                          _onTouch(d.localPosition.dx, chartW),
-                      onLongPressMoveUpdate: (d) =>
-                          _onTouch(d.localPosition.dx, chartW),
-                      onLongPressEnd: (_) =>
-                          setState(() => _touchedIndex = null),
-                      onScaleStart: _onScaleStart,
-                      onScaleUpdate: (d) => _onScaleUpdate(d, chartW),
-                      onScaleEnd: _onScaleEnd,
-                      child: CustomPaint(
-                        size: Size(chartW, constraints.maxHeight),
-                        painter: _StockCandlePainter(
-                          candles: dc,
-                          touchedIndex: _touchedIndex,
-                          formatValue: widget.formatValue,
-                          formatDate: widget.formatDate,
-                          labelColor: widget.labelColor,
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : LayoutBuilder(builder: (ctx, constraints) {
+                          final chartW = constraints.maxWidth;
+                          return GestureDetector(
+                            onLongPressStart: (d) =>
+                                _onTouch(d.localPosition.dx, chartW),
+                            onLongPressMoveUpdate: (d) =>
+                                _onTouch(d.localPosition.dx, chartW),
+                            onLongPressEnd: (_) =>
+                                setState(() => _touchedIndex = null),
+                            onScaleStart: _onScaleStart,
+                            onScaleUpdate: (d) => _onScaleUpdate(d, chartW),
+                            onScaleEnd: _onScaleEnd,
+                            child: CustomPaint(
+                              size: Size(chartW, constraints.maxHeight),
+                              painter: _StockCandlePainter(
+                                candles: dc,
+                                touchedIndex: _touchedIndex,
+                                formatValue: widget.formatValue,
+                                formatDate: _formatDate,
+                                labelColor: widget.labelColor,
+                              ),
+                            ),
+                          );
+                        }),
+                ),
+                // 기간 선택 버튼
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: _Period.values.map((p) {
+                      final selected = _period == p;
+                      return GestureDetector(
+                        onTap: () => _selectPeriod(p),
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? const Color(0xFF4ADE80)
+                                : cs.onSurface.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            p.label,
+                            style: GoogleFonts.inter(
+                              color: selected
+                                  ? Colors.black
+                                  : cs.onSurface.withValues(alpha: 0.6),
+                              fontSize: 12,
+                              fontWeight: selected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                            ),
+                          ),
                         ),
-                      ),
-                    );
-                  }),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ],
             ),
+            // 닫기 버튼
             Positioned(
               top: 4,
               right: 4,
