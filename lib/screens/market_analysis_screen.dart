@@ -1,7 +1,11 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import '../models/market_analysis.dart';
 import 'package:share_plus/share_plus.dart';
 import '../services/deep_link_service.dart';
@@ -48,6 +52,9 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   FearAndGreedResult? _fearAndGreed;
   bool _loadingFearAndGreed = true;
 
+  final _sentimentKey = GlobalKey();
+  bool _capturing = false;
+
   @override
   void initState() {
     super.initState();
@@ -78,6 +85,28 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
         _fearAndGreed = result;
         _loadingFearAndGreed = false;
       });
+    }
+  }
+
+  Future<void> _captureAndShare() async {
+    setState(() => _capturing = true);
+    try {
+      final boundary = _sentimentKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) return;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+      final bytes = byteData.buffer.asUint8List();
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/sentiment_${DateTime.now().millisecondsSinceEpoch}.png');
+      await file.writeAsBytes(bytes);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: '📊 주식저장소 시장 심리 지표\n주식저장소 앱에서 더 확인하세요 📈',
+      );
+    } finally {
+      if (mounted) setState(() => _capturing = false);
     }
   }
 
@@ -134,82 +163,149 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           const SizedBox(height: 28),
 
           // ── 시장 심리 지표 섹션 ──
-          Text('시장 심리 지표',
-              style: GoogleFonts.inter(
-                  color: cs.onSurface.withValues(alpha: 0.54),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5)),
-          const SizedBox(height: 10),
-          _buildFearAndGreedCard(context),
-          const SizedBox(height: 10),
-          _buildSentimentCard(
-            context,
-            name: 'VIX 공포지수',
-            symbol: '^VIX',
-            description: '시장 변동성 지수. 20 이상이면 불안감 고조, 30+ 이면 극도의 공포로 역발상 매수 기회 신호',
-            unit: '',
+          Row(
+            children: [
+              Text('시장 심리 지표',
+                  style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.54),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5)),
+              const Spacer(),
+              GestureDetector(
+                onTap: _capturing ? null : _captureAndShare,
+                child: _capturing
+                    ? const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 1.5, color: Color(0xFF4ADE80)))
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.camera_alt_outlined,
+                              size: 14,
+                              color: cs.onSurface.withValues(alpha: 0.45)),
+                          const SizedBox(width: 4),
+                          Text('캡처 공유',
+                              style: GoogleFonts.inter(
+                                  color: cs.onSurface.withValues(alpha: 0.45),
+                                  fontSize: 11)),
+                        ],
+                      ),
+              ),
+            ],
           ),
           const SizedBox(height: 10),
-          _buildSentimentCard(
-            context,
-            name: '미 10년 국채금리',
-            symbol: '^TNX',
-            description: '금리 상승 시 성장주·기술주 하락 압박. 4% 이상이면 채권 매력이 주식 대비 높아짐',
-            unit: '%',
-          ),
-          const SizedBox(height: 10),
-          _buildDerivedCard(
-            context,
-            name: '장단기 금리차',
-            description: '미 10년 국채금리에서 3개월 금리를 뺀 값. 음수(역전)이면 과거 경기침체 선행 신호로 주목받음',
-            unit: '%p',
-            getValue: () {
-              final t10 = _prices['미 10년 국채금리']?.price;
-              final t3m = _prices['미 3개월 국채금리']?.price;
-              if (t10 == null || t3m == null) return null;
-              return t10 - t3m;
-            },
-            getChange: () {
-              final t10 = _prices['미 10년 국채금리'];
-              final t3m = _prices['미 3개월 국채금리'];
-              if (t10 == null || t3m == null) return null;
-              final prevSpread = (t10.price - t10.change) - (t3m.price - t3m.change);
-              final currSpread = t10.price - t3m.price;
-              return currSpread - prevSpread;
-            },
-          ),
-          const SizedBox(height: 10),
-          _buildDerivedCard(
-            context,
-            name: '구리/금 비율',
-            description: '구리는 경기민감, 금은 안전자산. 비율 상승은 경기 낙관 심리, 하락은 경기침체 우려를 나타냄',
-            unit: '',
-            getValue: () {
-              final copper = _prices['구리']?.price;
-              final gold = _prices['금']?.price;
-              if (copper == null || gold == null || gold == 0) return null;
-              return copper / gold * 1000;
-            },
-            getChange: () {
-              final copper = _prices['구리'];
-              final gold = _prices['금'];
-              if (copper == null || gold == null || gold.price == 0) return null;
-              final prevCopper = copper.price - copper.change;
-              final prevGold = gold.price - gold.change;
-              if (prevGold == 0) return null;
-              final curr = copper.price / gold.price * 1000;
-              final prev = prevCopper / prevGold * 1000;
-              return curr - prev;
-            },
-          ),
-          const SizedBox(height: 10),
-          _buildSentimentCard(
-            context,
-            name: '달러 인덱스',
-            symbol: '달러 인덱스',
-            description: '주요 6개국 통화 대비 달러 강세 지수. 상승 시 신흥국·원자재 약세, 달러 약세 시 위험자산 선호 증가',
-            unit: '',
+          RepaintBoundary(
+            key: _sentimentKey,
+            child: Container(
+              color: cs.surface,
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 캡처 이미지 상단 타이틀
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
+                        Text('📊 시장 심리 지표',
+                            style: GoogleFonts.inter(
+                                color: cs.onSurface,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700)),
+                        const Spacer(),
+                        Text(
+                          DateFormat('yyyy.MM.dd').format(DateTime.now()),
+                          style: GoogleFonts.inter(
+                              color: cs.onSurface.withValues(alpha: 0.4),
+                              fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _buildFearAndGreedCard(context),
+                  const SizedBox(height: 10),
+                  _buildSentimentCard(
+                    context,
+                    name: 'VIX 공포지수',
+                    symbol: '^VIX',
+                    description: '시장 변동성 지수. 20 이상이면 불안감 고조, 30+ 이면 극도의 공포로 역발상 매수 기회 신호',
+                    unit: '',
+                  ),
+                  const SizedBox(height: 10),
+                  _buildSentimentCard(
+                    context,
+                    name: '미 10년 국채금리',
+                    symbol: '^TNX',
+                    description: '금리 상승 시 성장주·기술주 하락 압박. 4% 이상이면 채권 매력이 주식 대비 높아짐',
+                    unit: '%',
+                  ),
+                  const SizedBox(height: 10),
+                  _buildDerivedCard(
+                    context,
+                    name: '장단기 금리차',
+                    description: '미 10년 국채금리에서 3개월 금리를 뺀 값. 음수(역전)이면 과거 경기침체 선행 신호로 주목받음',
+                    unit: '%p',
+                    getValue: () {
+                      final t10 = _prices['미 10년 국채금리']?.price;
+                      final t3m = _prices['미 3개월 국채금리']?.price;
+                      if (t10 == null || t3m == null) return null;
+                      return t10 - t3m;
+                    },
+                    getChange: () {
+                      final t10 = _prices['미 10년 국채금리'];
+                      final t3m = _prices['미 3개월 국채금리'];
+                      if (t10 == null || t3m == null) return null;
+                      final prevSpread = (t10.price - t10.change) - (t3m.price - t3m.change);
+                      final currSpread = t10.price - t3m.price;
+                      return currSpread - prevSpread;
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  _buildDerivedCard(
+                    context,
+                    name: '구리/금 비율',
+                    description: '구리는 경기민감, 금은 안전자산. 비율 상승은 경기 낙관 심리, 하락은 경기침체 우려를 나타냄',
+                    unit: '',
+                    getValue: () {
+                      final copper = _prices['구리']?.price;
+                      final gold = _prices['금']?.price;
+                      if (copper == null || gold == null || gold == 0) return null;
+                      return copper / gold * 1000;
+                    },
+                    getChange: () {
+                      final copper = _prices['구리'];
+                      final gold = _prices['금'];
+                      if (copper == null || gold == null || gold.price == 0) return null;
+                      final prevCopper = copper.price - copper.change;
+                      final prevGold = gold.price - gold.change;
+                      if (prevGold == 0) return null;
+                      final curr = copper.price / gold.price * 1000;
+                      final prev = prevCopper / prevGold * 1000;
+                      return curr - prev;
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  _buildSentimentCard(
+                    context,
+                    name: '달러 인덱스',
+                    symbol: '달러 인덱스',
+                    description: '주요 6개국 통화 대비 달러 강세 지수. 상승 시 신흥국·원자재 약세, 달러 약세 시 위험자산 선호 증가',
+                    unit: '',
+                  ),
+                  const SizedBox(height: 8),
+                  // 하단 워터마크
+                  Center(
+                    child: Text('주식저장소 앱에서 확인하세요 📈',
+                        style: GoogleFonts.inter(
+                            color: cs.onSurface.withValues(alpha: 0.3),
+                            fontSize: 10)),
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 28),
 
