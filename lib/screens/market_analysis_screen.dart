@@ -454,13 +454,6 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     );
   }
 
-  String _prevDayLabel() {
-    final w = DateTime.now().weekday;
-    return (w == DateTime.monday || w == DateTime.saturday || w == DateTime.sunday)
-        ? '전 거래일(금) 대비'
-        : '전일 대비';
-  }
-
   Widget _buildSentimentCard(BuildContext context, {
     required String name,
     required String symbol,
@@ -479,57 +472,79 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: cs.onSurface.withValues(alpha: 0.05)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name,
-                    style: GoogleFonts.inter(
-                        color: cs.onSurface,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14)),
-                const SizedBox(height: 4),
-                Text(description,
-                    style: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.45),
-                        fontSize: 11,
-                        height: 1.5)),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          if (_loadingIndices)
-            const SizedBox(width: 14, height: 14,
-                child: CircularProgressIndicator(strokeWidth: 1.5, color: Color(0xFF4ADE80)))
-          else if (result == null)
-            Text('--', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38), fontSize: 14))
-          else
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
+          // 상단: 이름 + 현재값
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(name,
+                  style: GoogleFonts.inter(
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14)),
+              const Spacer(),
+              if (_loadingIndices)
+                const SizedBox(width: 14, height: 14,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 1.5, color: Color(0xFF4ADE80)))
+              else if (result == null)
+                Text('--', style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.38), fontSize: 18))
+              else
                 Text(
                   '${result.price.toStringAsFixed(2)}$unit',
                   style: GoogleFonts.inter(
                       color: cs.onSurface,
                       fontWeight: FontWeight.w700,
-                      fontSize: 18),
+                      fontSize: 20),
                 ),
-                Text(
-                  '${isUp ? '+' : ''}${result.changeRate.toStringAsFixed(2)}%',
-                  style: GoogleFonts.inter(
-                      color: color, fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  _prevDayLabel(),
-                  style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.3),
-                      fontSize: 9),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // 하단: 설명 + 변화량 배지
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Text(description,
+                    style: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.45),
+                        fontSize: 11,
+                        height: 1.5)),
+              ),
+              if (result != null) ...[
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${isUp ? '+' : ''}${result.changeRate.toStringAsFixed(2)}%',
+                        style: GoogleFonts.inter(
+                            color: color,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text('전일 대비',
+                        style: GoogleFonts.inter(
+                            color: cs.onSurface.withValues(alpha: 0.3),
+                            fontSize: 10)),
+                  ],
                 ),
               ],
-            ),
+            ],
+          ),
         ],
       ),
     );
@@ -545,9 +560,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     final cs = Theme.of(context).colorScheme;
     final value = getValue();
     final change = getChange();
-    final isUp = value != null && value >= 0;
     final changeIsUp = change != null && change >= 0;
-    final color = isUp ? const Color(0xFF4ADE80) : Colors.redAccent;
     final changeColor = changeIsUp ? const Color(0xFF4ADE80) : Colors.redAccent;
 
     return Container(
@@ -557,63 +570,83 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: cs.onSurface.withValues(alpha: 0.05)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name,
+          // 상단: 이름 + 현재값
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(name,
+                  style: GoogleFonts.inter(
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14)),
+              const Spacer(),
+              if (_loadingIndices)
+                const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 1.5, color: Color(0xFF4ADE80)))
+              else if (value == null)
+                Text('--',
                     style: GoogleFonts.inter(
-                        color: cs.onSurface,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14)),
-                const SizedBox(height: 4),
-                Text(description,
+                        color: cs.onSurface.withValues(alpha: 0.38),
+                        fontSize: 18))
+              else
+                Text(
+                  '${value >= 0 ? '+' : ''}${value.toStringAsFixed(2)}$unit',
+                  style: GoogleFonts.inter(
+                      color: cs.onSurface,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 20),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // 하단: 설명 + 변화량 배지
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Text(description,
                     style: GoogleFonts.inter(
                         color: cs.onSurface.withValues(alpha: 0.45),
                         fontSize: 11,
                         height: 1.5)),
+              ),
+              if (value != null && change != null) ...[
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: changeColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${changeIsUp ? '+' : ''}${change.toStringAsFixed(2)}$unit',
+                        style: GoogleFonts.inter(
+                            color: changeColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text('전일 대비',
+                        style: GoogleFonts.inter(
+                            color: cs.onSurface.withValues(alpha: 0.3),
+                            fontSize: 10)),
+                  ],
+                ),
               ],
-            ),
+            ],
           ),
-          const SizedBox(width: 12),
-          if (_loadingIndices)
-            const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                    strokeWidth: 1.5, color: Color(0xFF4ADE80)))
-          else if (value == null)
-            Text('--',
-                style: GoogleFonts.inter(
-                    color: cs.onSurface.withValues(alpha: 0.38), fontSize: 14))
-          else
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '${value >= 0 ? '+' : ''}${value.toStringAsFixed(2)}$unit',
-                  style: GoogleFonts.inter(
-                      color: color, fontWeight: FontWeight.w700, fontSize: 18),
-                ),
-                if (change != null)
-                  Text(
-                    '${changeIsUp ? '+' : ''}${change.toStringAsFixed(2)}$unit',
-                    style: GoogleFonts.inter(
-                        color: changeColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600),
-                  ),
-                Text(
-                  _prevDayLabel(),
-                  style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.3),
-                      fontSize: 9),
-                ),
-              ],
-            ),
         ],
       ),
     );
