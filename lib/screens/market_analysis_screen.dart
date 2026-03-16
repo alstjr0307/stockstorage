@@ -166,13 +166,6 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           const SizedBox(height: 28),
 
           // ── 시장 심리 지표 섹션 ──
-          Text('시장 심리 지표',
-              style: GoogleFonts.inter(
-                  color: cs.onSurface.withValues(alpha: 0.54),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5)),
-          const SizedBox(height: 10),
           RepaintBoundary(
             key: _sentimentKey,
             child: Container(
@@ -181,16 +174,23 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        DateFormat('yyyy.MM.dd').format(DateTime.now()),
-                        style: GoogleFonts.inter(
-                            color: cs.onSurface.withValues(alpha: 0.4),
-                            fontSize: 11),
-                      ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      children: [
+                        Text('시장 심리 지표',
+                            style: GoogleFonts.inter(
+                                color: cs.onSurface,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700)),
+                        const Spacer(),
+                        Text(
+                          DateFormat('yyyy.MM.dd').format(DateTime.now()),
+                          style: GoogleFonts.inter(
+                              color: cs.onSurface.withValues(alpha: 0.4),
+                              fontSize: 11),
+                        ),
+                      ],
                     ),
                   ),
                   _buildFearAndGreedCard(context),
