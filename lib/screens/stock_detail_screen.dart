@@ -719,84 +719,77 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           // 헤더: 기간 선택 — 로딩 중에도 항상 표시
           Padding(
             padding: const EdgeInsets.only(left: 8, bottom: 10),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ..._Period.values.map(
-                  (p) => GestureDetector(
-                    onTap: () => _selectPeriod(p),
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 6),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _selectedPeriod == p
-                            ? const Color(0xFF4ADE80).withValues(alpha: 0.2)
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: _selectedPeriod == p
-                              ? const Color(0xFF4ADE80).withValues(alpha: 0.5)
-                              : cs.onSurface.withValues(alpha: 0.12),
-                        ),
-                      ),
-                      child: Text(
-                        p.label,
+                // 상단 행: 분봉/일봉/주봉/월봉 + 등락률 + 확대버튼
+                Row(
+                  children: [
+                    _periodBtn('분봉', _selectedPeriod.isMinute, cs, () {
+                      if (!_selectedPeriod.isMinute) _selectPeriod(_Period.min1);
+                    }),
+                    ...[_Period.day1, _Period.week, _Period.month].map(
+                      (p) => _periodBtn(
+                          p.label, _selectedPeriod == p, cs, () => _selectPeriod(p)),
+                    ),
+                    const Spacer(),
+                    if (hasData) ...[
+                      Text(
+                        '$sign${changePct.toStringAsFixed(2)}%',
                         style: GoogleFonts.inter(
-                          color: _selectedPeriod == p
+                          color: changePct >= 0
                               ? const Color(0xFF4ADE80)
-                              : cs.onSurface.withValues(alpha: 0.38),
-                          fontSize: 11,
+                              : Colors.redAccent,
+                          fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
+                      const SizedBox(width: 8),
+                    ],
+                    GestureDetector(
+                      onTap: hasData
+                          ? () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  fullscreenDialog: true,
+                                  builder: (_) => _FullscreenCandleChartPage(
+                                    ticker: widget.pick.ticker,
+                                    market: widget.pick.market,
+                                    initialPeriod: _selectedPeriod,
+                                    initialCandles: _candles,
+                                    formatValue: (v) =>
+                                        _formatPrice(v, widget.pick.market),
+                                    labelColor: cs.onSurface,
+                                    initialRange: _visibleRange,
+                                  ),
+                                ),
+                              )
+                          : null,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          border: Border.all(
+                              color: cs.onSurface.withValues(alpha: 0.15)),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Icon(Icons.fullscreen,
+                            size: 16,
+                            color: cs.onSurface.withValues(alpha: 0.45)),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-                const Spacer(),
-                if (hasData) ...[
-                  Text(
-                    '$sign${changePct.toStringAsFixed(2)}%',
-                    style: GoogleFonts.inter(
-                      color: changePct >= 0
-                          ? const Color(0xFF4ADE80)
-                          : Colors.redAccent,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
+                // 분봉 서브 선택: 1분 / 5분 / 60분
+                if (_selectedPeriod.isMinute) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [_Period.min1, _Period.min5, _Period.min60].map(
+                      (p) => _periodBtn(
+                          p.label, _selectedPeriod == p, cs, () => _selectPeriod(p),
+                          small: true),
+                    ).toList(),
                   ),
-                  const SizedBox(width: 8),
                 ],
-                GestureDetector(
-                  onTap: hasData
-                      ? () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              fullscreenDialog: true,
-                              builder: (_) => _FullscreenCandleChartPage(
-                                ticker: widget.pick.ticker,
-                                market: widget.pick.market,
-                                initialPeriod: _selectedPeriod,
-                                initialCandles: _candles,
-                                formatValue: (v) =>
-                                    _formatPrice(v, widget.pick.market),
-                                labelColor: cs.onSurface,
-                                initialRange: _visibleRange,
-                              ),
-                            ),
-                          )
-                      : null,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                          color: cs.onSurface.withValues(alpha: 0.15)),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Icon(Icons.fullscreen,
-                        size: 16,
-                        color: cs.onSurface.withValues(alpha: 0.45)),
-                  ),
-                ),
               ],
             ),
           ),
@@ -885,6 +878,39 @@ class _StockDetailScreenState extends State<StockDetailScreen>
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _periodBtn(String label, bool active, ColorScheme cs,
+      VoidCallback onTap, {bool small = false}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(right: 6),
+        padding: EdgeInsets.symmetric(
+            horizontal: small ? 8 : 10, vertical: small ? 3 : 4),
+        decoration: BoxDecoration(
+          color: active
+              ? const Color(0xFF4ADE80).withValues(alpha: 0.2)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: active
+                ? const Color(0xFF4ADE80).withValues(alpha: 0.5)
+                : cs.onSurface.withValues(alpha: 0.12),
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            color: active
+                ? const Color(0xFF4ADE80)
+                : cs.onSurface.withValues(alpha: 0.38),
+            fontSize: small ? 10 : 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }
@@ -2316,37 +2342,33 @@ class _FullscreenCandleChartPageState
                 Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: _Period.values.map((p) {
-                      final selected = _period == p;
-                      return GestureDetector(
-                        onTap: () => _selectPeriod(p),
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? const Color(0xFF4ADE80)
-                                : cs.onSurface.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(8),
+                  child: Column(
+                    children: [
+                      // 상단: 분봉 / 일봉 / 주봉 / 월봉
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _fsBtn('분봉', _period.isMinute, cs, () {
+                            if (!_period.isMinute) _selectPeriod(_Period.min1);
+                          }),
+                          ...[_Period.day1, _Period.week, _Period.month].map(
+                            (p) => _fsBtn(p.label, _period == p, cs,
+                                () => _selectPeriod(p)),
                           ),
-                          child: Text(
-                            p.label,
-                            style: GoogleFonts.inter(
-                              color: selected
-                                  ? Colors.black
-                                  : cs.onSurface.withValues(alpha: 0.6),
-                              fontSize: 12,
-                              fontWeight: selected
-                                  ? FontWeight.w700
-                                  : FontWeight.w500,
-                            ),
-                          ),
+                        ],
+                      ),
+                      // 서브: 1분 / 5분 / 60분 (분봉 선택 시)
+                      if (_period.isMinute) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [_Period.min1, _Period.min5, _Period.min60]
+                              .map((p) => _fsBtn(p.label, _period == p, cs,
+                                  () => _selectPeriod(p)))
+                              .toList(),
                         ),
-                      );
-                    }).toList(),
+                      ],
+                    ],
                   ),
                 ),
               ],
@@ -2362,6 +2384,30 @@ class _FullscreenCandleChartPageState
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _fsBtn(String label, bool active, ColorScheme cs, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: active
+              ? const Color(0xFF4ADE80)
+              : cs.onSurface.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            color: active ? Colors.black : cs.onSurface.withValues(alpha: 0.6),
+            fontSize: 12,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+          ),
         ),
       ),
     );
