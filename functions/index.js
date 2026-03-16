@@ -1,5 +1,6 @@
 const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { auth } = require('firebase-functions');
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getMessaging } = require('firebase-admin/messaging');
@@ -7,6 +8,37 @@ const { getFirestore } = require('firebase-admin/firestore');
 const https = require('https');
 
 initializeApp();
+
+// ── 신규 가입자 → 관리자에게 알림 ────────────────────────────────────────────
+exports.notifyAdminOnNewUser = auth.user().onCreate(async (user) => {
+  const db = getFirestore();
+
+  // config/admin 문서에서 관리자 UID 조회
+  const adminSnap = await db.collection('config').doc('admin').get();
+  const adminUid = adminSnap.data()?.uid;
+  if (!adminUid) return;
+
+  // 관리자 FCM 토큰 조회
+  const tokensSnap = await db.collection('fcm_tokens')
+    .where('uid', '==', adminUid).get();
+  const tokens = tokensSnap.docs
+    .map((d) => d.data().token)
+    .filter((t) => typeof t === 'string' && t.length > 0);
+  if (tokens.length === 0) return;
+
+  const displayName = user.displayName || user.email || '알 수 없음';
+  const provider = user.providerData?.[0]?.providerId ?? 'unknown';
+
+  await getMessaging().sendEachForMulticast({
+    notification: {
+      title: '👤 신규 가입자',
+      body: `${displayName} (${provider})`,
+    },
+    android: { notification: { sound: 'default', channelId: 'stockstorage_alerts' } },
+    apns: { payload: { aps: { sound: 'default' } } },
+    tokens,
+  });
+});
 
 // ── 댓글 알림 (새 댓글 → 같은 종목 댓글 작성자들에게 푸시) ──────────────────
 exports.sendCommentNotification = onDocumentCreated(

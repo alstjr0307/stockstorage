@@ -178,7 +178,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                     padding: const EdgeInsets.only(bottom: 10),
                     child: Row(
                       children: [
-                        Text('시장 심리 지표',
+                        Text('📊 시장 심리 지표',
                             style: GoogleFonts.inter(
                                 color: cs.onSurface,
                                 fontSize: 13,

@@ -28,6 +28,9 @@ void main() async {
     if (e.code != 'duplicate-app') rethrow;
   }
 
+  // FCM 백그라운드 핸들러 등록 (Firebase 초기화 직후)
+  NotificationService.registerBackgroundHandler();
+
   // 카카오 SDK 초기화
   // TODO: developers.kakao.com 에서 앱 등록 후 네이티브 앱 키를 입력하세요.
   // AndroidManifest.xml 및 Info.plist 도 함께 설정이 필요합니다.
