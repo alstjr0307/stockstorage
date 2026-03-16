@@ -26,6 +26,11 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     ('나스닥100 선물', 'NQ=F'),
     ('VIX 공포지수', '^VIX'),
     ('미 10년 국채금리', '^TNX'),
+    // 심리 지표 계산용
+    ('미 3개월 국채금리', '^IRX'),
+    ('달러 인덱스', 'DX-Y.NYB'),
+    ('구리', 'HG=F'),
+    ('금', 'GC=F'),
   ];
 
   static const _indexDescriptions = {
@@ -152,6 +157,40 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             symbol: '^TNX',
             description: '금리 상승 시 성장주·기술주 하락 압박. 4% 이상이면 채권 매력이 주식 대비 높아짐',
             unit: '%',
+          ),
+          const SizedBox(height: 10),
+          _buildDerivedCard(
+            context,
+            name: '장단기 금리차',
+            description: '미 10년 국채금리에서 3개월 금리를 뺀 값. 음수(역전)이면 과거 경기침체 선행 신호로 주목받음',
+            unit: '%p',
+            getValue: () {
+              final t10 = _prices['미 10년 국채금리']?.price;
+              final t3m = _prices['미 3개월 국채금리']?.price;
+              if (t10 == null || t3m == null) return null;
+              return t10 - t3m / 10;
+            },
+          ),
+          const SizedBox(height: 10),
+          _buildDerivedCard(
+            context,
+            name: '구리/금 비율',
+            description: '구리는 경기민감, 금은 안전자산. 비율 상승은 경기 낙관 심리, 하락은 경기침체 우려를 나타냄',
+            unit: '',
+            getValue: () {
+              final copper = _prices['구리']?.price;
+              final gold = _prices['금']?.price;
+              if (copper == null || gold == null || gold == 0) return null;
+              return copper / gold * 1000;
+            },
+          ),
+          const SizedBox(height: 10),
+          _buildSentimentCard(
+            context,
+            name: '달러 인덱스',
+            symbol: '달러 인덱스',
+            description: '주요 6개국 통화 대비 달러 강세 지수. 상승 시 신흥국·원자재 약세, 달러 약세 시 위험자산 선호 증가',
+            unit: '',
           ),
           const SizedBox(height: 28),
 
@@ -458,6 +497,67 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                       color: color, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDerivedCard(BuildContext context, {
+    required String name,
+    required String description,
+    required String unit,
+    required double? Function() getValue,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final value = getValue();
+    final isUp = value != null && value >= 0;
+    final color = isUp ? const Color(0xFF4ADE80) : Colors.redAccent;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.05)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: GoogleFonts.inter(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14)),
+                const SizedBox(height: 4),
+                Text(description,
+                    style: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.45),
+                        fontSize: 11,
+                        height: 1.5)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          if (_loadingIndices)
+            const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                    strokeWidth: 1.5, color: Color(0xFF4ADE80)))
+          else if (value == null)
+            Text('--',
+                style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.38), fontSize: 14))
+          else
+            Text(
+              '${value >= 0 ? '+' : ''}${value.toStringAsFixed(2)}$unit',
+              style: GoogleFonts.inter(
+                  color: color, fontWeight: FontWeight.w700, fontSize: 18),
             ),
         ],
       ),
