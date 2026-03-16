@@ -1896,6 +1896,8 @@ class _StockCandlePainter extends CustomPainter {
   final String Function(double) formatValue;
   final String Function(DateTime) formatDate;
   final Color labelColor;
+  final List<_OHLC>? allCandles; // MA 계산용 전체 데이터
+  final int visibleStart;        // 전체 데이터 내 visible 시작 인덱스
 
   _StockCandlePainter({
     required this.candles,
@@ -1903,6 +1905,8 @@ class _StockCandlePainter extends CustomPainter {
     required this.formatValue,
     required this.formatDate,
     required this.labelColor,
+    this.allCandles,
+    this.visibleStart = 0,
   });
 
   @override
@@ -1967,6 +1971,46 @@ class _StockCandlePainter extends CustomPainter {
       );
     }
 
+    // 이동평균선 (allCandles가 있을 때만)
+    if (allCandles != null && allCandles!.isNotEmpty) {
+      const maConfigs = [
+        (5,   Color(0xFFFFA726)),  // MA5  - 주황
+        (20,  Color(0xFF42A5F5)), // MA20 - 파랑
+        (60,  Color(0xFFAB47BC)), // MA60 - 보라
+        (120, Color(0xFFEF5350)), // MA120 - 빨강
+      ];
+      for (final (period, color) in maConfigs) {
+        final path = Path();
+        bool started = false;
+        for (int i = 0; i < n; i++) {
+          final g = visibleStart + i;
+          if (g < period - 1) continue;
+          double sum = 0;
+          for (int k = g - period + 1; k <= g; k++) {
+            sum += allCandles![k].close;
+          }
+          final ma = sum / period;
+          final cx = toX(i, n);
+          final cy = toY(ma);
+          if (!started) {
+            path.moveTo(cx, cy);
+            started = true;
+          } else {
+            path.lineTo(cx, cy);
+          }
+        }
+        if (started) {
+          canvas.drawPath(
+            path,
+            Paint()
+              ..color = color.withValues(alpha: 0.85)
+              ..strokeWidth = 1.2
+              ..style = PaintingStyle.stroke,
+          );
+        }
+      }
+    }
+
     // 십자선
     if (touchedIndex != null) {
       final cx = toX(touchedIndex!, n);
@@ -2022,7 +2066,9 @@ class _StockCandlePainter extends CustomPainter {
   bool shouldRepaint(_StockCandlePainter old) =>
       old.candles != candles ||
       old.touchedIndex != touchedIndex ||
-      old.labelColor != labelColor;
+      old.labelColor != labelColor ||
+      old.allCandles != allCandles ||
+      old.visibleStart != visibleStart;
 }
 
 // ── 가로 전체화면 차트 페이지 ──────────────────────────────────────────────
@@ -2247,6 +2293,10 @@ class _FullscreenCandleChartPageState
                                 formatValue: widget.formatValue,
                                 formatDate: _formatDate,
                                 labelColor: widget.labelColor,
+                                allCandles: _candles,
+                                visibleStart: _visibleRange.start
+                                    .floor()
+                                    .clamp(0, _candles.length),
                               ),
                             ),
                           );
