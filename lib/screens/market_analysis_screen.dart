@@ -168,7 +168,15 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
               final t10 = _prices['미 10년 국채금리']?.price;
               final t3m = _prices['미 3개월 국채금리']?.price;
               if (t10 == null || t3m == null) return null;
-              return t10 - t3m / 10;
+              return t10 - t3m;
+            },
+            getChange: () {
+              final t10 = _prices['미 10년 국채금리'];
+              final t3m = _prices['미 3개월 국채금리'];
+              if (t10 == null || t3m == null) return null;
+              final prevSpread = (t10.price - t10.change) - (t3m.price - t3m.change);
+              final currSpread = t10.price - t3m.price;
+              return currSpread - prevSpread;
             },
           ),
           const SizedBox(height: 10),
@@ -182,6 +190,17 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
               final gold = _prices['금']?.price;
               if (copper == null || gold == null || gold == 0) return null;
               return copper / gold * 1000;
+            },
+            getChange: () {
+              final copper = _prices['구리'];
+              final gold = _prices['금'];
+              if (copper == null || gold == null || gold.price == 0) return null;
+              final prevCopper = copper.price - copper.change;
+              final prevGold = gold.price - gold.change;
+              if (prevGold == 0) return null;
+              final curr = copper.price / gold.price * 1000;
+              final prev = prevCopper / prevGold * 1000;
+              return curr - prev;
             },
           ),
           const SizedBox(height: 10),
@@ -435,6 +454,13 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     );
   }
 
+  String _prevDayLabel() {
+    final w = DateTime.now().weekday;
+    return (w == DateTime.monday || w == DateTime.saturday || w == DateTime.sunday)
+        ? '전 거래일(금) 대비'
+        : '전일 대비';
+  }
+
   Widget _buildSentimentCard(BuildContext context, {
     required String name,
     required String symbol,
@@ -496,6 +522,12 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                   style: GoogleFonts.inter(
                       color: color, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
+                Text(
+                  _prevDayLabel(),
+                  style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.3),
+                      fontSize: 9),
+                ),
               ],
             ),
         ],
@@ -508,11 +540,15 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     required String description,
     required String unit,
     required double? Function() getValue,
+    required double? Function() getChange,
   }) {
     final cs = Theme.of(context).colorScheme;
     final value = getValue();
+    final change = getChange();
     final isUp = value != null && value >= 0;
+    final changeIsUp = change != null && change >= 0;
     final color = isUp ? const Color(0xFF4ADE80) : Colors.redAccent;
+    final changeColor = changeIsUp ? const Color(0xFF4ADE80) : Colors.redAccent;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -554,10 +590,29 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                 style: GoogleFonts.inter(
                     color: cs.onSurface.withValues(alpha: 0.38), fontSize: 14))
           else
-            Text(
-              '${value >= 0 ? '+' : ''}${value.toStringAsFixed(2)}$unit',
-              style: GoogleFonts.inter(
-                  color: color, fontWeight: FontWeight.w700, fontSize: 18),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${value >= 0 ? '+' : ''}${value.toStringAsFixed(2)}$unit',
+                  style: GoogleFonts.inter(
+                      color: color, fontWeight: FontWeight.w700, fontSize: 18),
+                ),
+                if (change != null)
+                  Text(
+                    '${changeIsUp ? '+' : ''}${change.toStringAsFixed(2)}$unit',
+                    style: GoogleFonts.inter(
+                        color: changeColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600),
+                  ),
+                Text(
+                  _prevDayLabel(),
+                  style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.3),
+                      fontSize: 9),
+                ),
+              ],
             ),
         ],
       ),
