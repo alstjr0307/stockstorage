@@ -28,7 +28,9 @@ typedef _OHLC = ({
 });
 
 enum _Period {
-  min1('분봉', '1m', '1d'),
+  min1('1분', '1m', '1d'),
+  min5('5분', '5m', '5d'),
+  min60('60분', '60m', '1mo'),
   day1('일봉', '1d', '2y'),
   week('주봉', '1wk', 'max'),
   month('월봉', '1mo', 'max');
@@ -37,6 +39,8 @@ enum _Period {
   final String label;
   final String interval;
   final String range;
+
+  bool get isMinute => this == min1 || this == min5 || this == min60;
 }
 
 class StockDetailScreen extends StatefulWidget {
@@ -821,10 +825,14 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                         child: Row(
                           children: [
                             Text(
-                              _selectedPeriod == _Period.month
-                                  ? DateFormat('yyyy년 MM월')
+                              _selectedPeriod.isMinute
+                                  ? DateFormat('MM월 dd일 HH:mm')
                                       .format(touched.date)
-                                  : DateFormat('MM월 dd일').format(touched.date),
+                                  : _selectedPeriod == _Period.month
+                                      ? DateFormat('yyyy년 MM월')
+                                          .format(touched.date)
+                                      : DateFormat('MM월 dd일')
+                                          .format(touched.date),
                               style: GoogleFonts.inter(
                                 color: cs.onSurface.withValues(alpha: 0.54),
                                 fontSize: 10,
@@ -864,9 +872,11 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                       candles: dc,
                       touchedIndex: _touchedIndex,
                       formatValue: (v) => _formatPrice(v, widget.pick.market),
-                      formatDate: _selectedPeriod == _Period.month
-                          ? (d) => DateFormat('yy/MM').format(d)
-                          : (d) => DateFormat('MM/dd').format(d),
+                      formatDate: _selectedPeriod.isMinute
+                          ? (d) => DateFormat('HH:mm').format(d)
+                          : _selectedPeriod == _Period.month
+                              ? (d) => DateFormat('yy/MM').format(d)
+                              : (d) => DateFormat('MM/dd').format(d),
                       labelColor: cs.onSurface,
                     ),
                   ),
@@ -2216,7 +2226,7 @@ class _FullscreenCandleChartPageState
   }
 
   String _formatDate(DateTime d) {
-    if (_period == _Period.min1) return DateFormat('HH:mm').format(d);
+    if (_period.isMinute) return DateFormat('HH:mm').format(d);
     if (_period == _Period.month) return DateFormat('yy/MM').format(d);
     return DateFormat('MM/dd').format(d);
   }
