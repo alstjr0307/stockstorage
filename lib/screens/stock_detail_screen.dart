@@ -2352,7 +2352,25 @@ class _FullscreenCandleChartPageState
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Column(
                     children: [
-                      // 상단: 분봉 / 일봉 / 주봉 / 월봉
+                      // 서브: 1분 / 5분 / 60분 — 위로 슬라이드
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeInOut,
+                        alignment: Alignment.bottomCenter,
+                        child: _period.isMinute
+                            ? Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [_Period.min1, _Period.min5, _Period.min60]
+                                      .map((p) => _fsBtn(p.label, _period == p, cs,
+                                          () => _selectPeriod(p)))
+                                      .toList(),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                      // 메인: 분봉 / 일봉 / 주봉 / 월봉
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -2364,24 +2382,6 @@ class _FullscreenCandleChartPageState
                                 () => _selectPeriod(p)),
                           ),
                         ],
-                      ),
-                      // 서브: 1분 / 5분 / 60분 (분봉 선택 시)
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeInOut,
-                        alignment: Alignment.topCenter,
-                        child: _period.isMinute
-                            ? Padding(
-                                padding: const EdgeInsets.only(top: 6),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [_Period.min1, _Period.min5, _Period.min60]
-                                      .map((p) => _fsBtn(p.label, _period == p, cs,
-                                          () => _selectPeriod(p)))
-                                      .toList(),
-                                ),
-                              )
-                            : const SizedBox.shrink(),
                       ),
                     ],
                   ),
