@@ -54,6 +54,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
 
   final _sentimentKey = GlobalKey();
   bool _capturing = false;
+  bool _showWatermark = false;
 
   @override
   void initState() {
@@ -89,7 +90,9 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   }
 
   Future<void> _captureAndShare() async {
-    setState(() => _capturing = true);
+    setState(() { _capturing = true; _showWatermark = true; });
+    // 워터마크가 렌더링될 때까지 한 프레임 대기
+    await Future.delayed(const Duration(milliseconds: 80));
     try {
       final boundary = _sentimentKey.currentContext?.findRenderObject()
           as RenderRepaintBoundary?;
@@ -103,10 +106,10 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       await file.writeAsBytes(bytes);
       await Share.shareXFiles(
         [XFile(file.path)],
-        text: '📊 주식저장소 시장 심리 지표\n주식저장소 앱에서 더 확인하세요 📈',
+        text: '📊 주식저장소 시장 심리 지표',
       );
     } finally {
-      if (mounted) setState(() => _capturing = false);
+      if (mounted) setState(() { _capturing = false; _showWatermark = false; });
     }
   }
 
@@ -163,39 +166,12 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           const SizedBox(height: 28),
 
           // ── 시장 심리 지표 섹션 ──
-          Row(
-            children: [
-              Text('시장 심리 지표',
-                  style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.54),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5)),
-              const Spacer(),
-              GestureDetector(
-                onTap: _capturing ? null : _captureAndShare,
-                child: _capturing
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 1.5, color: Color(0xFF4ADE80)))
-                    : Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.camera_alt_outlined,
-                              size: 14,
-                              color: cs.onSurface.withValues(alpha: 0.45)),
-                          const SizedBox(width: 4),
-                          Text('캡처 공유',
-                              style: GoogleFonts.inter(
-                                  color: cs.onSurface.withValues(alpha: 0.45),
-                                  fontSize: 11)),
-                        ],
-                      ),
-              ),
-            ],
-          ),
+          Text('시장 심리 지표',
+              style: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.54),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5)),
           const SizedBox(height: 10),
           RepaintBoundary(
             key: _sentimentKey,
@@ -295,15 +271,58 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                     description: '주요 6개국 통화 대비 달러 강세 지수. 상승 시 신흥국·원자재 약세, 달러 약세 시 위험자산 선호 증가',
                     unit: '',
                   ),
-                  const SizedBox(height: 8),
-                  // 하단 워터마크
-                  Center(
-                    child: Text('주식저장소 앱에서 확인하세요 📈',
-                        style: GoogleFonts.inter(
-                            color: cs.onSurface.withValues(alpha: 0.3),
-                            fontSize: 10)),
-                  ),
+                  if (_showWatermark) ...[
+                    const SizedBox(height: 12),
+                    Center(
+                      child: RichText(
+                        text: TextSpan(children: [
+                          TextSpan(
+                            text: '주식저장소',
+                            style: GoogleFonts.inter(
+                                color: const Color(0xFF4ADE80),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800),
+                          ),
+                          TextSpan(
+                            text: ' 앱에서 확인하세요 📈',
+                            style: GoogleFonts.inter(
+                                color: cs.onSurface.withValues(alpha: 0.4),
+                                fontSize: 11),
+                          ),
+                        ]),
+                      ),
+                    ),
+                  ],
                 ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _capturing ? null : _captureAndShare,
+              icon: _capturing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Color(0xFF4ADE80)))
+                  : const Icon(Icons.camera_alt_outlined,
+                      size: 18, color: Color(0xFF4ADE80)),
+              label: Text(
+                _capturing ? '캡처 중...' : '캡처해서 공유하기',
+                style: GoogleFonts.inter(
+                    color: const Color(0xFF4ADE80),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: const BorderSide(
+                    color: Color(0xFF4ADE80), width: 1.2),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ),
