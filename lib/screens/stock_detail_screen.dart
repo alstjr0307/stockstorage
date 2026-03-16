@@ -780,16 +780,24 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                   ],
                 ),
                 // 분봉 서브 선택: 1분 / 5분 / 60분
-                if (_selectedPeriod.isMinute) ...[
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [_Period.min1, _Period.min5, _Period.min60].map(
-                      (p) => _periodBtn(
-                          p.label, _selectedPeriod == p, cs, () => _selectPeriod(p),
-                          small: true),
-                    ).toList(),
-                  ),
-                ],
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeInOut,
+                  alignment: Alignment.topCenter,
+                  child: _selectedPeriod.isMinute
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Row(
+                            children: [_Period.min1, _Period.min5, _Period.min60]
+                                .map((p) => _periodBtn(
+                                    p.label, _selectedPeriod == p, cs,
+                                    () => _selectPeriod(p),
+                                    small: true))
+                                .toList(),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
               ],
             ),
           ),
@@ -2358,16 +2366,23 @@ class _FullscreenCandleChartPageState
                         ],
                       ),
                       // 서브: 1분 / 5분 / 60분 (분봉 선택 시)
-                      if (_period.isMinute) ...[
-                        const SizedBox(height: 6),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [_Period.min1, _Period.min5, _Period.min60]
-                              .map((p) => _fsBtn(p.label, _period == p, cs,
-                                  () => _selectPeriod(p)))
-                              .toList(),
-                        ),
-                      ],
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeInOut,
+                        alignment: Alignment.topCenter,
+                        child: _period.isMinute
+                            ? Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [_Period.min1, _Period.min5, _Period.min60]
+                                      .map((p) => _fsBtn(p.label, _period == p, cs,
+                                          () => _selectPeriod(p)))
+                                      .toList(),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
                     ],
                   ),
                 ),
