@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>주식저장소 관리자</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0A0E1A; color: #e0e0e0; min-height: 100vh; }
+
+    /* 로그인 */
+    #login-screen {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 24px;
+    }
+    #login-screen h1 { color: #4ADE80; font-size: 24px; margin-bottom: 32px; }
+    #login-screen input {
+      width: 100%; max-width: 320px; padding: 12px 16px;
+      background: #1A2035; border: 1px solid #2a3550; border-radius: 10px;
+      color: #fff; font-size: 15px; margin-bottom: 12px; outline: none;
+    }
+    #login-screen input:focus { border-color: #4ADE80; }
+    #login-btn {
+      width: 100%; max-width: 320px; padding: 13px;
+      background: #4ADE80; color: #0A0E1A; font-size: 16px; font-weight: 700;
+      border: none; border-radius: 10px; cursor: pointer; margin-top: 4px;
+    }
+    #login-btn:hover { background: #22c55e; }
+    #login-error { color: #f87171; font-size: 13px; margin-top: 8px; }
+
+    /* 어드민 */
+    #admin-screen { display: none; }
+    header {
+      background: #1A2035; padding: 16px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid #2a3550; position: sticky; top: 0; z-index: 10;
+    }
+    header h1 { color: #4ADE80; font-size: 18px; font-weight: 700; }
+    #logout-btn {
+      background: none; border: 1px solid #2a3550; color: #aaa;
+      padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+    }
+    #logout-btn:hover { border-color: #4ADE80; color: #4ADE80; }
+
+    .tabs {
+      display: flex; gap: 0; background: #1A2035;
+      border-bottom: 1px solid #2a3550;
+    }
+    .tab-btn {
+      padding: 14px 24px; background: none; border: none; color: #888;
+      font-size: 14px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent;
+    }
+    .tab-btn.active { color: #4ADE80; border-bottom-color: #4ADE80; }
+
+    .tab-content { display: none; padding: 24px; max-width: 800px; margin: 0 auto; }
+    .tab-content.active { display: block; }
+
+    .section-title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 16px; }
+
+    /* 폼 */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .form-full { grid-column: 1 / -1; }
+    label { display: block; font-size: 12px; color: #888; margin-bottom: 4px; }
+    input[type=text], input[type=number], input[type=date], textarea, select {
+      width: 100%; padding: 10px 12px;
+      background: #1A2035; border: 1px solid #2a3550; border-radius: 8px;
+      color: #fff; font-size: 14px; outline: none;
+    }
+    input:focus, textarea:focus, select:focus { border-color: #4ADE80; }
+    textarea { resize: vertical; min-height: 80px; }
+    select option { background: #1A2035; }
+
+    .checkbox-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 0;
+    }
+    .checkbox-row input[type=checkbox] { width: 16px; height: 16px; accent-color: #4ADE80; }
+    .checkbox-row label { margin: 0; font-size: 14px; color: #ccc; }
+
+    .submit-btn {
+      margin-top: 20px; width: 100%; padding: 13px;
+      background: #4ADE80; color: #0A0E1A; font-size: 15px; font-weight: 700;
+      border: none; border-radius: 10px; cursor: pointer;
+    }
+    .submit-btn:hover { background: #22c55e; }
+    .submit-btn:disabled { background: #2a3550; color: #666; cursor: not-allowed; }
+
+    .msg { margin-top: 12px; font-size: 13px; padding: 10px 14px; border-radius: 8px; display: none; }
+    .msg.success { background: rgba(74,222,128,0.15); color: #4ADE80; display: block; }
+    .msg.error { background: rgba(248,113,113,0.15); color: #f87171; display: block; }
+
+    /* 목록 */
+    .pick-list { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+    .pick-card {
+      background: #1A2035; border: 1px solid #2a3550; border-radius: 12px; padding: 16px;
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+    }
+    .pick-card-info { flex: 1; }
+    .pick-card-name { font-weight: 700; color: #fff; font-size: 15px; }
+    .pick-card-meta { font-size: 12px; color: #888; margin-top: 4px; }
+    .pick-card-reason { font-size: 13px; color: #aaa; margin-top: 6px; }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
+      margin-right: 4px;
+    }
+    .badge-active { background: rgba(74,222,128,0.2); color: #4ADE80; }
+    .badge-completed { background: rgba(148,163,184,0.2); color: #94a3b8; }
+    .badge-premium { background: rgba(251,191,36,0.2); color: #fbbf24; }
+    .pick-card-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+    .action-btn {
+      padding: 6px 12px; border-radius: 7px; font-size: 12px; font-weight: 600;
+      border: none; cursor: pointer;
+    }
+    .btn-complete { background: rgba(74,222,128,0.15); color: #4ADE80; }
+    .btn-complete:hover { background: rgba(74,222,128,0.3); }
+    .btn-delete { background: rgba(248,113,113,0.15); color: #f87171; }
+    .btn-delete:hover { background: rgba(248,113,113,0.3); }
+
+    .filter-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-btn {
+      padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;
+      border: 1px solid #2a3550; background: none; color: #888; cursor: pointer;
+    }
+    .filter-btn.active { border-color: #4ADE80; color: #4ADE80; background: rgba(74,222,128,0.1); }
+
+    /* 알림 */
+    .noti-form { display: flex; flex-direction: column; gap: 12px; }
+
+    /* 종목 마감 모달 */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6); z-index: 100;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #1A2035; border: 1px solid #2a3550; border-radius: 16px;
+      padding: 24px; width: 320px;
+    }
+    .modal h3 { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 16px; }
+    .modal-btns { display: flex; gap: 8px; margin-top: 16px; }
+    .modal-btns button { flex: 1; padding: 10px; border-radius: 8px; font-size: 14px; font-weight: 700; border: none; cursor: pointer; }
+    .modal-cancel { background: #2a3550; color: #aaa; }
+    .modal-confirm { background: #4ADE80; color: #0A0E1A; }
+
+    .loading { text-align: center; color: #555; padding: 40px; }
+  </style>
+</head>
+<body>
+
+<!-- 로그인 -->
+<div id="login-screen">
+  <h1>📊 주식저장소 관리자</h1>
+  <input type="email" id="email-input" placeholder="이메일" />
+  <input type="password" id="pw-input" placeholder="비밀번호" />
+  <button id="login-btn" onclick="doLogin()">로그인</button>
+  <p id="login-error"></p>
+</div>
+
+<!-- 어드민 -->
+<div id="admin-screen">
+  <header>
+    <h1>📊 관리자 패널</h1>
+    <button id="logout-btn" onclick="doLogout()">로그아웃</button>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('tab-add', this)">종목 추가</button>
+    <button class="tab-btn" onclick="switchTab('tab-list', this)">종목 목록</button>
+    <button class="tab-btn" onclick="switchTab('tab-noti', this)">알림 발송</button>
+  </div>
+
+  <!-- 탭1: 종목 추가 -->
+  <div id="tab-add" class="tab-content active">
+    <p class="section-title">새 추천종목 등록</p>
+    <div class="form-grid">
+      <div>
+        <label>티커 (예: 005930, AAPL)</label>
+        <input type="text" id="f-ticker" placeholder="티커" />
+      </div>
+      <div>
+        <label>종목명</label>
+        <input type="text" id="f-name" placeholder="삼성전자" />
+      </div>
+      <div>
+        <label>매수가 (원/달러)</label>
+        <input type="number" id="f-buy" placeholder="70000" />
+      </div>
+      <div>
+        <label>목표가 (원/달러)</label>
+        <input type="number" id="f-target" placeholder="90000" />
+      </div>
+      <div>
+        <label>시장</label>
+        <select id="f-market">
+          <option value="KS">KOSPI (KS)</option>
+          <option value="KQ">KOSDAQ (KQ)</option>
+          <option value="US">미국 (US)</option>
+        </select>
+      </div>
+      <div>
+        <label>분류</label>
+        <select id="f-category">
+          <option value="단기">단기</option>
+          <option value="장기">장기</option>
+        </select>
+      </div>
+      <div>
+        <label>실적 발표일 (선택)</label>
+        <input type="date" id="f-earnings" />
+      </div>
+      <div>
+        <label>이미지 URL (선택)</label>
+        <input type="text" id="f-image" placeholder="https://..." />
+      </div>
+      <div class="form-full">
+        <label>추천 이유</label>
+        <textarea id="f-reason" placeholder="종목 추천 이유를 입력하세요..."></textarea>
+      </div>
+      <div class="form-full">
+        <div class="checkbox-row">
+          <input type="checkbox" id="f-premium" />
+          <label for="f-premium">프리미엄 종목</label>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="f-noti" checked />
+          <label for="f-noti">추가 시 푸시 알림 발송</label>
+        </div>
+      </div>
+    </div>
+    <button class="submit-btn" id="add-btn" onclick="addPick()">종목 추가하기</button>
+    <div id="add-msg" class="msg"></div>
+  </div>
+
+  <!-- 탭2: 종목 목록 -->
+  <div id="tab-list" class="tab-content">
+    <div class="filter-row">
+      <button class="filter-btn active" onclick="filterPicks('all', this)">전체</button>
+      <button class="filter-btn" onclick="filterPicks('active', this)">진행 중</button>
+      <button class="filter-btn" onclick="filterPicks('completed', this)">완료</button>
+    </div>
+    <div id="pick-list" class="pick-list">
+      <p class="loading">목록 불러오는 중...</p>
+    </div>
+  </div>
+
+  <!-- 탭3: 알림 -->
+  <div id="tab-noti" class="tab-content">
+    <p class="section-title">푸시 알림 발송</p>
+    <div class="noti-form">
+      <div>
+        <label>제목</label>
+        <input type="text" id="noti-title" placeholder="알림 제목" />
+      </div>
+      <div>
+        <label>내용</label>
+        <textarea id="noti-body" placeholder="알림 내용을 입력하세요..."></textarea>
+      </div>
+      <button class="submit-btn" onclick="sendNoti()">알림 발송</button>
+      <div id="noti-msg" class="msg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 마감 모달 -->
+<div class="modal-overlay" id="complete-modal">
+  <div class="modal">
+    <h3>종목 마감</h3>
+    <label>실제 청산가</label>
+    <input type="number" id="close-price-input" placeholder="청산가 입력" style="margin-top:8px;" />
+    <div class="modal-btns">
+      <button class="modal-cancel" onclick="closeModal()">취소</button>
+      <button class="modal-confirm" onclick="confirmComplete()">확인</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+    from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc,
+    serverTimestamp, query, orderBy, Timestamp }
+    from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+  const firebaseConfig = {
+    apiKey: 'AIzaSyDIp4yXMzaYXj_XKv8UBrck6fzar4a0TgQ',
+    authDomain: 'stockstorage-13828.firebaseapp.com',
+    projectId: 'stockstorage-13828',
+    storageBucket: 'stockstorage-13828.firebasestorage.app',
+    messagingSenderId: '475716336297',
+    appId: '1:475716336297:web:79645b5453cc769586c7b8',
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  let allPicks = [];
+  let currentFilter = 'all';
+  let pendingCompleteId = null;
+
+  // 인증 상태 감시
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('admin-screen').style.display = 'block';
+      loadPicks();
+    } else {
+      document.getElementById('login-screen').style.display = 'flex';
+      document.getElementById('admin-screen').style.display = 'none';
+    }
+  });
+
+  // 로그인
+  window.doLogin = async () => {
+    const email = document.getElementById('email-input').value.trim();
+    const pw = document.getElementById('pw-input').value;
+    const errEl = document.getElementById('login-error');
+    try {
+      await signInWithEmailAndPassword(auth, email, pw);
+      errEl.textContent = '';
+    } catch(e) {
+      errEl.textContent = '이메일 또는 비밀번호가 틀렸습니다.';
+    }
+  };
+
+  window.doLogout = () => signOut(auth);
+
+  // 탭 전환
+  window.switchTab = (id, btn) => {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    btn.classList.add('active');
+    if (id === 'tab-list') loadPicks();
+  };
+
+  // 종목 추가
+  window.addPick = async () => {
+    const btn = document.getElementById('add-btn');
+    const msg = document.getElementById('add-msg');
+    const ticker = document.getElementById('f-ticker').value.trim().toUpperCase();
+    const name = document.getElementById('f-name').value.trim();
+    const buy = parseFloat(document.getElementById('f-buy').value);
+    const target = parseFloat(document.getElementById('f-target').value);
+    const reason = document.getElementById('f-reason').value.trim();
+    const market = document.getElementById('f-market').value;
+    const category = document.getElementById('f-category').value;
+    const isPremium = document.getElementById('f-premium').checked;
+    const sendNotiFlag = document.getElementById('f-noti').checked;
+    const imageUrl = document.getElementById('f-image').value.trim() || null;
+    const earningsVal = document.getElementById('f-earnings').value;
+
+    if (!ticker || !name || isNaN(buy) || isNaN(target) || !reason) {
+      showMsg(msg, 'error', '티커, 종목명, 매수가, 목표가, 추천이유는 필수입니다.');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '등록 중...';
+    try {
+      const data = {
+        ticker, name, buyPrice: buy, targetPrice: target,
+        reason, market, category, isPremium,
+        imageUrl, currentPrice: null,
+        status: 'active',
+        upVotes: 0, downVotes: 0,
+        createdAt: serverTimestamp(),
+      };
+      if (earningsVal) data.earningsDate = Timestamp.fromDate(new Date(earningsVal));
+
+      await addDoc(collection(db, 'stock_picks'), data);
+
+      if (sendNotiFlag) {
+        await addDoc(collection(db, 'notification_queue'), {
+          title: `📈 새 추천종목: ${name}`,
+          body: `${ticker} · 목표가 ${target.toLocaleString()}`,
+          createdAt: serverTimestamp(),
+        });
+      }
+
+      showMsg(msg, 'success', `✓ ${name}(${ticker}) 종목이 추가되었습니다.`);
+      // 폼 초기화
+      ['f-ticker','f-name','f-buy','f-target','f-reason','f-image','f-earnings']
+        .forEach(id => document.getElementById(id).value = '');
+      document.getElementById('f-premium').checked = false;
+    } catch(e) {
+      showMsg(msg, 'error', '오류: ' + e.message);
+    }
+    btn.disabled = false;
+    btn.textContent = '종목 추가하기';
+  };
+
+  // 목록 로드
+  window.loadPicks = async () => {
+    const listEl = document.getElementById('pick-list');
+    listEl.innerHTML = '<p class="loading">불러오는 중...</p>';
+    try {
+      const q = query(collection(db, 'stock_picks'), orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      allPicks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderPicks();
+    } catch(e) {
+      listEl.innerHTML = `<p class="loading" style="color:#f87171;">오류: ${e.message}</p>`;
+    }
+  };
+
+  window.filterPicks = (filter, btn) => {
+    currentFilter = filter;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderPicks();
+  };
+
+  function renderPicks() {
+    const listEl = document.getElementById('pick-list');
+    const filtered = currentFilter === 'all' ? allPicks
+      : allPicks.filter(p => p.status === currentFilter);
+
+    if (filtered.length === 0) {
+      listEl.innerHTML = '<p class="loading">종목이 없습니다.</p>';
+      return;
+    }
+
+    listEl.innerHTML = filtered.map(p => {
+      const ret = (((p.targetPrice - p.buyPrice) / p.buyPrice) * 100).toFixed(1);
+      const date = p.createdAt?.toDate ? p.createdAt.toDate().toLocaleDateString('ko-KR') : '';
+      return `
+        <div class="pick-card">
+          <div class="pick-card-info">
+            <div class="pick-card-name">
+              ${p.name} <span style="color:#888;font-weight:400;font-size:13px;">${p.ticker}</span>
+            </div>
+            <div class="pick-card-meta" style="margin-top:6px;">
+              <span class="badge ${p.status === 'active' ? 'badge-active' : 'badge-completed'}">
+                ${p.status === 'active' ? '진행 중' : '완료'}
+              </span>
+              ${p.isPremium ? '<span class="badge badge-premium">프리미엄</span>' : ''}
+              <span style="color:#94a3b8;">${p.market} · ${p.category}</span>
+            </div>
+            <div class="pick-card-meta">
+              매수 ${p.buyPrice?.toLocaleString()} → 목표 ${p.targetPrice?.toLocaleString()}
+              <span style="color:#4ADE80;margin-left:6px;">+${ret}%</span>
+              ${p.closedPrice ? `<span style="color:#94a3b8;margin-left:6px;">청산 ${p.closedPrice.toLocaleString()}</span>` : ''}
+            </div>
+            <div class="pick-card-reason">${p.reason?.substring(0, 80)}${p.reason?.length > 80 ? '...' : ''}</div>
+            <div class="pick-card-meta" style="margin-top:4px;">${date}</div>
+          </div>
+          <div class="pick-card-actions">
+            ${p.status === 'active' ? `<button class="action-btn btn-complete" onclick="openCompleteModal('${p.id}')">마감</button>` : ''}
+            <button class="action-btn btn-delete" onclick="deletePick('${p.id}', '${p.name}')">삭제</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // 마감 모달
+  window.openCompleteModal = (id) => {
+    pendingCompleteId = id;
+    document.getElementById('close-price-input').value = '';
+    document.getElementById('complete-modal').classList.add('open');
+  };
+  window.closeModal = () => {
+    document.getElementById('complete-modal').classList.remove('open');
+    pendingCompleteId = null;
+  };
+  window.confirmComplete = async () => {
+    const price = parseFloat(document.getElementById('close-price-input').value);
+    if (!pendingCompleteId || isNaN(price)) return;
+    try {
+      await updateDoc(doc(db, 'stock_picks', pendingCompleteId), {
+        status: 'completed',
+        closedPrice: price,
+        closedAt: serverTimestamp(),
+      });
+      closeModal();
+      loadPicks();
+    } catch(e) { alert('오류: ' + e.message); }
+  };
+
+  // 삭제
+  window.deletePick = async (id, name) => {
+    if (!confirm(`"${name}" 종목을 삭제할까요?`)) return;
+    try {
+      await deleteDoc(doc(db, 'stock_picks', id));
+      loadPicks();
+    } catch(e) { alert('오류: ' + e.message); }
+  };
+
+  // 알림 발송
+  window.sendNoti = async () => {
+    const title = document.getElementById('noti-title').value.trim();
+    const body = document.getElementById('noti-body').value.trim();
+    const msg = document.getElementById('noti-msg');
+    if (!title || !body) { showMsg(msg, 'error', '제목과 내용을 입력하세요.'); return; }
+    try {
+      await addDoc(collection(db, 'notification_queue'), {
+        title, body, createdAt: serverTimestamp(),
+      });
+      showMsg(msg, 'success', '알림이 발송 대기열에 추가되었습니다.');
+      document.getElementById('noti-title').value = '';
+      document.getElementById('noti-body').value = '';
+    } catch(e) { showMsg(msg, 'error', '오류: ' + e.message); }
+  };
+
+  function showMsg(el, type, text) {
+    el.className = 'msg ' + type;
+    el.textContent = text;
+    setTimeout(() => { el.className = 'msg'; }, 4000);
+  }
+
+  // 엔터로 로그인
+  document.getElementById('pw-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') window.doLogin();
+  });
+</script>
+</body>
+</html>
