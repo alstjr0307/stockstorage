@@ -2,7 +2,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/announcement.dart';
 import '../models/comment.dart';
 import '../models/market_analysis.dart';
+import '../models/post.dart';
 import '../models/stock_pick.dart';
+import '../models/trading_journal.dart';
 
 class FirestoreService {
   final _db = FirebaseFirestore.instance;
@@ -173,7 +175,7 @@ class FirestoreService {
       _db.collection('users').doc(comment.uid).collection('myComments').doc(pickCommentRef.id),
       {
         'pickId': pickId,
-        'text': comment.text,
+        'text': comment.content,
         'createdAt': Timestamp.fromDate(comment.createdAt),
       },
     );
@@ -225,6 +227,35 @@ class FirestoreService {
     final doc = await _db.collection('market_analyses').doc(id).get();
     if (!doc.exists) return null;
     return MarketAnalysis.fromFirestore(doc);
+  }
+
+  // ── 관리자: 유저 목록 ─────────────────────────────────────────────────
+  Future<List<Map<String, dynamic>>> getAdminUserList() async {
+    final usersSnap = await _db.collection('users').get();
+    final results = await Future.wait(usersSnap.docs.map((doc) async {
+      final data = doc.data();
+      final commentsSnap = await _db
+          .collection('users')
+          .doc(doc.id)
+          .collection('myComments')
+          .count()
+          .get();
+      return {
+        'uid': doc.id,
+        'nickname': data['nickname'] as String? ?? '',
+        'createdAt': data['createdAt'] as Timestamp?,
+        'commentCount': commentsSnap.count ?? 0,
+      };
+    }));
+    results.sort((a, b) {
+      final ta = a['createdAt'] as Timestamp?;
+      final tb = b['createdAt'] as Timestamp?;
+      if (ta == null && tb == null) return 0;
+      if (ta == null) return 1;
+      if (tb == null) return -1;
+      return tb.compareTo(ta);
+    });
+    return results;
   }
 
   // ── 알림 큐 ───────────────────────────────────────────────────────────
@@ -340,5 +371,236 @@ class FirestoreService {
         .orderBy('createdAt', descending: true)
         .get();
     return snapshot.docs.map((d) => StockPick.fromFirestore(d)).toList();
+  }
+
+  // ── 전체 종목 (활성 + 종료, 매매일지 종목 선택용) ────────────────────────
+  Future<List<StockPick>> getAllStockPicksOnce() async {
+    final snap = await _db
+        .collection('stock_picks')
+        .orderBy('createdAt', descending: true)
+        .get();
+    return snap.docs.map((d) => StockPick.fromFirestore(d)).toList();
+  }
+
+  // ── 매매일지 ──────────────────────────────────────────────────────────────
+  Stream<List<TradingJournal>> getMyJournals(String uid) {
+    return _db
+        .collection('trading_journal')
+        .where('uid', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((s) => s.docs.map((d) => TradingJournal.fromFirestore(d)).toList());
+  }
+
+  Stream<List<TradingJournal>> getPublicJournals() {
+    return _db
+        .collection('trading_journal')
+        .where('isPublic', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((s) => s.docs.map((d) => TradingJournal.fromFirestore(d)).toList());
+  }
+
+  Future<(List<TradingJournal>, DocumentSnapshot?)> getPublicJournalsPaged({
+    DocumentSnapshot? startAfter,
+    int limit = 15,
+  }) async {
+    var query = _db
+        .collection('trading_journal')
+        .where('isPublic', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+    if (startAfter != null) query = query.startAfterDocument(startAfter);
+    final snap = await query.get();
+    final journals = snap.docs.map((d) => TradingJournal.fromFirestore(d)).toList();
+    final lastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
+    return (journals, lastDoc);
+  }
+
+  Future<void> addJournal(TradingJournal journal) {
+    return _db.collection('trading_journal').add(journal.toFirestore());
+  }
+
+  Future<void> updateJournal(TradingJournal journal) {
+    return _db
+        .collection('trading_journal')
+        .doc(journal.id)
+        .update(journal.toFirestore());
+  }
+
+  Future<void> deleteJournal(String id) {
+    return _db.collection('trading_journal').doc(id).delete();
+  }
+
+  Future<void> toggleJournalPublic(String id, bool isCurrentlyPublic) {
+    return _db.collection('trading_journal').doc(id).update({
+      'isPublic': !isCurrentlyPublic,
+    });
+  }
+
+  // returns true if now liked, false if unliked
+  Future<bool> likeJournal(String journalId, String uid) async {
+    final likeRef = _db
+        .collection('trading_journal')
+        .doc(journalId)
+        .collection('likes')
+        .doc(uid);
+    final likeDoc = await likeRef.get();
+    final batch = _db.batch();
+    final journalRef = _db.collection('trading_journal').doc(journalId);
+    if (likeDoc.exists) {
+      batch.delete(likeRef);
+      batch.update(journalRef, {'likes': FieldValue.increment(-1)});
+      await batch.commit();
+      return false;
+    } else {
+      batch.set(likeRef, {'uid': uid, 'createdAt': Timestamp.fromDate(DateTime.now())});
+      batch.update(journalRef, {'likes': FieldValue.increment(1)});
+      await batch.commit();
+      return true;
+    }
+  }
+
+  Future<bool> hasLikedJournal(String journalId, String uid) async {
+    final doc = await _db
+        .collection('trading_journal')
+        .doc(journalId)
+        .collection('likes')
+        .doc(uid)
+        .get();
+    return doc.exists;
+  }
+
+  // ── 자유게시판 Posts ──────────────────────────────────────────────────────
+
+  Future<(List<Post>, DocumentSnapshot?)> getPostsPaged({
+    DocumentSnapshot? startAfter,
+    int limit = 15,
+  }) async {
+    var query = _db
+        .collection('posts')
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+    if (startAfter != null) query = query.startAfterDocument(startAfter);
+    final snap = await query.get();
+    final posts = snap.docs.map((d) => Post.fromFirestore(d)).toList();
+    final lastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
+    return (posts, lastDoc);
+  }
+
+  Future<void> createPost(Post post) {
+    return _db.collection('posts').add(post.toFirestore());
+  }
+
+  Future<void> deletePost(String id) {
+    return _db.collection('posts').doc(id).delete();
+  }
+
+  // returns true if now liked, false if unliked
+  Future<bool> likePost(String postId, String uid) async {
+    final likeRef = _db.collection('posts').doc(postId).collection('likes').doc(uid);
+    final likeDoc = await likeRef.get();
+    final batch = _db.batch();
+    final postRef = _db.collection('posts').doc(postId);
+    if (likeDoc.exists) {
+      batch.delete(likeRef);
+      batch.update(postRef, {'likes': FieldValue.increment(-1)});
+      await batch.commit();
+      return false;
+    } else {
+      batch.set(likeRef, {'uid': uid, 'createdAt': Timestamp.fromDate(DateTime.now())});
+      batch.update(postRef, {'likes': FieldValue.increment(1)});
+      await batch.commit();
+      return true;
+    }
+  }
+
+  Future<bool> hasLikedPost(String postId, String uid) async {
+    final doc = await _db.collection('posts').doc(postId).collection('likes').doc(uid).get();
+    return doc.exists;
+  }
+
+  // ─── 자유게시판 댓글 ──────────────────────────────────────────────────────
+
+  Stream<List<Comment>> getPostComments(String postId) {
+    return _db.collection('posts').doc(postId).collection('comments')
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map((s) => s.docs.map(Comment.fromFirestore).toList());
+  }
+
+  Future<void> addPostComment(String postId, Comment comment) {
+    return _db.collection('posts').doc(postId).collection('comments').add(comment.toFirestore());
+  }
+
+  Future<void> deletePostComment(String postId, String commentId) {
+    return _db.collection('posts').doc(postId).collection('comments').doc(commentId).delete();
+  }
+
+  // ─── 매매일지 댓글 ────────────────────────────────────────────────────────
+
+  Stream<List<Comment>> getJournalComments(String journalId) {
+    return _db.collection('trading_journal').doc(journalId).collection('comments')
+        .orderBy('createdAt', descending: false)
+        .snapshots()
+        .map((s) => s.docs.map(Comment.fromFirestore).toList());
+  }
+
+  Future<void> addJournalComment(String journalId, Comment comment) {
+    return _db.collection('trading_journal').doc(journalId).collection('comments').add(comment.toFirestore());
+  }
+
+  Future<void> deleteJournalComment(String journalId, String commentId) {
+    return _db.collection('trading_journal').doc(journalId).collection('comments').doc(commentId).delete();
+  }
+
+  // ─── 신고 ─────────────────────────────────────────────────────────────────
+
+  Future<void> reportContent({
+    required String reporterUid,
+    required String targetUid,
+    required String contentType, // 'post', 'journal', 'comment'
+    required String contentId,
+    required String reason,
+  }) {
+    return _db.collection('reports').add({
+      'reporterUid': reporterUid,
+      'targetUid': targetUid,
+      'contentType': contentType,
+      'contentId': contentId,
+      'reason': reason,
+      'createdAt': Timestamp.fromDate(DateTime.now()),
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getReports() async {
+    final snap = await _db.collection('reports').orderBy('createdAt', descending: true).get();
+    return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+  }
+
+  Future<void> deleteReport(String reportId) {
+    return _db.collection('reports').doc(reportId).delete();
+  }
+
+  // ─── 차단 ─────────────────────────────────────────────────────────────────
+
+  Future<void> blockUser(String uid, String targetUid) {
+    return _db.collection('users').doc(uid).collection('blockedUsers').doc(targetUid).set({
+      'createdAt': Timestamp.fromDate(DateTime.now()),
+    });
+  }
+
+  Future<void> unblockUser(String uid, String targetUid) {
+    return _db.collection('users').doc(uid).collection('blockedUsers').doc(targetUid).delete();
+  }
+
+  Future<List<String>> getBlockedUids(String uid) async {
+    final snap = await _db.collection('users').doc(uid).collection('blockedUsers').get();
+    return snap.docs.map((d) => d.id).toList();
+  }
+
+  Future<bool> isBlocked(String uid, String targetUid) async {
+    final doc = await _db.collection('users').doc(uid).collection('blockedUsers').doc(targetUid).get();
+    return doc.exists;
   }
 }

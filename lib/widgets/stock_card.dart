@@ -116,33 +116,44 @@ class _StockCardState extends State<StockCard> {
                                   Row(
                                     children: [
                                       Flexible(
-                                        child: Text(
-                                          pick.name,
-                                          style: GoogleFonts.inter(
-                                            color: textPrimary,
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 15,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
+                                        child: isBlurred
+                                            ? Container(
+                                                height: 15,
+                                                width: 90,
+                                                decoration: BoxDecoration(
+                                                  color: textPrimary.withValues(alpha: 0.12),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                              )
+                                            : Text(
+                                                pick.name,
+                                                style: GoogleFonts.inter(
+                                                  color: textPrimary,
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 15,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
                                       ),
-                                      const SizedBox(width: 6),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: tickerBg,
-                                          borderRadius: BorderRadius.circular(4),
-                                        ),
-                                        child: Text(
-                                          pick.ticker,
-                                          style: GoogleFonts.robotoMono(
-                                            color: textMuted,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w600,
+                                      if (!isBlurred) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: tickerBg,
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            pick.ticker,
+                                            style: GoogleFonts.robotoMono(
+                                              color: textMuted,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                           ),
                                         ),
-                                      ),
+                                      ],
                                     ],
                                   ),
                                   const SizedBox(height: 2),
@@ -209,7 +220,7 @@ class _StockCardState extends State<StockCard> {
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     style: GoogleFonts.inter(
-                                      color: textMuted,
+                                      color: textPrimary,
                                       fontSize: 13,
                                       height: 1.5,
                                     ),
@@ -237,18 +248,22 @@ class _StockCardState extends State<StockCard> {
                                         padding: const EdgeInsets.symmetric(
                                             horizontal: 10, vertical: 4),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFFFFD700)
-                                              .withValues(alpha: 0.15),
+                                          color: isDark
+                                              ? const Color(0xFFFFD700).withValues(alpha: 0.15)
+                                              : const Color(0xFFFFD700).withValues(alpha: 0.25),
                                           borderRadius: BorderRadius.circular(12),
                                           border: Border.all(
-                                            color: const Color(0xFFFFD700)
-                                                .withValues(alpha: 0.4),
+                                            color: isDark
+                                                ? const Color(0xFFFFD700).withValues(alpha: 0.4)
+                                                : const Color(0xFFB8860B).withValues(alpha: 0.6),
                                           ),
                                         ),
                                         child: Text(
                                           '로그인 필요',
                                           style: GoogleFonts.inter(
-                                            color: const Color(0xFFFFD700),
+                                            color: isDark
+                                                ? const Color(0xFFFFD700)
+                                                : const Color(0xFF9A6E00),
                                             fontSize: 11,
                                             fontWeight: FontWeight.w600,
                                           ),
@@ -263,7 +278,7 @@ class _StockCardState extends State<StockCard> {
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.inter(
-                                  color: textSecondary,
+                                  color: textPrimary,
                                   fontSize: 13,
                                   height: 1.5,
                                 ),

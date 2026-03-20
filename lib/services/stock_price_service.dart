@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:http/http.dart' as http;
 
 class StockSearchResult {
@@ -15,7 +15,11 @@ class StockSearchResult {
     required this.exchange,
   });
 
-  static StockSearchResult? _fromSymbol(String symbol, String name, String exchange) {
+  static StockSearchResult? _fromSymbol(
+    String symbol,
+    String name,
+    String exchange,
+  ) {
     String ticker;
     String market;
     if (symbol.endsWith('.KS')) {
@@ -30,7 +34,12 @@ class StockSearchResult {
     } else {
       return null; // 다른 시장 제외
     }
-    return StockSearchResult(ticker: ticker, name: name, market: market, exchange: exchange);
+    return StockSearchResult(
+      ticker: ticker,
+      name: name,
+      market: market,
+      exchange: exchange,
+    );
   }
 }
 
@@ -60,11 +69,16 @@ class StockPriceService {
           'type': 'main',
         },
       );
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'Mozilla/5.0',
-        'Referer': 'https://finance.naver.com',
-        'Accept': 'application/json',
-      }).timeout(const Duration(seconds: 6));
+      final response = await http
+          .get(
+            uri,
+            headers: {
+              'User-Agent': 'Mozilla/5.0',
+              'Referer': 'https://finance.naver.com',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 6));
 
       if (response.statusCode != 200) return [];
       final json = jsonDecode(response.body);
@@ -89,13 +103,16 @@ class StockPriceService {
             } else {
               return null; // 지수, ETF, 펀드 등 제외
             }
-            return StockSearchResult(ticker: code, name: name, market: market, exchange: typeName);
+            return StockSearchResult(
+              ticker: code,
+              name: name,
+              market: market,
+              exchange: typeName,
+            );
           })
           .whereType<StockSearchResult>()
           .toList();
-    } catch (e, st) {
-      debugPrint('[Naver] ERROR: $e');
-      debugPrint('[Naver] $st');
+    } catch (_) {
       return [];
     }
   }
@@ -107,9 +124,9 @@ class StockPriceService {
         'https://query2.finance.yahoo.com/v1/finance/search'
         '?q=${Uri.encodeComponent(query)}&quotesCount=10&newsCount=0',
       );
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'Mozilla/5.0',
-      }).timeout(const Duration(seconds: 6));
+      final response = await http
+          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+          .timeout(const Duration(seconds: 6));
 
       if (response.statusCode != 200) return [];
       final json = jsonDecode(response.body);
@@ -163,9 +180,9 @@ class StockPriceService {
         'https://query1.finance.yahoo.com/v8/finance/chart/$symbol'
         '?interval=1d&range=1d',
       );
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'Mozilla/5.0',
-      }).timeout(const Duration(seconds: 8));
+      final response = await http
+          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+          .timeout(const Duration(seconds: 8));
 
       if (response.statusCode != 200) return null;
 
@@ -182,26 +199,33 @@ class StockPriceService {
       // regularMarketChange/regularMarketChangePercent를 직접 제공
       final double change;
       final double changeRate;
-      final directChange =
-          (meta['regularMarketChange'] as num?)?.toDouble();
-      final directChangeRate =
-          (meta['regularMarketChangePercent'] as num?)?.toDouble();
+      final directChange = (meta['regularMarketChange'] as num?)?.toDouble();
+      final directChangeRate = (meta['regularMarketChangePercent'] as num?)
+          ?.toDouble();
       if (directChange != null && directChangeRate != null) {
         change = directChange;
         changeRate = directChangeRate;
       } else {
-        final prevClose = (meta['chartPreviousClose'] as num?)?.toDouble() ??
+        final prevClose =
+            (meta['chartPreviousClose'] as num?)?.toDouble() ??
             (meta['previousClose'] as num?)?.toDouble() ??
             price;
         change = price - prevClose;
         changeRate = prevClose != 0 ? (change / prevClose) * 100 : 0.0;
       }
 
+      final marketTimeRaw = meta['regularMarketTime'] as int?;
+      final marketTime = marketTimeRaw != null
+          ? DateTime.fromMillisecondsSinceEpoch(marketTimeRaw * 1000, isUtc: true)
+              .add(const Duration(hours: 9)) // KST = UTC+9
+          : null;
+
       final result = PriceResult(
         price: price,
         currency: currency,
         change: change,
         changeRate: changeRate,
+        marketTime: marketTime,
       );
 
       _cache[symbol] = _CachedPrice(result: result, fetchedAt: DateTime.now());
@@ -212,19 +236,39 @@ class StockPriceService {
   }
 
   /// 종가 배열 반환. range: 1mo/3mo/6mo/1y/3y/5y, interval: 1d/1wk/1mo
-  static Future<List<double>> fetchHistory(String ticker, String market,
-      {String range = '1mo', String interval = '1d'}) async {
-    final result =
-        await fetchHistoryDetailed(ticker, market, range: range, interval: interval);
+  static Future<List<double>> fetchHistory(
+    String ticker,
+    String market, {
+    String range = '1mo',
+    String interval = '1d',
+  }) async {
+    final result = await fetchHistoryDetailed(
+      ticker,
+      market,
+      range: range,
+      interval: interval,
+    );
     return result.map((e) => e.$2).toList();
   }
 
-  static final _ohlcCache = <String,
-      List<({DateTime date, double open, double high, double low, double close})>>{};
+  static final _ohlcCache =
+      <
+        String,
+        List<
+          ({DateTime date, double open, double high, double low, double close})
+        >
+      >{};
 
   /// OHLC 캔들 데이터 반환. 실패 시 빈 리스트.
-  static Future<List<({DateTime date, double open, double high, double low, double close})>>
-      fetchOHLC(String ticker, String market, {String interval = '1d', String range = '1mo'}) async {
+  static Future<
+    List<({DateTime date, double open, double high, double low, double close})>
+  >
+  fetchOHLC(
+    String ticker,
+    String market, {
+    String interval = '1d',
+    String range = '1mo',
+  }) async {
     final symbol = toSymbol(ticker, market);
     final cacheKey = '$symbol:$interval:$range';
     if (_ohlcCache.containsKey(cacheKey)) return _ohlcCache[cacheKey]!;
@@ -233,9 +277,9 @@ class StockPriceService {
         'https://query1.finance.yahoo.com/v8/finance/chart/$symbol'
         '?interval=$interval&range=$range',
       );
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'Mozilla/5.0',
-      }).timeout(const Duration(seconds: 8));
+      final response = await http
+          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+          .timeout(const Duration(seconds: 8));
 
       if (response.statusCode != 200) return [];
       final json = jsonDecode(response.body);
@@ -247,18 +291,49 @@ class StockPriceService {
           .map((v) => DateTime.fromMillisecondsSinceEpoch(v.toInt() * 1000))
           .toList();
       final quote = result['indicators']?['quote']?[0];
-      final opens = (quote?['open'] as List<dynamic>?)?.map((v) => v is num ? v.toDouble() : null).toList();
-      final highs = (quote?['high'] as List<dynamic>?)?.map((v) => v is num ? v.toDouble() : null).toList();
-      final lows = (quote?['low'] as List<dynamic>?)?.map((v) => v is num ? v.toDouble() : null).toList();
-      final closes = (quote?['close'] as List<dynamic>?)?.map((v) => v is num ? v.toDouble() : null).toList();
+      final opens = (quote?['open'] as List<dynamic>?)
+          ?.map((v) => v is num ? v.toDouble() : null)
+          .toList();
+      final highs = (quote?['high'] as List<dynamic>?)
+          ?.map((v) => v is num ? v.toDouble() : null)
+          .toList();
+      final lows = (quote?['low'] as List<dynamic>?)
+          ?.map((v) => v is num ? v.toDouble() : null)
+          .toList();
+      final closes = (quote?['close'] as List<dynamic>?)
+          ?.map((v) => v is num ? v.toDouble() : null)
+          .toList();
 
-      if (timestamps == null || opens == null || highs == null || lows == null || closes == null) return [];
+      if (timestamps == null ||
+          opens == null ||
+          highs == null ||
+          lows == null ||
+          closes == null)
+        return [];
 
-      final out = <({DateTime date, double open, double high, double low, double close})>[];
+      final out =
+          <
+            ({
+              DateTime date,
+              double open,
+              double high,
+              double low,
+              double close,
+            })
+          >[];
       for (var i = 0; i < timestamps.length; i++) {
-        final o = opens[i]; final h = highs[i]; final l = lows[i]; final c = closes[i];
-        if (o != null && h != null && l != null && c != null &&
-            o > 0 && h > 0 && l > 0 && c > 0) {
+        final o = opens[i];
+        final h = highs[i];
+        final l = lows[i];
+        final c = closes[i];
+        if (o != null &&
+            h != null &&
+            l != null &&
+            c != null &&
+            o > 0 &&
+            h > 0 &&
+            l > 0 &&
+            c > 0) {
           out.add((date: timestamps[i], open: o, high: h, low: l, close: c));
         }
       }
@@ -270,8 +345,11 @@ class StockPriceService {
   }
 
   /// 뉴스: 한국 종목은 Google News 한국어, 미국 종목은 Yahoo Finance
-  static Future<List<StockNews>> fetchNews(String ticker, String market,
-      {String? name}) async {
+  static Future<List<StockNews>> fetchNews(
+    String ticker,
+    String market, {
+    String? name,
+  }) async {
     if (market != 'US' && name != null && name.isNotEmpty) {
       return _fetchGoogleNewsKr(name);
     }
@@ -282,7 +360,8 @@ class StockPriceService {
     try {
       final query = Uri.encodeComponent('$name 주식');
       final uri = Uri.parse(
-          'https://news.google.com/rss/search?q=$query&hl=ko&gl=KR&ceid=KR:ko');
+        'https://news.google.com/rss/search?q=$query&hl=ko&gl=KR&ceid=KR:ko',
+      );
       final response = await http
           .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
           .timeout(const Duration(seconds: 8));
@@ -294,15 +373,16 @@ class StockPriceService {
       for (final match in itemPattern.allMatches(body).take(5)) {
         final item = match.group(1)!;
         // 제목 끝 " - 출처" 제거
-        final title = _xmlTag(item, 'title')
-            .replaceAll(RegExp(r'\s*-\s*[^-]+$'), '')
-            .trim();
+        final title = _xmlTag(
+          item,
+          'title',
+        ).replaceAll(RegExp(r'\s*-\s*[^-]+$'), '').trim();
         final link = _xmlTag(item, 'link');
         final pubDateStr = _xmlTag(item, 'pubDate');
-        final source = RegExp(r'<source[^>]*>([^<]*)</source>')
-                .firstMatch(item)
-                ?.group(1)
-                ?.trim() ??
+        final source =
+            RegExp(
+              r'<source[^>]*>([^<]*)</source>',
+            ).firstMatch(item)?.group(1)?.trim() ??
             '';
         if (title.isEmpty || link.isEmpty) continue;
         DateTime publishedAt;
@@ -311,8 +391,14 @@ class StockPriceService {
         } catch (_) {
           publishedAt = DateTime.now();
         }
-        items.add(StockNews(
-            title: title, url: link, publisher: source, publishedAt: publishedAt));
+        items.add(
+          StockNews(
+            title: title,
+            url: link,
+            publisher: source,
+            publishedAt: publishedAt,
+          ),
+        );
       }
       return items;
     } catch (_) {
@@ -322,8 +408,8 @@ class StockPriceService {
 
   static String _xmlTag(String xml, String tag) {
     final m = RegExp(
-            '<$tag>(?:<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|([\\s\\S]*?))</$tag>')
-        .firstMatch(xml);
+      '<$tag>(?:<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|([\\s\\S]*?))</$tag>',
+    ).firstMatch(xml);
     return (m?.group(1) ?? m?.group(2) ?? '').trim();
   }
 
@@ -331,19 +417,36 @@ class StockPriceService {
     // "Mon, 10 Mar 2026 10:00:00 GMT"
     final p = s.trim().split(' ');
     const months = {
-      'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
-      'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12
+      'Jan': 1,
+      'Feb': 2,
+      'Mar': 3,
+      'Apr': 4,
+      'May': 5,
+      'Jun': 6,
+      'Jul': 7,
+      'Aug': 8,
+      'Sep': 9,
+      'Oct': 10,
+      'Nov': 11,
+      'Dec': 12,
     };
     final day = int.tryParse(p[1]) ?? 1;
     final month = months[p[2]] ?? 1;
     final year = int.tryParse(p[3]) ?? 2024;
     final t = p.length > 4 ? p[4].split(':') : ['0', '0'];
-    return DateTime.utc(year, month, day, int.tryParse(t[0]) ?? 0,
-        int.tryParse(t.length > 1 ? t[1] : '0') ?? 0).toLocal();
+    return DateTime.utc(
+      year,
+      month,
+      day,
+      int.tryParse(t[0]) ?? 0,
+      int.tryParse(t.length > 1 ? t[1] : '0') ?? 0,
+    ).toLocal();
   }
 
   static Future<List<StockNews>> _fetchYahooNews(
-      String ticker, String market) async {
+    String ticker,
+    String market,
+  ) async {
     final symbol = toSymbol(ticker, market);
     try {
       final uri = Uri.parse(
@@ -380,6 +483,45 @@ class StockPriceService {
   static final _fundamentalsCache = <String, _CachedFundamentals>{};
   static const _fundamentalsCacheDuration = Duration(hours: 6);
 
+  static _CachedPrice? _kospiNightFuturesCache;
+
+  /// KOSPI 200 야간선물 — KIS API Cloud Function 호출
+  static Future<PriceResult?> fetchKospiNightFutures() async {
+    final cached = _kospiNightFuturesCache;
+    if (cached != null &&
+        DateTime.now().difference(cached.fetchedAt) < _cacheDuration) {
+      return cached.result;
+    }
+
+    try {
+      final fn = FirebaseFunctions.instanceFor(
+        region: 'asia-northeast3',
+      ).httpsCallable(
+        'getKospiNightFutures',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 18)),
+      );
+      final res = await fn.call();
+      final d = res.data as Map<String, dynamic>;
+      if (d['hasData'] == false) return null;
+      final price = (d['price'] as num).toDouble();
+      final change = (d['change'] as num).toDouble();
+      final changeRate = (d['changeRate'] as num).toDouble();
+      final result = PriceResult(
+        price: price,
+        currency: 'KRW',
+        change: change,
+        changeRate: changeRate,
+      );
+      _kospiNightFuturesCache = _CachedPrice(
+        result: result,
+        fetchedAt: DateTime.now(),
+      );
+      return result;
+    } catch (_) {
+      return null;
+    }
+  }
+
   static _CachedFearAndGreed? _fearAndGreedCache;
   static const _fearAndGreedCacheDuration = Duration(minutes: 5);
 
@@ -387,18 +529,24 @@ class StockPriceService {
   static Future<FearAndGreedResult?> fetchFearAndGreed() async {
     final cached = _fearAndGreedCache;
     if (cached != null &&
-        DateTime.now().difference(cached.fetchedAt) < _fearAndGreedCacheDuration) {
+        DateTime.now().difference(cached.fetchedAt) <
+            _fearAndGreedCacheDuration) {
       return cached.result;
     }
     try {
       final uri = Uri.parse(
         'https://production.dataviz.cnn.io/index/fearandgreed/graphdata',
       );
-      final response = await http.get(uri, headers: {
-        'User-Agent':
-            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
-        'Referer': 'https://www.cnn.com/markets/fear-and-greed',
-      }).timeout(const Duration(seconds: 8));
+      final response = await http
+          .get(
+            uri,
+            headers: {
+              'User-Agent':
+                  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+              'Referer': 'https://www.cnn.com/markets/fear-and-greed',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
 
       if (response.statusCode != 200) return null;
       final json = jsonDecode(response.body);
@@ -413,7 +561,10 @@ class StockPriceService {
         previousMonth: (fg['previous_1_month'] as num).toDouble(),
         previousYear: (fg['previous_1_year'] as num).toDouble(),
       );
-      _fearAndGreedCache = _CachedFearAndGreed(result: result, fetchedAt: DateTime.now());
+      _fearAndGreedCache = _CachedFearAndGreed(
+        result: result,
+        fetchedAt: DateTime.now(),
+      );
       return result;
     } catch (_) {
       return null;
@@ -429,14 +580,18 @@ class StockPriceService {
   /// 미국(US):    Yahoo Finance quoteSummary (crumb 방식)
   /// [currentPrice]: 한국주식 PBR 계산용 현재가 (없으면 PBR 생략)
   static Future<FundamentalsResult?> fetchFundamentals(
-      String ticker, String market, {double? currentPrice}) async {
+    String ticker,
+    String market, {
+    double? currentPrice,
+  }) async {
     final symbol = toSymbol(ticker, market);
 
     // 캐시는 가격 변동과 무관한 PER/BPS 기준으로 유지
     // currentPrice가 달라져도 캐시 무효화 안 함 (PER은 서버에서 이미 현재가 반영)
     final cached = _fundamentalsCache[symbol];
     if (cached != null &&
-        DateTime.now().difference(cached.fetchedAt) < _fundamentalsCacheDuration) {
+        DateTime.now().difference(cached.fetchedAt) <
+            _fundamentalsCacheDuration) {
       // PBR은 현재가로 재계산
       if (currentPrice != null && cached.result.bps != null) {
         return FundamentalsResult(
@@ -456,8 +611,10 @@ class StockPriceService {
         fundamentals = await _fetchYahooFundamentals(symbol);
       }
       if (fundamentals == null) return null;
-      _fundamentalsCache[symbol] =
-          _CachedFundamentals(result: fundamentals, fetchedAt: DateTime.now());
+      _fundamentalsCache[symbol] = _CachedFundamentals(
+        result: fundamentals,
+        fetchedAt: DateTime.now(),
+      );
       return fundamentals;
     } catch (_) {
       return null;
@@ -469,33 +626,51 @@ class StockPriceService {
   ///   BPS  → main.nhn (최근 연간 BPS)
   ///   PBR  → currentPrice / BPS
   static Future<FundamentalsResult?> _fetchNaverFundamentals(
-      String ticker, double? currentPrice) async {
+    String ticker,
+    double? currentPrice,
+  ) async {
     // PER: sise.nhn
-    final siseUri = Uri.parse('https://finance.naver.com/item/sise.nhn?code=$ticker');
-    final siseRes = await http.get(siseUri, headers: {
-      'User-Agent': 'Mozilla/5.0',
-      'Referer': 'https://finance.naver.com',
-    }).timeout(const Duration(seconds: 8));
+    final siseUri = Uri.parse(
+      'https://finance.naver.com/item/sise.nhn?code=$ticker',
+    );
+    final siseRes = await http
+        .get(
+          siseUri,
+          headers: {
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://finance.naver.com',
+          },
+        )
+        .timeout(const Duration(seconds: 8));
 
     double? per;
     if (siseRes.statusCode == 200) {
-      final perMatch = RegExp(r'id="_sise_per"[^>]*>\s*([\d.,]+)')
-          .firstMatch(siseRes.body);
+      final perMatch = RegExp(
+        r'id="_sise_per"[^>]*>\s*([\d.,]+)',
+      ).firstMatch(siseRes.body);
       per = double.tryParse(perMatch?.group(1)?.replaceAll(',', '') ?? '');
     }
 
     // BPS: main.nhn
     double? bps;
     double? pbr;
-    final mainUri = Uri.parse('https://finance.naver.com/item/main.nhn?code=$ticker');
-    final mainRes = await http.get(mainUri, headers: {
-      'User-Agent': 'Mozilla/5.0',
-      'Referer': 'https://finance.naver.com',
-    }).timeout(const Duration(seconds: 8));
+    final mainUri = Uri.parse(
+      'https://finance.naver.com/item/main.nhn?code=$ticker',
+    );
+    final mainRes = await http
+        .get(
+          mainUri,
+          headers: {
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://finance.naver.com',
+          },
+        )
+        .timeout(const Duration(seconds: 8));
 
     if (mainRes.statusCode == 200) {
-      final bpsMatch = RegExp(r'BPS\(\uc6d0\)</strong></th>[\s\S]{0,300}<td[^>]*>\s*([\d.,]+)')
-          .firstMatch(mainRes.body);
+      final bpsMatch = RegExp(
+        r'BPS\(\uc6d0\)</strong></th>[\s\S]{0,300}<td[^>]*>\s*([\d.,]+)',
+      ).firstMatch(mainRes.body);
       bps = double.tryParse(bpsMatch?.group(1)?.replaceAll(',', '') ?? '');
       if (bps != null && currentPrice != null) {
         pbr = currentPrice / bps;
@@ -507,25 +682,31 @@ class StockPriceService {
   }
 
   /// Yahoo Finance quoteSummary (crumb 방식, 미국주식)
-  static Future<FundamentalsResult?> _fetchYahooFundamentals(String symbol) async {
+  static Future<FundamentalsResult?> _fetchYahooFundamentals(
+    String symbol,
+  ) async {
     // 크럼이 없으면 발급
     if (_yahoocrumb == null) {
-      final cookieRes = await http.get(
-        Uri.parse('https://fc.yahoo.com'),
-        headers: {'User-Agent': 'Mozilla/5.0'},
-      ).timeout(const Duration(seconds: 6));
+      final cookieRes = await http
+          .get(
+            Uri.parse('https://fc.yahoo.com'),
+            headers: {'User-Agent': 'Mozilla/5.0'},
+          )
+          .timeout(const Duration(seconds: 6));
       _yahooCookie = cookieRes.headers['set-cookie']
           ?.split(',')
           .map((c) => c.split(';').first.trim())
           .join('; ');
 
-      final crumbRes = await http.get(
-        Uri.parse('https://query2.finance.yahoo.com/v1/test/getcrumb'),
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Cookie': _yahooCookie ?? '',
-        },
-      ).timeout(const Duration(seconds: 6));
+      final crumbRes = await http
+          .get(
+            Uri.parse('https://query2.finance.yahoo.com/v1/test/getcrumb'),
+            headers: {
+              'User-Agent': 'Mozilla/5.0',
+              'Cookie': _yahooCookie ?? '',
+            },
+          )
+          .timeout(const Duration(seconds: 6));
       _yahoocrumb = crumbRes.body.trim();
     }
 
@@ -533,10 +714,12 @@ class StockPriceService {
       'https://query1.finance.yahoo.com/v10/finance/quoteSummary/$symbol'
       '?modules=summaryDetail,defaultKeyStatistics&crumb=${Uri.encodeComponent(_yahoocrumb!)}',
     );
-    final response = await http.get(uri, headers: {
-      'User-Agent': 'Mozilla/5.0',
-      'Cookie': _yahooCookie ?? '',
-    }).timeout(const Duration(seconds: 8));
+    final response = await http
+        .get(
+          uri,
+          headers: {'User-Agent': 'Mozilla/5.0', 'Cookie': _yahooCookie ?? ''},
+        )
+        .timeout(const Duration(seconds: 8));
 
     if (response.statusCode == 401) {
       // 크럼 만료 시 초기화 후 재시도
@@ -550,8 +733,10 @@ class StockPriceService {
     final result = json['quoteSummary']?['result']?[0];
     if (result == null) return null;
 
-    final per = (result['summaryDetail']?['trailingPE']?['raw'] as num?)?.toDouble();
-    final pbr = (result['defaultKeyStatistics']?['priceToBook']?['raw'] as num?)?.toDouble();
+    final per = (result['summaryDetail']?['trailingPE']?['raw'] as num?)
+        ?.toDouble();
+    final pbr = (result['defaultKeyStatistics']?['priceToBook']?['raw'] as num?)
+        ?.toDouble();
 
     if (per == null && pbr == null) return null;
     return FundamentalsResult(per: per, pbr: pbr);
@@ -559,15 +744,23 @@ class StockPriceService {
 
   /// 네이버 종목토론방 게시글 (한국주식 전용, 최대 20개)
   static Future<List<DiscussionPost>> fetchDiscussionPosts(
-      String ticker, String market) async {
+    String ticker,
+    String market,
+  ) async {
     if (market != 'KS' && market != 'KQ') return [];
     try {
       final uri = Uri.parse(
-          'https://finance.naver.com/item/board.nhn?code=$ticker&ordertype=&searchtype=&page=1');
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'Mozilla/5.0',
-        'Referer': 'https://finance.naver.com',
-      }).timeout(const Duration(seconds: 8));
+        'https://finance.naver.com/item/board.nhn?code=$ticker&ordertype=&searchtype=&page=1',
+      );
+      final response = await http
+          .get(
+            uri,
+            headers: {
+              'User-Agent': 'Mozilla/5.0',
+              'Referer': 'https://finance.naver.com',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return [];
 
       // latin1로 디코딩 (EUC-KR 페이지를 latin1로 읽으면 한글 깨짐 → utf8 시도)
@@ -595,13 +788,15 @@ class StockPriceService {
           int.parse(dateParts[3]),
           int.parse(dateParts[4]),
         );
-        posts.add(DiscussionPost(
-          nid: m.group(2)!,
-          title: m.group(3)!,
-          date: date,
-          viewCount: int.tryParse(m.group(4)!) ?? 0,
-          ticker: ticker,
-        ));
+        posts.add(
+          DiscussionPost(
+            nid: m.group(2)!,
+            title: m.group(3)!,
+            date: date,
+            viewCount: int.tryParse(m.group(4)!) ?? 0,
+            ticker: ticker,
+          ),
+        );
       }
       return posts;
     } catch (_) {
@@ -610,7 +805,10 @@ class StockPriceService {
   }
 
   /// Yahoo Finance 실적 발표 예정일 (US 종목만)
-  static Future<DateTime?> fetchEarningsDate(String ticker, String market) async {
+  static Future<DateTime?> fetchEarningsDate(
+    String ticker,
+    String market,
+  ) async {
     if (market != 'US') return null;
     final symbol = toSymbol(ticker, market);
     try {
@@ -623,8 +821,9 @@ class StockPriceService {
           .timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return null;
       final json = jsonDecode(response.body);
-      final dates = json['quoteSummary']?['result']?[0]
-          ?['calendarEvents']?['earnings']?['earningsDate'] as List<dynamic>?;
+      final dates =
+          json['quoteSummary']?['result']?[0]?['calendarEvents']?['earnings']?['earningsDate']
+              as List<dynamic>?;
       if (dates == null || dates.isEmpty) return null;
       final raw = dates[0]?['raw'] as int?;
       if (raw == null) return null;
@@ -636,10 +835,18 @@ class StockPriceService {
 
   /// (날짜, 종가) 배열 반환. 실패 시 빈 리스트.
   static Future<List<double>> fetchHistoryByDates(
-      String ticker, String market, DateTime start, DateTime end) async {
+    String ticker,
+    String market,
+    DateTime start,
+    DateTime end,
+  ) async {
     final symbol = toSymbol(ticker, market);
     final days = end.difference(start).inDays;
-    final interval = days <= 90 ? '1d' : days <= 730 ? '1wk' : '1mo';
+    final interval = days <= 90
+        ? '1d'
+        : days <= 730
+        ? '1wk'
+        : '1mo';
     final period1 = start.millisecondsSinceEpoch ~/ 1000;
     final period2 = end.millisecondsSinceEpoch ~/ 1000;
     try {
@@ -666,17 +873,20 @@ class StockPriceService {
   }
 
   static Future<List<(DateTime, double)>> fetchHistoryDetailed(
-      String ticker, String market,
-      {String range = '1mo', String interval = '1d'}) async {
+    String ticker,
+    String market, {
+    String range = '1mo',
+    String interval = '1d',
+  }) async {
     final symbol = toSymbol(ticker, market);
     try {
       final uri = Uri.parse(
         'https://query1.finance.yahoo.com/v8/finance/chart/$symbol'
         '?interval=$interval&range=$range',
       );
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'Mozilla/5.0',
-      }).timeout(const Duration(seconds: 8));
+      final response = await http
+          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+          .timeout(const Duration(seconds: 8));
 
       if (response.statusCode != 200) return [];
       final json = jsonDecode(response.body);
@@ -711,12 +921,14 @@ class PriceResult {
   final String currency; // 'KRW', 'USD'
   final double change;
   final double changeRate;
+  final DateTime? marketTime;
 
   const PriceResult({
     required this.price,
     required this.currency,
     required this.change,
     required this.changeRate,
+    this.marketTime,
   });
 
   bool get isUp => change >= 0;
@@ -749,7 +961,7 @@ class _CachedPrice {
 class FundamentalsResult {
   final double? per;
   final double? pbr;
-  final double? bps;   // BPS 캐시용 (PBR 재계산에 사용)
+  final double? bps; // BPS 캐시용 (PBR 재계산에 사용)
   const FundamentalsResult({this.per, this.pbr, this.bps});
 }
 

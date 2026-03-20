@@ -10,8 +10,10 @@ import '../models/market_analysis.dart';
 import 'package:share_plus/share_plus.dart';
 import '../services/deep_link_service.dart';
 import '../services/firestore_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/stock_price_service.dart';
 import 'index_detail_screen.dart';
+import 'night_futures_chart_screen.dart';
 
 class MarketAnalysisScreen extends StatefulWidget {
   const MarketAnalysisScreen({super.key});
@@ -27,6 +29,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     ('S&P 500', '^GSPC'),
     ('NASDAQ', '^IXIC'),
     ('USD/KRW', 'KRW=X'),
+    ('WTI 원유', 'CL=F'),
     ('나스닥100 선물', 'NQ=F'),
     ('VIX 공포지수', '^VIX'),
     ('미 10년 국채금리', '^TNX'),
@@ -48,6 +51,11 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
 
   final Map<String, PriceResult?> _prices = {};
   bool _loadingIndices = true;
+  DateTime? _indicesFetchedAt;
+
+  PriceResult? _kospiNightFutures;
+  bool _loadingNightFutures = true;
+  bool _isHistoricalNightData = false; // 낮 시간대 전날 데이터 여부
 
   FearAndGreedResult? _fearAndGreed;
   bool _loadingFearAndGreed = true;
@@ -61,20 +69,119 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     super.initState();
     _fetchIndices();
     _fetchFearAndGreed();
+    _fetchNightFutures();
+  }
+
+  static bool get _isNightSession {
+    final h = DateTime.now().toUtc().add(const Duration(hours: 9)).hour;
+    return h >= 18 || h < 5;
+  }
+
+  Future<void> _fetchNightFutures() async {
+    setState(() => _loadingNightFutures = true);
+
+    if (_isNightSession) {
+      // 야간 세션: Cloud Function 실시간 → 실패 시 Firestore 최신 데이터로 fallback
+      final result = await StockPriceService.fetchKospiNightFutures();
+      if (mounted) {
+        if (result != null) {
+          setState(() {
+            _kospiNightFutures = result;
+            _isHistoricalNightData = false;
+            _loadingNightFutures = false;
+          });
+        } else {
+          // fallback: Firestore 마지막 기록 가격 조회
+          try {
+            final snap = await FirebaseFirestore.instance
+                .collection('night_futures_prices')
+                .orderBy('timestamp', descending: true)
+                .limit(1)
+                .get();
+            if (mounted) {
+              if (snap.docs.isNotEmpty) {
+                final d = snap.docs.first.data();
+                setState(() {
+                  _kospiNightFutures = PriceResult(
+                    price: (d['price'] as num).toDouble(),
+                    change: (d['change'] as num).toDouble(),
+                    changeRate: (d['changeRate'] as num).toDouble(),
+                    currency: 'KRW',
+                  );
+                  _isHistoricalNightData = true;
+                  _loadingNightFutures = false;
+                });
+              } else {
+                setState(() {
+                  _kospiNightFutures = null;
+                  _loadingNightFutures = false;
+                });
+              }
+            }
+          } catch (_) {
+            if (mounted) setState(() { _kospiNightFutures = null; _loadingNightFutures = false; });
+          }
+        }
+      }
+    } else {
+      // 낮 시간: Firestore에서 마지막 기록 가격 조회
+      try {
+        final snap = await FirebaseFirestore.instance
+            .collection('night_futures_prices')
+            .orderBy('timestamp', descending: true)
+            .limit(1)
+            .get();
+        if (mounted) {
+          if (snap.docs.isNotEmpty) {
+            final d = snap.docs.first.data();
+            setState(() {
+              _kospiNightFutures = PriceResult(
+                price: (d['price'] as num).toDouble(),
+                change: (d['change'] as num).toDouble(),
+                changeRate: (d['changeRate'] as num).toDouble(),
+                currency: 'KRW',
+              );
+              _isHistoricalNightData = true;
+              _loadingNightFutures = false;
+            });
+          } else {
+            setState(() {
+              _kospiNightFutures = null;
+              _isHistoricalNightData = true;
+              _loadingNightFutures = false;
+            });
+          }
+        }
+      } catch (_) {
+        if (mounted) {
+          setState(() {
+            _kospiNightFutures = null;
+            _isHistoricalNightData = true;
+            _loadingNightFutures = false;
+          });
+        }
+      }
+    }
   }
 
   Future<void> _fetchIndices() async {
     setState(() => _loadingIndices = true);
-    final results = await Future.wait(
-      _indices.map((e) => StockPriceService.fetchPrice(e.$2, 'US')),
-    );
-    if (mounted) {
-      setState(() {
-        for (var i = 0; i < _indices.length; i++) {
-          _prices[_indices[i].$1] = results[i];
-        }
-        _loadingIndices = false;
-      });
+    try {
+      await Future.wait(
+        _indices.map((e) async {
+          final result = await StockPriceService.fetchPrice(e.$2, 'US');
+          if (mounted) setState(() => _prices[e.$1] = result);
+        }),
+      );
+    } catch (_) {
+      // 일부 지수 로드 실패해도 계속 진행
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingIndices = false;
+          _indicesFetchedAt = DateTime.now();
+        });
+      }
     }
   }
 
@@ -120,11 +227,15 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       color: const Color(0xFF4ADE80),
       backgroundColor: Theme.of(context).colorScheme.surface,
       onRefresh: () async {
-        await Future.wait([_fetchIndices(), _fetchFearAndGreed()]);
+        await Future.wait([_fetchIndices(), _fetchFearAndGreed(), _fetchNightFutures()]);
       },
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         children: [
+          // ── KOSPI 200 야간선물 (추후 구현) ──
+          // _buildNightFuturesCard(context),
+          // const SizedBox(height: 20),
+
           // ── 주요 지수 섹션 ──
           Row(
             children: [
@@ -138,6 +249,15 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                 ),
               ),
               const Spacer(),
+              if (_indicesFetchedAt != null && !_loadingIndices)
+                Text(
+                  '기준 ${DateFormat('HH:mm').format(_indicesFetchedAt!)}',
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.35),
+                    fontSize: 11,
+                  ),
+                ),
+              const SizedBox(width: 6),
               if (_loadingIndices)
                 const SizedBox(
                   width: 14,
@@ -161,8 +281,17 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
             childAspectRatio: 2.0,
-            children: _indices.take(6).map((e) => _buildIndexCard(context, e.$1)).toList(),
+            children: [
+              _buildIndexCard(context, 'KOSPI'),
+              _buildIndexCard(context, 'KOSDAQ'),
+              _buildIndexCard(context, 'S&P 500'),
+              _buildIndexCard(context, 'NASDAQ'),
+              _buildIndexCard(context, 'USD/KRW'),
+              _buildIndexCard(context, '나스닥100 선물'),
+            ],
           ),
+          const SizedBox(height: 10),
+          _buildIndexCard(context, 'WTI 원유'),
           const SizedBox(height: 28),
 
           // ── 시장 심리 지표 섹션 ──
@@ -387,6 +516,186 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       default:
         return rating;
     }
+  }
+
+  Widget _buildNightFuturesCard(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final result = _kospiNightFutures;
+    final isUp = result?.isUp ?? true;
+    final priceColor = isUp ? const Color(0xFF4ADE80) : Colors.redAccent;
+    return GestureDetector(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => NightFuturesChartScreen(
+            initialPrice: result?.price ?? 0,
+            initialChange: result?.change ?? 0,
+            initialChangeRate: result?.changeRate ?? 0,
+          ),
+        ),
+      ),
+      child: Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFF4ADE80).withValues(alpha: 0.35),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 헤더
+          Row(
+            children: [
+              Text(
+                'KOSPI 200 야간선물',
+                style: GoogleFonts.inter(
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 17,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _isNightSession
+                      ? const Color(0xFF4ADE80).withValues(alpha: 0.15)
+                      : cs.onSurface.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  _isNightSession && !_isHistoricalNightData
+                      ? '● 야간장'
+                      : _isNightSession && _isHistoricalNightData
+                          ? '최근 기록'
+                          : '전날 야간선물',
+                  style: GoogleFonts.inter(
+                    color: _isNightSession && !_isHistoricalNightData
+                        ? const Color(0xFF4ADE80)
+                        : cs.onSurface.withValues(alpha: 0.45),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              if (_loadingNightFutures)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 1.5, color: Color(0xFF4ADE80)),
+                )
+              else
+                GestureDetector(
+                  onTap: _fetchNightFutures,
+                  child: Icon(Icons.refresh,
+                      size: 18,
+                      color: cs.onSurface.withValues(alpha: 0.38)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // 가격 + 변동
+          if (_loadingNightFutures)
+            const SizedBox(
+              height: 56,
+              child: Center(
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Color(0xFF4ADE80)),
+              ),
+            )
+          else if (result == null)
+            SizedBox(
+              height: 56,
+              child: Center(
+                child: Text(
+                  _isNightSession
+                      ? '데이터를 불러올 수 없습니다'
+                      : '야간장 운영 시간이 아닙니다 (18:00~05:00 KST)',
+                  style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.38),
+                      fontSize: 13),
+                ),
+              ),
+            )
+          else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  result.price.toStringAsFixed(2),
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 40,
+                    height: 1,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    'pt',
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.45),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: priceColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${isUp ? '+' : ''}${result.changeRate.toStringAsFixed(2)}%',
+                        style: GoogleFonts.inter(
+                          color: priceColor,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${isUp ? '+' : ''}${result.change.toStringAsFixed(2)}pt',
+                      style: GoogleFonts.inter(
+                        color: priceColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          if (result != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              '전일 종가 기준 · KRX 야간세션 18:00~05:00 (KST)',
+              style: GoogleFonts.inter(
+                color: cs.onSurface.withValues(alpha: 0.3),
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ],
+      ),
+      ),
+    );
   }
 
   Widget _buildFearAndGreedCard(BuildContext context) {
@@ -791,9 +1100,9 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           Text(
             name,
             style: GoogleFonts.inter(
-                color: cs.onSurface.withValues(alpha: 0.54),
+                color: cs.onSurface,
                 fontSize: 10,
-                fontWeight: FontWeight.w500),
+                fontWeight: FontWeight.w600),
           ),
           if (_indexDescriptions[name] != null)
             Text(

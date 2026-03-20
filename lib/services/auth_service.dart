@@ -19,6 +19,7 @@ class AuthService {
   Future<UserCredential> signInWithEmail(String email, String password) async {
     final result = await _auth.signInWithEmailAndPassword(email: email, password: password);
     AnalyticsService.instance.logLogin('email');
+    AnalyticsService.instance.setUserId(result.user!.uid);
     return result;
   }
 
@@ -28,6 +29,8 @@ class AuthService {
       password: password,
     );
     AnalyticsService.instance.logLogin('email_signup');
+    AnalyticsService.instance.setUserId(result.user!.uid);
+    await _saveCreatedAt(result.user!.uid);
     return result;
   }
 
@@ -36,6 +39,7 @@ class AuthService {
       final provider = GoogleAuthProvider();
       final result = await _auth.signInWithPopup(provider);
       AnalyticsService.instance.logLogin('google');
+      AnalyticsService.instance.setUserId(result.user!.uid);
       return result;
     }
 
@@ -49,6 +53,10 @@ class AuthService {
     );
     final result = await _auth.signInWithCredential(credential);
     AnalyticsService.instance.logLogin('google');
+    AnalyticsService.instance.setUserId(result.user!.uid);
+    if (result.additionalUserInfo?.isNewUser == true) {
+      await _saveCreatedAt(result.user!.uid);
+    }
     return result;
   }
 
@@ -87,6 +95,7 @@ class AuthService {
         password: password,
       );
       AnalyticsService.instance.logLogin('kakao');
+      AnalyticsService.instance.setUserId(result.user!.uid);
       return result;
     } on FirebaseAuthException catch (e) {
       if (e.code == 'user-not-found' || e.code == 'invalid-credential') {
@@ -95,6 +104,8 @@ class AuthService {
           password: password,
         );
         AnalyticsService.instance.logLogin('kakao');
+        AnalyticsService.instance.setUserId(result.user!.uid);
+        await _saveCreatedAt(result.user!.uid);
         return result;
       }
       rethrow;
@@ -107,11 +118,16 @@ class AuthService {
       ..addScope('name');
     final result = await _auth.signInWithProvider(provider);
     AnalyticsService.instance.logLogin('apple');
+    AnalyticsService.instance.setUserId(result.user!.uid);
+    if (result.additionalUserInfo?.isNewUser == true) {
+      await _saveCreatedAt(result.user!.uid);
+    }
     return result;
   }
 
   Future<void> signOut() async {
     AnalyticsService.instance.logLogout();
+    AnalyticsService.instance.clearUserId();
     await _googleSignIn.signOut();
     // 카카오 로그아웃 (카카오로 로그인한 경우만)
     try {
@@ -123,6 +139,13 @@ class AuthService {
   }
 
   /// 계정 삭제: Firestore 사용자 데이터 + Firebase Auth 계정 모두 삭제
+  Future<void> _saveCreatedAt(String uid) {
+    return FirebaseFirestore.instance.collection('users').doc(uid).set(
+      {'createdAt': FieldValue.serverTimestamp()},
+      SetOptions(merge: true),
+    );
+  }
+
   Future<void> deleteAccount() async {
     final user = _auth.currentUser;
     if (user == null) return;

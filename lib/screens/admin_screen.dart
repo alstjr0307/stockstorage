@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +9,7 @@ import '../models/stock_pick.dart';
 import '../services/fcm_direct_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
+import '../widgets/stock_search_field.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -23,7 +25,7 @@ class _AdminScreenState extends State<AdminScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
   }
 
   @override
@@ -61,6 +63,8 @@ class _AdminScreenState extends State<AdminScreen>
             Tab(text: '공지사항'),
             Tab(text: '시황 분석'),
             Tab(text: '알림 발송'),
+            Tab(text: '유저 목록'),
+            Tab(text: '신고 관리'),
           ],
         ),
       ),
@@ -72,6 +76,8 @@ class _AdminScreenState extends State<AdminScreen>
           _AnnouncementTab(),
           _MarketAnalysisAdminTab(),
           _PushNotificationTab(),
+          _UsersTab(),
+          _ReportsTab(),
         ],
       ),
 
@@ -141,7 +147,7 @@ class _UploadTabState extends State<_UploadTab> {
       child: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          _StockSearchField(
+          StockSearchField(
             initialTicker: _tickerController.text,
             initialName: _nameController.text,
             onSelected: (ticker, name, market) {
@@ -171,7 +177,7 @@ class _UploadTabState extends State<_UploadTab> {
             child: SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title:
-                  Text('프리미엄 콘텐츠', style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7))),
+                  Text('로그인 후 열람 가능', style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7))),
               subtitle: Text('로그인 사용자만 상세 열람 가능',
                   style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38), fontSize: 12)),
               value: _isPremium,
@@ -341,8 +347,8 @@ class _UploadTabState extends State<_UploadTab> {
         await _firestoreService.addStockPick(pick);
         FcmDirectService.sendTopicNotification(
           title: '📈 새 추천 종목',
-          body: '${pick.name}(${pick.ticker}) 종목이 새로 등록되었습니다. 지금 확인해보세요!',
-        );
+          body: '새 추천 종목이 등록되었습니다. 지금 확인해보세요!',
+        ).catchError((_) {});
       }
 
       if (mounted) {
@@ -673,207 +679,6 @@ class _ManageCard extends StatelessWidget {
         }
       }
     }
-  }
-}
-
-// ─── 주식 검색 필드 ────────────────────────────────────────────────────────
-
-class _StockSearchField extends StatefulWidget {
-  final String initialTicker;
-  final String initialName;
-  final void Function(String ticker, String name, String market) onSelected;
-
-  const _StockSearchField({
-    required this.initialTicker,
-    required this.initialName,
-    required this.onSelected,
-  });
-
-  @override
-  State<_StockSearchField> createState() => _StockSearchFieldState();
-}
-
-class _StockSearchFieldState extends State<_StockSearchField> {
-  late final TextEditingController _searchController;
-  final _layerLink = LayerLink();
-  OverlayEntry? _overlay;
-  List<StockSearchResult> _results = [];
-  Timer? _debounce;
-  bool _loading = false;
-  bool _selected = false; // 선택 완료 상태
-
-  @override
-  void initState() {
-    super.initState();
-    final initial = widget.initialTicker.isNotEmpty
-        ? '${widget.initialTicker}  ${widget.initialName}'
-        : '';
-    _searchController = TextEditingController(text: initial);
-    if (widget.initialTicker.isNotEmpty) _selected = true;
-  }
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _removeOverlay();
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  void _onChanged(String value) {
-    _selected = false;
-    _debounce?.cancel();
-    if (value.trim().isEmpty) {
-      _removeOverlay();
-      return;
-    }
-    _debounce = Timer(const Duration(milliseconds: 400), () => _search(value.trim()));
-  }
-
-  Future<void> _search(String query) async {
-    setState(() => _loading = true);
-    final results = await StockPriceService.searchStocks(query);
-    if (!mounted) return;
-    setState(() { _results = results; _loading = false; });
-    if (results.isNotEmpty) _showOverlay();
-  }
-
-  void _showOverlay() {
-    _removeOverlay();
-    _overlay = OverlayEntry(builder: (_) => _buildDropdown());
-    Overlay.of(context).insert(_overlay!);
-  }
-
-  void _removeOverlay() {
-    _overlay?.remove();
-    _overlay = null;
-  }
-
-  void _onSelect(StockSearchResult r) {
-    _selected = true;
-    _searchController.text = '${r.ticker}  ${r.name}';
-    _removeOverlay();
-    widget.onSelected(r.ticker, r.name, r.market);
-  }
-
-  Widget _buildDropdown() {
-    return Positioned(
-      width: 300,
-      child: CompositedTransformFollower(
-        link: _layerLink,
-        offset: const Offset(0, 56),
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            constraints: const BoxConstraints(maxHeight: 260),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E2A40),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFF4ADE80).withValues(alpha: 0.12)),
-              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 16)],
-            ),
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              shrinkWrap: true,
-              itemCount: _results.length,
-              itemBuilder: (_, i) {
-                final r = _results[i];
-                final marketColor = switch (r.market) {
-                  'KS' => Colors.blueAccent,
-                  'KQ' => Colors.purpleAccent,
-                  _ => Colors.orangeAccent,
-                };
-                final marketLabel = switch (r.market) {
-                  'KS' => 'KOSPI',
-                  'KQ' => 'KOSDAQ',
-                  _ => 'US',
-                };
-                return InkWell(
-                  onTap: () => _onSelect(r),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: marketColor.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(marketLabel,
-                              style: GoogleFonts.inter(color: marketColor, fontSize: 10, fontWeight: FontWeight.w600)),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(r.name,
-                                  style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
-                                  maxLines: 1, overflow: TextOverflow.ellipsis),
-                              Text(r.ticker,
-                                  style: GoogleFonts.robotoMono(color: Colors.white38, fontSize: 11)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('종목 검색',
-            style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54), fontSize: 12)),
-        const SizedBox(height: 8),
-        CompositedTransformTarget(
-          link: _layerLink,
-          child: TextFormField(
-            controller: _searchController,
-            style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface),
-            onChanged: _onChanged,
-            onTap: () {
-              if (!_selected && _searchController.text.isNotEmpty) {
-                _search(_searchController.text.trim());
-              }
-            },
-            decoration: InputDecoration(
-              hintText: '종목명 또는 티커 검색 (예: 삼성전자, AAPL)',
-              hintStyle: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24)),
-              filled: true,
-              fillColor: const Color(0xFF1A2035),
-              suffixIcon: _loading
-                  ? const Padding(
-                      padding: EdgeInsets.all(14),
-                      child: SizedBox(
-                          width: 16, height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4ADE80))),
-                    )
-                  : _selected
-                      ? const Icon(Icons.check_circle, color: Color(0xFF4ADE80), size: 18)
-                      : Icon(Icons.search, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24), size: 18),
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-              focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Color(0xFF4ADE80), width: 1.5)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            ),
-            validator: (_) => !_selected ? '종목을 검색하여 선택하세요' : null,
-          ),
-        ),
-      ],
-    );
   }
 }
 
@@ -1478,7 +1283,8 @@ class _PushNotificationTabState extends State<_PushNotificationTab> {
     });
 
     try {
-      await FirestoreService().sendPushNotification(title: title, body: body);
+      // FcmDirectService로 직접 발송 (Cloud Function 의존 없음)
+      await FcmDirectService.sendTopicNotification(title: title, body: body);
       _titleController.clear();
       _bodyController.clear();
       setState(() => _lastResult = '✅ 발송 완료! 전체 유저에게 전송됩니다.');
@@ -1563,6 +1369,250 @@ class _PushNotificationTabState extends State<_PushNotificationTab> {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+// ─── 유저 목록 탭 ────────────────────────────────────────────────────────────
+
+class _UsersTab extends StatefulWidget {
+  const _UsersTab();
+
+  @override
+  State<_UsersTab> createState() => _UsersTabState();
+}
+
+class _UsersTabState extends State<_UsersTab> {
+  late Future<List<Map<String, dynamic>>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = FirestoreService().getAdminUserList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('오류: ${snapshot.error}', style: GoogleFonts.inter(color: cs.onSurface)));
+        }
+        final users = snapshot.data ?? [];
+        final today = DateTime.now();
+        final todayCount = users.where((u) {
+          final ts = u['createdAt'] as Timestamp?;
+          if (ts == null) return false;
+          final d = ts.toDate();
+          return d.year == today.year && d.month == today.month && d.day == today.day;
+        }).length;
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: users.length + 1,
+          itemBuilder: (context, i) {
+            if (i == 0) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Text('전체 가입자', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 12)),
+                          const SizedBox(height: 4),
+                          Text('${users.length}명', style: GoogleFonts.inter(color: cs.onSurface, fontWeight: FontWeight.w700, fontSize: 22)),
+                        ],
+                      ),
+                    ),
+                    Container(width: 1, height: 40, color: cs.onSurface.withValues(alpha: 0.1)),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Text('오늘 가입', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 12)),
+                          const SizedBox(height: 4),
+                          Text('+$todayCount명', style: GoogleFonts.inter(color: const Color(0xFF4ADE80), fontWeight: FontWeight.w700, fontSize: 22)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+            final u = users[i - 1];
+            final uid = u['uid'] as String;
+            final nickname = u['nickname'] as String;
+            final commentCount = u['commentCount'] as int;
+            final createdAt = u['createdAt'] as Timestamp?;
+            final joinDate = createdAt != null
+                ? DateFormat('yyyy.MM.dd').format(createdAt.toDate())
+                : '-';
+            return Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          nickname.isNotEmpty ? nickname : '(닉네임 없음)',
+                          style: GoogleFonts.inter(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          uid,
+                          style: GoogleFonts.inter(
+                            color: cs.onSurface.withValues(alpha: 0.4),
+                            fontSize: 11,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '댓글 $commentCount',
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF4ADE80),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '가입 $joinDate',
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.5),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+// ─── 신고 관리 탭 ──────────────────────────────────────────────────────────────
+
+class _ReportsTab extends StatefulWidget {
+  const _ReportsTab();
+
+  @override
+  State<_ReportsTab> createState() => _ReportsTabState();
+}
+
+class _ReportsTabState extends State<_ReportsTab> {
+  final _firestoreService = FirestoreService();
+  List<Map<String, dynamic>> _reports = [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final reports = await _firestoreService.getReports();
+    if (mounted) setState(() { _reports = reports; _loading = false; });
+  }
+
+  Future<void> _delete(String reportId) async {
+    await _firestoreService.deleteReport(reportId);
+    if (mounted) setState(() => _reports.removeWhere((r) => r['id'] == reportId));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    if (_loading) return const Center(child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+    if (_reports.isEmpty) {
+      return Center(child: Text('신고 내역이 없습니다', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4))));
+    }
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: const Color(0xFF4ADE80),
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: _reports.length,
+        separatorBuilder: (_, i) => const SizedBox(height: 10),
+        itemBuilder: (_, i) {
+          final r = _reports[i];
+          final createdAt = (r['createdAt'] as Timestamp?)?.toDate();
+          final typeLabel = switch (r['contentType'] as String? ?? '') {
+            'post' => '자유게시판',
+            'journal' => '매매일지',
+            'comment' => '댓글',
+            _ => '기타',
+          };
+          return Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.orangeAccent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(typeLabel, style: GoogleFonts.inter(color: Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(width: 8),
+                Text(r['reason'] as String? ?? '', style: GoogleFonts.inter(color: cs.onSurface, fontSize: 13, fontWeight: FontWeight.w600)),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => _delete(r['id'] as String),
+                  icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ]),
+              const SizedBox(height: 6),
+              Text('신고자: ${r['reporterUid']}', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4), fontSize: 11)),
+              Text('대상: ${r['targetUid']}', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4), fontSize: 11)),
+              Text('컨텐츠 ID: ${r['contentId']}', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4), fontSize: 11)),
+              if (createdAt != null)
+                Text(DateFormat('yyyy.MM.dd HH:mm').format(createdAt),
+                    style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.3), fontSize: 11)),
+            ]),
+          );
+        },
       ),
     );
   }

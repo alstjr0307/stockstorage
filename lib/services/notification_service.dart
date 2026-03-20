@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../utils/globals.dart';
 import 'firestore_service.dart';
@@ -16,6 +17,7 @@ class NotificationService {
   static final instance = NotificationService._();
 
   bool _initialized = false;
+  static final _localNotifications = FlutterLocalNotificationsPlugin();
 
   static void registerBackgroundHandler() {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
@@ -32,6 +34,12 @@ class NotificationService {
       badge: true,
       sound: true,
     );
+
+    // 로컬 알림 초기화
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings();
+    const initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
+    await _localNotifications.initialize(initSettings);
 
     // FCM 토큰 저장 — iOS는 APNS 토큰이 없으면 건너뜀
     try {
@@ -78,15 +86,34 @@ class NotificationService {
     });
 
     // 백그라운드에서 알림 탭해서 앱 진입
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      // 필요 시 특정 화면으로 이동 가능
-    });
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {});
 
     // 종료 상태에서 알림 탭해서 앱 진입
     final initialMessage = await messaging.getInitialMessage();
-    if (initialMessage != null) {
-      // 필요 시 특정 화면으로 이동 가능
-    }
+    if (initialMessage != null) {}
+  }
+
+  /// 포트폴리오 10% 구간 도달 로컬 알림
+  static Future<void> showPortfolioAlert(String stockName, double returnRate) async {
+    final isPositive = returnRate >= 0;
+    final threshold = (returnRate / 10).truncate() * 10;
+    final emoji = isPositive ? '📈' : '📉';
+    final sign = isPositive ? '+' : '';
+    await _localNotifications.show(
+      stockName.hashCode.abs() % 10000,
+      '$emoji $stockName $sign${threshold.toInt()}% 구간 도달',
+      '현재 수익률: $sign${returnRate.toStringAsFixed(1)}%',
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'stockstorage_alerts',
+          '주식 알림',
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: true,
+        ),
+        iOS: DarwinNotificationDetails(),
+      ),
+    );
   }
 
   void _showSnackBar(BuildContext context, String title, String body) {
@@ -117,8 +144,7 @@ class NotificationService {
         ),
         backgroundColor: const Color(0xFF1A2035),
         behavior: SnackBarBehavior.floating,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         duration: const Duration(seconds: 4),
       ),
     );

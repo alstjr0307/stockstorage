@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../services/analytics_service.dart';
 import '../services/stock_price_service.dart';
 
 typedef _OHLC = ({DateTime date, double open, double high, double low, double close});
@@ -66,6 +67,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
     _price = widget.initialPrice;
     if (_price == null) _fetchPrice();
     _fetchCandles(++_fetchSeq);
+    AnalyticsService.instance.logViewIndexDetail(widget.name);
   }
 
   Future<void> _fetchPrice() async {
@@ -206,6 +208,16 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                                 fontWeight: FontWeight.w600),
                           ),
                         ),
+                        if (price.marketTime != null) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            '기준 ${DateFormat('yyyy.MM.dd HH:mm').format(price.marketTime!)} KST',
+                            style: GoogleFonts.inter(
+                              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.35),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
             ),

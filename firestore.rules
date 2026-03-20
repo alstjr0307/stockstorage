@@ -35,6 +35,12 @@ service cloud.firestore {
           (resource.data.uid == request.auth.uid || isAdmin());
         allow update: if false;
       }
+
+    }
+
+    match /users/{userId}/myComments/{commentId} {
+      allow read: if isAdmin() || (request.auth != null && request.auth.uid == userId);
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
 
     // ─── announcements: 읽기 전체, 쓰기 관리자만 ──────────────────────
@@ -49,9 +55,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // ─── users: 본인 데이터만 읽기/쓰기 ───────────────────────────────
+    // ─── users: 본인 데이터만 읽기/쓰기, 관리자 전체 읽기 ────────────
     match /users/{uid} {
-      allow read, write: if isLoggedIn() && request.auth.uid == uid;
+      allow read: if isAdmin() || (isLoggedIn() && request.auth.uid == uid);
+      allow write: if isLoggedIn() && request.auth.uid == uid;
 
       match /memos/{pickId} {
         allow read, write: if isLoggedIn() && request.auth.uid == uid;
@@ -60,6 +67,17 @@ service cloud.firestore {
       match /votes/{pickId} {
         allow read, write: if isLoggedIn() && request.auth.uid == uid;
       }
+
+      match /blockedUsers/{blockedUid} {
+        allow read, write: if isLoggedIn() && request.auth.uid == uid;
+      }
+    }
+
+    // ─── reports: 로그인 유저 생성, 관리자 읽기/삭제 ──────────────────
+    match /reports/{reportId} {
+      allow create: if isLoggedIn() && request.resource.data.reporterUid == request.auth.uid;
+      allow read, delete: if isAdmin();
+      allow update: if false;
     }
 
     // ─── fcm_tokens: 로그인 유저 쓰기, 관리자 읽기 ───────────────────
@@ -71,6 +89,56 @@ service cloud.firestore {
     // ─── notification_queue: 관리자만 ─────────────────────────────────
     match /notification_queue/{docId} {
       allow read, write: if isAdmin();
+    }
+
+    // ─── night_futures_prices: 읽기 전체, 쓰기 Cloud Function(admin SDK)만 ──
+    match /night_futures_prices/{docId} {
+      allow read: if true;
+      allow write: if false; // Cloud Function admin SDK bypasses rules
+    }
+
+    // ─── posts (자유게시판): 읽기 전체, 쓰기 로그인 유저, 삭제 작성자/관리자 ──
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if isLoggedIn() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isLoggedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow update: if isLoggedIn() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']);
+
+      match /likes/{uid} {
+        allow read: if true;
+        allow write: if isLoggedIn() && request.auth.uid == uid;
+      }
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isLoggedIn() && request.resource.data.uid == request.auth.uid;
+        allow delete: if isLoggedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+        allow update: if false;
+      }
+    }
+
+    // ─── trading_journal: 본인만 쓰기, 공개글은 전체 읽기 ──────────────
+    match /trading_journal/{journalId} {
+      allow read: if resource.data.get('isPublic', false) == true || (isLoggedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isLoggedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if isLoggedIn() && (
+        resource.data.uid == request.auth.uid ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+      );
+      allow delete: if isLoggedIn() && resource.data.uid == request.auth.uid;
+
+      match /likes/{uid} {
+        allow read: if true;
+        allow write: if isLoggedIn() && request.auth.uid == uid;
+      }
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isLoggedIn() && request.resource.data.uid == request.auth.uid;
+        allow delete: if isLoggedIn() && (resource.data.uid == request.auth.uid || isAdmin());
+        allow update: if false;
+      }
     }
   }
 }

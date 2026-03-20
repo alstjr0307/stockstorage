@@ -91,9 +91,7 @@ class FcmDirectService {
         throw Exception('FCM 발송 실패: ${fcmResp.body}');
       }
     } catch (e) {
-      // 알림 실패는 종목 등록 자체에 영향 없도록 로그만 출력
-      // ignore: avoid_print
-      print('[FcmDirectService] 알림 발송 오류: $e');
+      rethrow;
     }
   }
 }

@@ -1,17 +1,85 @@
+import 'dart:io';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/stock_pick.dart';
 import '../providers/auth_provider.dart';
 import '../services/firestore_service.dart';
+import '../services/notification_service.dart';
 import '../services/stock_price_service.dart';
 import 'login_screen.dart';
 import 'stock_detail_screen.dart';
+import 'trading_journal_screen.dart';
 
-class PortfolioScreen extends StatelessWidget {
+class PortfolioScreen extends StatefulWidget {
   const PortfolioScreen({super.key});
 
+  @override
+  State<PortfolioScreen> createState() => _PortfolioScreenState();
+}
+
+class _PortfolioScreenState extends State<PortfolioScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        Container(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          child: TabBar(
+            controller: _tabController,
+            indicatorColor: const Color(0xFF4ADE80),
+            indicatorWeight: 2,
+            labelColor: const Color(0xFF4ADE80),
+            unselectedLabelColor: isDark ? Colors.white38 : Colors.black38,
+            labelStyle:
+                GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+            unselectedLabelStyle: GoogleFonts.inter(fontSize: 13),
+            dividerColor: cs.onSurface.withValues(alpha: 0.08),
+            tabs: const [
+              Tab(text: '내 매매일지'),
+              Tab(text: '관심 추천주'),
+            ],
+          ),
+        ),
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              const TradingJournalTab(),
+              _FavoritesTab(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FavoritesTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -81,6 +149,8 @@ class _PortfolioContentState extends State<_PortfolioContent> {
   final _firestoreService = FirestoreService();
   final Map<String, PriceResult?> _prices = {};
   final Set<String> _loadingIds = {};
+  final GlobalKey _shareCardKey = GlobalKey();
+  final bool _capturing = false;
 
   void _fetchPriceIfNeeded(StockPick pick) {
     if (_loadingIds.contains(pick.id) || _prices.containsKey(pick.id)) return;
@@ -91,8 +161,41 @@ class _PortfolioContentState extends State<_PortfolioContent> {
           _prices[pick.id] = result;
           _loadingIds.remove(pick.id);
         });
+        if (result != null) {
+          final returnRate = ((result.price - pick.buyPrice) / pick.buyPrice) * 100;
+          _checkAlertThreshold(pick, returnRate);
+        }
       }
     });
+  }
+
+  Future<void> _checkAlertThreshold(StockPick pick, double returnRate) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = 'portfolio_alert_${pick.id}';
+    final lastThreshold = prefs.getInt(key) ?? 0;
+    final currentThreshold = (returnRate / 10).truncate().toInt() * 10;
+
+    if (currentThreshold != 0 && currentThreshold != lastThreshold) {
+      await prefs.setInt(key, currentThreshold);
+      await NotificationService.showPortfolioAlert(pick.name, returnRate);
+    }
+  }
+
+  Future<void> _shareCard(int total, int positive, int withPrice, double avgReturn, List<StockPick> picks) async {
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _ShareCardSheet(
+        shareCardKey: _shareCardKey,
+        total: total,
+        positive: positive,
+        withPrice: withPrice,
+        avgReturn: avgReturn,
+        picks: picks,
+        prices: Map.from(_prices),
+      ),
+    );
   }
 
   @override
@@ -165,7 +268,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
               children: [
                 _buildStatsHeader(context, favPicks.length, positiveCount,
-                    withPrice.length, avgReturn),
+                    withPrice.length, avgReturn, favPicks),
                 const SizedBox(height: 20),
                 Text(
                   '관심 추천주',
@@ -186,7 +289,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
   }
 
   Widget _buildStatsHeader(BuildContext context, int total, int positive,
-      int withPrice, double avgReturn) {
+      int withPrice, double avgReturn, List<StockPick> picks) {
     final cs = Theme.of(context).colorScheme;
     final isPositive = avgReturn >= 0;
 
@@ -207,25 +310,55 @@ class _PortfolioContentState extends State<_PortfolioContent> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '포트폴리오 현황',
+                '관심추천주 현황',
                 style: GoogleFonts.inter(
                     color: cs.onSurface.withValues(alpha: 0.8),
                     fontWeight: FontWeight.w700,
                     fontSize: 15),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: cs.onSurface.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '추천주 $total개',
-                  style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.5),
-                      fontSize: 11),
-                ),
+              Row(
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: cs.onSurface.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '추천주 $total개',
+                      style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.5),
+                          fontSize: 11),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: _capturing
+                        ? null
+                        : () => _shareCard(total, positive, withPrice, avgReturn, picks),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF4ADE80).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.ios_share_rounded, size: 13, color: Color(0xFF4ADE80)),
+                          const SizedBox(width: 4),
+                          Text(
+                            '공유',
+                            style: GoogleFonts.inter(
+                                color: const Color(0xFF4ADE80),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -235,7 +368,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
               Expanded(
                 child: _statItem(
                   context,
-                  '평균 수익률',
+                  '추천주 평균 수익률',
                   withPrice == 0
                       ? '--'
                       : '${isPositive ? '+' : ''}${avgReturn.toStringAsFixed(2)}%',
@@ -280,7 +413,6 @@ class _PortfolioContentState extends State<_PortfolioContent> {
       ],
     );
   }
-
 
   Widget _buildPickCard(BuildContext context, StockPick pick) {
     final cs = Theme.of(context).colorScheme;
@@ -394,6 +526,284 @@ class _PortfolioContentState extends State<_PortfolioContent> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── 공유 카드 바텀시트 ───────────────────────────────────────────────────────
+
+class _ShareCardSheet extends StatefulWidget {
+  final GlobalKey shareCardKey;
+  final int total;
+  final int positive;
+  final int withPrice;
+  final double avgReturn;
+  final List<StockPick> picks;
+  final Map<String, PriceResult?> prices;
+
+  const _ShareCardSheet({
+    required this.shareCardKey,
+    required this.total,
+    required this.positive,
+    required this.withPrice,
+    required this.avgReturn,
+    required this.picks,
+    required this.prices,
+  });
+
+  @override
+  State<_ShareCardSheet> createState() => _ShareCardSheetState();
+}
+
+class _ShareCardSheetState extends State<_ShareCardSheet> {
+  bool _sharing = false;
+
+  Future<void> _captureAndShare() async {
+    setState(() => _sharing = true);
+    await Future.delayed(const Duration(milliseconds: 60));
+    try {
+      final boundary = widget.shareCardKey.currentContext
+          ?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+      final bytes = byteData.buffer.asUint8List();
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/portfolio_${DateTime.now().millisecondsSinceEpoch}.png');
+      await file.writeAsBytes(bytes);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: '📊 주식저장소 관심추천주 현황',
+      );
+    } finally {
+      if (mounted) setState(() => _sharing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isPositive = widget.avgReturn >= 0;
+    final sign = isPositive ? '+' : '';
+    final color = isPositive ? const Color(0xFF4ADE80) : Colors.redAccent;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF0D1117),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36, height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // 공유 카드 (캡처 대상)
+          RepaintBoundary(
+            key: widget.shareCardKey,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(28),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0A0E1A),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: color.withValues(alpha: 0.3),
+                  width: 1.5,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 헤더
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 8, height: 8,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF4ADE80),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '주식저장소',
+                            style: GoogleFonts.inter(
+                              color: const Color(0xFF4ADE80),
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        DateFormat('yyyy.MM.dd').format(DateTime.now()),
+                        style: GoogleFonts.inter(
+                          color: Colors.white.withValues(alpha: 0.4),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+                  // 추천주 평균 수익률 (메인)
+                  Text(
+                    '추천주 평균 수익률',
+                    style: GoogleFonts.inter(
+                      color: Colors.white.withValues(alpha: 0.5),
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    widget.withPrice == 0
+                        ? '--'
+                        : '$sign${widget.avgReturn.toStringAsFixed(2)}%',
+                    style: GoogleFonts.inter(
+                      color: color,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 42,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  // 구분선
+                  Container(height: 1, color: Colors.white.withValues(alpha: 0.08)),
+                  const SizedBox(height: 20),
+                  // 통계 3개
+                  Row(
+                    children: [
+                      _shareStatItem('보유 종목', '${widget.total}개', Colors.white),
+                      _shareStatItem('수익 중', '${widget.positive}개', const Color(0xFF4ADE80)),
+                      _shareStatItem('손실 중', '${widget.withPrice - widget.positive}개', Colors.redAccent),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // 종목 리스트
+                  Container(height: 1, color: Colors.white.withValues(alpha: 0.08)),
+                  const SizedBox(height: 12),
+                  ...widget.picks.map((pick) {
+                    final priceResult = widget.prices[pick.id];
+                    final livePrice = priceResult?.price;
+                    final returnRate = livePrice != null
+                        ? ((livePrice - pick.buyPrice) / pick.buyPrice) * 100
+                        : pick.returnRate;
+                    final isPos = returnRate >= 0;
+                    final retColor = isPos ? const Color(0xFF4ADE80) : Colors.redAccent;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              pick.ticker,
+                              style: GoogleFonts.robotoMono(
+                                color: Colors.white.withValues(alpha: 0.9),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              pick.name,
+                              style: GoogleFonts.inter(
+                                color: Colors.white.withValues(alpha: 0.7),
+                                fontSize: 12,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            '${isPos ? '+' : ''}${returnRate.toStringAsFixed(1)}%',
+                            style: GoogleFonts.inter(
+                              color: retColor,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 8),
+                  // 하단 워터마크
+                  Center(
+                    child: Text(
+                      '주식저장소 앱에서 확인하세요',
+                      style: GoogleFonts.inter(
+                        color: Colors.white.withValues(alpha: 0.25),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // 공유 버튼
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: _sharing ? null : _captureAndShare,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4ADE80),
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                disabledBackgroundColor: const Color(0xFF4ADE80).withValues(alpha: 0.4),
+              ),
+              icon: _sharing
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                  : const Icon(Icons.ios_share_rounded, size: 18),
+              label: Text(
+                _sharing ? '처리 중...' : '이미지로 공유',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 15),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _shareStatItem(String label, String value, Color color) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: GoogleFonts.inter(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 18,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: Colors.white.withValues(alpha: 0.4),
+              fontSize: 11,
+            ),
+          ),
+        ],
       ),
     );
   }

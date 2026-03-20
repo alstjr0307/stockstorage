@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'analytics_service.dart';
 
 const bool _useTestAds = false;
 final bool _adsEnabled = !kDebugMode; // 디버그(테스트) 모드에서는 광고 비활성화
@@ -78,6 +79,7 @@ class AdService {
     if (_stockViewCount % _interstitialEvery != 0) return;
     if (_isInterstitialReady && _interstitialAd != null) {
       _interstitialAd!.show();
+      AnalyticsService.instance.logAdInterstitialShown();
     }
   }
 

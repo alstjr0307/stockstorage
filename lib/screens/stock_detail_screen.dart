@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'dart:math';
-import 'dart:ui' as ui show TextDirection;
+import 'dart:ui' as ui;
+import 'package:flutter/rendering.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -76,13 +79,15 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   }
 
   final _shareButtonKey = GlobalKey();
+  final _captureKey = GlobalKey();
+  bool _capturing = false;
+  bool _showCaptureWatermark = false;
   final _commentController = TextEditingController();
   final _memoController = TextEditingController();
   final _firestoreService = FirestoreService();
   bool _submitting = false;
   bool _memoSaving = false;
   bool _memoChanged = false;
-  bool _showComments = false;
   final Set<String> _deletingCommentIds = {};
 
   // 투표
@@ -103,6 +108,11 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) return;
+      const tabNames = ['정보', '뉴스', '댓글'];
+      AnalyticsService.instance.logTabChange('stock_detail_${tabNames[_tabController.index]}');
+    });
     if (Random().nextBool()) {
       AdService.instance.showInterstitialIfReady();
     }
@@ -391,6 +401,26 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     Share.share(text, sharePositionOrigin: origin);
   }
 
+  Future<void> _captureAndShare() async {
+    setState(() { _capturing = true; _showCaptureWatermark = true; });
+    await Future.delayed(const Duration(milliseconds: 80));
+    try {
+      final boundary = _captureKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) return;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+      final bytes = byteData.buffer.asUint8List();
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/pick_${DateTime.now().millisecondsSinceEpoch}.png');
+      await file.writeAsBytes(bytes);
+      await Share.shareXFiles([XFile(file.path)], text: '📈 주식저장소 추천 종목');
+    } finally {
+      if (mounted) setState(() { _capturing = false; _showCaptureWatermark = false; });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final pick = widget.pick;
@@ -593,54 +623,179 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // 차트
-                            _chartCard(),
-                            // 매수가 / 현재가 / 목표가
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                              decoration: BoxDecoration(
-                                color: cs.surface,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Column(
-                                children: [
-                                  Row(
-                                    children: [
-                                      Expanded(child: _priceItem(context, '매수가', _formatPrice(pick.buyPrice, pick.market), cs.onSurface.withValues(alpha: 0.6))),
-                                      Container(width: 1, height: 40, color: cs.onSurface.withValues(alpha: 0.1)),
-                                      Expanded(
-                                        child: _priceItem(
-                                          context,
-                                          '현재가',
-                                          _livePrice != null ? _livePrice!.formattedPrice : (_loadingPrice ? '로딩중' : '--'),
-                                          isPositive ? const Color(0xFF4ADE80) : Colors.redAccent,
+                            // ── 캡처 영역 시작 ──
+                            RepaintBoundary(
+                              key: _captureKey,
+                              child: Container(
+                                color: _capturing ? cs.surface : null,
+                                padding: _capturing ? const EdgeInsets.symmetric(horizontal: 20, vertical: 16) : EdgeInsets.zero,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // 종목명 + 수익률 (캡처 시에만 표시)
+                                    if (_capturing) ...[
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  pick.name,
+                                                  style: GoogleFonts.inter(
+                                                    color: cs.onSurface,
+                                                    fontSize: 20,
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Row(
+                                                  children: [
+                                                    _marketBadge(pick.market),
+                                                    const SizedBox(width: 8),
+                                                    Text(
+                                                      DateFormat('yyyy.MM.dd').format(pick.createdAt),
+                                                      style: GoogleFonts.inter(
+                                                        color: cs.onSurface.withValues(alpha: 0.38),
+                                                        fontSize: 11,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                            decoration: BoxDecoration(
+                                              color: isPositive
+                                                  ? const Color(0xFF4ADE80).withValues(alpha: 0.12)
+                                                  : Colors.redAccent.withValues(alpha: 0.12),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: isPositive
+                                                    ? const Color(0xFF4ADE80).withValues(alpha: 0.4)
+                                                    : Colors.redAccent.withValues(alpha: 0.4),
+                                              ),
+                                            ),
+                                            child: Text(
+                                              '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
+                                              style: GoogleFonts.inter(
+                                                color: isPositive ? const Color(0xFF4ADE80) : Colors.redAccent,
+                                                fontWeight: FontWeight.w800,
+                                                fontSize: 20,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+                                      // 현재가 카드
+                                      _livePriceCard(pick, formatter),
+                                      const SizedBox(height: 12),
+                                    ],
+                                    // 일봉 차트
+                                    _chartCard(),
+                                    const SizedBox(height: 14),
+                                    // 매수가 / 현재가 / 목표가
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                      decoration: BoxDecoration(
+                                        color: cs.onSurface.withValues(alpha: 0.04),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Expanded(child: _priceItem(context, '매수가', _formatPrice(pick.buyPrice, pick.market), cs.onSurface.withValues(alpha: 0.6))),
+                                              Container(width: 1, height: 40, color: cs.onSurface.withValues(alpha: 0.1)),
+                                              Expanded(
+                                                child: _priceItem(
+                                                  context,
+                                                  '현재가',
+                                                  _livePrice != null ? _livePrice!.formattedPrice : (_loadingPrice ? '로딩중' : '--'),
+                                                  isPositive ? const Color(0xFF4ADE80) : Colors.redAccent,
+                                                ),
+                                              ),
+                                              Container(width: 1, height: 40, color: cs.onSurface.withValues(alpha: 0.1)),
+                                              Expanded(child: _priceItem(context, '목표가', _formatPrice(pick.targetPrice, pick.market), const Color(0xFF4ADE80))),
+                                            ],
+                                          ),
+                                          if (_livePrice != null && pick.targetPrice > pick.buyPrice) ...[
+                                            const SizedBox(height: 12),
+                                            _priceProgressBar(pick.buyPrice, _livePrice!.price, pick.targetPrice, isPositive),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    // 매수 근거
+                                    Text('매수 근거',
+                                        style: GoogleFonts.inter(
+                                          color: cs.onSurface.withValues(alpha: 0.5),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          letterSpacing: 0.5,
+                                        )),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      pick.reason,
+                                      style: GoogleFonts.inter(
+                                          color: cs.onSurface,
+                                          fontSize: 13,
+                                          height: 1.8),
+                                    ),
+                                    // 워터마크
+                                    if (_showCaptureWatermark) ...[
+                                      const SizedBox(height: 14),
+                                      Center(
+                                        child: RichText(
+                                          text: TextSpan(children: [
+                                            TextSpan(
+                                              text: '주식저장소',
+                                              style: GoogleFonts.inter(
+                                                  color: const Color(0xFF4ADE80),
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w800),
+                                            ),
+                                            TextSpan(
+                                              text: ' 앱에서 확인하세요 📈',
+                                              style: GoogleFonts.inter(
+                                                  color: cs.onSurface.withValues(alpha: 0.4),
+                                                  fontSize: 11),
+                                            ),
+                                          ]),
                                         ),
                                       ),
-                                      Container(width: 1, height: 40, color: cs.onSurface.withValues(alpha: 0.1)),
-                                      Expanded(child: _priceItem(context, '목표가', _formatPrice(pick.targetPrice, pick.market), const Color(0xFF4ADE80))),
                                     ],
-                                  ),
-                                  if (_livePrice != null && pick.targetPrice > pick.buyPrice) ...[
-                                    const SizedBox(height: 12),
-                                    _priceProgressBar(pick.buyPrice, _livePrice!.price, pick.targetPrice, isPositive),
                                   ],
-                                ],
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 16),
-                            // 매수 근거
-                            _sectionLabel('매수 근거'),
-                            const SizedBox(height: 8),
-                            Container(
+                            // ── 캡처 영역 끝 ──
+                            const SizedBox(height: 10),
+                            SizedBox(
                               width: double.infinity,
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: cs.surface,
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Text(
-                                pick.reason,
-                                style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.7), fontSize: 14, height: 1.8),
+                              child: OutlinedButton.icon(
+                                onPressed: _capturing ? null : _captureAndShare,
+                                icon: _capturing
+                                    ? const SizedBox(
+                                        width: 16, height: 16,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4ADE80)))
+                                    : const Icon(Icons.camera_alt_outlined, size: 18, color: Color(0xFF4ADE80)),
+                                label: Text(
+                                  _capturing ? '캡처 중...' : '캡처해서 공유하기',
+                                  style: GoogleFonts.inter(
+                                      color: const Color(0xFF4ADE80),
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 13),
+                                  side: const BorderSide(color: Color(0xFF4ADE80), width: 1.2),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
                               ),
                             ),
                             const SizedBox(height: 20),
@@ -653,11 +808,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                               const SizedBox(height: 20),
                             ],
                             // 댓글
-                            _commentToggleButton(),
-                            if (_showComments) ...[
-                              const SizedBox(height: 10),
-                              _commentSection(),
-                            ],
+                            _commentSection(),
                             const SizedBox(height: 8),
                           ],
                         ),
@@ -1605,84 +1756,66 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     );
   }
 
-  // ── 코멘트 토글 버튼 ─────────────────────────────────────────────────────
-  Widget _commentToggleButton() {
-    final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: () => setState(() => _showComments = !_showComments),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.chat_bubble_outline,
-              color: cs.onSurface.withValues(alpha: 0.38),
-              size: 16,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '코멘트',
-              style: GoogleFonts.inter(
-                color: cs.onSurface.withValues(alpha: 0.54),
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const Spacer(),
-            Icon(
-              _showComments ? Icons.expand_less : Icons.expand_more,
-              color: cs.onSurface.withValues(alpha: 0.38),
-              size: 18,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   // ── 코멘트 목록 ──────────────────────────────────────────────────────────
   Widget _commentSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('코멘트'),
-        const SizedBox(height: 10),
         StreamBuilder<List<Comment>>(
           stream: _firestoreService.getComments(widget.pick.id),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const SizedBox(
-                height: 48,
-                child: Center(
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Color(0xFF4ADE80),
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionLabel('코멘트'),
+                  const SizedBox(height: 10),
+                  const SizedBox(
+                    height: 48,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF4ADE80),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               );
             }
             final comments = snapshot.data ?? [];
-            if (comments.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text(
-                  '첫 번째 코멘트를 남겨보세요',
-                  style: GoogleFonts.inter(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.24),
-                    fontSize: 13,
-                  ),
-                ),
-              );
-            }
+            final cs = Theme.of(context).colorScheme;
             return Column(
-              children: comments.map((c) => _commentItem(c)).toList(),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _sectionLabel('코멘트'),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${comments.length}',
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.38),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                if (comments.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      '첫 번째 코멘트를 남겨보세요',
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.24),
+                        fontSize: 13,
+                      ),
+                    ),
+                  )
+                else
+                  ...comments.map((c) => _commentItem(c)),
+              ],
             );
           },
         ),
@@ -1707,7 +1840,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           Row(
             children: [
               Text(
-                comment.displayName,
+                comment.nickname,
                 style: GoogleFonts.inter(
                   color: cs.onSurface.withValues(alpha: 0.7),
                   fontSize: 12,
@@ -1804,7 +1937,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           ),
           const SizedBox(height: 6),
           Text(
-            comment.text,
+            comment.content,
             style: GoogleFonts.inter(
               color: cs.onSurface,
               fontSize: 13,
@@ -1919,8 +2052,8 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         Comment(
           id: '',
           uid: user.uid,
-          displayName: nickname,
-          text: text,
+          nickname: nickname,
+          content: text,
           createdAt: DateTime.now(),
         ),
       );

@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
@@ -28,18 +30,33 @@ void main() async {
     if (e.code != 'duplicate-app') rethrow;
   }
 
+  // Firebase App Check 초기화 (디버그/에뮬레이터는 debug 프로바이더)
+  try {
+    await FirebaseAppCheck.instance.activate(
+      androidProvider: kDebugMode
+          ? AndroidProvider.debug
+          : AndroidProvider.playIntegrity,
+      appleProvider: kDebugMode
+          ? AppleProvider.debug
+          : AppleProvider.deviceCheck,
+    );
+  } catch (_) {
+    // 에뮬레이터 등 지원 안 되는 환경에서 무시
+  }
+
   // FCM 백그라운드 핸들러 등록 (Firebase 초기화 직후)
   NotificationService.registerBackgroundHandler();
 
   // 카카오 SDK 초기화
-  // TODO: developers.kakao.com 에서 앱 등록 후 네이티브 앱 키를 입력하세요.
-  // AndroidManifest.xml 및 Info.plist 도 함께 설정이 필요합니다.
   KakaoSdk.init(nativeAppKey: '23dd91427bb7ac2055aab304681da522');
 
-  await NotificationService.instance.init();
+  AnalyticsService.instance.init();
   await DeepLinkService.init();
   timeago.setLocaleMessages('ko', timeago.KoMessages());
   runApp(const StockStorageApp());
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    NotificationService.instance.init();
+  });
 }
 
 Future<void> initAds() async {
