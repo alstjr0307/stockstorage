@@ -9,11 +9,14 @@ class AuthService {
   final _auth = FirebaseAuth.instance;
   final _googleSignIn = GoogleSignIn();
 
-  // 관리자 UID (Firebase에서 확인 후 입력)
-  static const String adminUid = '1KzEXKZMoFaYOymYyoI283AR3Y32';
+  // 관리자 UID 목록
+  static const List<String> adminUids = [
+    '1KzEXKZMoFaYOymYyoI283AR3Y32',
+    'v4a3ClF3FhWGXsGnZ29wyvQNSCX2',
+  ];
 
   User? get currentUser => _auth.currentUser;
-  bool get isAdmin => _auth.currentUser?.uid == adminUid;
+  bool get isAdmin => adminUids.contains(_auth.currentUser?.uid);
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   Future<UserCredential> signInWithEmail(String email, String password) async {

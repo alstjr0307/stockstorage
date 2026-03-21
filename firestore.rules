@@ -5,7 +5,10 @@ service cloud.firestore {
 
     // 관리자 UID
     function isAdmin() {
-      return request.auth != null && request.auth.uid == '1KzEXKZMoFaYOymYyoI283AR3Y32';
+      return request.auth != null && (
+        request.auth.uid == '1KzEXKZMoFaYOymYyoI283AR3Y32' ||
+        request.auth.uid == 'v4a3ClF3FhWGXsGnZ29wyvQNSCX2'
+      );
     }
 
     function isLoggedIn() {

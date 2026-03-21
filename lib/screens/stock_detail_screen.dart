@@ -1825,7 +1825,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
 
   Widget _commentItem(Comment comment) {
     final isOwn = _currentUser?.uid == comment.uid;
-    final isAdmin = _currentUser?.uid == AuthService.adminUid;
+    final isAdmin = AuthService.adminUids.contains(_currentUser?.uid);
     final cs = Theme.of(context).colorScheme;
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
