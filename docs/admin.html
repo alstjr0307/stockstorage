@@ -374,23 +374,27 @@
     }
   };
 
-  window.doKakaoLogin = async () => {
-    const errEl = document.getElementById('login-error');
-    try {
-      const accessToken = await new Promise((resolve, reject) => {
-        Kakao.Auth.login({
-          success: (authObj) => resolve(authObj.access_token),
-          fail: (err) => reject(err),
-        });
-      });
-      const createKakaoCustomToken = httpsCallable(functions, 'createKakaoCustomToken');
-      const { data } = await createKakaoCustomToken({ accessToken });
-      await signInWithCustomToken(auth, data.customToken);
-      errEl.textContent = '';
-    } catch(e) {
-      errEl.textContent = '카카오 로그인 실패: ' + (e.message || JSON.stringify(e));
-    }
+  const KAKAO_REDIRECT_URI = 'https://alstjr0307.github.io/stockstorage/admin.html';
+
+  window.doKakaoLogin = () => {
+    Kakao.Auth.authorize({ redirectUri: KAKAO_REDIRECT_URI });
   };
+
+  // 카카오 redirect 후 code 처리
+  const kakaoCode = new URLSearchParams(window.location.search).get('code');
+  if (kakaoCode) {
+    window.history.replaceState({}, '', window.location.pathname);
+    const errEl = document.getElementById('login-error');
+    (async () => {
+      try {
+        const kakaoAuthCode = httpsCallable(functions, 'kakaoAuthCode');
+        const { data } = await kakaoAuthCode({ code: kakaoCode, redirectUri: KAKAO_REDIRECT_URI });
+        await signInWithCustomToken(auth, data.customToken);
+      } catch(e) {
+        errEl.textContent = '카카오 로그인 실패: ' + (e.message || JSON.stringify(e));
+      }
+    })();
+  }
 
   window.doLogout = () => signOut(auth);
 

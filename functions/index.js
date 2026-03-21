@@ -186,6 +186,43 @@ exports.crawlFemcoIndex = onSchedule(
   }
 );
 
+// ── 카카오 인증코드 → Firebase 커스텀 토큰 (웹 admin용) ──────────────────────
+exports.kakaoAuthCode = onCall(
+  { region: 'asia-northeast3' },
+  async (request) => {
+    const { code, redirectUri } = request.data;
+    if (!code || !redirectUri) {
+      throw new HttpsError('invalid-argument', 'code와 redirectUri가 필요합니다.');
+    }
+
+    // 인증코드 → 액세스 토큰
+    const tokenRes = await axios.post(
+      'https://kauth.kakao.com/oauth/token',
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: 'cc0d470794e8b40751586a607e301770',
+        redirect_uri: redirectUri,
+        code,
+      }).toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+    const accessToken = tokenRes.data.access_token;
+
+    // 액세스 토큰 → 유저 정보
+    const userRes = await axios.get('https://kapi.kakao.com/v2/user/me', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const kakaoId = String(userRes.data.id);
+    const uid = `kakao:${kakaoId}`;
+
+    const customToken = await getAuth().createCustomToken(uid, {
+      provider: 'kakao',
+      kakaoId,
+    });
+    return { customToken };
+  }
+);
+
 // ── 카카오 커스텀 토큰 발급 ────────────────────────────────────────────────
 // 클라이언트에서 카카오 액세스 토큰을 보내면 서버에서 검증 후 Firebase 커스텀 토큰 반환
 exports.createKakaoCustomToken = onCall(
