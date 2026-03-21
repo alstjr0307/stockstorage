@@ -500,12 +500,12 @@ async function fetchWithRetry(appKey, appSecret, symbol) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const approvalKey = await getKisApprovalKey(appKey, appSecret);
-      const data = await fetchViaWebSocket(approvalKey, symbol, 120000); // 2분
+      const data = await fetchViaWebSocket(approvalKey, symbol, 20000); // 20초
       return data;
     } catch (e) {
       console.error(`[WS] 시도 ${attempt} 실패:`, e.message);
       if (attempt < 2) {
-        await new Promise(r => setTimeout(r, 3000));
+        await new Promise(r => setTimeout(r, 1000));
       } else {
         throw e;
       }
@@ -515,7 +515,7 @@ async function fetchWithRetry(appKey, appSecret, symbol) {
 
 // ── 야간선물 가격 5분마다 Firestore에 기록 (히스토리 축적) ──────────────────
 exports.recordNightFuturesPrice = onSchedule(
-  { schedule: 'every 5 minutes', region: 'asia-northeast3', timeoutSeconds: 270 },
+  { schedule: 'every 1 minutes', region: 'asia-northeast3', timeoutSeconds: 60 },
   async () => {
     const kst = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
     const kstHour = kst.getUTCHours();

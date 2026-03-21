@@ -14,6 +14,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/stock_price_service.dart';
 import 'index_detail_screen.dart';
 import 'night_futures_chart_screen.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 class MarketAnalysisScreen extends StatefulWidget {
   const MarketAnalysisScreen({super.key});
@@ -233,8 +234,8 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         children: [
           // ── KOSPI 200 야간선물 (추후 구현) ──
-          // _buildNightFuturesCard(context),
-          // const SizedBox(height: 20),
+          _buildNightFuturesCard(context),
+          const SizedBox(height: 20),
 
           // ── 주요 지수 섹션 ──
           Row(
@@ -292,6 +293,8 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           ),
           const SizedBox(height: 10),
           _buildIndexCard(context, 'WTI 원유'),
+          const SizedBox(height: 10),
+          _buildWeekendNasdaqCard(context),
           const SizedBox(height: 28),
 
           // ── 시장 심리 지표 섹션 ──
@@ -1062,6 +1065,82 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                 ),
               ],
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeekendNasdaqCard(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final html = '''
+<!DOCTYPE html><html><head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>body{margin:0;background:${isDark ? '#1A2035' : '#ffffff'};}</style>
+</head><body>
+<div class="tradingview-widget-container" style="height:220px;width:100%">
+  <div class="tradingview-widget-container__widget"></div>
+  <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>
+  {
+    "symbol": "CAPITALCOM:US100",
+    "width": "100%",
+    "height": 220,
+    "locale": "kr",
+    "dateRange": "1D",
+    "colorTheme": "${isDark ? 'dark' : 'light'}",
+    "isTransparent": true,
+    "autosize": true,
+    "largeChartUrl": ""
+  }
+  </script>
+</div>
+</body></html>''';
+
+    final controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(cs.surface)
+      ..loadHtmlString(html);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+            child: Row(
+              children: [
+                Text('위캔드 나스닥',
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    )),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4ADE80).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text('주말 포함',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF4ADE80),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      )),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            height: 200,
+            child: WebViewWidget(controller: controller),
           ),
         ],
       ),
