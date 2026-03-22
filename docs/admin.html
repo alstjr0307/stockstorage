@@ -158,6 +158,13 @@
     .modal-cancel { background: #2a3550; color: #aaa; }
     .modal-confirm { background: #4ADE80; color: #0A0E1A; }
 
+    /* 시황분석 디테일 모달 */
+    #analysis-modal .modal { width: 600px; max-width: 90vw; max-height: 80vh; display: flex; flex-direction: column; }
+    #analysis-modal .modal-body { overflow-y: auto; margin-top: 12px; flex: 1; }
+    #an-detail-title { font-size: 17px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+    #an-detail-date { font-size: 12px; color: #888; margin-bottom: 16px; }
+    #an-detail-body { font-size: 14px; color: #ccc; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+
     .loading { text-align: center; color: #555; padding: 40px; }
     #kakao-btn {
       width: 100%; max-width: 320px; padding: 12px;
@@ -313,6 +320,21 @@
       </div>
       <button class="submit-btn" onclick="sendNoti()">알림 발송</button>
       <div id="noti-msg" class="msg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 시황분석 디테일 모달 -->
+<div class="modal-overlay" id="analysis-modal">
+  <div class="modal">
+    <h3>시황 분석</h3>
+    <div class="modal-body">
+      <div id="an-detail-title"></div>
+      <div id="an-detail-date"></div>
+      <div id="an-detail-body"></div>
+    </div>
+    <div class="modal-btns" style="margin-top:16px;">
+      <button class="modal-cancel" onclick="closeAnalysisModal()">닫기</button>
     </div>
   </div>
 </div>
@@ -622,6 +644,7 @@
               <div class="pick-card-meta" style="margin-top:4px;">${date}</div>
             </div>
             <div class="pick-card-actions">
+              <button class="action-btn btn-complete" onclick="openAnalysisModal('${d.id}')">보기</button>
               <button class="action-btn btn-delete" onclick="deleteAnalysis('${d.id}', '${data.title.replace(/'/g, "\\'")}')">삭제</button>
             </div>
           </div>`;
@@ -629,6 +652,30 @@
     } catch(e) {
       listEl.innerHTML = `<p class="loading" style="color:#f87171;">오류: ${e.message}</p>`;
     }
+  };
+
+  // 시황 분석 디테일 모달
+  let analysisCache = {};
+  window.openAnalysisModal = async (id) => {
+    document.getElementById('analysis-modal').classList.add('open');
+    document.getElementById('an-detail-title').textContent = '불러오는 중...';
+    document.getElementById('an-detail-date').textContent = '';
+    document.getElementById('an-detail-body').textContent = '';
+    try {
+      if (!analysisCache[id]) {
+        const snap = await getDocs(query(collection(db, 'market_analyses')));
+        snap.docs.forEach(d => { analysisCache[d.id] = { id: d.id, ...d.data() }; });
+      }
+      const data = analysisCache[id];
+      document.getElementById('an-detail-title').textContent = data.title;
+      document.getElementById('an-detail-date').textContent = data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString('ko-KR') : '';
+      document.getElementById('an-detail-body').textContent = data.body;
+    } catch(e) {
+      document.getElementById('an-detail-title').textContent = '오류: ' + e.message;
+    }
+  };
+  window.closeAnalysisModal = () => {
+    document.getElementById('analysis-modal').classList.remove('open');
   };
 
   // 시황 분석 삭제
