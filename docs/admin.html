@@ -199,6 +199,7 @@
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('tab-add', this)">종목 추가</button>
     <button class="tab-btn" onclick="switchTab('tab-list', this)">종목 목록</button>
+    <button class="tab-btn" onclick="switchTab('tab-analysis', this)">시황 분석</button>
     <button class="tab-btn" onclick="switchTab('tab-noti', this)">알림 발송</button>
   </div>
 
@@ -276,7 +277,29 @@
     </div>
   </div>
 
-  <!-- 탭3: 알림 -->
+  <!-- 탭3: 시황 분석 -->
+  <div id="tab-analysis" class="tab-content">
+    <p class="section-title">시황 분석 작성</p>
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div>
+        <label>제목</label>
+        <input type="text" id="an-title" placeholder="예: 2024년 4월 2주차 시황 분석" />
+      </div>
+      <div>
+        <label>내용</label>
+        <textarea id="an-body" placeholder="시황 분석 내용을 입력하세요..." style="min-height:200px;"></textarea>
+      </div>
+      <button class="submit-btn" id="an-btn" onclick="addAnalysis()">시황 분석 등록</button>
+      <div id="an-msg" class="msg"></div>
+    </div>
+
+    <p class="section-title" style="margin-top:32px;">등록된 시황 분석</p>
+    <div id="analysis-list" class="pick-list">
+      <p class="loading">불러오는 중...</p>
+    </div>
+  </div>
+
+  <!-- 탭4: 알림 -->
   <div id="tab-noti" class="tab-content">
     <p class="section-title">푸시 알림 발송</p>
     <div class="noti-form">
@@ -405,6 +428,7 @@
     document.getElementById(id).classList.add('active');
     btn.classList.add('active');
     if (id === 'tab-list') loadPicks();
+    if (id === 'tab-analysis') loadAnalyses();
   };
 
   // 종목 추가
@@ -557,6 +581,62 @@
     try {
       await deleteDoc(doc(db, 'stock_picks', id));
       loadPicks();
+    } catch(e) { alert('오류: ' + e.message); }
+  };
+
+  // 시황 분석 등록
+  window.addAnalysis = async () => {
+    const btn = document.getElementById('an-btn');
+    const msg = document.getElementById('an-msg');
+    const title = document.getElementById('an-title').value.trim();
+    const body = document.getElementById('an-body').value.trim();
+    if (!title || !body) { showMsg(msg, 'error', '제목과 내용을 입력하세요.'); return; }
+    btn.disabled = true; btn.textContent = '등록 중...';
+    try {
+      await addDoc(collection(db, 'market_analyses'), { title, body, createdAt: serverTimestamp() });
+      showMsg(msg, 'success', '✓ 시황 분석이 등록되었습니다.');
+      document.getElementById('an-title').value = '';
+      document.getElementById('an-body').value = '';
+      loadAnalyses();
+    } catch(e) { showMsg(msg, 'error', '오류: ' + e.message); }
+    btn.disabled = false; btn.textContent = '시황 분석 등록';
+  };
+
+  // 시황 분석 목록 로드
+  window.loadAnalyses = async () => {
+    const listEl = document.getElementById('analysis-list');
+    listEl.innerHTML = '<p class="loading">불러오는 중...</p>';
+    try {
+      const q = query(collection(db, 'market_analyses'), orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      if (snap.empty) { listEl.innerHTML = '<p class="loading">등록된 시황 분석이 없습니다.</p>'; return; }
+      listEl.innerHTML = snap.docs.map(d => {
+        const data = d.data();
+        const date = data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString('ko-KR') : '';
+        const preview = data.body?.substring(0, 100) + (data.body?.length > 100 ? '...' : '');
+        return `
+          <div class="pick-card">
+            <div class="pick-card-info">
+              <div class="pick-card-name">${data.title}</div>
+              <div class="pick-card-reason" style="margin-top:6px;">${preview}</div>
+              <div class="pick-card-meta" style="margin-top:4px;">${date}</div>
+            </div>
+            <div class="pick-card-actions">
+              <button class="action-btn btn-delete" onclick="deleteAnalysis('${d.id}', '${data.title.replace(/'/g, "\\'")}')">삭제</button>
+            </div>
+          </div>`;
+      }).join('');
+    } catch(e) {
+      listEl.innerHTML = `<p class="loading" style="color:#f87171;">오류: ${e.message}</p>`;
+    }
+  };
+
+  // 시황 분석 삭제
+  window.deleteAnalysis = async (id, title) => {
+    if (!confirm(`"${title}" 시황 분석을 삭제할까요?`)) return;
+    try {
+      await deleteDoc(doc(db, 'market_analyses', id));
+      loadAnalyses();
     } catch(e) { alert('오류: ' + e.message); }
   };
 
