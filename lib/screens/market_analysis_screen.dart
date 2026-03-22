@@ -1100,6 +1100,11 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(cs.surface)
+      ..setNavigationDelegate(NavigationDelegate(
+        onNavigationRequest: (req) => req.isMainFrame && req.url != 'about:blank'
+            ? NavigationDecision.prevent
+            : NavigationDecision.navigate,
+      ))
       ..loadHtmlString(html);
 
     return Container(
