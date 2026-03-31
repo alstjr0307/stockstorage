@@ -12,6 +12,7 @@ const cheerio = require('cheerio');
 const WebSocket = require('ws');
 
 initializeApp();
+require('./fmkorea_append');
 
 // ── 신규 가입자 → 관리자에게 알림 ────────────────────────────────────────────
 exports.notifyAdminOnNewUser = auth.user().onCreate(async (user) => {
