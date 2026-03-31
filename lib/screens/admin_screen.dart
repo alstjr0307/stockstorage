@@ -10,6 +10,7 @@ import '../services/fcm_direct_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
 import '../widgets/stock_search_field.dart';
+import 'write_market_analysis_screen.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -998,67 +999,15 @@ class _MarketAnalysisAdminTab extends StatefulWidget {
 
 class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
   final _fs = FirestoreService();
-  final _titleCtrl = TextEditingController();
-  final _bodyCtrl = TextEditingController();
-  bool _isLoading = false;
-  MarketAnalysis? _editing;
 
-  @override
-  void dispose() {
-    _titleCtrl.dispose();
-    _bodyCtrl.dispose();
-    super.dispose();
-  }
-
-  void _startEdit(MarketAnalysis a) {
-    setState(() {
-      _editing = a;
-      _titleCtrl.text = a.title;
-      _bodyCtrl.text = a.body;
-    });
-  }
-
-  void _cancelEdit() {
-    setState(() {
-      _editing = null;
-      _titleCtrl.clear();
-      _bodyCtrl.clear();
-    });
-  }
-
-  Future<void> _submit() async {
-    final title = _titleCtrl.text.trim();
-    final body = _bodyCtrl.text.trim();
-    if (title.isEmpty || body.isEmpty) return;
-    setState(() => _isLoading = true);
-    try {
-      final a = MarketAnalysis(
-        id: _editing?.id ?? '',
-        title: title,
-        body: body,
-        createdAt: _editing?.createdAt ?? DateTime.now(),
-      );
-      if (_editing != null) {
-        await _fs.updateMarketAnalysis(a);
-      } else {
-        await _fs.addMarketAnalysis(a);
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(_editing != null ? '수정 완료' : '등록 완료',
-              style: GoogleFonts.inter()),
-          backgroundColor: const Color(0xFF4ADE80),
-        ));
-        _cancelEdit();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('오류: $e'), backgroundColor: Colors.redAccent));
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+  Future<void> _openWrite([MarketAnalysis? editing]) async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WriteMarketAnalysisScreen(editing: editing),
+      ),
+    );
+    if (result == true && mounted) setState(() {});
   }
 
   Future<void> _delete(MarketAnalysis a) async {
@@ -1092,87 +1041,50 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // ── 입력 폼 ──
+        // 작성 버튼
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: const Color(0xFF1A2035),
-            border: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12))),
+            border: Border(
+                bottom: BorderSide(
+                    color:
+                        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12))),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(_editing != null ? '시황 분석 수정' : '시황 분석 등록',
-                  style: GoogleFonts.inter(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600)),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _titleCtrl,
-                style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface),
-                decoration: _inputDeco(context, '제목'),
+          child: SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4ADE80),
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: _bodyCtrl,
-                maxLines: 5,
-                style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface),
-                decoration: _inputDeco(context, '본문'),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Spacer(),
-                  if (_editing != null)
-                    TextButton(
-                      onPressed: _cancelEdit,
-                      child: Text('취소',
-                          style:
-                              GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38))),
-                    ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4ADE80),
-                      foregroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 10),
-                    ),
-                    onPressed: _isLoading ? null : _submit,
-                    child: _isLoading
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.black))
-                        : Text(_editing != null ? '수정' : '등록',
-                            style: GoogleFonts.inter(
-                                fontWeight: FontWeight.w700)),
-                  ),
-                ],
-              ),
-            ],
+              onPressed: () => _openWrite(),
+              icon: const Icon(Icons.add, size: 20),
+              label: Text('새 시황 분석 작성',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14)),
+            ),
           ),
         ),
-        // ── 목록 ──
+        // 목록
         Expanded(
           child: StreamBuilder<List<MarketAnalysis>>(
             stream: _fs.getMarketAnalyses(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
-                    child: CircularProgressIndicator(
-                        color: Color(0xFF4ADE80)));
+                    child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
               }
               final list = snapshot.data ?? [];
               if (list.isEmpty) {
                 return Center(
                     child: Text('등록된 시황 분석이 없습니다',
-                        style:
-                            GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38))));
+                        style: GoogleFonts.inter(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withValues(alpha: 0.38))));
               }
               return ListView.builder(
                 padding: const EdgeInsets.all(12),
@@ -1186,7 +1098,10 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
                       color: const Color(0xFF1A2035),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05)),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withValues(alpha: 0.05)),
                     ),
                     child: Row(
                       children: [
@@ -1196,14 +1111,18 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
                             children: [
                               Text(a.title,
                                   style: GoogleFonts.inter(
-                                      color: Theme.of(context).colorScheme.onSurface,
+                                      color:
+                                          Theme.of(context).colorScheme.onSurface,
                                       fontWeight: FontWeight.w600,
                                       fontSize: 13)),
                               Text(a.body,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.inter(
-                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: 0.38),
                                       fontSize: 11)),
                             ],
                           ),
@@ -1211,7 +1130,7 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
                         IconButton(
                           icon: const Icon(Icons.edit_outlined,
                               color: Color(0xFF4ADE80), size: 18),
-                          onPressed: () => _startEdit(a),
+                          onPressed: () => _openWrite(a),
                         ),
                         IconButton(
                           icon: const Icon(Icons.delete_outline,
@@ -1228,25 +1147,6 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
         ),
       ],
     );
-  }
-
-  InputDecoration _inputDeco(BuildContext context, String hint) {
-    final cs = Theme.of(context).colorScheme;
-    return InputDecoration(
-        hintText: hint,
-        hintStyle: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.24)),
-        filled: true,
-        fillColor: const Color(0xFF0A0E1A),
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide:
-                const BorderSide(color: Color(0xFF4ADE80), width: 1.5)),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      );
   }
 }
 

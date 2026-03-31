@@ -16,7 +16,7 @@ class MyCommentsScreen extends StatefulWidget {
 class _MyCommentsScreenState extends State<MyCommentsScreen> {
   final _fs = FirestoreService();
   late Future<List<({StockPick? pick, String text, DateTime createdAt})>>
-      _future;
+  _future;
 
   @override
   void initState() {
@@ -25,7 +25,7 @@ class _MyCommentsScreenState extends State<MyCommentsScreen> {
   }
 
   Future<List<({StockPick? pick, String text, DateTime createdAt})>>
-      _load() async {
+  _load() async {
     final comments = await _fs.getMyComments(widget.uid);
     final pickCache = <String, StockPick?>{};
     for (final c in comments) {
@@ -34,11 +34,10 @@ class _MyCommentsScreenState extends State<MyCommentsScreen> {
       }
     }
     return comments
-        .map((c) => (
-              pick: pickCache[c.pickId],
-              text: c.text,
-              createdAt: c.createdAt,
-            ))
+        .map(
+          (c) =>
+              (pick: pickCache[c.pickId], text: c.text, createdAt: c.createdAt),
+        )
         .toList();
   }
 
@@ -53,8 +52,11 @@ class _MyCommentsScreenState extends State<MyCommentsScreen> {
         backgroundColor: cs.surface,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new,
-              size: 18, color: cs.onSurface.withValues(alpha: 0.7)),
+          icon: Icon(
+            Icons.arrow_back_ios_new,
+            size: 18,
+            color: cs.onSurface.withValues(alpha: 0.7),
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -72,14 +74,19 @@ class _MyCommentsScreenState extends State<MyCommentsScreen> {
           if (snap.connectionState != ConnectionState.done) {
             return const Center(
               child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Color(0xFF4ADE80)),
+                strokeWidth: 2,
+                color: Color(0xFF4ADE80),
+              ),
             );
           }
           if (snap.hasError) {
             return Center(
-              child: Text('불러오기 실패',
-                  style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.4))),
+              child: Text(
+                '불러오기 실패',
+                style: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.4),
+                ),
+              ),
             );
           }
           final items = snap.data!;
@@ -88,14 +95,19 @@ class _MyCommentsScreenState extends State<MyCommentsScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.chat_bubble_outline,
-                      size: 48,
-                      color: cs.onSurface.withValues(alpha: 0.15)),
+                  Icon(
+                    Icons.chat_bubble_outline,
+                    size: 48,
+                    color: cs.onSurface.withValues(alpha: 0.15),
+                  ),
                   const SizedBox(height: 12),
-                  Text('작성한 댓글이 없습니다',
-                      style: GoogleFonts.inter(
-                          color: cs.onSurface.withValues(alpha: 0.35),
-                          fontSize: 14)),
+                  Text(
+                    '작성한 댓글이 없습니다',
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.35),
+                      fontSize: 14,
+                    ),
+                  ),
                 ],
               ),
             );
@@ -103,7 +115,7 @@ class _MyCommentsScreenState extends State<MyCommentsScreen> {
           return ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             itemCount: items.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            separatorBuilder: (_, _) => const SizedBox(height: 8),
             itemBuilder: (context, i) {
               final item = items[i];
               final pick = item.pick;
@@ -111,16 +123,15 @@ class _MyCommentsScreenState extends State<MyCommentsScreen> {
                 onTap: pick == null
                     ? null
                     : () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => StockDetailScreen(pick: pick)),
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => StockDetailScreen(pick: pick),
                         ),
+                      ),
                 child: Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color(0xFF1A2035)
-                        : Colors.white,
+                    color: isDark ? const Color(0xFF1A2035) : Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: cs.onSurface.withValues(alpha: 0.06),

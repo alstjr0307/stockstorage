@@ -8,8 +8,8 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import '../models/market_analysis.dart';
 import 'package:share_plus/share_plus.dart';
-import '../services/deep_link_service.dart';
 import '../services/firestore_service.dart';
+import 'market_analysis_detail_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/stock_price_service.dart';
 import 'index_detail_screen.dart';
@@ -1242,63 +1242,10 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   Widget _buildAnalysisCard(BuildContext context, MarketAnalysis a) {
     final cs = Theme.of(context).colorScheme;
     return GestureDetector(
-      onTap: () => showModalBottomSheet(
-        context: context,
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        isScrollControlled: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (_) => DraggableScrollableSheet(
-          initialChildSize: 0.6,
-          maxChildSize: 0.92,
-          minChildSize: 0.4,
-          expand: false,
-          builder: (_, ctrl) => SingleChildScrollView(
-            controller: ctrl,
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 40),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      DateFormat('yyyy년 MM월 dd일').format(a.createdAt),
-                      style: GoogleFonts.inter(
-                          color: cs.onSurface.withValues(alpha: 0.38), fontSize: 12),
-                    ),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: () => Share.share(
-                        '📊 주식저장소 시황 분석\n'
-                        '━━━━━━━━━━━━━━━━━━\n'
-                        '${a.title}\n\n'
-                        '${a.body.length > 100 ? '${a.body.substring(0, 100)}...' : a.body}\n'
-                        '━━━━━━━━━━━━━━━━━━\n'
-                        '👉 ${DeepLinkService.analysisUrl(a)}',
-                      ),
-                      child: Icon(Icons.share_outlined,
-                          size: 20, color: cs.onSurface.withValues(alpha: 0.45)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  a.title,
-                  style: GoogleFonts.inter(
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 18),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  a.body,
-                  style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.7), fontSize: 14, height: 1.9),
-                ),
-              ],
-            ),
-          ),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MarketAnalysisDetailScreen(analysis: a),
         ),
       ),
       child: Container(

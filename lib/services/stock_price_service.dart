@@ -216,8 +216,10 @@ class StockPriceService {
 
       final marketTimeRaw = meta['regularMarketTime'] as int?;
       final marketTime = marketTimeRaw != null
-          ? DateTime.fromMillisecondsSinceEpoch(marketTimeRaw * 1000, isUtc: true)
-              .add(const Duration(hours: 9)) // KST = UTC+9
+          ? DateTime.fromMillisecondsSinceEpoch(
+              marketTimeRaw * 1000,
+              isUtc: true,
+            ).add(const Duration(hours: 9)) // KST = UTC+9
           : null;
 
       final result = PriceResult(
@@ -308,8 +310,9 @@ class StockPriceService {
           opens == null ||
           highs == null ||
           lows == null ||
-          closes == null)
+          closes == null) {
         return [];
+      }
 
       final out =
           <
@@ -494,12 +497,11 @@ class StockPriceService {
     }
 
     try {
-      final fn = FirebaseFunctions.instanceFor(
-        region: 'asia-northeast3',
-      ).httpsCallable(
-        'getKospiNightFutures',
-        options: HttpsCallableOptions(timeout: const Duration(seconds: 18)),
-      );
+      final fn = FirebaseFunctions.instanceFor(region: 'asia-northeast3')
+          .httpsCallable(
+            'getKospiNightFutures',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 18)),
+          );
       final res = await fn.call();
       final d = res.data as Map<String, dynamic>;
       if (d['hasData'] == false) return null;

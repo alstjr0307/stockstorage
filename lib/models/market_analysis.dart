@@ -5,12 +5,14 @@ class MarketAnalysis {
   final String title;
   final String body;
   final DateTime createdAt;
+  final List<String> imageUrls;
 
   const MarketAnalysis({
     required this.id,
     required this.title,
     required this.body,
     required this.createdAt,
+    this.imageUrls = const [],
   });
 
   factory MarketAnalysis.fromFirestore(DocumentSnapshot doc) {
@@ -20,6 +22,7 @@ class MarketAnalysis {
       title: data['title'] ?? '',
       body: data['body'] ?? '',
       createdAt: (data['createdAt'] as Timestamp).toDate(),
+      imageUrls: List<String>.from(data['imageUrls'] as List? ?? []),
     );
   }
 
@@ -27,5 +30,6 @@ class MarketAnalysis {
         'title': title,
         'body': body,
         'createdAt': Timestamp.fromDate(createdAt),
+        'imageUrls': imageUrls,
       };
 }

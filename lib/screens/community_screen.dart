@@ -12,6 +12,7 @@ import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
 import '../utils/dialogs.dart';
 import 'post_detail_screen.dart';
+import 'write_post_screen.dart';
 
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
@@ -443,17 +444,13 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
     final uid = auth.user!.uid;
     final nickname = await _firestoreService.getNickname(uid) ?? '익명';
     if (!mounted) return;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => _WritePostSheet(
-        uid: uid,
-        nickname: nickname,
-        firestoreService: _firestoreService,
-        onPosted: _refresh,
+    final posted = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WritePostScreen(uid: uid, nickname: nickname),
       ),
     );
+    if (posted == true && mounted) _refresh();
   }
 
   void _openPost(BuildContext context, Post post, AuthProvider auth) {
@@ -1257,138 +1254,6 @@ class _PostDetailSheetState extends State<_PostDetailSheet> {
         ),
       ),
     );
-  }
-}
-
-// ── 글쓰기 시트 ───────────────────────────────────────────────────────────────
-
-class _WritePostSheet extends StatefulWidget {
-  final String uid;
-  final String nickname;
-  final FirestoreService firestoreService;
-  final VoidCallback onPosted;
-
-  const _WritePostSheet({
-    required this.uid,
-    required this.nickname,
-    required this.firestoreService,
-    required this.onPosted,
-  });
-
-  @override
-  State<_WritePostSheet> createState() => _WritePostSheetState();
-}
-
-class _WritePostSheetState extends State<_WritePostSheet> {
-  final _titleCtrl = TextEditingController();
-  final _contentCtrl = TextEditingController();
-  bool _saving = false;
-
-  @override
-  void dispose() {
-    _titleCtrl.dispose();
-    _contentCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    final title = _titleCtrl.text.trim();
-    if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('제목을 입력해주세요')));
-      return;
-    }
-    setState(() => _saving = true);
-    try {
-      await widget.firestoreService.createPost(Post(
-        id: '',
-        uid: widget.uid,
-        nickname: widget.nickname,
-        title: title,
-        content: _contentCtrl.text.trim(),
-        likes: 0,
-        createdAt: DateTime.now(),
-      ));
-      if (mounted) {
-        Navigator.pop(context);
-        widget.onPosted();
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? const Color(0xFF0D1117) : Colors.white;
-    final bottomPad = MediaQuery.of(context).viewInsets.bottom;
-
-    final screenH = MediaQuery.of(context).size.height;
-
-    return SizedBox(
-      height: screenH * 0.88,
-      child: Container(
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + bottomPad),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 핸들
-          Center(child: Container(
-            width: 36, height: 4,
-            decoration: BoxDecoration(color: cs.onSurface.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(2)),
-          )),
-          const SizedBox(height: 20),
-          // 헤더
-          Row(children: [
-            Text('새 글 작성', style: GoogleFonts.inter(color: cs.onSurface, fontSize: 18, fontWeight: FontWeight.w800)),
-            const Spacer(),
-            _saving
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4ADE80)))
-                : TextButton(
-                    onPressed: _submit,
-                    child: Text('등록', style: GoogleFonts.inter(color: const Color(0xFF4ADE80), fontSize: 14, fontWeight: FontWeight.w700)),
-                  ),
-          ]),
-          const SizedBox(height: 16),
-          // 제목
-          TextField(
-            controller: _titleCtrl,
-            style: GoogleFonts.inter(color: cs.onSurface, fontSize: 15, fontWeight: FontWeight.w600),
-            decoration: InputDecoration(
-              hintText: '제목',
-              hintStyle: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.3), fontSize: 15),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.onSurface.withValues(alpha: 0.12))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.onSurface.withValues(alpha: 0.12))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF4ADE80))),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            ),
-          ),
-          const SizedBox(height: 12),
-          // 내용
-          Expanded(
-          child: TextField(
-            controller: _contentCtrl,
-            maxLines: null,
-            expands: true,
-            textAlignVertical: TextAlignVertical.top,
-            style: GoogleFonts.inter(color: cs.onSurface, fontSize: 14),
-            decoration: InputDecoration(
-              hintText: '내용을 입력해주세요',
-              hintStyle: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.3), fontSize: 14),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.onSurface.withValues(alpha: 0.12))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cs.onSurface.withValues(alpha: 0.12))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF4ADE80))),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            ),
-          )),
-        ],
-      ),
-    ));
   }
 }
 

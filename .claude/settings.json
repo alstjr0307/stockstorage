@@ -68,7 +68,22 @@
       "Bash(powershell -Command \"Get-ChildItem -Path ''C:\\\\'' -Filter ''flutter.bat'' -Recurse -Depth 4 -ErrorAction SilentlyContinue | Select-Object -First 3 FullName\")",
       "Bash(powershell -Command \"Set-Location ''C:\\\\Users\\\\alswp\\\\stockstorage''; & ''C:\\\\flutter\\\\bin\\\\flutter.bat'' packages pub get 2>&1 | Select-String ''firebase''\")",
       "Bash(where firebase:*)",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(flutter build:*)",
+      "Bash(ls /c/Users/alswp/flutter/bin/flutter*)",
+      "Bash(/c/flutter/bin/flutter build:*)",
+      "Bash(git -C /c/Users/alswp/stockstorage remote get-url origin)",
+      "Bash(git push:*)",
+      "WebFetch(domain:imjaden.tistory.com)",
+      "Bash(git reset:*)",
+      "Bash(git rm:*)",
+      "Bash(/c/Users/alswp/flutter/bin/flutter pub:*)",
+      "Bash(cmd.exe /c \"dart pub get\")",
+      "Bash(grep -r \"sizedImageBuilder\\\\|MarkdownSizedImageBuilder\\\\|MarkdownImageConfig\" c:/Users/alswp/stockstorage/.dart_tool --include=*.dart -l)",
+      "Bash(find /c/Users/alswp/AppData -path */flutter_markdown* -name *.dart)",
+      "Bash(find /c/Users/alswp -path */flutter_markdown/lib/*.dart)",
+      "Bash(grep -n \"sizedImageBuilder\\\\|MarkdownSizedImageBuilder\\\\|MarkdownImageConfig\" /c/Users/alswp/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_markdown-0.7.7+1/lib/*.dart)",
+      "Bash(grep -n \"class MarkdownImageConfig\" /c/Users/alswp/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_markdown-0.7.7+1/lib/src/*.dart)"
     ],
     "additionalDirectories": [
       "C:\\Users\\alswp\\Downloads"

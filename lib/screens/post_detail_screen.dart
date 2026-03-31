@@ -1,4 +1,6 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -154,6 +156,29 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     }
   }
 
+  void _showImageFullscreen(BuildContext context, String url) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.black,
+            leading: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              child: CachedNetworkImage(imageUrl: url, fit: BoxFit.contain),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _deleteComment(String commentId) async {
     await _firestoreService.deletePostComment(widget.post.id, commentId);
   }
@@ -305,16 +330,102 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         const SizedBox(height: 20),
                         Divider(color: cs.onSurface.withValues(alpha: 0.07), height: 1),
                         const SizedBox(height: 20),
-                        // 본문
+                        // 본문 (마크다운 렌더링)
                         if (widget.post.content.isNotEmpty)
-                          Text(
-                            widget.post.content,
-                            style: GoogleFonts.inter(
-                              color: cs.onSurface.withValues(alpha: 0.9),
-                              fontSize: 15,
-                              height: 1.8,
+                          MarkdownBody(
+                            data: widget.post.content,
+                            sizedImageBuilder: (config) => Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: GestureDetector(
+                                onTap: () => _showImageFullscreen(
+                                    context, config.uri.toString()),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: CachedNetworkImage(
+                                    imageUrl: config.uri.toString(),
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                    placeholder: (_, _) => Container(
+                                      height: 180,
+                                      color: cs.onSurface.withValues(alpha: 0.05),
+                                      child: const Center(
+                                        child: CircularProgressIndicator(
+                                            color: Color(0xFF4ADE80),
+                                            strokeWidth: 2),
+                                      ),
+                                    ),
+                                    errorWidget: (_, _, _) => const SizedBox(),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            styleSheet: MarkdownStyleSheet(
+                              p: GoogleFonts.inter(
+                                color: cs.onSurface.withValues(alpha: 0.9),
+                                fontSize: 15,
+                                height: 1.8,
+                              ),
+                              strong: GoogleFonts.inter(
+                                color: cs.onSurface,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                height: 1.8,
+                              ),
+                              em: GoogleFonts.inter(
+                                color: cs.onSurface.withValues(alpha: 0.9),
+                                fontSize: 15,
+                                fontStyle: FontStyle.italic,
+                                height: 1.8,
+                              ),
+                              del: GoogleFonts.inter(
+                                color: cs.onSurface.withValues(alpha: 0.5),
+                                fontSize: 15,
+                                decoration: TextDecoration.lineThrough,
+                                height: 1.8,
+                              ),
+                              listBullet: GoogleFonts.inter(
+                                color: cs.onSurface.withValues(alpha: 0.9),
+                                fontSize: 15,
+                                height: 1.8,
+                              ),
+                            ),
+                            shrinkWrap: true,
+                            softLineBreak: true,
+                          ),
+                        // 첨부 이미지
+                        if (widget.post.imageUrls.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          ...widget.post.imageUrls.map(
+                            (url) => Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: GestureDetector(
+                                onTap: () => _showImageFullscreen(context, url),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: CachedNetworkImage(
+                                    imageUrl: url,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                    placeholder: (_, _) => Container(
+                                      height: 180,
+                                      color: cs.onSurface.withValues(alpha: 0.05),
+                                      child: const Center(
+                                        child: CircularProgressIndicator(
+                                            color: Color(0xFF4ADE80), strokeWidth: 2),
+                                      ),
+                                    ),
+                                    errorWidget: (_, _, _) => Container(
+                                      height: 100,
+                                      color: cs.onSurface.withValues(alpha: 0.05),
+                                      child: Icon(Icons.broken_image_outlined,
+                                          color: cs.onSurface.withValues(alpha: 0.3)),
+                                    ),
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
+                        ],
                         const SizedBox(height: 28),
                         // 좋아요
                         _LikeRow(
