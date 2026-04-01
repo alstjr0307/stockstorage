@@ -1,12 +1,14 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
-import 'dart:io';
 import 'package:share_plus/share_plus.dart';
+
 import '../services/stock_price_service.dart';
 
 class MarketSentimentScreen extends StatefulWidget {
@@ -17,7 +19,17 @@ class MarketSentimentScreen extends StatefulWidget {
 }
 
 class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
-  static const _sentimentIndices = [
+  final _captureKey = GlobalKey();
+  final Map<String, PriceResult?> _prices = {};
+
+  FearAndGreedResult? _fearAndGreed;
+  bool _loadingPrices = true;
+  bool _loadingFearAndGreed = true;
+  bool _capturing = false;
+  bool _showWatermark = false;
+  DateTime? _updatedAt;
+
+  static const _symbols = [
     ('VIX 공포지수', '^VIX'),
     ('미 10년 국채금리', '^TNX'),
     ('미 3개월 국채금리', '^IRX'),
@@ -26,36 +38,29 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
     ('금', 'GC=F'),
   ];
 
-  final Map<String, PriceResult?> _prices = {};
-  bool _loadingPrices = true;
-
-  FearAndGreedResult? _fearAndGreed;
-  bool _loadingFearAndGreed = true;
-
-  final _sentimentKey = GlobalKey();
-  bool _capturing = false;
-  bool _showWatermark = false;
-
   @override
   void initState() {
     super.initState();
-    _fetchAll();
+    _refresh();
   }
 
-  Future<void> _fetchAll() async {
+  Future<void> _refresh() async {
     await Future.wait([_fetchPrices(), _fetchFearAndGreed()]);
+    if (mounted) setState(() => _updatedAt = DateTime.now());
   }
 
   Future<void> _fetchPrices() async {
     if (mounted) setState(() => _loadingPrices = true);
     try {
-      await Future.wait(
-        _sentimentIndices.map((e) async {
-          final result = await StockPriceService.fetchPrice(e.$2, 'US');
-          if (mounted) setState(() => _prices[e.$1] = result);
-        }),
+      final results = await Future.wait(
+        _symbols.map((item) => StockPriceService.fetchPrice(item.$2, 'US')),
       );
-    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        for (var i = 0; i < _symbols.length; i++) {
+          _prices[_symbols[i].$1] = results[i];
+        }
+      });
     } finally {
       if (mounted) setState(() => _loadingPrices = false);
     }
@@ -64,12 +69,11 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
   Future<void> _fetchFearAndGreed() async {
     if (mounted) setState(() => _loadingFearAndGreed = true);
     final result = await StockPriceService.fetchFearAndGreed();
-    if (mounted) {
-      setState(() {
-        _fearAndGreed = result;
-        _loadingFearAndGreed = false;
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      _fearAndGreed = result;
+      _loadingFearAndGreed = false;
+    });
   }
 
   Future<void> _captureAndShare() async {
@@ -80,18 +84,15 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
     await Future.delayed(const Duration(milliseconds: 80));
     try {
       final boundary =
-          _sentimentKey.currentContext?.findRenderObject()
+          _captureKey.currentContext?.findRenderObject()
               as RenderRepaintBoundary?;
       if (boundary == null) return;
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) return;
-      final bytes = byteData.buffer.asUint8List();
+      final image = await boundary.toImage(pixelRatio: 3);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (data == null) return;
       final dir = await getTemporaryDirectory();
-      final file = File(
-        '${dir.path}/sentiment_${DateTime.now().millisecondsSinceEpoch}.png',
-      );
-      await file.writeAsBytes(bytes);
+      final file = File('${dir.path}/sentiment_${DateTime.now().millisecondsSinceEpoch}.png');
+      await file.writeAsBytes(data.buffer.asUint8List());
       await Share.shareXFiles([XFile(file.path)], text: '📊 주식저장소 시장 심리 지표');
     } finally {
       if (mounted) {
@@ -106,222 +107,178 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, color: cs.onSurface, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
         title: Text(
           '시장 심리 지표',
-          style: GoogleFonts.inter(
-            color: cs.onSurface,
-            fontWeight: FontWeight.w700,
-            fontSize: 17,
-          ),
+          style: GoogleFonts.inter(fontWeight: FontWeight.w700, color: cs.onSurface),
         ),
         centerTitle: true,
       ),
       body: RefreshIndicator(
         color: const Color(0xFF4ADE80),
-        backgroundColor: cs.surface,
-        onRefresh: _fetchAll,
+        onRefresh: _refresh,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
           children: [
             RepaintBoundary(
-              key: _sentimentKey,
+              key: _captureKey,
               child: Container(
+                width: double.infinity,
                 color: Theme.of(context).scaffoldBackgroundColor,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ── 헤더 ──
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_updatedAt != null) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.surface,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: cs.onSurface.withValues(alpha: 0.06),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.025),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
                         child: Row(
                           children: [
-                            Text(
-                              DateFormat('yyyy년 M월 d일').format(DateTime.now()),
-                              style: GoogleFonts.inter(
-                                color: cs.onSurface.withValues(alpha: 0.38),
-                                fontSize: 12,
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF4ADE80).withValues(
+                                  alpha: 0.14,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.schedule_rounded,
+                                size: 16,
+                                color: Color(0xFF15803D),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                '기준 : ${DateFormat('M월 d일 HH:mm').format(_updatedAt!)}',
+                                style: GoogleFonts.inter(
+                                  color: cs.onSurface.withValues(alpha: 0.78),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
-
-                      // ── 공포탐욕지수 ──
-                      _buildSectionLabel(context, '공포 & 탐욕'),
-                      const SizedBox(height: 8),
-                      _buildFearAndGreedCard(context),
-                      const SizedBox(height: 20),
-
-                      // ── 변동성 지표 ──
-                      _buildSectionLabel(context, '변동성'),
-                      const SizedBox(height: 8),
-                      _buildSentimentCard(
-                        context,
-                        name: 'VIX 공포지수',
-                        description:
-                            '시장 변동성 지수. 20 이상이면 불안감 고조, 30+ 이면 극도의 공포로 역발상 매수 기회 신호',
-                        unit: '',
-                      ),
-                      const SizedBox(height: 20),
-
-                      // ── 금리 지표 ──
-                      _buildSectionLabel(context, '금리'),
-                      const SizedBox(height: 8),
-                      _buildSentimentCard(
-                        context,
-                        name: '미 10년 국채금리',
-                        description:
-                            '금리 상승 시 성장주·기술주 하락 압박. 4% 이상이면 채권 매력이 주식 대비 높아짐',
-                        unit: '%',
-                      ),
-                      const SizedBox(height: 10),
-                      _buildDerivedCard(
-                        context,
-                        name: '장단기 금리차',
-                        description:
-                            '미 10년 국채금리에서 3개월 금리를 뺀 값. 음수(역전)이면 과거 경기침체 선행 신호로 주목받음',
-                        unit: '%p',
-                        getValue: () {
-                          final t10 = _prices['미 10년 국채금리']?.price;
-                          final t3m = _prices['미 3개월 국채금리']?.price;
-                          if (t10 == null || t3m == null) return null;
-                          return t10 - t3m;
-                        },
-                        getChange: () {
-                          final t10 = _prices['미 10년 국채금리'];
-                          final t3m = _prices['미 3개월 국채금리'];
-                          if (t10 == null || t3m == null) return null;
-                          final prevSpread =
-                              (t10.price - t10.change) -
-                              (t3m.price - t3m.change);
-                          final currSpread = t10.price - t3m.price;
-                          return currSpread - prevSpread;
-                        },
-                      ),
-                      const SizedBox(height: 20),
-
-                      // ── 경기 심리 ──
-                      _buildSectionLabel(context, '경기 심리'),
-                      const SizedBox(height: 8),
-                      _buildDerivedCard(
-                        context,
-                        name: '구리/금 비율',
-                        description:
-                            '구리는 경기민감, 금은 안전자산. 비율 상승은 경기 낙관 심리, 하락은 경기침체 우려를 나타냄',
-                        unit: '',
-                        getValue: () {
-                          final copper = _prices['구리']?.price;
-                          final gold = _prices['금']?.price;
-                          if (copper == null || gold == null || gold == 0) {
-                            return null;
-                          }
-                          return copper / gold * 1000;
-                        },
-                        getChange: () {
-                          final copper = _prices['구리'];
-                          final gold = _prices['금'];
-                          if (copper == null ||
-                              gold == null ||
-                              gold.price == 0) {
-                            return null;
-                          }
-                          final prevCopper = copper.price - copper.change;
-                          final prevGold = gold.price - gold.change;
-                          if (prevGold == 0) return null;
-                          final curr = copper.price / gold.price * 1000;
-                          final prev = prevCopper / prevGold * 1000;
-                          return curr - prev;
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      _buildSentimentCard(
-                        context,
-                        name: '달러 인덱스',
-                        description:
-                            '주요 6개국 통화 대비 달러 강세 지수. 상승 시 신흥국·원자재 약세, 달러 약세 시 위험자산 선호 증가',
-                        unit: '',
-                      ),
-
-                      // ── 워터마크 ──
-                      if (_showWatermark) ...[
-                        const SizedBox(height: 16),
-                        Center(
-                          child: RichText(
-                            text: TextSpan(
-                              children: [
-                                TextSpan(
-                                  text: '주식저장소',
-                                  style: GoogleFonts.inter(
-                                    color: const Color(0xFF4ADE80),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                TextSpan(
-                                  text: ' 앱에서 확인하세요 📈',
-                                  style: GoogleFonts.inter(
-                                    color: cs.onSurface.withValues(alpha: 0.4),
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ],
-                            ),
+                      const SizedBox(height: 12),
+                    ],
+                    _sectionLabel(context, '공포 & 탐욕'),
+                    const SizedBox(height: 8),
+                    _buildFearAndGreedCard(context),
+                    const SizedBox(height: 20),
+                    _sectionLabel(context, '변동성'),
+                    const SizedBox(height: 8),
+                    _buildMetricCard(
+                      context,
+                      title: 'VIX 공포지수',
+                      description:
+                          'S&P 500 옵션 가격으로 계산하는 대표 변동성 지수입니다. 보통 20 아래면 비교적 안정적이고, 30 이상이면 시장이 급격히 불안해진 상태로 해석하는 경우가 많습니다.',
+                      valueText: _priceText('VIX 공포지수', ''),
+                      changeText: _changeRateText('VIX 공포지수'),
+                    ),
+                    const SizedBox(height: 20),
+                    _sectionLabel(context, '금리'),
+                    const SizedBox(height: 8),
+                    _buildMetricCard(
+                      context,
+                      title: '미 10년 국채금리',
+                      description:
+                          '미국 장기 시장금리의 기준처럼 보는 지표입니다. 금리가 빠르게 오르면 성장주 밸류에이션 부담이 커질 수 있고, 반대로 하락하면 주식시장에 우호적으로 해석되기도 합니다.',
+                      valueText: _priceText('미 10년 국채금리', '%'),
+                      changeText: _changeRateText('미 10년 국채금리'),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildMetricCard(
+                      context,
+                      title: '장단기 금리차',
+                      description:
+                          '미 10년물 금리에서 3개월물 금리를 뺀 값입니다. 이 수치가 마이너스가 되면 금리 역전으로 보며, 경기 둔화나 침체 우려 신호로 자주 언급됩니다.',
+                      valueText: _spreadValue(),
+                      changeText: _spreadChange(),
+                    ),
+                    const SizedBox(height: 20),
+                    _sectionLabel(context, '경기 심리'),
+                    const SizedBox(height: 8),
+                    _buildMetricCard(
+                      context,
+                      title: '구리/금 비율',
+                      description:
+                          '구리는 경기민감 자산, 금은 대표 안전자산으로 자주 비교됩니다. 비율이 오르면 경기 회복 기대가 강해지고, 내려가면 방어 심리나 둔화 우려가 커진 것으로 해석할 수 있습니다.',
+                      valueText: _copperGoldValue(),
+                      changeText: _copperGoldChange(),
+                    ),
+                    const SizedBox(height: 10),
+                    _buildMetricCard(
+                      context,
+                      title: '달러 인덱스',
+                      description:
+                          '주요 6개 통화 대비 달러의 상대 강도를 보여주는 지수입니다. 달러가 강해지면 신흥국 자산과 원자재에 부담이 생기기 쉽고, 약해지면 위험자산 선호가 살아나는 흐름이 나타나기도 합니다.',
+                      valueText: _priceText('달러 인덱스', ''),
+                      changeText: _changeRateText('달러 인덱스'),
+                    ),
+                    if (_showWatermark) ...[
+                      const SizedBox(height: 16),
+                      Center(
+                        child: Text(
+                          '주식저장소 앱에서 확인하세요',
+                          style: GoogleFonts.inter(
+                            color: cs.onSurface.withValues(alpha: 0.4),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                      ],
+                      ),
                     ],
-                  ),
+                  ],
                 ),
               ),
             ),
-
             const SizedBox(height: 20),
-            // ── 캡처 공유 버튼 ──
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _capturing ? null : _captureAndShare,
-                icon: _capturing
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Color(0xFF4ADE80),
-                        ),
-                      )
-                    : const Icon(
-                        Icons.camera_alt_outlined,
-                        size: 18,
-                        color: Color(0xFF4ADE80),
-                      ),
-                label: Text(
-                  _capturing ? '캡처 중...' : '캡처해서 공유하기',
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF4ADE80),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  side: const BorderSide(color: Color(0xFF4ADE80), width: 1.2),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
+            FilledButton.icon(
+              onPressed: _capturing ? null : _captureAndShare,
+              icon: _capturing
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                    )
+                  : const Icon(Icons.camera_alt_outlined, color: Colors.black),
+              label: Text(
+                _capturing ? '캡처 중...' : '캡처해서 공유하기',
+                style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.w800),
+              ),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF4ADE80),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
               ),
             ),
           ],
@@ -330,62 +287,45 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
     );
   }
 
-  Widget _buildSectionLabel(BuildContext context, String label) {
+  Widget _sectionLabel(BuildContext context, String text) {
     final cs = Theme.of(context).colorScheme;
-    return Text(
-      label.toUpperCase(),
-      style: GoogleFonts.inter(
-        color: cs.onSurface.withValues(alpha: 0.4),
-        fontSize: 11,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.0,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF4ADE80).withValues(alpha: 0.16),
+            cs.surface,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFF4ADE80).withValues(alpha: 0.18),
+        ),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.inter(
+          color: cs.onSurface,
+          fontSize: 13,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.1,
+        ),
       ),
     );
   }
 
   Widget _buildFearAndGreedCard(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.onSurface.withValues(alpha: 0.07)),
-      ),
-      child: _loadingFearAndGreed
-          ? const SizedBox(
-              height: 80,
-              child: Center(
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Color(0xFF4ADE80),
-                ),
-              ),
-            )
-          : _fearAndGreed == null
-          ? SizedBox(
-              height: 80,
-              child: Center(
-                child: Text(
-                  '데이터 없음',
-                  style: GoogleFonts.inter(
-                    color: cs.onSurface.withValues(alpha: 0.38),
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            )
-          : _buildFearAndGreedContent(context, _fearAndGreed!, cs),
-    );
-  }
+    if (_loadingFearAndGreed) {
+      return _SurfaceCard(child: const SizedBox(height: 80, child: Center(child: CircularProgressIndicator(color: Color(0xFF4ADE80)))));
+    }
+    if (_fearAndGreed == null) {
+      return _SurfaceCard(child: SizedBox(height: 80, child: Center(child: Text('데이터 없음', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4))))));
+    }
 
-  Widget _buildFearAndGreedContent(
-    BuildContext context,
-    FearAndGreedResult fg,
-    ColorScheme cs,
-  ) {
+    final fg = _fearAndGreed!;
     final color = _fearAndGreedColor(fg.score);
-    final label = _fearAndGreedLabel(fg.rating);
     final comparisons = [
       ('전일', fg.previousClose),
       ('1주전', fg.previousWeek),
@@ -393,392 +333,173 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
       ('1년전', fg.previousYear),
     ];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              '공포탐욕지수',
-              style: GoogleFonts.inter(
-                color: cs.onSurface.withValues(alpha: 0.54),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
-              ),
-            ),
-            const Spacer(),
-            Text(
-              'S&P 500 기준 · CNN',
-              style: GoogleFonts.inter(
-                color: cs.onSurface.withValues(alpha: 0.3),
-                fontSize: 11,
-              ),
-            ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () => Share.share(
-                '😱 CNN 공포탐욕지수 (S&P 500 기준)\n'
-                '━━━━━━━━━━━━━━━━━━\n'
-                '현재: ${fg.score.toStringAsFixed(0)} · $label\n\n'
-                '전일:  ${fg.previousClose.toStringAsFixed(0)}\n'
-                '1주전: ${fg.previousWeek.toStringAsFixed(0)}\n'
-                '1달전: ${fg.previousMonth.toStringAsFixed(0)}\n'
-                '1년전: ${fg.previousYear.toStringAsFixed(0)}\n'
-                '━━━━━━━━━━━━━━━━━━\n'
-                '주식저장소 앱에서 시장 심리를 확인하세요 📈',
-              ),
-              child: Icon(
-                Icons.share_outlined,
-                size: 16,
-                color: cs.onSurface.withValues(alpha: 0.35),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        // 반원 게이지
-        Center(
-          child: Column(
+    return _SurfaceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              SizedBox(
-                width: 220,
-                height: 115,
-                child: CustomPaint(
-                  painter: SemicircleGaugePainter(
-                    score: fg.score,
-                    trackColor: cs.onSurface.withValues(alpha: 0.08),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
+                child: Text('공포탐욕지수', style: GoogleFonts.inter(color: color, fontSize: 11, fontWeight: FontWeight.w800)),
+              ),
+              const Spacer(),
+              Text('S&P 500 기준 · CNN', style: GoogleFonts.inter(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.35))),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Center(
+            child: Column(
+              children: [
+                SizedBox(
+                  width: 240,
+                  height: 122,
+                  child: CustomPaint(
+                    painter: SemicircleGaugePainter(score: fg.score, trackColor: cs.onSurface.withValues(alpha: 0.08)),
                   ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                fg.score.toStringAsFixed(0),
-                style: GoogleFonts.inter(
-                  color: color,
-                  fontSize: 44,
-                  fontWeight: FontWeight.w800,
-                  height: 1,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: GoogleFonts.inter(
-                  color: color,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
+                Text(fg.score.toStringAsFixed(0), style: GoogleFonts.inter(color: color, fontSize: 44, fontWeight: FontWeight.w800, height: 1)),
+                const SizedBox(height: 4),
+                Text(_fearAndGreedLabel(fg.rating), style: GoogleFonts.inter(color: color, fontSize: 14, fontWeight: FontWeight.w700)),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 4),
-
-        // 구간 라벨
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '극도 공포',
-                style: GoogleFonts.inter(
-                  color: cs.onSurface.withValues(alpha: 0.3),
-                  fontSize: 10,
-                ),
-              ),
-              Text(
-                '극도 탐욕',
-                style: GoogleFonts.inter(
-                  color: cs.onSurface.withValues(alpha: 0.3),
-                  fontSize: 10,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // 비교 칩
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: comparisons.map((c) {
-            final prev = c.$2;
-            final isUp = fg.score >= prev;
-            final chipColor = isUp ? const Color(0xFF4ADE80) : Colors.redAccent;
-            return Expanded(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 2),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                decoration: BoxDecoration(
-                  color: cs.onSurface.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: comparisons.map((item) {
+              final isUp = fg.score >= item.$2;
+              final chipColor = isUp ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
+              return Container(
+                width: 72,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                decoration: BoxDecoration(color: cs.onSurface.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12)),
                 child: Column(
                   children: [
-                    Text(
-                      c.$1,
-                      style: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.45),
-                        fontSize: 10,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '${isUp ? '▲' : '▼'} ${prev.toStringAsFixed(0)}',
-                      style: GoogleFonts.inter(
-                        color: chipColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    Text(item.$1, style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w700, color: cs.onSurface.withValues(alpha: 0.45))),
+                    const SizedBox(height: 4),
+                    Text('${isUp ? '▲' : '▼'} ${item.$2.toStringAsFixed(0)}', style: GoogleFonts.inter(fontSize: 10, fontWeight: FontWeight.w800, color: chipColor)),
                   ],
                 ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSentimentCard(
-    BuildContext context, {
-    required String name,
-    required String description,
-    required String unit,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    final result = _prices[name];
-    final isUp = result?.isUp ?? true;
-    final color = isUp ? const Color(0xFF4ADE80) : Colors.redAccent;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.onSurface.withValues(alpha: 0.07)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                name,
-                style: GoogleFonts.inter(
-                  color: cs.onSurface,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
-              const Spacer(),
-              if (_loadingPrices)
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 1.5,
-                    color: Color(0xFF4ADE80),
-                  ),
-                )
-              else if (result == null)
-                Text(
-                  '--',
-                  style: GoogleFonts.inter(
-                    color: cs.onSurface.withValues(alpha: 0.38),
-                    fontSize: 18,
-                  ),
-                )
-              else
-                Text(
-                  '${result.price.toStringAsFixed(2)}$unit',
-                  style: GoogleFonts.inter(
-                    color: cs.onSurface,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 20,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Text(
-                  description,
-                  style: GoogleFonts.inter(
-                    color: cs.onSurface.withValues(alpha: 0.45),
-                    fontSize: 11,
-                    height: 1.5,
-                  ),
-                ),
-              ),
-              if (result != null) ...[
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        '${isUp ? '+' : ''}${result.changeRate.toStringAsFixed(2)}%',
-                        style: GoogleFonts.inter(
-                          color: color,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '전일 대비',
-                      style: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.3),
-                        fontSize: 10,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
+              );
+            }).toList(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDerivedCard(
+  Widget _buildMetricCard(
     BuildContext context, {
-    required String name,
+    required String title,
     required String description,
-    required String unit,
-    required double? Function() getValue,
-    required double? Function() getChange,
+    required String valueText,
+    required String? changeText,
   }) {
     final cs = Theme.of(context).colorScheme;
-    final value = getValue();
-    final change = getChange();
-    final changeIsUp = change != null && change >= 0;
-    final changeColor = changeIsUp ? const Color(0xFF4ADE80) : Colors.redAccent;
+    final isPositive = changeText == null || !changeText.startsWith('-');
+    final color = isPositive ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.onSurface.withValues(alpha: 0.07)),
-      ),
+    return _SurfaceCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                name,
-                style: GoogleFonts.inter(
-                  color: cs.onSurface,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
-              ),
-              const Spacer(),
-              if (_loadingPrices)
-                const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 1.5,
-                    color: Color(0xFF4ADE80),
-                  ),
-                )
-              else if (value == null)
-                Text(
-                  '--',
-                  style: GoogleFonts.inter(
-                    color: cs.onSurface.withValues(alpha: 0.38),
-                    fontSize: 18,
-                  ),
-                )
-              else
-                Text(
-                  '${value >= 0 ? '+' : ''}${value.toStringAsFixed(2)}$unit',
-                  style: GoogleFonts.inter(
-                    color: cs.onSurface,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 20,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
+          Text(title, style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: cs.onSurface)),
+          const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
                 child: Text(
-                  description,
+                  valueText,
                   style: GoogleFonts.inter(
-                    color: cs.onSurface.withValues(alpha: 0.45),
-                    fontSize: 11,
-                    height: 1.5,
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w800,
+                    fontSize: valueText == '--' ? 18 : 28,
+                    height: 1,
                   ),
                 ),
               ),
-              if (value != null && change != null) ...[
-                const SizedBox(width: 10),
+              if (changeText != null) ...[
+                const SizedBox(width: 12),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: changeColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        '${changeIsUp ? '+' : ''}${change.toStringAsFixed(2)}$unit',
-                        style: GoogleFonts.inter(
-                          color: changeColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(color: color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(999)),
+                      child: Text(changeText, style: GoogleFonts.inter(color: color, fontSize: 11, fontWeight: FontWeight.w800)),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '전일 대비',
-                      style: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.3),
-                        fontSize: 10,
-                      ),
-                    ),
+                    const SizedBox(height: 4),
+                    Text('전일 대비', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.34), fontSize: 10, fontWeight: FontWeight.w700)),
                   ],
                 ),
               ],
             ],
           ),
+          const SizedBox(height: 10),
+          Text(description, style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 12, height: 1.55)),
         ],
       ),
     );
+  }
+
+  String _priceText(String key, String unit) {
+    if (_loadingPrices) return '...';
+    final result = _prices[key];
+    if (result == null) return '--';
+    return '${result.price.toStringAsFixed(2)}$unit';
+  }
+
+  String? _changeRateText(String key) {
+    if (_loadingPrices) return null;
+    final result = _prices[key];
+    if (result == null) return null;
+    return '${result.isUp ? '+' : ''}${result.changeRate.toStringAsFixed(2)}%';
+  }
+
+  String _spreadValue() {
+    if (_loadingPrices) return '...';
+    final t10 = _prices['미 10년 국채금리']?.price;
+    final t3m = _prices['미 3개월 국채금리']?.price;
+    if (t10 == null || t3m == null) return '--';
+    final value = t10 - t3m;
+    return '${value >= 0 ? '+' : ''}${value.toStringAsFixed(2)}%p';
+  }
+
+  String? _spreadChange() {
+    if (_loadingPrices) return null;
+    final t10 = _prices['미 10년 국채금리'];
+    final t3m = _prices['미 3개월 국채금리'];
+    if (t10 == null || t3m == null) return null;
+    final prevSpread = (t10.price - t10.change) - (t3m.price - t3m.change);
+    final currSpread = t10.price - t3m.price;
+    final change = currSpread - prevSpread;
+    return '${change >= 0 ? '+' : ''}${change.toStringAsFixed(2)}%p';
+  }
+
+  String _copperGoldValue() {
+    if (_loadingPrices) return '...';
+    final copper = _prices['구리']?.price;
+    final gold = _prices['금']?.price;
+    if (copper == null || gold == null || gold == 0) return '--';
+    return (copper / gold * 1000).toStringAsFixed(2);
+  }
+
+  String? _copperGoldChange() {
+    if (_loadingPrices) return null;
+    final copper = _prices['구리'];
+    final gold = _prices['금'];
+    if (copper == null || gold == null || gold.price == 0) return null;
+    final prevCopper = copper.price - copper.change;
+    final prevGold = gold.price - gold.change;
+    if (prevGold == 0) return null;
+    final curr = copper.price / gold.price * 1000;
+    final prev = prevCopper / prevGold * 1000;
+    final change = curr - prev;
+    return '${change >= 0 ? '+' : ''}${change.toStringAsFixed(2)}';
   }
 
   Color _fearAndGreedColor(double score) {
@@ -807,11 +528,108 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
   }
 }
 
+class _HeroCard extends StatelessWidget {
+  const _HeroCard({
+    required this.label,
+    required this.updatedAt,
+    required this.isDark,
+  });
+
+  final String label;
+  final DateTime? updatedAt;
+  final bool isDark;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? const [Color(0xFF102033), Color(0xFF111827), Color(0xFF16311F)]
+              : const [Color(0xFFEBFFF2), Color(0xFFF6FAFF), Color(0xFFEFFBF3)],
+        ),
+        border: Border.all(color: const Color(0xFF4ADE80).withValues(alpha: isDark ? 0.18 : 0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(color: const Color(0xFF4ADE80).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(999)),
+                child: Text('SENTIMENT SNAPSHOT', style: GoogleFonts.inter(color: const Color(0xFF15803D), fontSize: 11, fontWeight: FontWeight.w800)),
+              ),
+              const Spacer(),
+              if (updatedAt != null)
+                Text(
+                  DateFormat('오늘 HH:mm').format(updatedAt!),
+                  style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.55), fontSize: 11, fontWeight: FontWeight.w700),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            '시장의 온도와 위험 선호 흐름을\n한 번에 읽는 페이지예요.',
+            style: GoogleFonts.inter(color: cs.onSurface, fontSize: 22, fontWeight: FontWeight.w800, height: 1.35),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '공포탐욕지수, 변동성, 금리, 달러, 경기 민감 자산 흐름을 한 화면에서 정리했습니다.',
+            style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.62), fontSize: 13, height: 1.6),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(color: cs.onSurface.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(999)),
+            child: Text(label, style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.78), fontSize: 11, fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SurfaceCard extends StatelessWidget {
+  const _SurfaceCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
 class SemicircleGaugePainter extends CustomPainter {
+  const SemicircleGaugePainter({
+    required this.score,
+    required this.trackColor,
+  });
+
   final double score;
   final Color trackColor;
-
-  const SemicircleGaugePainter({required this.score, required this.trackColor});
 
   static const _segments = [
     (0.0, 0.25, Color(0xFFEF4444)),
@@ -822,8 +640,8 @@ class SemicircleGaugePainter extends CustomPainter {
   ];
 
   Color get _needleColor {
-    for (final s in _segments) {
-      if (score / 100 <= s.$2) return s.$3;
+    for (final segment in _segments) {
+      if (score / 100 <= segment.$2) return segment.$3;
     }
     return _segments.last.$3;
   }
@@ -838,7 +656,6 @@ class SemicircleGaugePainter extends CustomPainter {
     const sweepAngle = math.pi;
 
     final rect = Rect.fromCircle(center: Offset(cx, cy), radius: radius);
-
     canvas.drawArc(
       rect,
       startAngle,
@@ -852,10 +669,9 @@ class SemicircleGaugePainter extends CustomPainter {
     );
 
     final pct = (score / 100).clamp(0.0, 1.0);
-    for (final seg in _segments) {
-      final segStart = seg.$1;
-      final segEnd = seg.$2;
-      final segColor = seg.$3;
+    for (final segment in _segments) {
+      final segStart = segment.$1;
+      final segEnd = segment.$2;
       if (pct <= segStart) break;
       final drawEnd = pct < segEnd ? pct : segEnd;
       canvas.drawArc(
@@ -864,7 +680,7 @@ class SemicircleGaugePainter extends CustomPainter {
         sweepAngle * (drawEnd - segStart),
         false,
         Paint()
-          ..color = segColor
+          ..color = segment.$3
           ..style = PaintingStyle.stroke
           ..strokeWidth = strokeWidth
           ..strokeCap = StrokeCap.butt,
@@ -875,19 +691,17 @@ class SemicircleGaugePainter extends CustomPainter {
     final needleLen = radius - strokeWidth - 4;
     canvas.drawLine(
       Offset(cx, cy),
-      Offset(
-        cx + needleLen * math.cos(needleAngle),
-        cy + needleLen * math.sin(needleAngle),
-      ),
+      Offset(cx + needleLen * math.cos(needleAngle), cy + needleLen * math.sin(needleAngle)),
       Paint()
         ..color = _needleColor
         ..strokeWidth = 2.5
         ..strokeCap = StrokeCap.round,
     );
-
     canvas.drawCircle(Offset(cx, cy), 5, Paint()..color = _needleColor);
   }
 
   @override
-  bool shouldRepaint(SemicircleGaugePainter old) => old.score != score;
+  bool shouldRepaint(covariant SemicircleGaugePainter oldDelegate) {
+    return oldDelegate.score != score || oldDelegate.trackColor != trackColor;
+  }
 }

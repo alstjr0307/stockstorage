@@ -41,10 +41,14 @@ class NotificationService {
     const initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
     await _localNotifications.initialize(initSettings);
 
-    // FCM 토큰 저장 — iOS는 APNS 토큰이 없으면 건너뜀
+    // FCM 토큰 저장 — iOS는 APNS 토큰이 준비될 때까지 최대 5초 대기
     try {
       if (Platform.isIOS) {
-        final apnsToken = await messaging.getAPNSToken();
+        String? apnsToken;
+        for (int i = 0; i < 5 && apnsToken == null; i++) {
+          apnsToken = await messaging.getAPNSToken();
+          if (apnsToken == null) await Future.delayed(const Duration(seconds: 1));
+        }
         if (apnsToken != null) {
           final token = await messaging.getToken();
           if (token != null) {

@@ -28,9 +28,13 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, size: 18, color: cs.onSurface),
-          onPressed: () => Navigator.pop(context),
+        leadingWidth: 72,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16, top: 6, bottom: 6),
+          child: _TopActionButton(
+            icon: Icons.arrow_back_ios_new_rounded,
+            onTap: () => Navigator.pop(context),
+          ),
         ),
         title: Text(
           '시황 분석',
@@ -42,13 +46,12 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
         ),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: Icon(
-              Icons.share_outlined,
-              size: 20,
-              color: cs.onSurface.withValues(alpha: 0.65),
+          Padding(
+            padding: const EdgeInsets.only(right: 16, top: 6, bottom: 6),
+            child: _TopActionButton(
+              icon: Icons.share_outlined,
+              onTap: () => Share.share(_shareText()),
             ),
-            onPressed: () => Share.share(_shareText()),
           ),
         ],
       ),
@@ -321,6 +324,51 @@ class _MetaChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TopActionButton extends StatelessWidget {
+  const _TopActionButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Ink(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: cs.surface.withValues(alpha: isDark ? 0.74 : 0.92),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.04),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Icon(
+            icon,
+            size: 19,
+            color: cs.onSurface.withValues(alpha: 0.78),
+          ),
+        ),
       ),
     );
   }

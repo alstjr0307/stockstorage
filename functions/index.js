@@ -133,6 +133,69 @@ exports.sendCommentNotification = onDocumentCreated(
   }
 );
 
+// ── 자유게시판 댓글 알림 (새 댓글 → 게시글 작성자에게 푸시) ──────────────────
+exports.sendPostCommentNotification = onDocumentCreated(
+  { document: 'posts/{postId}/comments/{commentId}', region: 'asia-northeast3' },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const { uid: commenterUid, nickname, content } = data;
+    const { postId } = event.params;
+    const db = getFirestore();
+
+    // 게시글 조회 → 작성자 UID 확인
+    const postSnap = await db.collection('posts').doc(postId).get();
+    if (!postSnap.exists) return;
+
+    const postData = postSnap.data();
+    const authorUid = postData?.uid;
+
+    // 자기 글에 자기가 댓글 → 알림 없음
+    if (!authorUid || authorUid === commenterUid) return;
+
+    // 작성자 FCM 토큰 조회
+    const tokensSnap = await db.collection('fcm_tokens')
+      .where('uid', '==', authorUid).get();
+    const tokens = tokensSnap.docs
+      .map((d) => d.data().token)
+      .filter((t) => typeof t === 'string' && t.length > 0);
+    if (tokens.length === 0) return;
+
+    const senderName = nickname || '누군가';
+    const preview = content?.length > 30 ? content.slice(0, 30) + '…' : content;
+
+    const invalidTokens = [];
+    const chunkSize = 500;
+    for (let i = 0; i < tokens.length; i += chunkSize) {
+      const chunk = tokens.slice(i, i + chunkSize);
+      const response = await getMessaging().sendEachForMulticast({
+        notification: {
+          title: `💬 내 글에 댓글이 달렸어요`,
+          body: `${senderName}: ${preview}`,
+        },
+        data: { postId },
+        android: { notification: { sound: 'default', channelId: 'stockstorage_alerts' } },
+        apns: { payload: { aps: { sound: 'default' } } },
+        tokens: chunk,
+      });
+      response.responses.forEach((r, idx) => {
+        if (!r.success &&
+          (r.error?.code === 'messaging/invalid-registration-token' ||
+           r.error?.code === 'messaging/registration-token-not-registered')) {
+          invalidTokens.push(chunk[idx]);
+        }
+      });
+    }
+
+    if (invalidTokens.length > 0) {
+      await Promise.all(
+        invalidTokens.map((t) => db.collection('fcm_tokens').doc(t).delete())
+      );
+    }
+  }
+);
+
 // ── 펨코지수: 30분마다 에펨코리아 주식게시판 글 수 수집 ──────────────────────
 exports.crawlFemcoIndex = onSchedule(
   { schedule: 'every 30 minutes', region: 'asia-northeast3', timeoutSeconds: 60 },

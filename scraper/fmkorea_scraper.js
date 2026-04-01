@@ -1,5 +1,6 @@
 const puppeteerExtra = require('puppeteer-extra');
 const admin = require('firebase-admin');
+const https = require('https');
 
 let serviceAccount;
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
@@ -11,7 +12,7 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT) {
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
-const DAYS_BACK = Number(process.env.DAYS_BACK || 30);
+const DAYS_BACK = Number(process.env.DAYS_BACK || 1);
 const COARSE_STEP = Number(process.env.COARSE_STEP || 1000);
 const CONCURRENCY = Number(process.env.CONCURRENCY || 10);
 const MAX_COARSE_PAGE = Number(process.env.MAX_COARSE_PAGE || 300000);
@@ -24,6 +25,150 @@ function pad2(n) {
 
 function formatDate(d) {
   return `${d.getFullYear()}.${pad2(d.getMonth() + 1)}.${pad2(d.getDate())}`;
+}
+
+function parseDateKey(dateKey) {
+  const [y, m, d] = dateKey.split('.').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function isWeekday(dateKey) {
+  const day = parseDateKey(dateKey).getDay();
+  return day >= 1 && day <= 5;
+}
+
+function pearson(xs, ys) {
+  if (xs.length !== ys.length || xs.length < 2) return null;
+  const meanX = xs.reduce((a, b) => a + b, 0) / xs.length;
+  const meanY = ys.reduce((a, b) => a + b, 0) / ys.length;
+  let numerator = 0;
+  let denomX = 0;
+  let denomY = 0;
+
+  for (let i = 0; i < xs.length; i += 1) {
+    const dx = xs[i] - meanX;
+    const dy = ys[i] - meanY;
+    numerator += dx * dy;
+    denomX += dx * dx;
+    denomY += dy * dy;
+  }
+
+  const denominator = Math.sqrt(denomX * denomY);
+  if (!denominator) return null;
+  return numerator / denominator;
+}
+
+function fetchJson(url) {
+  return new Promise((resolve, reject) => {
+    https
+      .get(
+        url,
+        { headers: { 'User-Agent': 'Mozilla/5.0' } },
+        (res) => {
+          let body = '';
+          res.on('data', (chunk) => {
+            body += chunk;
+          });
+          res.on('end', () => {
+            if (res.statusCode !== 200) {
+              reject(new Error(`status ${res.statusCode}`));
+              return;
+            }
+            resolve(JSON.parse(body));
+          });
+        }
+      )
+      .on('error', reject);
+  });
+}
+
+async function fetchKospiHistory() {
+  const json = await fetchJson(
+    'https://query1.finance.yahoo.com/v8/finance/chart/%5EKS11?interval=1d&range=3y'
+  );
+  const result = json.chart?.result?.[0];
+  if (!result) return [];
+
+  const timestamps = result.timestamp || [];
+  const closes = result.indicators?.quote?.[0]?.close || [];
+  const out = [];
+
+  for (let i = 0; i < timestamps.length && i < closes.length; i += 1) {
+    const close = closes[i];
+    if (typeof close !== 'number') continue;
+    const date = new Date((timestamps[i] + 9 * 60 * 60) * 1000);
+    out.push({
+      dateKey: `${date.getUTCFullYear()}.${pad2(date.getUTCMonth() + 1)}.${pad2(date.getUTCDate())}`,
+      close,
+    });
+  }
+
+  return out;
+}
+
+function previousWeekdayKey(dateKey) {
+  const cursor = parseDateKey(dateKey);
+  cursor.setDate(cursor.getDate() - 1);
+  while (cursor.getDay() === 0 || cursor.getDay() === 6) {
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return formatDate(cursor);
+}
+
+function buildSummary(entries, kospiHistory) {
+  if (!entries.length) return null;
+
+  const latest = entries[entries.length - 1];
+  const recentWeekdays = entries
+    .slice(0, -1)
+    .filter((entry) => isWeekday(entry.dateKey))
+    .slice(-20);
+
+  const average =
+    recentWeekdays.length > 0
+      ? recentWeekdays.reduce((sum, entry) => sum + entry.count, 0) / recentWeekdays.length
+      : null;
+  const avgDiff = average == null ? null : latest.count - average;
+  const avgDiffRate =
+    average == null || average === 0 ? null : (avgDiff / average) * 100;
+
+  const countByDate = Object.fromEntries(entries.map((entry) => [entry.dateKey, entry.count]));
+  const xs = [];
+  const ys = [];
+  const scatterPoints = [];
+
+  for (let i = 1; i < kospiHistory.length; i += 1) {
+    const current = kospiHistory[i];
+    const previous = kospiHistory[i - 1];
+    if (!previous.close) continue;
+
+    const prevDateKey = previousWeekdayKey(current.dateKey);
+    const postCount = countByDate[prevDateKey];
+    if (typeof postCount !== 'number') continue;
+
+    const changeRate = ((current.close - previous.close) / previous.close) * 100;
+    xs.push(postCount);
+    ys.push(changeRate);
+    scatterPoints.push({
+      x: postCount,
+      y: Number(changeRate.toFixed(3)),
+      dateKey: current.dateKey,
+    });
+  }
+
+  const correlation = pearson(xs, ys);
+
+  return {
+    latestDateKey: latest.dateKey,
+    latestCount: latest.count,
+    recent20WeekdayAverage: average == null ? null : Number(average.toFixed(2)),
+    recent20WeekdayDiff: avgDiff == null ? null : Number(avgDiff.toFixed(2)),
+    recent20WeekdayDiffRate: avgDiffRate == null ? null : Number(avgDiffRate.toFixed(2)),
+    recent20WeekdaySampleCount: recentWeekdays.length,
+    correlation: correlation == null ? null : Number(correlation.toFixed(4)),
+    correlationSampleCount: xs.length,
+    scatterPoints: scatterPoints.slice(-120),
+  };
 }
 
 function buildTargetDateKeys(now, daysBack) {
@@ -389,6 +534,29 @@ async function saveCountsToFirestore(totalCounts) {
   }
 
   console.log(`[save] Firestore upsert complete: ${entries.length} day docs`);
+
+  const snap = await db.collection('fmkorea_index').orderBy(admin.firestore.FieldPath.documentId()).get();
+  const allEntries = snap.docs.map((doc) => ({
+    dateKey: doc.id,
+    count: Number(doc.data().count || 0),
+  }));
+
+  try {
+    const kospiHistory = await fetchKospiHistory();
+    const summary = buildSummary(allEntries, kospiHistory);
+    if (summary) {
+      await db.collection('fmkorea_index_meta').doc('summary').set(
+        {
+          ...summary,
+          updatedAt: nowTs,
+        },
+        { merge: true }
+      );
+      console.log('[save] summary doc updated');
+    }
+  } catch (err) {
+    console.error('[save] summary update failed', err.message);
+  }
 }
 
 async function run() {
