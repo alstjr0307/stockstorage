@@ -1,9 +1,14 @@
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../models/market_analysis.dart';
 import '../services/firestore_service.dart';
@@ -203,32 +208,18 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 6),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2),
-          child: Text(
-            '필요한 지표만 눌러서 상세 화면으로 바로 들어갈 수 있어요.',
-            style: GoogleFonts.inter(
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.52),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
         GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           crossAxisCount: 3,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
-          childAspectRatio: 0.86,
+          childAspectRatio: 0.74,
           children: [
             _IndicatorShortcutCard(
-              title: '마감수급',
-              subtitle: '수급 TOP5',
+              title: '외인 · 기관 수급',
+              subtitle: '외국인·기관 순매수\nTOP5 종목',
               icon: Icons.candlestick_chart_rounded,
               accent: const Color(0xFFF59E0B),
               onTap: () {
@@ -706,7 +697,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '매일 업데이트되는 시황 분석 글을 카드형으로 정리했습니다. 글을 누르면 상세 페이지에서 편하게 읽을 수 있습니다.',
+                    '등록된 시황 분석 글을 카드형으로 정리했습니다.',
                     style: GoogleFonts.inter(
                       color: cs.onSurface.withValues(alpha: 0.58),
                       fontSize: 12,
@@ -844,75 +835,29 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                       const SizedBox(height: 14),
                       Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: accent.withValues(alpha: 0.10),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              hasImage ? '이미지 포함' : '텍스트 중심',
-                              style: GoogleFonts.inter(
-                                color: accent,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
                           const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: cs.onSurface.withValues(alpha: 0.05),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  '자세히 보기',
-                                  style: GoogleFonts.inter(
-                                    color: cs.onSurface.withValues(alpha: 0.72),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '자세히 보기',
+                                style: GoogleFonts.inter(
+                                  color: cs.onSurface.withValues(alpha: 0.72),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
                                 ),
-                                const SizedBox(width: 6),
-                                Icon(
-                                  Icons.arrow_forward_rounded,
-                                  size: 14,
-                                  color: cs.onSurface.withValues(alpha: 0.52),
-                                ),
-                              ],
-                            ),
+                              ),
+                              const SizedBox(width: 6),
+                              Icon(
+                                Icons.arrow_forward_rounded,
+                                size: 14,
+                                color: cs.onSurface.withValues(alpha: 0.52),
+                              ),
+                            ],
                           ),
                         ],
                       ),
                     ],
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    gradient: LinearGradient(
-                      colors: [
-                        accent.withValues(alpha: 0.16),
-                        accent.withValues(alpha: 0.04),
-                      ],
-                    ),
-                  ),
-                  child: Icon(
-                    hasImage ? Icons.article_outlined : Icons.subject_rounded,
-                    color: accent.withValues(alpha: 0.9),
                   ),
                 ),
               ],
@@ -1054,15 +999,6 @@ class _InvestorFlowCard extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        Text(
-          '코스피와 코스닥에서 외국인과 기관이 많이 담은 종목을 마감 기준으로 정리했습니다.',
-          style: GoogleFonts.inter(
-            color: cs.onSurface.withValues(alpha: 0.54),
-            fontSize: 12,
-            height: 1.5,
-          ),
-        ),
         const SizedBox(height: 16),
         _InvestorFlowMarketBlock(
           marketLabel: 'KOSPI',
@@ -1174,7 +1110,7 @@ class _IndicatorShortcutCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 subtitle,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
                   color: cs.onSurface.withValues(alpha: 0.52),
@@ -1240,15 +1176,163 @@ class _IndicatorDetailScaffold extends StatelessWidget {
   }
 }
 
-class _InvestorFlowDetailScreen extends StatelessWidget {
+class _InvestorFlowDetailScreen extends StatefulWidget {
   const _InvestorFlowDetailScreen();
 
   @override
+  State<_InvestorFlowDetailScreen> createState() =>
+      _InvestorFlowDetailScreenState();
+}
+
+class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
+  final _captureKey = GlobalKey();
+  bool _capturing = false;
+  bool _showWatermark = false;
+
+  String _shareText() {
+    return '주식저장소 마감수급\n\n'
+        '외국인과 기관이 가장 많이 순매수한 종목을 한눈에 확인해보세요.\n\n'
+        'https://stockstorage-13828.web.app';
+  }
+
+  Future<void> _captureAndShare() async {
+    if (_capturing) return;
+
+    setState(() {
+      _capturing = true;
+      _showWatermark = true;
+    });
+
+    await Future.delayed(const Duration(milliseconds: 80));
+
+    try {
+      final boundary =
+          _captureKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary == null) return;
+
+      final image = await boundary.toImage(pixelRatio: 3);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (data == null) return;
+
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/investor_flow_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
+      await file.writeAsBytes(data.buffer.asUint8List());
+
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: '주식저장소 마감수급',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _capturing = false;
+          _showWatermark = false;
+        });
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return const _IndicatorDetailScaffold(
-      title: '마감수급',
-      subtitle: '외국인과 기관 매매 상위 종목',
-      child: _InvestorFlowCard(),
+    final cs = Theme.of(context).colorScheme;
+
+    return Scaffold(
+      appBar: AppBar(
+        titleSpacing: 0,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '마감수급',
+              style: GoogleFonts.inter(
+                color: cs.onSurface,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            Text(
+              '외국인과 기관이 가장 많이 순매수한 종목',
+              style: GoogleFonts.inter(
+                color: cs.onSurface.withValues(alpha: 0.54),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: '공유하기',
+            onPressed: () => Share.share(_shareText()),
+            icon: const Icon(Icons.share_outlined),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          children: [
+            RepaintBoundary(
+              key: _captureKey,
+              child: Container(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                child: Column(
+                  children: [
+                    const _InvestorFlowCard(),
+                    if (_showWatermark) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        '주식저장소 앱에서 확인하세요.',
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.4),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _capturing ? null : _captureAndShare,
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF4ADE80),
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+                icon: _capturing
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.black,
+                        ),
+                      )
+                    : const Icon(Icons.image_outlined, size: 20),
+                label: Text(
+                  '캡처해서 공유하기',
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
