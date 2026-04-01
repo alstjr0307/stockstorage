@@ -1,7 +1,10 @@
-const puppeteer = require('puppeteer');
+const puppeteerExtra = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const admin = require('firebase-admin');
 
-// Firebase 초기화 (GitHub Secret → 환경변수로 전달)
+puppeteerExtra.use(StealthPlugin());
+
+// Firebase 초기화
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -23,11 +26,13 @@ async function scrapePage(page, pageNum) {
   console.log(`페이지 ${pageNum} 로딩: ${url}`);
   await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
 
-  // td.time 요소가 나타날 때까지 대기 (최대 10초)
+  // td.time 요소가 나타날 때까지 대기 (최대 15초)
   try {
-    await page.waitForSelector('td.time', { timeout: 10000 });
+    await page.waitForSelector('td.time', { timeout: 15000 });
   } catch (_) {
-    console.log(`페이지 ${pageNum}: td.time 없음 (공지만 있는 페이지거나 로드 실패)`);
+    // 실제 HTML 샘플 출력해서 디버깅
+    const sample = await page.evaluate(() => document.body.innerHTML.substring(0, 500));
+    console.log(`페이지 ${pageNum}: td.time 없음. HTML 앞부분: ${sample}`);
     return [];
   }
 
@@ -68,16 +73,23 @@ function parseTimes(timesList, today, cutoff) {
 }
 
 async function run() {
-  const browser = await puppeteer.launch({
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  const browser = await puppeteerExtra.launch({
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-blink-features=AutomationControlled',
+    ],
     headless: true,
   });
 
   try {
     const page = await browser.newPage();
-    await page.setUserAgent(
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-    );
+
+    // 실제 브라우저처럼 viewport 설정
+    await page.setViewport({ width: 1280, height: 800 });
+    await page.setExtraHTTPHeaders({
+      'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+    });
 
     const today = new Date();
     const cutoff = new Date(today);
@@ -86,10 +98,14 @@ async function run() {
     const totalCounts = {};
     let hitCutoff = false;
 
-    // 첫 페이지: 봇 감지 쿠키 세팅용 (결과도 수집)
+    // 첫 페이지: 봇 감지 쿠키 세팅용
     console.log('첫 페이지 로딩 (봇 감지 통과용)...');
     await page.goto('https://www.fmkorea.com/stock', { waitUntil: 'networkidle2', timeout: 30000 });
-    await new Promise(r => setTimeout(r, 2000)); // 봇 감지 JS 실행 대기
+    await new Promise(r => setTimeout(r, 3000));
+
+    // 봇 감지 통과 확인
+    const title = await page.title();
+    console.log('페이지 타이틀:', title);
 
     for (let p = 1; p <= MAX_PAGES && !hitCutoff; p++) {
       const times = await scrapePage(page, p);
@@ -102,11 +118,17 @@ async function run() {
       hitCutoff = h;
 
       if (!hitCutoff && p < MAX_PAGES) {
-        await new Promise(r => setTimeout(r, 1000)); // 요청 간 간격
+        await new Promise(r => setTimeout(r, 1500));
       }
     }
 
     console.log('수집된 날짜:', Object.keys(totalCounts).sort());
+    console.log('날짜별 카운트:', JSON.stringify(totalCounts));
+
+    if (Object.keys(totalCounts).length === 0) {
+      console.log('데이터 없음 - Firestore 저장 건너뜀');
+      return;
+    }
 
     // Firestore 저장
     const batch = db.batch();
