@@ -128,6 +128,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final text = _commentCtrl.text.trim();
     final auth = context.read<AuthProvider>();
     if (text.isEmpty || !auth.isLoggedIn) return;
+    final focusScope = FocusScope.of(context);
     setState(() => _sending = true);
     try {
       await _firestoreService.addPostComment(
@@ -142,6 +143,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       );
       AnalyticsService.instance.logWriteCommunityComment('post');
       _commentCtrl.clear();
+      focusScope.unfocus();
       // 댓글 작성 후 맨 아래로 스크롤
       await Future.delayed(const Duration(milliseconds: 200));
       if (_scrollCtrl.hasClients) {
@@ -210,7 +212,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final auth = context.watch<AuthProvider>();
 
-    return Scaffold(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
       backgroundColor: cs.surface,
       appBar: AppBar(
         backgroundColor: cs.surface,
@@ -514,6 +518,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             onSubmit: _submitComment,
           ),
         ],
+      ),
       ),
     );
   }

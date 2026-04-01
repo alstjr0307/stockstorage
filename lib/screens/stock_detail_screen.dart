@@ -453,7 +453,9 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     final isPositive = returnRate >= 0;
     final isKorean = pick.market == 'KS' || pick.market == 'KQ';
 
-    return Scaffold(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -992,6 +994,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -2232,6 +2235,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   Future<void> _submitComment(User user) async {
     final text = _commentController.text.trim();
     if (text.isEmpty || _submitting) return;
+    final focusScope = FocusScope.of(context);
     setState(() => _submitting = true);
     try {
       final nickname =
@@ -2249,7 +2253,10 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         ),
       );
       AnalyticsService.instance.logAddComment(widget.pick.ticker);
-      if (mounted) _commentController.clear();
+      if (mounted) {
+        _commentController.clear();
+        focusScope.unfocus();
+      }
     } catch (_) {
       // 권한 오류 등 — 실패해도 UI 잠김 방지
     } finally {

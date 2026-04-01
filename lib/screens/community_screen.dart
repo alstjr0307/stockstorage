@@ -54,8 +54,8 @@ class _CommunityScreenState extends State<CommunityScreen>
             indicatorColor: const Color(0xFF4ADE80),
             indicatorWeight: 2,
             tabs: const [
-              Tab(text: '매매일지 공유'),
               Tab(text: '자유게시판'),
+              Tab(text: '매매일지 공유'),
             ],
           ),
         ),
@@ -63,8 +63,8 @@ class _CommunityScreenState extends State<CommunityScreen>
           child: TabBarView(
             controller: _tabController,
             children: const [
-              _JournalTab(),
               _FreeBoardTab(),
+              _JournalTab(),
             ],
           ),
         ),

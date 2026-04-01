@@ -94,6 +94,17 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // ─── fmkorea_index: 읽기 전체, 쓰기 로그인 유저 (앱 캐시) ────────────
+    match /fmkorea_index/{docId} {
+      allow read: if true;
+      allow write: if isLoggedIn();
+    }
+
+    match /market_investor_flow/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // ─── night_futures_prices: 읽기 전체, 쓰기 Cloud Function(admin SDK)만 ──
     match /night_futures_prices/{docId} {
       allow read: if true;
