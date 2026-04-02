@@ -153,15 +153,15 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
     }
 
     return MarkdownStyleSheet(
-      p: body(16, 1.95),
+      p: body(14, 1.85),
       pPadding: const EdgeInsets.only(bottom: 14),
-      strong: body(16, 1.95, weight: FontWeight.w800).copyWith(color: cs.onSurface),
-      em: body(16, 1.95).copyWith(fontStyle: FontStyle.italic),
-      del: body(16, 1.95).copyWith(
+      strong: body(14, 1.85, weight: FontWeight.w800).copyWith(color: cs.onSurface),
+      em: body(14, 1.85).copyWith(fontStyle: FontStyle.italic),
+      del: body(14, 1.85).copyWith(
         color: cs.onSurface.withValues(alpha: 0.5),
         decoration: TextDecoration.lineThrough,
       ),
-      blockquote: body(15, 1.8).copyWith(
+      blockquote: body(13, 1.7).copyWith(
         color: cs.onSurface.withValues(alpha: 0.72),
       ),
       blockquoteDecoration: BoxDecoration(
@@ -170,15 +170,15 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
         border: Border.all(color: const Color(0xFF4ADE80).withValues(alpha: 0.16)),
       ),
       blockquotePadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      h1: body(26, 1.4, weight: FontWeight.w800).copyWith(color: cs.onSurface),
-      h2: body(22, 1.45, weight: FontWeight.w800).copyWith(color: cs.onSurface),
-      h3: body(19, 1.5, weight: FontWeight.w700).copyWith(color: cs.onSurface),
+      h1: body(23, 1.3, weight: FontWeight.w800).copyWith(color: cs.onSurface),
+      h2: body(19, 1.35, weight: FontWeight.w800).copyWith(color: cs.onSurface),
+      h3: body(17, 1.4, weight: FontWeight.w700).copyWith(color: cs.onSurface),
       h1Padding: const EdgeInsets.only(top: 10, bottom: 12),
       h2Padding: const EdgeInsets.only(top: 8, bottom: 10),
       h3Padding: const EdgeInsets.only(top: 8, bottom: 8),
       code: GoogleFonts.jetBrainsMono(
         color: cs.onSurface,
-        fontSize: 13.5,
+        fontSize: 12.5,
         height: 1.7,
         fontWeight: FontWeight.w500,
       ),
@@ -187,7 +187,7 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
       ),
       codeblockPadding: const EdgeInsets.all(16),
-      listBullet: body(16, 1.95),
+      listBullet: body(14, 1.85),
       horizontalRuleDecoration: BoxDecoration(
         border: Border(
           top: BorderSide(color: cs.onSurface.withValues(alpha: 0.08)),
@@ -243,7 +243,7 @@ class _HeroHeader extends StatelessWidget {
               ),
             ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(22, 22, 22, 24),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -257,21 +257,21 @@ class _HeroHeader extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 Text(
                   analysis.title,
                   style: GoogleFonts.inter(
                     color: cs.onSurface,
-                    fontSize: 28,
+                    fontSize: 24,
                     fontWeight: FontWeight.w800,
-                    height: 1.35,
-                    letterSpacing: -0.6,
+                    height: 1.3,
+                    letterSpacing: -0.4,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Container(
-                  width: 54,
-                  height: 4,
+                  width: 44,
+                  height: 3,
                   decoration: BoxDecoration(
                     color: accent,
                     borderRadius: BorderRadius.circular(999),
@@ -302,7 +302,7 @@ class _MetaChip extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: accent
             ? const Color(0xFF4ADE80).withValues(alpha: 0.14)
@@ -319,15 +319,15 @@ class _MetaChip extends StatelessWidget {
         children: [
           Icon(
             icon,
-            size: 14,
+            size: 13,
             color: accent ? const Color(0xFF1F9D55) : cs.onSurface.withValues(alpha: 0.7),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 5),
           Text(
             label,
             style: GoogleFonts.inter(
               color: cs.onSurface.withValues(alpha: 0.8),
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
           ),

@@ -927,7 +927,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                               dateLabel,
                               style: GoogleFonts.inter(
                                 color: cs.onSurface.withValues(alpha: 0.62),
-                                fontSize: 11,
+                                fontSize: 10,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -949,7 +949,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.inter(
                           color: cs.onSurface,
-                          fontSize: 16,
+                          fontSize: 15,
                           fontWeight: FontWeight.w800,
                           height: 1.3,
                         ),
@@ -961,7 +961,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.inter(
                           color: cs.onSurface.withValues(alpha: 0.58),
-                          fontSize: 12,
+                          fontSize: 11,
                           height: 1.5,
                         ),
                       ),
@@ -973,7 +973,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                               '이미지 포함',
                               style: GoogleFonts.inter(
                                 color: cs.onSurface.withValues(alpha: 0.42),
-                                fontSize: 11,
+                                fontSize: 10,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
