@@ -217,10 +217,111 @@ class FirestoreService {
     }).toList();
   }
 
+  Future<List<({String pickId, String text, DateTime createdAt})>>
+      getMyStockPickComments(String uid) {
+    return getMyComments(uid);
+  }
+
+  Future<List<({String postId, String text, DateTime createdAt})>>
+      getMyPostComments(String uid) async {
+    final mirroredSnap = await _db
+        .collection('users')
+        .doc(uid)
+        .collection('myPostComments')
+        .orderBy('createdAt', descending: true)
+        .get();
+
+    if (mirroredSnap.docs.isNotEmpty) {
+      return mirroredSnap.docs.map((doc) {
+        final data = doc.data();
+        return (
+          postId: data['postId'] as String? ?? '',
+          text: data['text'] as String? ?? '',
+          createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+        );
+      }).toList();
+    }
+
+    final items = <({String commentId, String postId, String text, DateTime createdAt})>[];
+
+    try {
+      final snap = await _db
+          .collectionGroup('comments')
+          .where('uid', isEqualTo: uid)
+          .get();
+
+      for (final doc in snap.docs) {
+        final parentDoc = doc.reference.parent.parent;
+        final rootCollection = parentDoc?.parent;
+        if (parentDoc == null || rootCollection?.id != 'posts') continue;
+        final data = doc.data();
+        items.add((
+          commentId: doc.id,
+          postId: parentDoc.id,
+          text: data['content'] as String? ?? '',
+          createdAt:
+              (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+        ));
+      }
+    } catch (_) {
+      final postsSnap = await _db.collection('posts').get();
+
+      for (final postDoc in postsSnap.docs) {
+        final commentsSnap = await postDoc.reference
+            .collection('comments')
+            .where('uid', isEqualTo: uid)
+            .get();
+
+        for (final commentDoc in commentsSnap.docs) {
+          final data = commentDoc.data();
+          items.add((
+            commentId: commentDoc.id,
+            postId: postDoc.id,
+            text: data['content'] as String? ?? '',
+            createdAt:
+                (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          ));
+        }
+      }
+    }
+
+    items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    if (items.isNotEmpty) {
+      final batch = _db.batch();
+      for (final item in items) {
+        batch.set(
+          _db.collection('users').doc(uid).collection('myPostComments').doc(item.commentId),
+          {
+            'postId': item.postId,
+            'text': item.text,
+            'createdAt': Timestamp.fromDate(item.createdAt),
+          },
+          SetOptions(merge: true),
+        );
+      }
+      await batch.commit();
+    }
+
+    return items
+        .map((item) => (
+              postId: item.postId,
+              text: item.text,
+              createdAt: item.createdAt,
+            ))
+        .toList();
+  }
+
   Future<StockPick?> getStockPickOnce(String id) async {
     final doc = await _db.collection('stock_picks').doc(id).get();
     if (!doc.exists) return null;
     return StockPick.fromFirestore(doc);
+  }
+
+  Future<Post?> getPostOnce(String id) async {
+    final doc = await _db.collection('posts').doc(id).get();
+    if (!doc.exists) return null;
+    return Post.fromFirestore(doc);
   }
 
   Future<MarketAnalysis?> getMarketAnalysisOnce(String id) async {
@@ -488,6 +589,18 @@ class FirestoreService {
     return (posts, lastDoc);
   }
 
+  Stream<List<Post>> getPostsByUid(String uid) {
+    return _db
+        .collection('posts')
+        .where('uid', isEqualTo: uid)
+        .snapshots()
+        .map((snap) {
+          final posts = snap.docs.map((d) => Post.fromFirestore(d)).toList();
+          posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          return posts;
+        });
+  }
+
   Future<void> createPost(Post post) {
     return _db.collection('posts').add(post.toFirestore());
   }
@@ -530,11 +643,33 @@ class FirestoreService {
   }
 
   Future<void> addPostComment(String postId, Comment comment) {
-    return _db.collection('posts').doc(postId).collection('comments').add(comment.toFirestore());
+    final commentRef = _db.collection('posts').doc(postId).collection('comments').doc();
+    final batch = _db.batch();
+    batch.set(commentRef, comment.toFirestore());
+    batch.set(
+      _db.collection('users').doc(comment.uid).collection('myPostComments').doc(commentRef.id),
+      {
+        'postId': postId,
+        'text': comment.content,
+        'createdAt': Timestamp.fromDate(comment.createdAt),
+      },
+    );
+    return batch.commit();
   }
 
-  Future<void> deletePostComment(String postId, String commentId) {
-    return _db.collection('posts').doc(postId).collection('comments').doc(commentId).delete();
+  Future<void> deletePostComment(String postId, String commentId) async {
+    final commentRef = _db.collection('posts').doc(postId).collection('comments').doc(commentId);
+    final commentSnap = await commentRef.get();
+    final commentUid = commentSnap.data()?['uid'] as String?;
+
+    final batch = _db.batch();
+    batch.delete(commentRef);
+    if (commentUid != null && commentUid.isNotEmpty) {
+      batch.delete(
+        _db.collection('users').doc(commentUid).collection('myPostComments').doc(commentId),
+      );
+    }
+    await batch.commit();
   }
 
   // ─── 매매일지 댓글 ────────────────────────────────────────────────────────

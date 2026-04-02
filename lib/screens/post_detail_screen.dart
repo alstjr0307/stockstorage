@@ -431,29 +431,18 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           ),
                         ],
                         const SizedBox(height: 28),
-                        // 좋아요
-                        _LikeRow(
-                          isLiked: _liked,
-                          count: _likeCount,
-                          onTap: _toggleLike,
+                        Row(
+                          children: [
+                            _LikeRow(
+                              isLiked: _liked,
+                              count: _likeCount,
+                              onTap: _toggleLike,
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 8),
                         Divider(color: cs.onSurface.withValues(alpha: 0.07), height: 1),
                       ],
-                    ),
-                  ),
-                ),
-                // 댓글 헤더
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                    child: Text(
-                      '댓글',
-                      style: GoogleFonts.inter(
-                        color: cs.onSurface,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
                     ),
                   ),
                 ),
@@ -472,38 +461,56 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                     final comments = (snap.data ?? [])
                         .where((c) => !_blockedCommentUids.contains(c.uid))
                         .toList();
-                    if (comments.isEmpty) {
-                      return SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 40),
-                          child: Center(
+                    final commentCount = comments.length;
+                    if (snap.connectionState != ConnectionState.waiting)
+                      return SliverMainAxisGroup(slivers: [
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
                             child: Text(
-                              '첫 댓글을 남겨보세요',
+                              '댓글 $commentCount',
                               style: GoogleFonts.inter(
-                                color: cs.onSurface.withValues(alpha: 0.3),
-                                fontSize: 13,
+                                color: cs.onSurface,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
                         ),
-                      );
-                    }
-                    return SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (_, i) {
-                          final c = comments[i];
-                          final isOwn = auth.user?.uid == c.uid;
-                          return _CommentTile(
-                            comment: c,
-                            isOwn: isOwn,
-                            onDelete: () => _deleteComment(c.id),
-                            onReport: (!isOwn && auth.isLoggedIn) ? () => _reportComment(c) : null,
-                            onBlock: (!isOwn && auth.isLoggedIn) ? () => _blockFromComment(c) : null,
-                          );
-                        },
-                        childCount: comments.length,
-                      ),
-                    );
+                        if (comments.isEmpty)
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 40),
+                              child: Center(
+                                child: Text(
+                                  '첫 댓글을 남겨보세요',
+                                  style: GoogleFonts.inter(
+                                    color: cs.onSurface.withValues(alpha: 0.3),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        else
+                          SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (_, i) {
+                                final c = comments[i];
+                                final isOwn = auth.user?.uid == c.uid;
+                                return _CommentTile(
+                                  comment: c,
+                                  isOwn: isOwn,
+                                  onDelete: () => _deleteComment(c.id),
+                                  onReport: (!isOwn && auth.isLoggedIn) ? () => _reportComment(c) : null,
+                                  onBlock: (!isOwn && auth.isLoggedIn) ? () => _blockFromComment(c) : null,
+                                );
+                              },
+                              childCount: comments.length,
+                            ),
+                          ),
+                      ]);
+                    return const SliverToBoxAdapter(child: SizedBox.shrink());
                   },
                 ),
                 const SliverToBoxAdapter(child: SizedBox(height: 16)),

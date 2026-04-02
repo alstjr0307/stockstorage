@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/market_analysis.dart';
@@ -78,6 +79,9 @@ class _WriteMarketAnalysisScreenState
     final b = _TextBlock(text);
     b.focus.addListener(() {
       if (b.focus.hasFocus) _lastFocused = b;
+    });
+    b.ctrl.addListener(() {
+      if (mounted) setState(() {});
     });
     return b;
   }
@@ -318,6 +322,75 @@ class _WriteMarketAnalysisScreenState
     );
   }
 
+  String _buildPreviewMarkdown() {
+    final sb = StringBuffer();
+    for (final block in _blocks) {
+      if (block is _TextBlock) {
+        final t = block.ctrl.text.trim();
+        if (t.isEmpty) continue;
+        if (sb.isNotEmpty) sb.write('\n\n');
+        sb.write(t);
+      } else if (block is _ImageBlock) {
+        final url = block.url ?? block.uploadedUrl;
+        if (url == null || url.isEmpty) continue;
+        if (sb.isNotEmpty) sb.write('\n\n');
+        sb.write('![]($url)');
+      }
+    }
+    return sb.toString();
+  }
+
+  MarkdownStyleSheet _previewStyleSheet(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    TextStyle body(double size, double height, {FontWeight weight = FontWeight.w500}) {
+      return GoogleFonts.inter(
+        color: cs.onSurface.withValues(alpha: 0.88),
+        fontSize: size,
+        height: height,
+        fontWeight: weight,
+      );
+    }
+
+    return MarkdownStyleSheet(
+      p: body(14, 1.7),
+      pPadding: const EdgeInsets.only(bottom: 10),
+      strong: body(14, 1.7, weight: FontWeight.w800).copyWith(color: cs.onSurface),
+      em: body(14, 1.7).copyWith(fontStyle: FontStyle.italic),
+      del: body(14, 1.7).copyWith(
+        color: cs.onSurface.withValues(alpha: 0.5),
+        decoration: TextDecoration.lineThrough,
+      ),
+      h1: body(22, 1.4, weight: FontWeight.w800),
+      h2: body(19, 1.45, weight: FontWeight.w800),
+      h3: body(17, 1.5, weight: FontWeight.w700),
+      blockquote: body(13, 1.65).copyWith(
+        color: cs.onSurface.withValues(alpha: 0.74),
+      ),
+      blockquoteDecoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
+      ),
+      blockquotePadding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      code: GoogleFonts.jetBrainsMono(
+        color: cs.onSurface,
+        fontSize: 12.5,
+        height: 1.6,
+      ),
+      codeblockDecoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      codeblockPadding: const EdgeInsets.all(14),
+      listBullet: body(14, 1.7),
+      horizontalRuleDecoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: cs.onSurface.withValues(alpha: 0.08)),
+        ),
+      ),
+    );
+  }
+
   // ── 저장 ──────────────────────────────────────────────────────────────────
 
   Future<void> _submit() async {
@@ -419,6 +492,7 @@ class _WriteMarketAnalysisScreenState
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final previewMarkdown = _buildPreviewMarkdown();
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -499,6 +573,40 @@ class _WriteMarketAnalysisScreenState
                       _buildTextBlock(_blocks[i] as _TextBlock)
                     else
                       _buildImageBlock(_blocks[i] as _ImageBlock, i),
+                  if (previewMarkdown.isNotEmpty) ...[
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                      decoration: BoxDecoration(
+                        color: cs.onSurface.withValues(alpha: 0.03),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: cs.onSurface.withValues(alpha: 0.06),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '미리보기',
+                            style: GoogleFonts.inter(
+                              color: cs.onSurface.withValues(alpha: 0.72),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          MarkdownBody(
+                            data: previewMarkdown,
+                            shrinkWrap: true,
+                            softLineBreak: true,
+                            selectable: false,
+                            styleSheet: _previewStyleSheet(context),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

@@ -56,6 +56,16 @@ function buildNaverUrl({ sosok, investorGubun }) {
   return `https://finance.naver.com/sise/sise_deal_rank_iframe.naver?sosok=${sosok}&investor_gubun=${investorGubun}&type=buy`;
 }
 
+function getNaverDateKey(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: SEOUL_TZ,
+    year: '2-digit',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return formatter.format(date).replace(/-/g, '.');
+}
+
 function parseNumber(text) {
   const value = Number(String(text || '').replace(/[^\d.-]/g, ''));
   return Number.isFinite(value) ? value : null;
@@ -75,9 +85,24 @@ async function fetchTop5FromNaver(config) {
 
   const html = decoder.decode(response.data);
   const $ = cheerio.load(html);
+  const expectedDate = getNaverDateKey();
+  const boxes = $('div.box_type_ms').toArray();
+  const targetBox =
+    boxes.find((box) => {
+      const dateText = $(box).find('.sise_guide_date').first().text().trim();
+      return dateText === expectedDate;
+    }) ??
+    boxes[boxes.length - 1] ??
+    null;
   const rows = [];
 
-  $('table tr').each((_, tr) => {
+  if (!targetBox) {
+    return [];
+  }
+
+  $(targetBox)
+    .find('table.type_1 tr')
+    .each((_, tr) => {
     const link = $(tr).find('a.tltle');
     if (!link.length) return;
 

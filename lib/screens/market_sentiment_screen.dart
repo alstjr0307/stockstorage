@@ -199,6 +199,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
                     _buildMetricCard(
                       context,
                       title: 'VIX 공포지수',
+                      benchmarkText: '기준 20 이하 안정 · 30 이상 경계',
                       description:
                           'S&P 500 옵션 가격으로 계산하는 대표 변동성 지수입니다. 보통 20 아래면 비교적 안정적이고, 30 이상이면 시장이 급격히 불안해진 상태로 해석하는 경우가 많습니다.',
                       valueText: _priceText('VIX 공포지수', ''),
@@ -210,6 +211,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
                     _buildMetricCard(
                       context,
                       title: '미 10년 국채금리',
+                      benchmarkText: '기준 4% 전후 부담선 · 4.5% 이상 긴장',
                       description:
                           '미국 장기 시장금리의 기준처럼 보는 지표입니다. 금리가 빠르게 오르면 성장주 밸류에이션 부담이 커질 수 있고, 반대로 하락하면 주식시장에 우호적으로 해석되기도 합니다.',
                       valueText: _priceText('미 10년 국채금리', '%'),
@@ -219,6 +221,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
                     _buildMetricCard(
                       context,
                       title: '장단기 금리차',
+                      benchmarkText: '기준 0%p 아래 역전 · +1%p 안팎 정상',
                       description:
                           '미 10년물 금리에서 3개월물 금리를 뺀 값입니다. 이 수치가 마이너스가 되면 금리 역전으로 보며, 경기 둔화나 침체 우려 신호로 자주 언급됩니다.',
                       valueText: _spreadValue(),
@@ -230,6 +233,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
                     _buildMetricCard(
                       context,
                       title: '구리/금 비율',
+                      benchmarkText: '기준 상승세면 경기 선호 · 하락세면 방어 선호',
                       description:
                           '구리는 경기민감 자산, 금은 대표 안전자산으로 자주 비교됩니다. 비율이 오르면 경기 회복 기대가 강해지고, 내려가면 방어 심리나 둔화 우려가 커진 것으로 해석할 수 있습니다.',
                       valueText: _copperGoldValue(),
@@ -239,6 +243,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
                     _buildMetricCard(
                       context,
                       title: '달러 인덱스',
+                      benchmarkText: '기준 100 중립선 · 105 이상 강달러 경계',
                       description:
                           '주요 6개 통화 대비 달러의 상대 강도를 보여주는 지수입니다. 달러가 강해지면 신흥국 자산과 원자재에 부담이 생기기 쉽고, 약해지면 위험자산 선호가 살아나는 흐름이 나타나기도 합니다.',
                       valueText: _priceText('달러 인덱스', ''),
@@ -366,6 +371,37 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
             ),
           ),
           const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: cs.onSurface.withValues(alpha: 0.045),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.straighten_rounded,
+                  size: 14,
+                  color: cs.onSurface.withValues(alpha: 0.55),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '기준 0~24 극단적 공포 · 25~44 공포 · 45~55 중립 · 56~74 탐욕 · 75~100 극단적 탐욕',
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.66),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -394,6 +430,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
   Widget _buildMetricCard(
     BuildContext context, {
     required String title,
+    required String benchmarkText,
     required String description,
     required String valueText,
     required String? changeText,
@@ -438,6 +475,37 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
                 ),
               ],
             ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(
+              color: cs.onSurface.withValues(alpha: 0.045),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.straighten_rounded,
+                  size: 14,
+                  color: cs.onSurface.withValues(alpha: 0.55),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    benchmarkText,
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.66),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 10),
           Text(description, style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 12, height: 1.55)),

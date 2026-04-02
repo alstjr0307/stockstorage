@@ -290,7 +290,12 @@ class StockPriceService {
 
       final timestamps = (result['timestamp'] as List<dynamic>?)
           ?.whereType<num>()
-          .map((v) => DateTime.fromMillisecondsSinceEpoch(v.toInt() * 1000))
+          .map(
+            (v) => DateTime.fromMillisecondsSinceEpoch(
+              v.toInt() * 1000,
+              isUtc: true,
+            ).add(const Duration(hours: 9)),
+          )
           .toList();
       final quote = result['indicators']?['quote']?[0];
       final opens = (quote?['open'] as List<dynamic>?)
@@ -897,7 +902,12 @@ class StockPriceService {
 
       final timestamps = (result['timestamp'] as List<dynamic>?)
           ?.whereType<num>()
-          .map((v) => DateTime.fromMillisecondsSinceEpoch(v.toInt() * 1000))
+          .map(
+            (v) => DateTime.fromMillisecondsSinceEpoch(
+              v.toInt() * 1000,
+              isUtc: true,
+            ).add(const Duration(hours: 9)),
+          )
           .toList();
       final closes =
           (result['indicators']?['quote']?[0]?['close'] as List<dynamic>?)

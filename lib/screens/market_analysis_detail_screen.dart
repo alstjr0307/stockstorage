@@ -21,6 +21,7 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
     final coverImage = analysis.imageUrls.isNotEmpty ? analysis.imageUrls.first : null;
     final extraImages =
         analysis.imageUrls.length > 1 ? analysis.imageUrls.skip(1).toList() : const <String>[];
+    final renderedBody = _normalizeBodyForMarkdown(analysis.body);
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0A0E1A) : const Color(0xFFF4F7FB),
@@ -90,7 +91,7 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           MarkdownBody(
-                            data: analysis.body,
+                            data: renderedBody,
                             selectable: true,
                             softLineBreak: true,
                             shrinkWrap: true,
@@ -130,6 +131,13 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
         '${analysis.title}\n\n'
         '$shortPreview\n\n'
         '${DeepLinkService.analysisUrl(analysis)}';
+  }
+
+  String _normalizeBodyForMarkdown(String body) {
+    return body.replaceAllMapped(
+      RegExp(r'(^|\n)(\d+)\.\s', multiLine: true),
+      (match) => '${match.group(1)}${match.group(2)}\\. ',
+    );
   }
 
   MarkdownStyleSheet _markdownStyleSheet(BuildContext context) {
@@ -341,33 +349,17 @@ class _TopActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Ink(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: cs.surface.withValues(alpha: isDark ? 0.74 : 0.92),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: isDark ? 0.16 : 0.04),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Icon(
-            icon,
-            size: 19,
-            color: cs.onSurface.withValues(alpha: 0.78),
-          ),
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        splashRadius: 20,
+        onPressed: onTap,
+        icon: Icon(
+          icon,
+          size: 19,
+          color: cs.onSurface.withValues(alpha: 0.78),
         ),
       ),
     );

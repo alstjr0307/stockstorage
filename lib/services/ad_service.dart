@@ -29,8 +29,8 @@ class AdService {
           ? 'ca-app-pub-3940256099942544/1033173712'
           : 'ca-app-pub-3940256099942544/4411468910';
     }
-    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/5598098844';
-    return 'ca-app-pub-6925657557995580/5025289757';
+    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/7720689486';
+    return 'ca-app-pub-6925657557995580/2656065066';
   }
 
   // ── 배너 광고 ─────────────────────────────────────────────────────────
@@ -41,6 +41,7 @@ class AdService {
   InterstitialAd? _interstitialAd;
   bool _isInterstitialReady = false;
   int _stockViewCount = 0;
+  int _indicatorDetailOpenCount = 0;
   static const int _interstitialEvery = 3; // 3번 중 1번만 전면광고
 
   void loadInterstitial() {
@@ -77,6 +78,16 @@ class AdService {
     if (!_adsEnabled) return;
     _stockViewCount++;
     if (_stockViewCount % _interstitialEvery != 0) return;
+    if (_isInterstitialReady && _interstitialAd != null) {
+      _interstitialAd!.show();
+      AnalyticsService.instance.logAdInterstitialShown();
+    }
+  }
+
+  void showIndicatorDetailInterstitialIfReady() {
+    if (!_adsEnabled) return;
+    _indicatorDetailOpenCount++;
+    if ((_indicatorDetailOpenCount - 1) % _interstitialEvery != 0) return;
     if (_isInterstitialReady && _interstitialAd != null) {
       _interstitialAd!.show();
       AnalyticsService.instance.logAdInterstitialShown();
