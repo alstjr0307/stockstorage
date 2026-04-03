@@ -46,14 +46,16 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   };
 
   static const _indexAccentColors = {
-    'KOSPI': Color(0xFF22C55E),
-    'KOSDAQ': Color(0xFF10B981),
-    'S&P 500': Color(0xFF3B82F6),
-    'NASDAQ': Color(0xFF6366F1),
+    'KOSPI': Color(0xFF3182F6),
+    'KOSDAQ': Color(0xFF00C4B4),
+    'S&P 500': Color(0xFF6366F1),
+    'NASDAQ': Color(0xFF8B5CF6),
     'USD/KRW': Color(0xFFF59E0B),
     '나스닥100 선물': Color(0xFFF97316),
     'WTI 오일': Color(0xFFEF4444),
   };
+
+  static final _analysisFmt = DateFormat('MM.dd HH:mm');
 
   final Map<String, PriceResult?> _prices = {};
   bool _loadingIndices = true;
@@ -105,11 +107,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       length: 2,
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
-            child: _buildTopTabBar(context),
-          ),
-          const SizedBox(height: 8),
+          _buildTopTabBar(context),
           Expanded(
             child: TabBarView(
               children: [
@@ -126,70 +124,36 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   Widget _buildTopTabBar(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(5),
-      decoration: BoxDecoration(
-        color: cs.surface.withValues(alpha: isDark ? 0.88 : 0.94),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.onSurface.withValues(alpha: 0.05)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.14 : 0.035),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
+    return TabBar(
+      labelStyle: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w500),
+      labelColor: cs.onSurface,
+      unselectedLabelColor: cs.onSurface.withValues(alpha: 0.38),
+      dividerColor: Colors.transparent,
+      indicator: BoxDecoration(
+        color: isDark
+            ? cs.onSurface.withValues(alpha: 0.1)
+            : cs.onSurface.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(9999),
       ),
-      child: TabBar(
-        padding: EdgeInsets.zero,
-        labelPadding: EdgeInsets.zero,
-        indicator: BoxDecoration(
-          borderRadius: BorderRadius.circular(15),
-          color: const Color(0xFF4ADE80),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF22C55E).withValues(alpha: 0.20),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        dividerColor: Colors.transparent,
-        indicatorSize: TabBarIndicatorSize.tab,
-        splashBorderRadius: BorderRadius.circular(15),
-        labelColor: Colors.black,
-        unselectedLabelColor: cs.onSurface.withValues(alpha: 0.56),
-        labelStyle: GoogleFonts.inter(
-          fontSize: 14,
-          fontWeight: FontWeight.w800,
-        ),
-        unselectedLabelStyle: GoogleFonts.inter(
-          fontSize: 14,
-          fontWeight: FontWeight.w700,
-        ),
-        tabs: const [
-          SizedBox(
-            height: 48,
-            child: Tab(text: '지표'),
-          ),
-          SizedBox(
-            height: 48,
-            child: Tab(text: '시황분석'),
-          ),
-        ],
-      ),
+      indicatorSize: TabBarIndicatorSize.tab,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      tabs: const [
+        Tab(text: '지표'),
+        Tab(text: '시황분석'),
+      ],
     );
   }
 
   Widget _buildIndicatorsTab(BuildContext context) {
     return RefreshIndicator(
-      color: const Color(0xFF4ADE80),
+      color: const Color(0xFF3182F6),
       onRefresh: _refreshAll,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 2, 16, 100),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
         children: [
           _buildIndicesPanel(context),
-          const SizedBox(height: 18),
+          const SizedBox(height: 28),
           _buildIndicatorShortcuts(context),
         ],
       ),
@@ -197,169 +161,102 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   }
 
   Widget _buildIndicatorShortcuts(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final items = [
+      (
+        title: '외인 · 기관 수급',
+        subtitle: '외국인·기관 순매수 TOP5 종목',
+        icon: Icons.candlestick_chart_rounded,
+        accent: const Color(0xFFF59E0B),
+        onTap: () {
+          AdService.instance.showIndicatorDetailInterstitialIfReady();
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const _InvestorFlowDetailScreen()),
+          );
+        },
+      ),
+      (
+        title: '시장 심리 지표',
+        subtitle: '공포/탐욕 · 시장 온도',
+        icon: Icons.psychology_alt_rounded,
+        accent: const Color(0xFF3182F6),
+        onTap: () {
+          AdService.instance.showIndicatorDetailInterstitialIfReady();
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const MarketSentimentScreen()),
+          );
+        },
+      ),
+      (
+        title: '펨코지수',
+        subtitle: '커뮤니티 흐름 · KOSPI 비교',
+        icon: Icons.forum_rounded,
+        accent: const Color(0xFF6366F1),
+        onTap: () {
+          AdService.instance.showIndicatorDetailInterstitialIfReady();
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const _FmkoreaIndexDetailScreen()),
+          );
+        },
+      ),
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2),
-          child: Text(
-            '세부 지표',
-            style: GoogleFonts.inter(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-            ),
+        Text(
+          '세부 지표',
+          style: GoogleFonts.inter(
+            color: cs.onSurface,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.4,
           ),
         ),
-        const SizedBox(height: 10),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 3,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 0.74,
-          children: [
-            _IndicatorShortcutCard(
-              title: '외인 · 기관 수급',
-              subtitle: '외국인·기관 순매수\nTOP5 종목',
-              icon: Icons.candlestick_chart_rounded,
-              accent: const Color(0xFFF59E0B),
-              onTap: () {
-                AdService.instance.showIndicatorDetailInterstitialIfReady();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const _InvestorFlowDetailScreen(),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: cs.onSurface.withValues(alpha: isDark ? 0.06 : 0.0)),
+            boxShadow: isDark ? null : [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              for (var i = 0; i < items.length; i++) ...[
+                _IndicatorShortcutCard(
+                  title: items[i].title,
+                  subtitle: items[i].subtitle,
+                  icon: items[i].icon,
+                  accent: items[i].accent,
+                  onTap: items[i].onTap,
+                ),
+                if (i < items.length - 1)
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    indent: 20 + 40 + 14,
+                    endIndent: 0,
+                    color: cs.onSurface.withValues(alpha: 0.06),
                   ),
-                );
-              },
-            ),
-            _IndicatorShortcutCard(
-              title: '시장 심리\n지표',
-              subtitle: '공포/탐욕',
-              icon: Icons.psychology_alt_rounded,
-              accent: const Color(0xFF22C55E),
-              onTap: () {
-                AdService.instance.showIndicatorDetailInterstitialIfReady();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const MarketSentimentScreen(),
-                  ),
-                );
-              },
-            ),
-            _IndicatorShortcutCard(
-              title: '펨코지수',
-              subtitle: '커뮤니티 흐름',
-              icon: Icons.forum_rounded,
-              accent: const Color(0xFF3B82F6),
-              onTap: () {
-                AdService.instance.showIndicatorDetailInterstitialIfReady();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const _FmkoreaIndexDetailScreen(),
-                  ),
-                );
-              },
-            ),
-          ],
+              ],
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildSentimentEntryCard(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF0F172A), Color(0xFF1E293B), Color(0xFF14532D)],
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF0F172A).withValues(alpha: 0.24),
-            blurRadius: 24,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              '시장 심리 지표',
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '공포탐욕지수와 주요 심리 지표를 한 화면에서 확인하세요.',
-            style: GoogleFonts.inter(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '시장 온도, 금리, 변동성 흐름까지 따로 정리한 전용 화면으로 이동합니다.',
-            style: GoogleFonts.inter(
-              color: Colors.white.withValues(alpha: 0.76),
-              fontSize: 12,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const MarketSentimentScreen(),
-                  ),
-                );
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF4ADE80),
-                foregroundColor: Colors.black,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              icon: const Icon(Icons.insights_outlined, size: 18),
-              label: Text(
-                '시장 심리 지표 보러가기',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildIndicesPanel(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -376,19 +273,20 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                     '주요 지수',
                     style: GoogleFonts.inter(
                       color: cs.onSurface,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.5,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     _indicesFetchedAt == null
                         ? '핵심 시장 지수를 빠르게 확인하세요'
-                        : '기준 시간 ${DateFormat('오늘 HH:mm').format(_indicesFetchedAt!)}',
+                        : '기준 ${DateFormat('HH:mm').format(_indicesFetchedAt!)}',
                     style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.5),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface.withValues(alpha: 0.45),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],
@@ -400,7 +298,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                 height: 18,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Color(0xFF4ADE80),
+                  color: Color(0xFF3182F6),
                 ),
               )
             else
@@ -423,7 +321,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             crossAxisCount: 2,
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
-            childAspectRatio: 1.06,
+            childAspectRatio: 1.1,
           ),
           itemBuilder: (context, index) {
             return _buildIndexCard(
@@ -443,12 +341,12 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final result = _prices[name];
-    final accent = _indexAccentColors[name] ?? const Color(0xFF4ADE80);
+    final accent = _indexAccentColors[name] ?? const Color(0xFF3182F6);
     final isUp = result?.isUp ?? true;
-    final moveColor = isUp ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
+    final moveColor = isUp ? const Color(0xFFF04452) : const Color(0xFF1677FF);
 
     return InkWell(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(16),
       onTap: () {
         Navigator.push(
           context,
@@ -461,135 +359,103 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           ),
         );
       },
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
+      child: Ink(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: cs.onSurface.withValues(alpha: isDark ? 0.14 : 0.10),
+            color: cs.onSurface.withValues(alpha: isDark ? 0.09 : 0.0),
             width: 1,
           ),
           color: cs.surface,
-          boxShadow: [
+          boxShadow: isDark ? null : [
             BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.08 : 0.04),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
-              offset: const Offset(0, 4),
+              offset: const Offset(0, 2),
             ),
           ],
         ),
-        child: Column(
-          children: [
-            Container(
-              height: 4,
-              color: accent,
-            ),
-            Expanded(
-              child: Padding(
-              padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
-                              color: cs.onSurface,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          width: 26,
-                          height: 26,
-                          decoration: BoxDecoration(
-                            color: accent.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(9),
-                          ),
-                          child: Icon(
-                            Icons.trending_up_rounded,
-                            size: 15,
-                            color: accent,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      _indexDescriptions[name] ?? '',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.44),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const Spacer(),
-                    if (_loadingIndices && result == null)
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Color(0xFF4ADE80),
-                        ),
-                      )
-                    else if (result == null)
-                      Text(
-                        '--',
-                        style: GoogleFonts.inter(
-                          color: cs.onSurface.withValues(alpha: 0.36),
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      )
-                    else ...[
-                      Text(
-                        _displayValue(name, result),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                          color: cs.onSurface,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          height: 1.1,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: moveColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          '${isUp ? '+' : ''}${result.changeRate.toStringAsFixed(2)}%',
-                          style: GoogleFonts.inter(
-                            color: moveColor,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  color: accent,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                _indexDescriptions[name] ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.38),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+              const Spacer(),
+              if (_loadingIndices && result == null)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF3182F6),
+                  ),
+                )
+              else if (result == null)
+                Text(
+                  '--',
+                  style: GoogleFonts.robotoMono(
+                    color: cs.onSurface.withValues(alpha: 0.3),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                )
+              else ...[
+                Text(
+                  _displayValue(name, result),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.robotoMono(
+                    color: cs.onSurface,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    height: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _buildChangeRateBadge(moveColor, isUp, result.changeRate),
+              ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildChangeRateBadge(Color color, bool isUp, double changeRate) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(9999),
+      ),
+      child: Text(
+        '${isUp ? '+' : ''}${changeRate.toStringAsFixed(2)}%',
+        style: GoogleFonts.robotoMono(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -611,7 +477,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
-            child: CircularProgressIndicator(color: Color(0xFF4ADE80)),
+            child: CircularProgressIndicator(color: Color(0xFF3182F6)),
           );
         }
 
@@ -622,81 +488,79 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                 .map((item) => item.createdAt)
                 .reduce((a, b) => a.isAfter(b) ? a : b);
 
+        final isDark = Theme.of(context).brightness == Brightness.dark;
         return ListView(
-          padding: const EdgeInsets.fromLTRB(16, 2, 16, 100),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
           children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-              decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 14,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _buildAnalysisSummaryItem(
-                      context,
-                      icon: Icons.schedule_rounded,
-                      label: '최신 업데이트',
-                      primaryValue: latestDate == null
-                          ? '-'
-                          : DateFormat('yyyy.MM.dd').format(latestDate),
-                      secondaryValue: latestDate == null
-                          ? null
-                          : DateFormat('HH:mm').format(latestDate),
-                      accentColor: const Color(0xFF16A34A),
-                    ),
-                  ),
-                  Container(
-                    width: 1,
-                    height: 52,
-                    margin: const EdgeInsets.symmetric(horizontal: 14),
-                    color: cs.onSurface.withValues(alpha: 0.08),
-                  ),
-                  Expanded(
-                    child: _buildAnalysisSummaryItem(
-                      context,
-                      icon: Icons.feed_outlined,
-                      label: '글 개수',
-                      primaryValue: '${list.length}개',
-                      accentColor: const Color(0xFF0EA5E9),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (list.isEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 48),
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: cs.onSurface.withValues(alpha: 0.05),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '시황분석',
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        latestDate == null
+                            ? '등록된 분석이 없습니다'
+                            : '최신 ${_analysisFmt.format(latestDate)} · 총 ${list.length}개',
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.45),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            if (list.isEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 60),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: isDark
+                      ? Border.all(color: cs.onSurface.withValues(alpha: 0.06))
+                      : null,
+                ),
                 child: Center(
-                  child: Text(
-                    '등록된 시황 분석이 없습니다.',
-                    style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.42),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.article_outlined,
+                        size: 32,
+                        color: cs.onSurface.withValues(alpha: 0.2),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        '등록된 시황 분석이 없습니다.',
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.38),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               )
             else
-              ...list.map((analysis) => _buildAnalysisCard(context, analysis)),
+              for (var i = 0; i < list.length; i++) ...[
+                _buildAnalysisCard(context, list[i]),
+                if (i < list.length - 1)
+                  Divider(height: 1, thickness: 1, color: cs.onSurface.withValues(alpha: 0.07)),
+              ],
           ],
         );
       },
@@ -707,12 +571,12 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final result = _prices[name];
-    final accent = _indexAccentColors[name] ?? const Color(0xFF4ADE80);
+    final accent = _indexAccentColors[name] ?? const Color(0xFF3182F6);
     final isUp = result?.isUp ?? true;
-    final moveColor = isUp ? const Color(0xFF16A34A) : const Color(0xFFDC2626);
+    final moveColor = isUp ? const Color(0xFFF04452) : const Color(0xFF1677FF);
 
     return InkWell(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(16),
       onTap: () {
         Navigator.push(
           context,
@@ -727,134 +591,104 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       },
       child: Ink(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: cs.onSurface.withValues(alpha: isDark ? 0.14 : 0.10),
+            color: cs.onSurface.withValues(alpha: isDark ? 0.09 : 0.0),
             width: 1,
           ),
           color: cs.surface,
-          boxShadow: [
+          boxShadow: isDark ? null : [
             BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.08 : 0.04),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
-              offset: const Offset(0, 4),
+              offset: const Offset(0, 2),
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: Column(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                height: 4,
-                color: accent,
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  Icons.local_gas_station_rounded,
+                  color: accent,
+                  size: 20,
+                ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  name,
-                                  style: GoogleFonts.inter(
-                                    color: cs.onSurface,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                width: 28,
-                                height: 28,
-                                decoration: BoxDecoration(
-                                  color: accent.withValues(alpha: 0.14),
-                                  borderRadius: BorderRadius.circular(9),
-                                ),
-                                child: Icon(
-                                  Icons.local_gas_station_rounded,
-                                  color: accent,
-                                  size: 16,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            _indexDescriptions[name] ?? '',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
-                              color: cs.onSurface.withValues(alpha: 0.48),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          if (_loadingIndices && result == null)
-                            const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Color(0xFF4ADE80),
-                              ),
-                            )
-                          else if (result == null)
-                            Text(
-                              '--',
-                              style: GoogleFonts.inter(
-                                color: cs.onSurface.withValues(alpha: 0.36),
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            )
-                          else ...[
-                            Text(
-                              _displayValue(name, result),
-                              style: GoogleFonts.inter(
-                                color: cs.onSurface,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w800,
-                                height: 1.1,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 5,
-                              ),
-                              decoration: BoxDecoration(
-                                color: moveColor.withValues(alpha: 0.12),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                '${isUp ? '+' : ''}${result.changeRate.toStringAsFixed(2)}%',
-                                style: GoogleFonts.inter(
-                                  color: moveColor,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
+                    Text(
+                      name,
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _indexDescriptions[name] ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.38),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 12),
+              if (_loadingIndices && result == null)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF3182F6),
+                  ),
+                )
+              else if (result == null)
+                Text(
+                  '--',
+                  style: GoogleFonts.robotoMono(
+                    color: cs.onSurface.withValues(alpha: 0.3),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                )
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      _displayValue(name, result),
+                      style: GoogleFonts.robotoMono(
+                        color: cs.onSurface,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        height: 1.1,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    _buildChangeRateBadge(moveColor, isUp, result.changeRate),
+                  ],
+                ),
             ],
           ),
-          ),
+        ),
       ),
     );
   }
@@ -863,14 +697,12 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     final cs = Theme.of(context).colorScheme;
     final hasImage = analysis.imageUrls.isNotEmpty;
     final preview = analysis.body.replaceAll('\n', ' ').trim();
-    final dateLabel = DateFormat('yyyy.MM.dd HH:mm').format(analysis.createdAt);
+    final dateLabel = _analysisFmt.format(analysis.createdAt);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(24),
+    return Column(
+      children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(8),
           onTap: () {
             Navigator.push(
               context,
@@ -879,217 +711,71 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
               ),
             );
           },
-          child: Ink(
-            padding: const EdgeInsets.fromLTRB(16, 15, 16, 15),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 14,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Row(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: cs.onSurface.withValues(alpha: 0.05),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              dateLabel,
-                              style: GoogleFonts.inter(
-                                color: cs.onSurface.withValues(alpha: 0.62),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          const Spacer(),
-                          Icon(
-                            hasImage
-                                ? Icons.insert_photo_outlined
-                                : Icons.article_outlined,
-                            size: 17,
-                            color: cs.onSurface.withValues(alpha: 0.38),
-                          ),
-                        ],
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: cs.onSurface.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(9999),
                       ),
-                      const SizedBox(height: 12),
-                      Text(
-                        analysis.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                      child: Text(
+                        dateLabel,
                         style: GoogleFonts.inter(
-                          color: cs.onSurface,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          height: 1.3,
+                          color: cs.onSurface.withValues(alpha: 0.55),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(height: 9),
-                      Text(
-                        preview.isEmpty ? '본문이 없습니다.' : preview,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                          color: cs.onSurface.withValues(alpha: 0.58),
-                          fontSize: 11,
-                          height: 1.5,
-                        ),
+                    ),
+                    const Spacer(),
+                    if (hasImage)
+                      Icon(
+                        Icons.image_outlined,
+                        size: 16,
+                        color: cs.onSurface.withValues(alpha: 0.3),
                       ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          if (hasImage)
-                            Text(
-                              '이미지 포함',
-                              style: GoogleFonts.inter(
-                                color: cs.onSurface.withValues(alpha: 0.42),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          const Spacer(),
-                          Text(
-                            '자세히 보기',
-                            style: GoogleFonts.inter(
-                              color: cs.onSurface.withValues(alpha: 0.52),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          Icon(
-                            Icons.chevron_right_rounded,
-                            size: 16,
-                            color: cs.onSurface.withValues(alpha: 0.38),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAnalysisSummaryChip(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: cs.onSurface.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 14,
-            color: cs.onSurface.withValues(alpha: 0.52),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: GoogleFonts.inter(
-              color: cs.onSurface.withValues(alpha: 0.64),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAnalysisSummaryItem(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required String primaryValue,
-    String? secondaryValue,
-    required Color accentColor,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: accentColor.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            icon,
-            size: 16,
-            color: accentColor,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: GoogleFonts.inter(
-                  color: cs.onSurface.withValues(alpha: 0.5),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                primaryValue,
-                style: GoogleFonts.inter(
-                  color: cs.onSurface,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              if (secondaryValue != null) ...[
-                const SizedBox(height: 2),
+                const SizedBox(height: 10),
                 Text(
-                  secondaryValue,
+                  analysis.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.inter(
-                    color: accentColor,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
+                    color: cs.onSurface,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    height: 1.3,
+                    letterSpacing: -0.5,
                   ),
                 ),
+                if (preview.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    preview,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.5),
+                      fontSize: 15,
+                      height: 1.65,
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ],
     );
   }
+
 }
 
 class _InvestorFlowCard extends StatelessWidget {
@@ -1109,13 +795,13 @@ class _InvestorFlowCard extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: cs.surface,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.02),
-                blurRadius: 8,
-                offset: const Offset(0, 3),
+                color: Colors.black.withValues(alpha: 0.04),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
@@ -1137,7 +823,7 @@ class _InvestorFlowCard extends StatelessWidget {
         child: Center(
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            color: Color(0xFF4ADE80),
+            color: Color(0xFF3182F6),
           ),
         ),
       );
@@ -1257,75 +943,54 @@ class _IndicatorShortcutCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(24),
-        onTap: onTap,
-        child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: accent.withValues(alpha: isDark ? 0.28 : 0.18),
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 20, color: accent),
             ),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                accent.withValues(alpha: isDark ? 0.18 : 0.14),
-                cs.surface,
-              ],
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.45),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: accent.withValues(alpha: isDark ? 0.12 : 0.10),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, size: 18, color: accent),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  color: cs.onSurface,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  height: 1.25,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  color: cs.onSurface.withValues(alpha: 0.52),
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 20,
+              color: cs.onSurface.withValues(alpha: 0.25),
+            ),
+          ],
         ),
       ),
     );
@@ -1558,11 +1223,12 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
               child: FilledButton.icon(
                 onPressed: _capturing ? null : _captureAndShare,
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF4ADE80),
-                  foregroundColor: Colors.black,
+                  backgroundColor: const Color(0xFF3182F6),
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
+                  elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 icon: _capturing
@@ -1571,7 +1237,7 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
                         height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.black,
+                          color: Colors.white,
                         ),
                       )
                     : const Icon(Icons.image_outlined, size: 20),
@@ -1712,11 +1378,12 @@ class _FmkoreaIndexDetailScreenState extends State<_FmkoreaIndexDetailScreen> {
               child: FilledButton.icon(
                 onPressed: _capturing ? null : _captureAndShare,
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF4ADE80),
-                  foregroundColor: Colors.black,
+                  backgroundColor: const Color(0xFF3182F6),
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
+                  elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 icon: _capturing
@@ -1725,7 +1392,7 @@ class _FmkoreaIndexDetailScreenState extends State<_FmkoreaIndexDetailScreen> {
                         height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.black,
+                          color: Colors.white,
                         ),
                       )
                     : const Icon(Icons.image_outlined, size: 20),
@@ -1806,7 +1473,7 @@ class _InvestorFlowMarketBlock extends StatelessWidget {
           const SizedBox(height: 12),
           _InvestorFlowGroup(
             title: '외국인 순매수',
-            color: const Color(0xFF16A34A),
+            color: const Color(0xFF3182F6),
             items: foreignTop5,
             icon: Icons.trending_up_rounded,
             emoji: '🌎',
@@ -2068,11 +1735,11 @@ class _FmkoreaIndexCard extends StatelessWidget {
             height: 180,
             decoration: BoxDecoration(
               color: cs.surface,
-              borderRadius: BorderRadius.circular(24),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
             ),
             child: const Center(
-              child: CircularProgressIndicator(color: Color(0xFF4ADE80)),
+              child: CircularProgressIndicator(color: Color(0xFF3182F6)),
             ),
           );
         }
@@ -2133,16 +1800,16 @@ class _FmkoreaIndexCard extends StatelessWidget {
             final focusedKospiChange =
                 kospiSnapshot?.sameDayChangeByDate[focusedEntry.dateKey];
             return Container(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: cs.surface,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.03),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
+                    color: Colors.black.withValues(alpha: 0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
@@ -2167,13 +1834,13 @@ class _FmkoreaIndexCard extends StatelessWidget {
                           vertical: 5,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF4ADE80).withValues(alpha: 0.13),
+                          color: const Color(0xFF3182F6).withValues(alpha: 0.13),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
                           '일간 게시글',
                           style: GoogleFonts.inter(
-                            color: const Color(0xFF15803D),
+                            color: const Color(0xFF3182F6),
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
                           ),
@@ -2192,15 +1859,15 @@ class _FmkoreaIndexCard extends StatelessWidget {
                               : '전일 마감 게시글 수',
                           dateKey: focusedEntry.dateKey,
                           count: focusedEntry.count,
-                          accentColor: const Color(0xFF16A34A),
+                          accentColor: const Color(0xFF3182F6),
                           subtitle: focusedKospiChange == null
                               ? '전일 KOSPI 변동률 집계 전'
                               : '전일 KOSPI ${_formatSignedPercent(focusedKospiChange)}',
                           subtitleColor: focusedKospiChange == null
                               ? null
                               : focusedKospiChange >= 0
-                                  ? const Color(0xFF16A34A)
-                                  : const Color(0xFFDC2626),
+                                  ? const Color(0xFFF04452)
+                                  : const Color(0xFF1677FF),
                           insight: effectiveInsight,
                         ),
                       ),
@@ -2384,14 +2051,14 @@ class _FmkoreaIndexCard extends StatelessWidget {
     final diff = target.count - average;
     final diffRate = average == 0 ? 0.0 : (diff / average) * 100;
     final color = diffRate >= 35
-        ? const Color(0xFFDC2626)
+        ? const Color(0xFFF04452)
         : diffRate >= 15
-            ? const Color(0xFFF97316)
+            ? const Color(0xFFFF9500)
             : diffRate >= -10
-                ? const Color(0xFF16A34A)
+                ? const Color(0xFF0DC99A)
                 : diffRate >= -25
-                    ? const Color(0xFF0EA5E9)
-                    : const Color(0xFF2563EB);
+                    ? const Color(0xFF3182F6)
+                    : const Color(0xFF6366F1);
 
     return _FmkoreaWeekdayInsight(
       average: average,
@@ -2527,16 +2194,16 @@ class _FmkoreaIndexCard extends StatelessWidget {
       height: 160,
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
       ),
       child: Center(
         child: Text(
           text,
           style: GoogleFonts.inter(
-            color: cs.onSurface.withValues(alpha: 0.42),
+            color: cs.onSurface.withValues(alpha: 0.38),
             fontSize: 13,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w400,
           ),
         ),
       ),
@@ -2558,16 +2225,9 @@ class _FmkoreaIndexCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        border: Border.all(color: accentColor.withValues(alpha: 0.12)),
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            accentColor.withValues(alpha: 0.10),
-            cs.surface,
-          ],
-        ),
+        color: cs.surface,
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2598,10 +2258,10 @@ class _FmkoreaIndexCard extends StatelessWidget {
                   '$count',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.robotoMono(
                     color: cs.onSurface,
-                    fontSize: 30,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
                     height: 1,
                   ),
                 ),
@@ -2697,18 +2357,18 @@ class _FmkoreaIndexCard extends StatelessWidget {
     final changeColor = kospiChange == null
         ? cs.onSurface.withValues(alpha: 0.42)
         : kospiChange >= 0
-            ? const Color(0xFF16A34A)
-            : const Color(0xFFDC2626);
+            ? const Color(0xFFF04452)
+            : const Color(0xFF1677FF);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
       decoration: BoxDecoration(
         color: isFocused
-            ? const Color(0xFF4ADE80).withValues(alpha: 0.08)
+            ? const Color(0xFF3182F6).withValues(alpha: 0.06)
             : cs.surface,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isFocused
-              ? const Color(0xFF4ADE80).withValues(alpha: 0.24)
+              ? const Color(0xFF3182F6).withValues(alpha: 0.2)
               : cs.onSurface.withValues(alpha: 0.06),
         ),
       ),
@@ -2867,7 +2527,7 @@ class _FmkoreaTrendChartState extends State<_FmkoreaTrendChart> {
           children: [
             _buildLegend(
               context,
-              color: const Color(0xFF4ADE80),
+              color: const Color(0xFF3182F6),
               label: '게시글 수',
             ),
             const SizedBox(width: 12),
@@ -2915,8 +2575,8 @@ class _FmkoreaTrendChartState extends State<_FmkoreaTrendChart> {
     final kospiColor = point.kospiChange == null
         ? cs.onSurface.withValues(alpha: 0.5)
         : point.kospiChange! >= 0
-            ? const Color(0xFF0EA5E9)
-            : const Color(0xFFDC2626);
+            ? const Color(0xFFF04452)
+            : const Color(0xFF1677FF);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -2940,7 +2600,7 @@ class _FmkoreaTrendChartState extends State<_FmkoreaTrendChart> {
           Text(
             '게시글 ${point.count}건',
             style: GoogleFonts.inter(
-              color: const Color(0xFF16A34A),
+              color: const Color(0xFF3182F6),
               fontSize: 12,
               fontWeight: FontWeight.w800,
             ),
@@ -3078,8 +2738,8 @@ class _FmkoreaTrendPainter extends CustomPainter {
         ..strokeWidth = 1,
     );
 
-    final barPaint = Paint()..color = const Color(0xFF4ADE80).withValues(alpha: 0.45);
-    final todayBarPaint = Paint()..color = const Color(0xFF16A34A);
+    final barPaint = Paint()..color = const Color(0xFF3182F6).withValues(alpha: 0.35);
+    final todayBarPaint = Paint()..color = const Color(0xFF3182F6);
     final weekendBarPaint = Paint()
       ..color = const Color(0xFFF59E0B).withValues(alpha: 0.28);
     final linePaint = Paint()
@@ -3270,8 +2930,8 @@ class _FmkoreaKospiCorrelation {
   String get correlationText => correlation.toStringAsFixed(2);
 
   Color get color {
-    if (correlation >= 0.2) return const Color(0xFF16A34A);
-    if (correlation <= -0.2) return const Color(0xFFDC2626);
+    if (correlation >= 0.2) return const Color(0xFF0DC99A);
+    if (correlation <= -0.2) return const Color(0xFFF04452);
     return const Color(0xFFF59E0B);
   }
 
@@ -3324,8 +2984,8 @@ class _FmkoreaStoredSummary {
             diffRate: diffRate,
             sampleCount: sample,
             color: diff >= 0
-                ? const Color(0xFF16A34A)
-                : const Color(0xFFDC2626),
+                ? const Color(0xFF0DC99A)
+                : const Color(0xFFF04452),
           );
 
     final points = scatterRaw
@@ -3437,7 +3097,7 @@ class _FmkoreaScatterPlot extends StatelessWidget {
                           painter: _FmkoreaScatterPainter(
                             points: points,
                             axisColor: cs.onSurface.withValues(alpha: 0.18),
-                            pointColor: const Color(0xFF16A34A),
+                            pointColor: const Color(0xFF3182F6),
                           ),
                           child: const SizedBox.expand(),
                         ),

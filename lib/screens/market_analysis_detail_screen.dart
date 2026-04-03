@@ -153,15 +153,15 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
     }
 
     return MarkdownStyleSheet(
-      p: body(14, 1.85),
+      p: body(15, 1.8),
       pPadding: const EdgeInsets.only(bottom: 14),
-      strong: body(14, 1.85, weight: FontWeight.w800).copyWith(color: cs.onSurface),
-      em: body(14, 1.85).copyWith(fontStyle: FontStyle.italic),
-      del: body(14, 1.85).copyWith(
+      strong: body(15, 1.8, weight: FontWeight.w800).copyWith(color: cs.onSurface),
+      em: body(15, 1.8).copyWith(fontStyle: FontStyle.italic),
+      del: body(15, 1.8).copyWith(
         color: cs.onSurface.withValues(alpha: 0.5),
         decoration: TextDecoration.lineThrough,
       ),
-      blockquote: body(13, 1.7).copyWith(
+      blockquote: body(14, 1.7).copyWith(
         color: cs.onSurface.withValues(alpha: 0.72),
       ),
       blockquoteDecoration: BoxDecoration(
@@ -170,15 +170,15 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
         border: Border.all(color: const Color(0xFF4ADE80).withValues(alpha: 0.16)),
       ),
       blockquotePadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      h1: body(23, 1.3, weight: FontWeight.w800).copyWith(color: cs.onSurface),
-      h2: body(19, 1.35, weight: FontWeight.w800).copyWith(color: cs.onSurface),
-      h3: body(17, 1.4, weight: FontWeight.w700).copyWith(color: cs.onSurface),
-      h1Padding: const EdgeInsets.only(top: 10, bottom: 12),
-      h2Padding: const EdgeInsets.only(top: 8, bottom: 10),
+      h1: body(26, 1.25, weight: FontWeight.w800).copyWith(color: cs.onSurface),
+      h2: body(22, 1.3, weight: FontWeight.w800).copyWith(color: cs.onSurface),
+      h3: body(18, 1.4, weight: FontWeight.w700).copyWith(color: cs.onSurface),
+      h1Padding: const EdgeInsets.only(top: 12, bottom: 12),
+      h2Padding: const EdgeInsets.only(top: 10, bottom: 10),
       h3Padding: const EdgeInsets.only(top: 8, bottom: 8),
       code: GoogleFonts.jetBrainsMono(
         color: cs.onSurface,
-        fontSize: 12.5,
+        fontSize: 13,
         height: 1.7,
         fontWeight: FontWeight.w500,
       ),
@@ -187,7 +187,7 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
       ),
       codeblockPadding: const EdgeInsets.all(16),
-      listBullet: body(14, 1.85),
+      listBullet: body(15, 1.8),
       horizontalRuleDecoration: BoxDecoration(
         border: Border(
           top: BorderSide(color: cs.onSurface.withValues(alpha: 0.08)),

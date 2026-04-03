@@ -366,27 +366,27 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w800, color: cs.onSurface)),
-          const SizedBox(height: 6),
+          Text(title, style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w700, color: cs.onSurface, letterSpacing: -0.3)),
+          const SizedBox(height: 4),
           Text(
             benchmarkText,
             style: GoogleFonts.inter(
               color: cs.onSurface.withValues(alpha: 0.5),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
                 child: Text(
                   valueText,
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.robotoMono(
                     color: cs.onSurface,
-                    fontWeight: FontWeight.w800,
-                    fontSize: valueText == '--' ? 18 : 28,
+                    fontWeight: FontWeight.w700,
+                    fontSize: valueText == '--' ? 20 : 32,
                     height: 1,
                   ),
                 ),

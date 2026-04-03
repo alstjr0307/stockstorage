@@ -2,7 +2,9 @@
 
 > **컨셉: "Calm Finance"**
 > 복잡한 금융 정보를 군더더기 없이. 토스처럼 — 보는 순간 이해되고, 쓰는 순간 편하게.
-> 여백으로 말하고, 타이포로 계층을 만든다.
+> 글씨로 압도하고, 여백으로 숨 쉬게 한다.
+>
+> **트렌드 레퍼런스**: 토스 커뮤니티 — 제목이 크고 bold, 탭은 pill 형태, 카드 경계 없이 배경 위에 콘텐츠 바로.
 
 ---
 
@@ -57,23 +59,24 @@
 
 | Token | Size | Weight | LineHeight | LetterSpacing | 용도 |
 |---|---|---|---|---|---|
-| `type.display` | 28px | 700 | 1.2 | -0.6 | 큰 숫자, 히어로 |
-| `type.title1` | 24px | 700 | 1.3 | -0.5 | 페이지 제목 |
-| `type.title2` | 20px | 700 | 1.35 | -0.4 | 섹션 제목 |
-| `type.title3` | 17px | 600 | 1.4 | -0.3 | 카드 제목 |
-| `type.body1` | 16px | 400 | 1.6 | 0 | 본문 |
-| `type.body2` | 14px | 400 | 1.6 | 0 | 보조 본문 |
+| `type.display` | 32px | 800 | 1.15 | -0.8 | 큰 숫자, 히어로 |
+| `type.title1` | 26px | 700 | 1.25 | -0.6 | 페이지 제목 |
+| `type.title2` | 22px | 700 | 1.3 | -0.5 | 섹션 제목, 카드 헤드라인 |
+| `type.title3` | 18px | 600 | 1.4 | -0.3 | 카드 제목, 리스트 아이템 |
+| `type.body1` | 16px | 400 | 1.65 | 0 | 본문 |
+| `type.body2` | 15px | 400 | 1.65 | 0 | 보조 본문 |
 | `type.caption1` | 13px | 500 | 1.4 | 0 | 라벨, 태그 |
 | `type.caption2` | 12px | 400 | 1.4 | 0 | 타임스탬프, 힌트 |
-| `type.micro` | 11px | 500 | 1.3 | 0 | 배지, 아주 작은 라벨 |
-| `type.number.lg` | 32px | 700 | 1.1 | -0.5 | 주가, 총액 (Mono) |
-| `type.number.md` | 18px | 600 | 1.3 | -0.3 | 수익률, 변동폭 (Mono) |
-| `type.number.sm` | 13px | 500 | 1.4 | 0 | 소형 수치 (Mono) |
+| `type.micro` | 11px | 600 | 1.3 | 0 | 배지, 아주 작은 라벨 |
+| `type.number.lg` | 34px | 700 | 1.05 | -0.6 | 주가, 총액 (Mono) |
+| `type.number.md` | 20px | 700 | 1.2 | -0.3 | 지수 카드 수치 (Mono) |
+| `type.number.sm` | 14px | 600 | 1.4 | 0 | 소형 수치 (Mono) |
 
 ### 원칙
 - **숫자는 항상 JetBrains Mono.** 자릿수 정렬이 곧 신뢰감.
-- weight는 400 / 600 / 700 세 가지만.
+- weight는 400 / 600 / 700 / 800 네 가지. 800은 display·히어로에만.
 - 색으로 강조하지 않고 **size와 weight로 계층** 만들기.
+- **title2(22px)** 를 카드 헤드라인 기본으로. 17px title3는 너무 작다.
 
 ---
 
@@ -162,6 +165,28 @@ Container(
 
 - 강조 색 accent bar 없음 — **여백과 타이포로 계층 표현**
 - 카드 안에 또 카드 넣지 않기
+- **카드 없이 배경에 직접** — 콘텐츠 피드(시황분석 리스트 등)는 카드 shell 없이 배경 위에 바로 표시하는 것도 고려. 제목을 크게 해서 계층 표현.
+
+**Borderless 콘텐츠 행 (토스 커뮤니티 스타일)**
+```dart
+// 카드 컨테이너 없이, 패딩과 Divider만으로
+Padding(
+  padding: EdgeInsets.fromLTRB(20, 20, 20, 20),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      // 메타 정보 (날짜, 카테고리)
+      Text(meta, style: type.caption1.copyWith(color: label.tertiary)),
+      SizedBox(height: 8),
+      // 제목 — 크고 bold
+      Text(title, style: type.title2),   // 22px w700
+      SizedBox(height: 6),
+      // 본문 프리뷰
+      Text(preview, maxLines: 2, style: type.body2.copyWith(color: label.secondary)),
+    ],
+  ),
+)
+```
 
 ---
 
@@ -275,18 +300,39 @@ Padding(
 
 ### Badge / Tag
 
+**Pill Badge (기본 — 토스 스타일)**
 ```dart
 Container(
-  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
   decoration: BoxDecoration(
     color: color.withValues(alpha: 0.1),
-    borderRadius: BorderRadius.circular(4),
+    borderRadius: BorderRadius.circular(9999),   // pill
   ),
   child: Text(label,
-    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
+    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
   ),
 )
 ```
+
+**Chip (텍스트 필터, 카테고리)**
+```dart
+Container(
+  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+  decoration: BoxDecoration(
+    color: isSelected ? accent.withValues(alpha: 0.12) : bg.tertiary,
+    borderRadius: BorderRadius.circular(9999),
+    border: isSelected ? Border.all(color: accent.withValues(alpha: 0.3)) : null,
+  ),
+  child: Text(label,
+    style: TextStyle(
+      fontSize: 13, fontWeight: FontWeight.w600,
+      color: isSelected ? accent : label.secondary,
+    ),
+  ),
+)
+```
+
+> borderRadius 4는 쓰지 않는다. 최소 6, 기본 pill(9999).
 
 ---
 
@@ -326,6 +372,27 @@ showModalBottomSheet(
 
 ### Tab Bar
 
+두 가지 스타일 중 선택:
+
+**① Pill 탭 (토스 커뮤니티 스타일 — 트렌디)**
+```dart
+TabBar(
+  labelStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+  unselectedLabelStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+  labelColor: label.primary,
+  unselectedLabelColor: label.tertiary,
+  dividerColor: Colors.transparent,
+  indicator: BoxDecoration(
+    color: bg.tertiary,                      // 선택된 탭 배경
+    borderRadius: BorderRadius.circular(9999),
+  ),
+  indicatorSize: TabBarIndicatorSize.tab,
+  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+  tabAlignment: TabAlignment.start,           // 좌측 정렬 (콘텐츠 탭)
+)
+```
+
+**② 언더라인 탭 (현재 스타일 — 클래식)**
 ```dart
 TabBar(
   labelStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
@@ -335,9 +402,11 @@ TabBar(
   indicatorColor: label.primary,
   indicatorWeight: 2,
   indicatorSize: TabBarIndicatorSize.label,
-  dividerColor: Colors.transparent,
+  dividerColor: border,
 )
 ```
+
+> 시황/지표 탭 → pill 탭 권장. 페이지 수가 많을수록 언더라인이 스크롤하기 좋음.
 
 ---
 
@@ -418,6 +487,15 @@ Container(height: 8, color: bg.tertiary)  // 토스 스타일 섹션 구분
 | 색 사용 | 거의 흑백 | 지수별 색상 + 상승/하락색 |
 | 숫자 폰트 | 일반 폰트 | JetBrains Mono |
 | 차트 | 없음 | 핵심 기능 |
+| 탭 스타일 | Pill 탭 (커뮤니티) | Pill 탭 권장 |
+| 타이포 크기 | 크고 bold (22-24px 헤드) | title2(22px) 적극 활용 |
+
+### 토스에서 직접 가져올 것들 ✅
+- **Pill 탭** — 언더라인보다 훨씬 트렌디
+- **큰 제목** — 카드 안 타이틀 22px w700, 숫자 34px
+- **배지 pill화** — borderRadius 4 → 9999
+- **카드리스 피드** — 분석글 목록은 카드 없이 배경 직접
+- **메타 먼저** — 날짜/카테고리 위에, 제목 아래
 
 ---
 
