@@ -111,7 +111,8 @@
       "Bash(ls c:/Users/alswp/stockstorage/*.json)",
       "Bash(ls c:/Users/alswp/stockstorage/scraper/*.json)",
       "Bash(node send_test_notification.js)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(git rebase:*)"
     ],
     "additionalDirectories": [
       "C:\\Users\\alswp\\Downloads",
