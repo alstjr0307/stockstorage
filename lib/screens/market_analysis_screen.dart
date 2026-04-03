@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models/market_analysis.dart';
@@ -462,7 +461,9 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           ),
         );
       },
-      child: Ink(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
@@ -478,21 +479,15 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             ),
           ],
         ),
-        child: Row(
+        child: Column(
           children: [
             Container(
-              width: 5,
-              decoration: BoxDecoration(
-                color: accent,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(18),
-                  bottomLeft: Radius.circular(18),
-                ),
-              ),
+              height: 4,
+              color: accent,
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -594,6 +589,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
@@ -745,22 +741,15 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             ),
           ],
         ),
-        child: IntrinsicHeight(
-          child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              width: 5,
-              decoration: BoxDecoration(
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Column(
+            children: [
+              Container(
+                height: 4,
                 color: accent,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(18),
-                  bottomLeft: Radius.circular(18),
-                ),
               ),
-            ),
-            Expanded(
-              child: Padding(
+              Padding(
                 padding: const EdgeInsets.all(14),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -863,10 +852,9 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                   ],
                 ),
               ),
-            ),
-          ],
+            ],
           ),
-        ),
+          ),
       ),
     );
   }
@@ -1118,16 +1106,16 @@ class _InvestorFlowCard extends StatelessWidget {
           .snapshots(),
       builder: (context, snapshot) {
         return Container(
-          padding: const EdgeInsets.all(18),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: cs.surface,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
+                color: Colors.black.withValues(alpha: 0.02),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
               ),
             ],
           ),
@@ -1172,27 +1160,44 @@ class _InvestorFlowCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: Text(
-                '마감 수급 TOP5',
-                style: GoogleFonts.inter(
-                  color: cs.onSurface,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '마감 수급 TOP5',
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface,
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '순매수 금액 기준 · 외인/기관 상위 5종목',
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.5),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ),
+            const SizedBox(width: 10),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFFF59E0B).withValues(alpha: 0.14),
+                color: cs.onSurface.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: cs.onSurface.withValues(alpha: 0.07)),
               ),
               child: Text(
                 data.marketDate,
                 style: GoogleFonts.inter(
-                  color: const Color(0xFFB45309),
+                  color: cs.onSurface.withValues(alpha: 0.72),
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
                 ),
@@ -1200,13 +1205,13 @@ class _InvestorFlowCard extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 18),
         _InvestorFlowMarketBlock(
           marketLabel: 'KOSPI',
           foreignTop5: data.kospiForeignTop5,
           institutionTop5: data.kospiInstitutionTop5,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
         _InvestorFlowMarketBlock(
           marketLabel: 'KOSDAQ',
           foreignTop5: data.kosdaqForeignTop5,
@@ -1390,10 +1395,58 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
   bool _capturing = false;
   bool _showWatermark = false;
 
-  String _shareText() {
-    return '주식저장소 마감수급\n\n'
-        '외국인과 기관이 가장 많이 순매수한 종목을 한눈에 확인해보세요.\n\n'
-        'https://stockstorage-13828.web.app';
+  Rect _shareOrigin() {
+    final size = MediaQuery.sizeOf(context);
+    return Rect.fromLTWH(size.width / 2, size.height / 2, 1, 1);
+  }
+
+  Future<void> _shareInvestorFlowText() async {
+    _InvestorFlowSnapshot? data;
+    try {
+      final query = await FirebaseFirestore.instance
+          .collection('market_investor_flow')
+          .orderBy('marketDate', descending: true)
+          .limit(1)
+          .get()
+          .timeout(const Duration(seconds: 5));
+      final doc = query.docs.isNotEmpty ? query.docs.first : null;
+      if (doc != null) {
+        data = _InvestorFlowSnapshot.fromMap(doc.data());
+      }
+    } catch (_) {
+      // 데이터 없이 공유
+    }
+    await Share.share(_shareText(data));
+  }
+
+  String _shareText(_InvestorFlowSnapshot? data) {
+    final lines = <String>[
+      '주식저장소 마감수급',
+      '',
+      '외국인과 기관이 가장 많이 순매수한 종목을 한눈에 확인해보세요.',
+    ];
+    if (data != null) {
+      lines.addAll([
+        '',
+        '[${data.marketDate}]',
+        '외인 순매수 TOP5 (KOSPI): ${_top5Names(data.kospiForeignTop5)}',
+        '기관 순매수 TOP5 (KOSPI): ${_top5Names(data.kospiInstitutionTop5)}',
+        '외인 순매수 TOP5 (KOSDAQ): ${_top5Names(data.kosdaqForeignTop5)}',
+        '기관 순매수 TOP5 (KOSDAQ): ${_top5Names(data.kosdaqInstitutionTop5)}',
+      ]);
+    }
+    lines.addAll(['', 'https://stockstorage-13828.web.app']);
+    return lines.join('\n');
+  }
+
+  String _top5Names(List<_InvestorFlowItem> items) {
+    final names = items
+        .map((item) => item.name.trim())
+        .where((name) => name.isNotEmpty && name != '-')
+        .take(5)
+        .toList();
+    if (names.isEmpty) return '-';
+    return names.join(', ');
   }
 
   Future<void> _captureAndShare() async {
@@ -1416,15 +1469,15 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       if (data == null) return;
 
-      final dir = await getTemporaryDirectory();
       final file = File(
-        '${dir.path}/investor_flow_${DateTime.now().millisecondsSinceEpoch}.png',
+        '${Directory.systemTemp.path}/investor_flow_${DateTime.now().millisecondsSinceEpoch}.png',
       );
       await file.writeAsBytes(data.buffer.asUint8List());
 
       await Share.shareXFiles(
         [XFile(file.path)],
         text: '주식저장소 마감수급',
+        sharePositionOrigin: _shareOrigin(),
       );
     } finally {
       if (mounted) {
@@ -1467,7 +1520,7 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
         actions: [
           IconButton(
             tooltip: '공유하기',
-            onPressed: () => Share.share(_shareText()),
+            onPressed: _shareInvestorFlowText,
             icon: const Icon(Icons.share_outlined),
           ),
         ],
@@ -1552,6 +1605,11 @@ class _FmkoreaIndexDetailScreenState extends State<_FmkoreaIndexDetailScreen> {
   bool _capturing = false;
   bool _showWatermark = false;
 
+  Rect _shareOrigin() {
+    final size = MediaQuery.sizeOf(context);
+    return Rect.fromLTWH(size.width / 2, size.height / 2, 1, 1);
+  }
+
   Future<void> _captureAndShare() async {
     if (_capturing) return;
 
@@ -1572,15 +1630,15 @@ class _FmkoreaIndexDetailScreenState extends State<_FmkoreaIndexDetailScreen> {
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       if (data == null) return;
 
-      final dir = await getTemporaryDirectory();
       final file = File(
-        '${dir.path}/fmkorea_index_${DateTime.now().millisecondsSinceEpoch}.png',
+        '${Directory.systemTemp.path}/fmkorea_index_${DateTime.now().millisecondsSinceEpoch}.png',
       );
       await file.writeAsBytes(data.buffer.asUint8List());
 
       await Share.shareXFiles(
         [XFile(file.path)],
         text: '주식저장소 펨코지수',
+        sharePositionOrigin: _shareOrigin(),
       );
     } finally {
       if (mounted) {
@@ -1704,33 +1762,62 @@ class _InvestorFlowMarketBlock extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: cs.onSurface.withValues(alpha: 0.03),
-        borderRadius: BorderRadius.circular(20),
+        color: cs.onSurface.withValues(alpha: 0.02),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            marketLabel,
-            style: GoogleFonts.inter(
-              color: cs.onSurface,
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-            ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: cs.onSurface.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  marketLabel,
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'TOP5',
+                style: GoogleFonts.robotoMono(
+                  color: cs.onSurface.withValues(alpha: 0.45),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            height: 1,
+            color: cs.onSurface.withValues(alpha: 0.08),
           ),
           const SizedBox(height: 12),
           _InvestorFlowGroup(
             title: '외국인 순매수',
-            color: const Color(0xFF22C55E),
+            color: const Color(0xFF16A34A),
             items: foreignTop5,
             icon: Icons.trending_up_rounded,
+            emoji: '🌎',
           ),
           const SizedBox(height: 10),
           _InvestorFlowGroup(
             title: '기관 순매수',
-            color: const Color(0xFFF97316),
+            color: const Color(0xFFEA580C),
             items: institutionTop5,
             icon: Icons.account_balance_rounded,
+            emoji: '🏦',
           ),
         ],
       ),
@@ -1744,25 +1831,20 @@ class _InvestorFlowGroup extends StatelessWidget {
     required this.color,
     required this.items,
     required this.icon,
+    this.emoji,
   });
 
   final String title;
   final Color color;
   final List<_InvestorFlowItem> items;
   final IconData icon;
+  final String? emoji;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: LinearGradient(
-          colors: [color.withValues(alpha: 0.13), cs.surface],
-        ),
-        border: Border.all(color: color.withValues(alpha: 0.18)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 4, 2, 2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1772,12 +1854,19 @@ class _InvestorFlowGroup extends StatelessWidget {
                 width: 30,
                 height: 30,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.14),
+                  color: color.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: color, size: 16),
+                child: emoji != null
+                    ? Center(
+                        child: Text(
+                          emoji!,
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      )
+                    : Icon(icon, color: color, size: 16),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 9),
               Expanded(
                 child: Text(
                   title,
@@ -1788,18 +1877,32 @@ class _InvestorFlowGroup extends StatelessWidget {
                   ),
                 ),
               ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'TOP5',
+                  style: GoogleFonts.robotoMono(
+                    color: color,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            '순매수 금액 기준 상위 5개',
-            style: GoogleFonts.inter(
-              color: cs.onSurface.withValues(alpha: 0.42),
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
+          const SizedBox(height: 8),
+          Container(
+            height: 3,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(999),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           if (items.isEmpty)
             Text(
               '데이터가 없습니다.',
@@ -1809,54 +1912,74 @@ class _InvestorFlowGroup extends StatelessWidget {
               ),
             )
           else
-            ...items.map(
-              (item) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
+            ...List.generate(items.length, (index) {
+              final item = items[index];
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 24,
+                          height: 24,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${item.rank}',
+                            style: GoogleFonts.inter(
+                              color: color,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            item.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.inter(
+                              color: cs.onSurface,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: cs.onSurface.withValues(alpha: 0.04),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            item.amountEokText,
+                            style: GoogleFonts.robotoMono(
+                              color: cs.onSurface.withValues(alpha: 0.74),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (index != items.length - 1)
                     Container(
-                      width: 24,
-                      height: 24,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: color.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '${item.rank}',
-                        style: GoogleFonts.inter(
-                          color: color,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
+                      height: 1,
+                      color: cs.onSurface.withValues(alpha: 0.06),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        item.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
-                          color: cs.onSurface,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      item.amountEokText,
-                      style: GoogleFonts.robotoMono(
-                        color: cs.onSurface.withValues(alpha: 0.74),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+                ],
+              );
+            }),
         ],
       ),
     );
@@ -1962,7 +2085,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
             snapshot.data?.docs
                 .map(
                   (doc) => _FmkoreaDailyCount(
-                    dateKey: doc.id,
+                    dateKey: _normalizeDateKey(doc.id),
                     count: (doc.data()['count'] as num?)?.toInt() ?? 0,
                     updatedAt: (doc.data()['updatedAt'] as Timestamp?)
                         ?.toDate(),
@@ -2309,9 +2432,22 @@ class _FmkoreaIndexCard extends StatelessWidget {
         currentTime.day,
       );
       final changeRate = ((current.$2 - previous.$2) / previous.$2) * 100;
-      final prevKey = _previousWeekdayKey(currentDate);
       final currentKey = DateFormat('yyyy.MM.dd').format(currentTime);
-      sameDayChangeByDate[currentKey] = changeRate;
+      final prevDayKey = DateFormat(
+        'yyyy.MM.dd',
+      ).format(currentTime.subtract(const Duration(days: 1)));
+      final nextDayKey = DateFormat(
+        'yyyy.MM.dd',
+      ).format(currentTime.add(const Duration(days: 1)));
+      final mappedKey = _resolveKospiDateKey(
+        countByDate: countByDate,
+        currentKey: currentKey,
+        prevDayKey: prevDayKey,
+        nextDayKey: nextDayKey,
+      );
+      sameDayChangeByDate[mappedKey] = changeRate;
+
+      final prevKey = _previousWeekdayKey(DateFormat('yyyy.MM.dd').parse(mappedKey));
       final postCount = countByDate[prevKey];
       if (postCount == null) continue;
       xs.add(postCount);
@@ -2340,6 +2476,18 @@ class _FmkoreaIndexCard extends StatelessWidget {
       sameDayChangeByDate: sameDayChangeByDate,
       correlation: correlation,
     );
+  }
+
+  String _resolveKospiDateKey({
+    required Map<String, double> countByDate,
+    required String currentKey,
+    required String prevDayKey,
+    required String nextDayKey,
+  }) {
+    if (countByDate.containsKey(currentKey)) return currentKey;
+    if (countByDate.containsKey(prevDayKey)) return prevDayKey;
+    if (countByDate.containsKey(nextDayKey)) return nextDayKey;
+    return currentKey;
   }
 
   String _previousWeekdayKey(DateTime date) {
@@ -2445,13 +2593,17 @@ class _FmkoreaIndexCard extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                '$count',
-                style: GoogleFonts.inter(
-                  color: cs.onSurface,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
-                  height: 1,
+              Flexible(
+                child: Text(
+                  '$count',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface,
+                    fontSize: 30,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                  ),
                 ),
               ),
               const SizedBox(width: 6),
@@ -3038,6 +3190,16 @@ class _FmkoreaTrendPainter extends CustomPainter {
     )..layout();
     tp.paint(canvas, Offset(x, y));
   }
+}
+
+String _normalizeDateKey(String raw) {
+  final text = raw.trim();
+  final match = RegExp(r'(\d{4})\D+(\d{1,2})\D+(\d{1,2})').firstMatch(text);
+  if (match == null) return text;
+  final y = match.group(1)!;
+  final m = match.group(2)!.padLeft(2, '0');
+  final d = match.group(3)!.padLeft(2, '0');
+  return '$y.$m.$d';
 }
 
 class _FmkoreaDailyCount {

@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -559,6 +558,11 @@ class _ShareCardSheet extends StatefulWidget {
 class _ShareCardSheetState extends State<_ShareCardSheet> {
   bool _sharing = false;
 
+  Rect _shareOrigin() {
+    final size = MediaQuery.sizeOf(context);
+    return Rect.fromLTWH(size.width / 2, size.height / 2, 1, 1);
+  }
+
   Future<void> _captureAndShare() async {
     setState(() => _sharing = true);
     await Future.delayed(const Duration(milliseconds: 60));
@@ -570,12 +574,14 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return;
       final bytes = byteData.buffer.asUint8List();
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/portfolio_${DateTime.now().millisecondsSinceEpoch}.png');
+      final file = File(
+        '${Directory.systemTemp.path}/portfolio_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
       await file.writeAsBytes(bytes);
       await Share.shareXFiles(
         [XFile(file.path)],
         text: '📊 주식저장소 관심추천주 현황',
+        sharePositionOrigin: _shareOrigin(),
       );
     } finally {
       if (mounted) setState(() => _sharing = false);

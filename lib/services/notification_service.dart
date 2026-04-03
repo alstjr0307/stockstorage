@@ -35,6 +35,13 @@ class NotificationService {
       sound: true,
     );
 
+    // iOS 포그라운드 알림 배너 표시
+    await messaging.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+
     // 로컬 알림 초기화
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const iosSettings = DarwinInitializationSettings();
@@ -49,12 +56,17 @@ class NotificationService {
           apnsToken = await messaging.getAPNSToken();
           if (apnsToken == null) await Future.delayed(const Duration(seconds: 1));
         }
-        if (apnsToken != null) {
-          final token = await messaging.getToken();
-          if (token != null) {
-            final uid = FirebaseAuth.instance.currentUser?.uid;
-            FirestoreService().saveFcmToken(token, uid: uid).catchError((_) {});
-          }
+        final db = FirestoreService();
+        if (apnsToken == null) {
+          db.logFcmDebug('apns_token_null');
+          return;
+        }
+        final token = await messaging.getToken();
+        if (token != null) {
+          final uid = FirebaseAuth.instance.currentUser?.uid;
+          FirestoreService().saveFcmToken(token, uid: uid).catchError((_) {});
+        } else {
+          db.logFcmDebug('fcm_token_null, apns=$apnsToken');
         }
       } else {
         final token = await messaging.getToken();
@@ -63,8 +75,8 @@ class NotificationService {
           FirestoreService().saveFcmToken(token, uid: uid).catchError((_) {});
         }
       }
-    } catch (_) {
-      // SERVICE_NOT_AVAILABLE 등 FCM 미지원 환경
+    } catch (e) {
+      FirestoreService().logFcmDebug('exception: $e');
     }
 
     // 새 종목 알림 토픽 구독
@@ -74,6 +86,17 @@ class NotificationService {
     messaging.onTokenRefresh.listen((t) {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       FirestoreService().saveFcmToken(t, uid: uid).catchError((_) {});
+    });
+
+    // 로그인 시점에 토큰 재저장 (앱 시작 시 미로그인 상태로 저장 실패한 경우 대비)
+    FirebaseAuth.instance.authStateChanges().listen((user) async {
+      if (user == null) return;
+      try {
+        final token = await messaging.getToken();
+        if (token != null) {
+          FirestoreService().saveFcmToken(token, uid: user.uid).catchError((_) {});
+        }
+      } catch (_) {}
     });
 
     // 포그라운드 메시지 수신

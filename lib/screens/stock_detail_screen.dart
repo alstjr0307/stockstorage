@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -425,12 +424,17 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return;
       final bytes = byteData.buffer.asUint8List();
-      final dir = await getTemporaryDirectory();
       final file = File(
-        '${dir.path}/pick_${DateTime.now().millisecondsSinceEpoch}.png',
+        '${Directory.systemTemp.path}/pick_${DateTime.now().millisecondsSinceEpoch}.png',
       );
       await file.writeAsBytes(bytes);
-      await Share.shareXFiles([XFile(file.path)], text: '📈 주식저장소 추천 종목');
+      final size = MediaQuery.sizeOf(context);
+      final origin = Rect.fromLTWH(size.width / 2, size.height / 2, 1, 1);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: '📈 주식저장소 추천 종목',
+        sharePositionOrigin: origin,
+      );
     } finally {
       if (mounted)
         setState(() {

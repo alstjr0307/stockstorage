@@ -200,13 +200,22 @@ class StockPriceService {
       final double change;
       final double changeRate;
       final directChange = (meta['regularMarketChange'] as num?)?.toDouble();
-      final directChangeRate = (meta['regularMarketChangePercent'] as num?)
-          ?.toDouble();
-      if (directChange != null && directChangeRate != null) {
+      if (directChange != null) {
+        final prevClose =
+            (meta['regularMarketPreviousClose'] as num?)?.toDouble() ??
+            (meta['chartPreviousClose'] as num?)?.toDouble() ??
+            (meta['previousClose'] as num?)?.toDouble();
         change = directChange;
-        changeRate = directChangeRate;
+        if (prevClose != null && prevClose != 0) {
+          changeRate = (change / prevClose) * 100;
+        } else {
+          changeRate = (meta['regularMarketChangePercent'] as num?)
+                  ?.toDouble() ??
+              0.0;
+        }
       } else {
         final prevClose =
+            (meta['regularMarketPreviousClose'] as num?)?.toDouble() ??
             (meta['chartPreviousClose'] as num?)?.toDouble() ??
             (meta['previousClose'] as num?)?.toDouble() ??
             price;

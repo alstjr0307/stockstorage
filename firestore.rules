@@ -88,9 +88,10 @@ service cloud.firestore {
       allow update: if false;
     }
 
-    // ─── fcm_tokens: 로그인 유저 쓰기, 관리자 읽기 ───────────────────
+    // ─── fcm_tokens: 누구나 쓰기, 관리자 읽기/삭제 ──────────────────
     match /fcm_tokens/{token} {
-      allow create, update: if isLoggedIn();
+      allow create, update: if request.resource.data.keys().hasOnly(['token', 'uid', 'updatedAt'])
+        && request.resource.data.token == token;
       allow read, delete: if isAdmin();
     }
 

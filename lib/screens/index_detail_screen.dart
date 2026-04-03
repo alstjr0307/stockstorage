@@ -1,11 +1,13 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../services/analytics_service.dart';
 import '../services/stock_price_service.dart';
+import 'chart_visible_range.dart';
 
 typedef _OHLC = ({
   DateTime date,
@@ -54,6 +56,16 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
   int? _touchedIndex;
   _Period _selectedPeriod = _Period.day1;
   int _fetchSeq = 0;
+  ChartVisibleRange _visibleRange = const ChartVisibleRange(0, 0);
+  ChartVisibleRange? _rangeAtScaleStart;
+  Offset? _focalPointAtScaleStart;
+
+  List<_OHLC> get _displayCandles {
+    if (_candles.isEmpty || _visibleRange.width <= 0) return [];
+    final start = _visibleRange.start.floor().clamp(0, _candles.length);
+    final end = _visibleRange.end.ceil().clamp(start, _candles.length);
+    return _candles.sublist(start, end);
+  }
 
   @override
   void initState() {
@@ -86,6 +98,11 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
       _candles = data;
       _loadingChart = false;
       _touchedIndex = null;
+      final defaultView = _selectedPeriod == _Period.day1 ? 120 : data.length;
+      final startIdx = (data.length - defaultView)
+          .clamp(0, data.length)
+          .toDouble();
+      _visibleRange = ChartVisibleRange(startIdx, data.length.toDouble());
     });
   }
 
@@ -105,8 +122,27 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
       _selectedPeriod = period;
       _loadingChart = true;
       _touchedIndex = null;
+      _visibleRange = const ChartVisibleRange(0, 0);
     });
     _fetchCandles(++_fetchSeq);
+  }
+
+  void _openFullscreenChart() {
+    if (_candles.length < 2) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => _IndexFullscreenChartPage(
+          title: widget.name,
+          symbol: widget.symbol,
+          initialCandles: _candles,
+          initialPeriod: _selectedPeriod,
+          initialRange: _visibleRange,
+          formatValue: _formatValue,
+        ),
+      ),
+    );
   }
 
   String _formatValue(double value) {
@@ -259,30 +295,16 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _summaryStat(
-                        context,
-                        label: '추세',
-                        value: price.changeRate >= 0 ? '상승 우위' : '하락 우위',
-                      ),
+                const SizedBox(height: 14),
+                if (price.marketTime != null)
+                  Text(
+                    '🕐 기준 ${DateFormat('MM.dd HH:mm').format(price.marketTime!)}',
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.38),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _summaryStat(
-                        context,
-                        label: '기준 시각',
-                        value: price.marketTime == null
-                            ? '-'
-                            : DateFormat(
-                                'MM.dd HH:mm',
-                              ).format(price.marketTime!),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
               ],
             ),
     );
@@ -290,13 +312,14 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
 
   Widget _buildChartCard(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final hasData = !_loadingChart && _candles.length >= 2;
+    final dc = _loadingChart ? <_OHLC>[] : _displayCandles;
+    final hasData = !_loadingChart && dc.length >= 2;
     final touched =
-        hasData && _touchedIndex != null && _touchedIndex! < _candles.length
-        ? _candles[_touchedIndex!]
+        hasData && _touchedIndex != null && _touchedIndex! < dc.length
+        ? dc[_touchedIndex!]
         : null;
-    final firstClose = hasData ? _candles.first.close : 0.0;
-    final lastClose = hasData ? _candles.last.close : 0.0;
+    final firstClose = hasData ? dc.first.close : 0.0;
+    final lastClose = hasData ? dc.last.close : 0.0;
     final deltaPct = hasData
         ? ((lastClose - firstClose) / firstClose) * 100
         : 0.0;
@@ -325,7 +348,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
           Row(
             children: [
               Text(
-                '가격 흐름',
+                '차트',
                 style: GoogleFonts.inter(
                   color: cs.onSurface,
                   fontSize: 17,
@@ -342,6 +365,22 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: hasData ? _openFullscreenChart : null,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: cs.onSurface.withValues(alpha: 0.15)),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Icon(
+                    Icons.fullscreen,
+                    size: 16,
+                    color: cs.onSurface.withValues(alpha: 0.45),
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -451,25 +490,20 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
           else
             LayoutBuilder(
               builder: (context, constraints) {
+                final chartW = constraints.maxWidth;
                 return GestureDetector(
-                  onTapDown: (details) => _handleTouch(
-                    details.localPosition.dx,
-                    constraints.maxWidth,
-                  ),
-                  onHorizontalDragDown: (details) => _handleTouch(
-                    details.localPosition.dx,
-                    constraints.maxWidth,
-                  ),
-                  onHorizontalDragUpdate: (details) => _handleTouch(
-                    details.localPosition.dx,
-                    constraints.maxWidth,
-                  ),
-                  onHorizontalDragEnd: (_) =>
-                      setState(() => _touchedIndex = null),
+                  onLongPressStart: (details) =>
+                      _onTouch(details.localPosition.dx, chartW),
+                  onLongPressMoveUpdate: (details) =>
+                      _onTouch(details.localPosition.dx, chartW),
+                  onLongPressEnd: (_) => setState(() => _touchedIndex = null),
+                  onScaleStart: _onScaleStart,
+                  onScaleUpdate: (details) => _onScaleUpdate(details, chartW),
+                  onScaleEnd: _onScaleEnd,
                   child: CustomPaint(
                     size: Size(constraints.maxWidth, 240),
                     painter: _CandlePainter(
-                      candles: _candles,
+                      candles: dc,
                       touchedIndex: _touchedIndex,
                       formatValue: _formatValue,
                       formatDate: (date) {
@@ -482,6 +516,10 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                         return DateFormat('MM/dd').format(date);
                       },
                       labelColor: cs.onSurface,
+                      allCandles: _candles,
+                      visibleStart: _visibleRange.start
+                          .floor()
+                          .clamp(0, _candles.length),
                     ),
                   ),
                 );
@@ -492,15 +530,64 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
     );
   }
 
-  void _handleTouch(double localX, double width) {
+  void _onTouch(double localX, double width) {
     if (_candles.isEmpty) return;
     const yAxisW = 48.0;
     final chartWidth = width - yAxisW;
+    if (chartWidth <= 0) return;
     final adjustedX = (localX - yAxisW).clamp(0.0, chartWidth);
-    final index = ((adjustedX / chartWidth) * (_candles.length - 1)).round();
-    if (_touchedIndex != index) {
-      setState(() => _touchedIndex = index);
+    final visibleWidth = _visibleRange.width;
+    if (visibleWidth <= 0) return;
+    final fractionalIndex =
+        _visibleRange.start + (adjustedX / chartWidth) * visibleWidth;
+    final overallIndex = fractionalIndex.floor().clamp(0, _candles.length - 1);
+    final displayStartIdx = _visibleRange.start.floor();
+    final displayTouchedIdx = overallIndex - displayStartIdx;
+    if (_touchedIndex != displayTouchedIdx) {
+      setState(() => _touchedIndex = displayTouchedIdx);
     }
+  }
+
+  void _onScaleStart(ScaleStartDetails details) {
+    _rangeAtScaleStart = _visibleRange;
+    _focalPointAtScaleStart = details.localFocalPoint;
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails details, double chartWidth) {
+    if (_rangeAtScaleStart == null ||
+        _focalPointAtScaleStart == null ||
+        _candles.isEmpty) {
+      return;
+    }
+    const yAxisW = 48.0;
+    final candleAreaW = chartWidth - yAxisW;
+    if (candleAreaW <= 0) return;
+
+    final newWidth = (_rangeAtScaleStart!.width / details.scale).clamp(
+      5.0,
+      _candles.length.toDouble(),
+    );
+    final focalFraction = ((_focalPointAtScaleStart!.dx - yAxisW) / candleAreaW)
+        .clamp(0.0, 1.0);
+    final anchorCandle =
+        _rangeAtScaleStart!.start + focalFraction * _rangeAtScaleStart!.width;
+    final panDeltaX = details.localFocalPoint.dx - _focalPointAtScaleStart!.dx;
+    final panDeltaCandles = (panDeltaX / candleAreaW) * newWidth;
+
+    var newStart = anchorCandle - (focalFraction * newWidth) - panDeltaCandles;
+    if (newStart < 0) newStart = 0;
+    if (newStart + newWidth > _candles.length) {
+      newStart = _candles.length - newWidth;
+    }
+    setState(() {
+      _visibleRange = ChartVisibleRange(newStart, newStart + newWidth);
+      _touchedIndex = null;
+    });
+  }
+
+  void _onScaleEnd(ScaleEndDetails _) {
+    _rangeAtScaleStart = null;
+    _focalPointAtScaleStart = null;
   }
 
   Widget _periodPill(
@@ -649,12 +736,406 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
   }
 }
 
+class _IndexFullscreenChartPage extends StatefulWidget {
+  const _IndexFullscreenChartPage({
+    required this.title,
+    required this.symbol,
+    required this.initialCandles,
+    required this.initialPeriod,
+    required this.initialRange,
+    required this.formatValue,
+  });
+
+  final String title;
+  final String symbol;
+  final List<_OHLC> initialCandles;
+  final _Period initialPeriod;
+  final ChartVisibleRange initialRange;
+  final String Function(double) formatValue;
+
+  @override
+  State<_IndexFullscreenChartPage> createState() =>
+      _IndexFullscreenChartPageState();
+}
+
+class _IndexFullscreenChartPageState extends State<_IndexFullscreenChartPage> {
+  late _Period _period;
+  late List<_OHLC> _candles;
+  bool _loading = false;
+  int _fetchSeq = 0;
+  int? _touchedIndex;
+  late ChartVisibleRange _visibleRange;
+  ChartVisibleRange? _rangeAtScaleStart;
+  Offset? _focalPointAtScaleStart;
+
+  List<_OHLC> get _displayCandles {
+    if (_candles.isEmpty || _visibleRange.width <= 0) return [];
+    final start = _visibleRange.start.floor().clamp(0, _candles.length);
+    final end = _visibleRange.end.ceil().clamp(start, _candles.length);
+    return _candles.sublist(start, end);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _period = widget.initialPeriod;
+    _candles = widget.initialCandles;
+    _visibleRange = widget.initialRange;
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    super.dispose();
+  }
+
+  Future<void> _fetchCandles(int seq) async {
+    final data = await StockPriceService.fetchOHLC(
+      widget.symbol,
+      'US',
+      interval: _period.interval,
+      range: _period.range,
+    );
+    if (!mounted || _fetchSeq != seq) return;
+    setState(() {
+      _candles = data;
+      _loading = false;
+      _touchedIndex = null;
+      final defaultView = _period == _Period.day1 ? 120 : data.length;
+      final startIdx = (data.length - defaultView)
+          .clamp(0, data.length)
+          .toDouble();
+      _visibleRange = ChartVisibleRange(startIdx, data.length.toDouble());
+    });
+  }
+
+  void _selectPeriod(_Period period) {
+    if (_period == period) return;
+    setState(() {
+      _period = period;
+      _loading = true;
+      _touchedIndex = null;
+      _visibleRange = const ChartVisibleRange(0, 0);
+    });
+    _fetchCandles(++_fetchSeq);
+  }
+
+  void _onTouch(double localX, double width) {
+    if (_candles.isEmpty) return;
+    const yAxisW = 48.0;
+    final chartWidth = width - yAxisW;
+    if (chartWidth <= 0) return;
+    final adjustedX = (localX - yAxisW).clamp(0.0, chartWidth);
+    final visibleWidth = _visibleRange.width;
+    if (visibleWidth <= 0) return;
+    final fractionalIndex =
+        _visibleRange.start + (adjustedX / chartWidth) * visibleWidth;
+    final overallIndex = fractionalIndex.floor().clamp(0, _candles.length - 1);
+    final displayStartIdx = _visibleRange.start.floor();
+    final displayTouchedIdx = overallIndex - displayStartIdx;
+    if (_touchedIndex != displayTouchedIdx) {
+      setState(() => _touchedIndex = displayTouchedIdx);
+    }
+  }
+
+  void _onScaleStart(ScaleStartDetails details) {
+    _rangeAtScaleStart = _visibleRange;
+    _focalPointAtScaleStart = details.localFocalPoint;
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails details, double chartWidth) {
+    if (_rangeAtScaleStart == null ||
+        _focalPointAtScaleStart == null ||
+        _candles.isEmpty) {
+      return;
+    }
+    const yAxisW = 48.0;
+    final candleAreaW = chartWidth - yAxisW;
+    if (candleAreaW <= 0) return;
+    final newWidth = (_rangeAtScaleStart!.width / details.scale).clamp(
+      5.0,
+      _candles.length.toDouble(),
+    );
+    final focalFraction = ((_focalPointAtScaleStart!.dx - yAxisW) / candleAreaW)
+        .clamp(0.0, 1.0);
+    final anchorCandle =
+        _rangeAtScaleStart!.start + focalFraction * _rangeAtScaleStart!.width;
+    final panDeltaX = details.localFocalPoint.dx - _focalPointAtScaleStart!.dx;
+    final panDeltaCandles = (panDeltaX / candleAreaW) * newWidth;
+
+    var newStart = anchorCandle - (focalFraction * newWidth) - panDeltaCandles;
+    if (newStart < 0) newStart = 0;
+    if (newStart + newWidth > _candles.length) {
+      newStart = _candles.length - newWidth;
+    }
+    setState(() {
+      _visibleRange = ChartVisibleRange(newStart, newStart + newWidth);
+      _touchedIndex = null;
+    });
+  }
+
+  void _onScaleEnd(ScaleEndDetails _) {
+    _rangeAtScaleStart = null;
+    _focalPointAtScaleStart = null;
+  }
+
+  Widget _fsBtn(String label, bool active, ColorScheme cs, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: active
+              ? const Color(0xFF4ADE80)
+              : cs.onSurface.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            color: active ? Colors.black : cs.onSurface.withValues(alpha: 0.6),
+            fontSize: 12,
+            fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _ohlcLabel(
+    String label,
+    double value,
+    ColorScheme cs, {
+    Color? color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 10),
+      child: RichText(
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: '$label ',
+              style: GoogleFonts.inter(
+                color: cs.onSurface.withValues(alpha: 0.38),
+                fontSize: 10,
+              ),
+            ),
+            TextSpan(
+              text: widget.formatValue(value),
+              style: GoogleFonts.inter(
+                color: color ?? cs.onSurface.withValues(alpha: 0.87),
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _axisDate(DateTime date) {
+    if (_period.isMinute) return DateFormat('HH:mm').format(date);
+    if (_period == _Period.month) return DateFormat('yy/MM').format(date);
+    return DateFormat('MM/dd').format(date);
+  }
+
+  String _formatDate(DateTime date) {
+    if (_period.isMinute) {
+      return DateFormat('MM.dd HH:mm').format(date);
+    }
+    if (_period == _Period.month) {
+      return DateFormat('yyyy.MM').format(date);
+    }
+    return DateFormat('yyyy.MM.dd').format(date);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final dc = _displayCandles;
+    final touched = _touchedIndex != null && _touchedIndex! < dc.length
+        ? dc[_touchedIndex!]
+        : null;
+
+    return Scaffold(
+      backgroundColor: cs.surface,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 150),
+                  child: touched != null
+                      ? Padding(
+                          key: ValueKey(_touchedIndex),
+                          padding: const EdgeInsets.only(
+                            left: 10,
+                            top: 4,
+                            bottom: 4,
+                          ),
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                Text(
+                                  _formatDate(touched.date),
+                                  style: GoogleFonts.inter(
+                                    color: cs.onSurface.withValues(alpha: 0.54),
+                                    fontSize: 11,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                _ohlcLabel('시', touched.open, cs),
+                                _ohlcLabel(
+                                  '고',
+                                  touched.high,
+                                  cs,
+                                  color: const Color(0xFF22C55E),
+                                ),
+                                _ohlcLabel(
+                                  '저',
+                                  touched.low,
+                                  cs,
+                                  color: const Color(0xFFEF4444),
+                                ),
+                                _ohlcLabel(
+                                  '종',
+                                  touched.close,
+                                  cs,
+                                  color: touched.close >= touched.open
+                                      ? const Color(0xFF22C55E)
+                                      : const Color(0xFFEF4444),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : const SizedBox(key: ValueKey('empty'), height: 26),
+                ),
+                Expanded(
+                  child: _loading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF4ADE80),
+                          ),
+                        )
+                      : LayoutBuilder(
+                          builder: (context, constraints) {
+                            final chartW = constraints.maxWidth;
+                            return GestureDetector(
+                              onLongPressStart: (details) =>
+                                  _onTouch(details.localPosition.dx, chartW),
+                              onLongPressMoveUpdate: (details) =>
+                                  _onTouch(details.localPosition.dx, chartW),
+                              onLongPressEnd: (_) =>
+                                  setState(() => _touchedIndex = null),
+                              onScaleStart: _onScaleStart,
+                              onScaleUpdate: (details) =>
+                                  _onScaleUpdate(details, chartW),
+                              onScaleEnd: _onScaleEnd,
+                              child: CustomPaint(
+                                size: Size(chartW, constraints.maxHeight),
+                                painter: _CandlePainter(
+                                  candles: dc,
+                                  touchedIndex: _touchedIndex,
+                                  formatValue: widget.formatValue,
+                                  formatDate: _axisDate,
+                                  labelColor: cs.onSurface,
+                                  allCandles: _candles,
+                                  visibleStart: _visibleRange.start
+                                      .floor()
+                                      .clamp(0, _candles.length),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: Column(
+                    children: [
+                      AnimatedSize(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeInOut,
+                        alignment: Alignment.bottomCenter,
+                        child: _period.isMinute
+                            ? Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [_Period.min1, _Period.min5, _Period.min60]
+                                      .map(
+                                        (p) => _fsBtn(
+                                          p.label,
+                                          _period == p,
+                                          cs,
+                                          () => _selectPeriod(p),
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _fsBtn('분봉', _period.isMinute, cs, () {
+                            if (!_period.isMinute) _selectPeriod(_Period.min1);
+                          }),
+                          ...[_Period.day1, _Period.week, _Period.month].map(
+                            (p) => _fsBtn(
+                              p.label,
+                              _period == p,
+                              cs,
+                              () => _selectPeriod(p),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: IconButton(
+                icon: Icon(
+                  Icons.fullscreen_exit,
+                  color: cs.onSurface.withValues(alpha: 0.6),
+                ),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _CandlePainter extends CustomPainter {
   final List<_OHLC> candles;
   final int? touchedIndex;
   final String Function(double) formatValue;
   final String Function(DateTime) formatDate;
   final Color labelColor;
+  final List<_OHLC>? allCandles;
+  final int visibleStart;
 
   const _CandlePainter({
     required this.candles,
@@ -662,6 +1143,8 @@ class _CandlePainter extends CustomPainter {
     required this.formatValue,
     required this.formatDate,
     required this.labelColor,
+    this.allCandles,
+    this.visibleStart = 0,
   });
 
   @override
@@ -726,6 +1209,47 @@ class _CandlePainter extends CustomPainter {
       );
     }
 
+    // 이동평균선: 5 / 20 / 60 / 120
+    if (allCandles != null && allCandles!.isNotEmpty) {
+      const maConfigs = [
+        (5, Color(0xFFFFA726)),
+        (20, Color(0xFF42A5F5)),
+        (60, Color(0xFFAB47BC)),
+        (120, Color(0xFFEF5350)),
+      ];
+      for (final (period, color) in maConfigs) {
+        final path = Path();
+        var started = false;
+        for (int i = 0; i < n; i++) {
+          final globalIndex = visibleStart + i;
+          if (globalIndex < period - 1) continue;
+          if (globalIndex >= allCandles!.length) continue;
+          var sum = 0.0;
+          for (int k = globalIndex - period + 1; k <= globalIndex; k++) {
+            sum += allCandles![k].close;
+          }
+          final ma = sum / period;
+          final cx = toX(i, n);
+          final cy = toY(ma);
+          if (!started) {
+            path.moveTo(cx, cy);
+            started = true;
+          } else {
+            path.lineTo(cx, cy);
+          }
+        }
+        if (started) {
+          canvas.drawPath(
+            path,
+            Paint()
+              ..color = color.withValues(alpha: 0.85)
+              ..strokeWidth = 1.2
+              ..style = PaintingStyle.stroke,
+          );
+        }
+      }
+    }
+
     if (touchedIndex != null && touchedIndex! < candles.length) {
       final cx = toX(touchedIndex!, candles.length);
       canvas.drawLine(
@@ -755,6 +1279,7 @@ class _CandlePainter extends CustomPainter {
       tp.paint(canvas, Offset(0, chartH * i / 4 - tp.height / 2));
     }
 
+    final sourceCandles = allCandles ?? candles;
     const count = 4;
     final style = TextStyle(
       color: labelColor.withValues(alpha: 0.35),
@@ -767,8 +1292,12 @@ class _CandlePainter extends CustomPainter {
         candles.length - 1,
       );
       final cx = toX(idx, candles.length);
+      final sourceIdx = (visibleStart + idx).clamp(0, sourceCandles.length - 1);
       final tp = TextPainter(
-        text: TextSpan(text: formatDate(candles[idx].date), style: style),
+        text: TextSpan(
+          text: formatDate(sourceCandles[sourceIdx].date),
+          style: style,
+        ),
         textDirection: ui.TextDirection.ltr,
       )..layout();
       final x = (cx - tp.width / 2).clamp(yAxisW, size.width - tp.width);
@@ -780,6 +1309,8 @@ class _CandlePainter extends CustomPainter {
   bool shouldRepaint(covariant _CandlePainter oldDelegate) {
     return oldDelegate.candles != candles ||
         oldDelegate.touchedIndex != touchedIndex ||
-        oldDelegate.labelColor != labelColor;
+        oldDelegate.labelColor != labelColor ||
+        oldDelegate.allCandles != allCandles ||
+        oldDelegate.visibleStart != visibleStart;
   }
 }

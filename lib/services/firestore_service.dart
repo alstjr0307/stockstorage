@@ -374,6 +374,13 @@ class FirestoreService {
   }
 
   // ── FCM 토큰 ─────────────────────────────────────────────────────────
+  Future<void> logFcmDebug(String message) {
+    return _db.collection('fcm_debug').add({
+      'message': message,
+      'createdAt': Timestamp.fromDate(DateTime.now()),
+    });
+  }
+
   Future<void> saveFcmToken(String token, {String? uid}) {
     return _db.collection('fcm_tokens').doc(token).set({
       'token': token,
