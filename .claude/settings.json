@@ -112,7 +112,13 @@
       "Bash(ls c:/Users/alswp/stockstorage/scraper/*.json)",
       "Bash(node send_test_notification.js)",
       "Bash(git pull:*)",
-      "Bash(git rebase:*)"
+      "Bash(git rebase:*)",
+      "Bash(git filter-branch --force --tree-filter ':*)",
+      "Bash(git stash:*)",
+      "Bash(node -e \"require\\('./fmkorea_scraper.js'\\)\")",
+      "Bash(node -e ':*)",
+      "Bash(/c/Users/alswp/flutter/bin/flutter build:*)",
+      "Bash(cmd.exe /c \"flutter --version\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\alswp\\Downloads",

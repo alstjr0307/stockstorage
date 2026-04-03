@@ -309,17 +309,13 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                   avgReturn,
                   favPicks,
                 ),
-                const SizedBox(height: 28),
-                Text(
-                  '관심 추천주',
-                  style: GoogleFonts.inter(
-                    color: cs.onSurface,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.5,
-                  ),
+                const SizedBox(height: 20),
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: cs.onSurface.withValues(alpha: 0.07),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 for (var i = 0; i < favPicks.length; i++) ...[
                   _buildPickCard(context, favPicks[i]),
                   if (i < favPicks.length - 1)

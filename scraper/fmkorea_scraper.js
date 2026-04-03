@@ -59,51 +59,38 @@ function pearson(xs, ys) {
   return numerator / denominator;
 }
 
-function fetchJson(url) {
-  return new Promise((resolve, reject) => {
+
+async function fetchKospiHistory() {
+  const end = new Date();
+  const start = new Date(end);
+  start.setFullYear(start.getFullYear() - 3);
+  const fmt = (d) =>
+    `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`;
+  const url = `https://api.finance.naver.com/siseJson.naver?symbol=KOSPI&requestType=1&startTime=${fmt(start)}&endTime=${fmt(end)}&timeframe=day`;
+
+  const body = await new Promise((resolve, reject) => {
     https
       .get(
         url,
-        { headers: { 'User-Agent': 'Mozilla/5.0' } },
+        { headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://finance.naver.com' } },
         (res) => {
-          let body = '';
-          res.on('data', (chunk) => {
-            body += chunk;
-          });
-          res.on('end', () => {
-            if (res.statusCode !== 200) {
-              reject(new Error(`status ${res.statusCode}`));
-              return;
-            }
-            resolve(JSON.parse(body));
-          });
+          let data = '';
+          res.on('data', (chunk) => { data += chunk; });
+          res.on('end', () => resolve(data));
         }
       )
       .on('error', reject);
   });
-}
 
-async function fetchKospiHistory() {
-  const json = await fetchJson(
-    'https://query1.finance.yahoo.com/v8/finance/chart/%5EKS11?interval=1d&range=3y'
-  );
-  const result = json.chart?.result?.[0];
-  if (!result) return [];
-
-  const timestamps = result.timestamp || [];
-  const closes = result.indicators?.quote?.[0]?.close || [];
   const out = [];
-
-  for (let i = 0; i < timestamps.length && i < closes.length; i += 1) {
-    const close = closes[i];
-    if (typeof close !== 'number') continue;
-    const date = new Date((timestamps[i] + 9 * 60 * 60) * 1000);
-    out.push({
-      dateKey: `${date.getUTCFullYear()}.${pad2(date.getUTCMonth() + 1)}.${pad2(date.getUTCDate())}`,
-      close,
-    });
+  // format: ["YYYYMMDD", open, high, low, close, ...]
+  const rowRegex = /\["(\d{8})",\s*[\d.]+,\s*[\d.]+,\s*[\d.]+,\s*([\d.]+)/g;
+  let m;
+  while ((m = rowRegex.exec(body)) !== null) {
+    const d = m[1];
+    const dateKey = `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}`;
+    out.push({ dateKey, close: parseFloat(m[2]) });
   }
-
   return out;
 }
 

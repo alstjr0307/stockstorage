@@ -694,11 +694,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                 color: accent.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(
-                _indexIconFor(name),
-                color: accent,
-                size: 16,
-              ),
+              child: _buildIndexBadgeGlyph(name, accent, 16),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -831,11 +827,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                       color: accent.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(
-                      _indexIconFor(name),
-                      color: accent,
-                      size: 16,
-                    ),
+                    child: _buildIndexBadgeGlyph(name, accent, 16),
                   ),
                   const SizedBox(width: 9),
                   Expanded(
@@ -1096,11 +1088,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                   color: accent.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(13),
                 ),
-                child: Icon(
-                  _indexIconFor(name),
-                  color: accent,
-                  size: 21,
-                ),
+                child: _buildIndexBadgeGlyph(name, accent, 21),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1266,6 +1254,31 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       default:
         return Icons.trending_up_rounded;
     }
+  }
+
+  Widget _buildIndexBadgeGlyph(String name, Color accent, double size) {
+    final emoji = _indexEmojiFor(name);
+    if (emoji != null) {
+      return Center(
+        child: Text(
+          emoji,
+          style: TextStyle(
+            fontSize: size,
+            height: 1,
+          ),
+        ),
+      );
+    }
+    return Icon(
+      _indexIconFor(name),
+      color: accent,
+      size: size,
+    );
+  }
+
+  String? _indexEmojiFor(String name) {
+    if (name == 'USD/KRW') return '💱';
+    return null;
   }
 
 }
@@ -2122,28 +2135,26 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
               child: FilledButton.icon(
                 onPressed: _capturing ? null : _captureAndShare,
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF3182F6),
+                  backgroundColor: const Color(0xFF10B981),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                 ),
                 icon: _capturing
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.image_outlined, size: 20),
+                    : const Icon(Icons.camera_alt_outlined),
                 label: Text(
-                  '캡처해서 공유하기',
+                  _capturing ? '캡처 중...' : '캡처해서 공유하기',
                   style: GoogleFonts.inter(
-                    fontSize: 15,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -2282,28 +2293,26 @@ class _FmkoreaIndexDetailScreenState extends State<_FmkoreaIndexDetailScreen> {
               child: FilledButton.icon(
                 onPressed: _capturing ? null : _captureAndShare,
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF3182F6),
+                  backgroundColor: const Color(0xFF10B981),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                 ),
                 icon: _capturing
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
+                        width: 16,
+                        height: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: Colors.white,
                         ),
                       )
-                    : const Icon(Icons.image_outlined, size: 20),
+                    : const Icon(Icons.camera_alt_outlined),
                 label: Text(
-                  '캡처해서 공유하기',
+                  _capturing ? '캡처 중...' : '캡처해서 공유하기',
                   style: GoogleFonts.inter(
-                    fontSize: 15,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -2959,17 +2968,53 @@ class _FmkoreaIndexCard extends StatelessWidget {
     );
   }
 
+  Future<List<(String, double)>> _fetchNaverKospiHistory() async {
+    final end = DateTime.now();
+    final start = end.subtract(const Duration(days: 365 * 3));
+    final fmt = DateFormat('yyyyMMdd');
+    final uri = Uri.parse(
+      'https://api.finance.naver.com/siseJson.naver'
+      '?symbol=KOSPI&requestType=1'
+      '&startTime=${fmt.format(start)}&endTime=${fmt.format(end)}&timeframe=day',
+    );
+    try {
+      final client = HttpClient();
+      final req = await client.getUrl(uri);
+      req.headers.set('Referer', 'https://finance.naver.com');
+      req.headers.set('User-Agent', 'Mozilla/5.0');
+      final res = await req.close();
+      final body = await res.transform(const SystemEncoding().decoder).join();
+      client.close();
+      // format: ["YYYYMMDD", open, high, low, close, ...]
+      final rows = RegExp(r'\["(\d{8})",\s*[\d.]+,\s*[\d.]+,\s*[\d.]+,\s*([\d.]+)').allMatches(body);
+      return rows
+          .map((m) {
+            final dateRaw = m.group(1)!;
+            final close = double.parse(m.group(2)!);
+            final dateKey =
+                '${dateRaw.substring(0, 4)}.${dateRaw.substring(4, 6)}.${dateRaw.substring(6, 8)}';
+            return (dateKey, close);
+          })
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<_FmkoreaKospiSnapshot?> _computeKospiSnapshot(
     List<_FmkoreaDailyCount> entries,
   ) async {
     if (entries.isEmpty) return null;
 
-    final history = await StockPriceService.fetchHistoryDetailed(
-      '^KS11',
-      'US',
-      range: '3y',
-      interval: '1d',
-    );
+    final naverHistory = await _fetchNaverKospiHistory();
+    final history = naverHistory.isNotEmpty
+        ? naverHistory
+        : (await StockPriceService.fetchHistoryDetailed(
+            '^KS11',
+            'US',
+            range: '3y',
+            interval: '1d',
+          )).map((e) => (DateFormat('yyyy.MM.dd').format(e.$1), e.$2)).toList();
     if (history.length < 2) return null;
 
     final countByDate = {for (final entry in entries) entry.dateKey: entry.count.toDouble()};
@@ -2982,20 +3027,13 @@ class _FmkoreaIndexCard extends StatelessWidget {
       final current = history[i];
       final previous = history[i - 1];
       if (previous.$2 == 0) continue;
-      final currentTime = current.$1;
-      final currentDate = DateTime(
-        currentTime.year,
-        currentTime.month,
-        currentTime.day,
-      );
+      final currentKey = current.$1;
+      final currentDate = DateFormat('yyyy.MM.dd').parse(currentKey);
       final changeRate = ((current.$2 - previous.$2) / previous.$2) * 100;
-      final currentKey = DateFormat('yyyy.MM.dd').format(currentTime);
-      final prevDayKey = DateFormat(
-        'yyyy.MM.dd',
-      ).format(currentTime.subtract(const Duration(days: 1)));
-      final nextDayKey = DateFormat(
-        'yyyy.MM.dd',
-      ).format(currentTime.add(const Duration(days: 1)));
+      final prevDayKey = DateFormat('yyyy.MM.dd')
+          .format(currentDate.subtract(const Duration(days: 1)));
+      final nextDayKey = DateFormat('yyyy.MM.dd')
+          .format(currentDate.add(const Duration(days: 1)));
       final mappedKey = _resolveKospiDateKey(
         countByDate: countByDate,
         currentKey: currentKey,
@@ -3013,7 +3051,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
         _FmkoreaScatterPoint(
           x: postCount,
           y: changeRate,
-          label: DateFormat('yyyy.MM.dd').format(currentTime),
+          label: currentKey,
         ),
       );
     }

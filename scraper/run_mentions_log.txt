@@ -173,3 +173,55 @@
     at Connection.send (C:\Users\alswp\stockstorage\scraper\node_modules\puppeteer-core\lib\cjs\puppeteer\cdp\Connection.js:80:21)
     at CdpPage.close (C:\Users\alswp\stockstorage\scraper\node_modules\puppeteer-core\lib\cjs\puppeteer\cdp\Page.js:820:34)
     at async main (C:\Users\alswp\stockstorage\scraper\fmkorea_yesterday_mentions_scraper.js:576:5)
+===== 2026-04-04  5:00:02.94 ===== 
+[start] targetDate=2026.04.04 nowKst=2026.04.04 05:00
+[start] mode=today
+[alias] loaded=2726
+[page=1] targetRows=yes oldest=2026.04.04 totalMatched=20
+[page=2] targetRows=yes oldest=2026.04.04 totalMatched=40
+[page=3] targetRows=yes oldest=2026.04.04 totalMatched=60
+[page=4] targetRows=yes oldest=2026.04.04 totalMatched=80
+[page=5] targetRows=yes oldest=2026.04.04 totalMatched=100
+[page=6] targetRows=yes oldest=2026.04.04 totalMatched=120
+[page=7] targetRows=yes oldest=2026.04.04 totalMatched=140
+[page=8] targetRows=yes oldest=2026.04.04 totalMatched=160
+[page=9] targetRows=yes oldest=2026.04.04 totalMatched=180
+[page=10] targetRows=yes oldest=2026.04.04 totalMatched=200
+[page=11] targetRows=yes oldest=2026.04.04 totalMatched=220
+[page=12] targetRows=yes oldest=2026.04.04 totalMatched=240
+[page=13] targetRows=yes oldest=2026.04.04 totalMatched=260
+[page=14] targetRows=yes oldest=2026.04.04 totalMatched=280
+[page=15] targetRows=yes oldest=2026.04.04 totalMatched=300
+[page=16] targetRows=yes oldest=2026.04.04 totalMatched=320
+[page=17] targetRows=yes oldest=2026.04.04 totalMatched=340
+[page=18] targetRows=yes oldest=2026.04.04 totalMatched=360
+[page=19] targetRows=yes oldest=2026.04.04 totalMatched=380
+[page=20] targetRows=yes oldest=2026.04.04 totalMatched=400
+[page=21] targetRows=yes oldest=2026.04.04 totalMatched=420
+[page=22] targetRows=yes oldest=2026.04.04 totalMatched=440
+[page=23] targetRows=yes oldest=2026.04.04 totalMatched=460
+[page=24] targetRows=yes oldest=2026.04.04 totalMatched=480
+[page=25] targetRows=yes oldest=2026.04.04 totalMatched=500
+[page=26] targetRows=yes oldest=2026.04.04 totalMatched=520
+[page=27] targetRows=yes oldest=2026.04.04 totalMatched=540
+[page=28] targetRows=yes oldest=2026.04.04 totalMatched=560
+[page=29] targetRows=yes oldest=2026.04.04 totalMatched=580
+[page=30] targetRows=yes oldest=2026.04.04 totalMatched=600
+[page=31] targetRows=yes oldest=2026.04.04 totalMatched=620
+[page=32] targetRows=yes oldest=2026.04.04 totalMatched=640
+[page=33] targetRows=yes oldest=2026.04.04 totalMatched=660
+[page=34] targetRows=yes oldest=2026.04.04 totalMatched=680
+[page=35] targetRows=yes oldest=2026.04.04 totalMatched=700
+[page=36] targetRows=yes oldest=2026.04.04 totalMatched=720
+[page=37] targetRows=yes oldest=2026.04.04 totalMatched=740
+[page=38] targetRows=yes oldest=2026.04.04 totalMatched=760
+[page=39] targetRows=yes oldest=2026.04.04 totalMatched=780
+[page=40] targetRows=yes oldest=2026.04.04 totalMatched=800
+[page=41] targetRows=yes oldest=2026.04.04 totalMatched=820
+[page=42] targetRows=yes oldest=2026.04.03 totalMatched=821
+[page=43] targetRows=no oldest=2026.04.03 totalMatched=821
+[stop] passed target date range
+[collect] scannedPages=43 targetPosts=821
+[done] date=2026.04.04 posts=821 matchedPosts=62 uniqueStocks=54
+[done] top10=NAVER(8), 삼성전자(7), 한화(3), 삼천당제약(2), SK하이닉스(2), 한미반도체(2), 아하(2), 레이(2), 기아(1), 현대해상(1)
+[done] aliasCandidatesTickers=2

@@ -175,6 +175,16 @@ class StockPriceService {
       return cached.result;
     }
 
+    // 한국 주요 지수는 네이버 realtime API 우선
+    final naverSym = _naverSymbols[symbol];
+    if (naverSym != null) {
+      final result = await _fetchNaverIndexPrice(naverSym);
+      if (result != null) {
+        _cache[symbol] = _CachedPrice(result: result, fetchedAt: DateTime.now());
+        return result;
+      }
+    }
+
     try {
       final uri = Uri.parse(
         'https://query1.finance.yahoo.com/v8/finance/chart/$symbol'
@@ -270,6 +280,150 @@ class StockPriceService {
         >
       >{};
 
+  static final _naverSymbols = {'^KS11': 'KOSPI', '^KQ11': 'KOSDAQ'};
+
+  static int _rangeToDays(String range) => switch (range) {
+    '1d' => 1,
+    '5d' => 5,
+    '1mo' => 31,
+    '3mo' => 91,
+    '6mo' => 182,
+    '1y' => 365,
+    '2y' => 730,
+    '3y' => 1095,
+    '5y' => 1826,
+    _ => 7300, // max
+  };
+
+  static Future<PriceResult?> _fetchNaverIndexPrice(String naverSymbol) async {
+    try {
+      final uri = Uri.parse(
+        'https://polling.finance.naver.com/api/realtime/domestic/index/$naverSymbol',
+      );
+      final response = await http
+          .get(uri, headers: {
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://finance.naver.com',
+          })
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) return null;
+
+      final json = jsonDecode(response.body);
+      final item = (json['result']?['areas'] as List?)
+          ?.whereType<Map>()
+          .expand((a) => (a['datas'] as List?) ?? [])
+          .whereType<Map>()
+          .firstOrNull;
+      if (item == null) return null;
+
+      double parse(String s) => double.tryParse(s.replaceAll(',', '')) ?? 0.0;
+      final price = parse(item['closePrice'] as String? ?? '');
+      if (price == 0) return null;
+
+      final change = parse(item['compareToPreviousClosePrice'] as String? ?? '');
+      final changeRate = double.tryParse(
+            (item['fluctuationsRatio'] as String? ?? '').replaceAll(',', ''),
+          ) ??
+          0.0;
+
+      final tradedAtStr = item['localTradedAt'] as String? ?? '';
+      final marketTime = DateTime.tryParse(tradedAtStr)?.toLocal();
+
+      return PriceResult(
+        price: price,
+        currency: 'KRW',
+        change: change,
+        changeRate: changeRate,
+        marketTime: marketTime,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<
+    List<({DateTime date, double open, double high, double low, double close})>
+  >
+  _fetchNaverDailyOHLC(String naverSymbol, String range) async {
+    final end = DateTime.now();
+    final start = end.subtract(Duration(days: _rangeToDays(range)));
+    String pad(int n) => n.toString().padLeft(2, '0');
+    String fmt(DateTime d) => '${d.year}${pad(d.month)}${pad(d.day)}';
+    final uri = Uri.parse(
+      'https://api.finance.naver.com/siseJson.naver'
+      '?symbol=$naverSymbol&requestType=1'
+      '&startTime=${fmt(start)}&endTime=${fmt(end)}&timeframe=day',
+    );
+    try {
+      final response = await http.get(uri, headers: {
+        'User-Agent': 'Mozilla/5.0',
+        'Referer': 'https://finance.naver.com',
+      }).timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) return [];
+      final body = response.body;
+      // format: ["YYYYMMDD", open, high, low, close, ...]
+      final rowRegex = RegExp(
+        r'\["(\d{8})",\s*([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)',
+      );
+      final out = <({DateTime date, double open, double high, double low, double close})>[];
+      for (final m in rowRegex.allMatches(body)) {
+        final d = m.group(1)!;
+        final year = int.parse(d.substring(0, 4));
+        final month = int.parse(d.substring(4, 6));
+        final day = int.parse(d.substring(6, 8));
+        final o = double.parse(m.group(2)!);
+        final h = double.parse(m.group(3)!);
+        final l = double.parse(m.group(4)!);
+        final c = double.parse(m.group(5)!);
+        out.add((date: DateTime(year, month, day), open: o, high: h, low: l, close: c));
+      }
+
+      // 오늘 캔들이 없으면 네이버 실시간 API로 보완 (장중 or 당일 종가 미반영 시)
+      if (out.isNotEmpty) {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        final lastDate = DateTime(out.last.date.year, out.last.date.month, out.last.date.day);
+        if (lastDate.isBefore(todayDate)) {
+          try {
+            final rtUri = Uri.parse(
+              'https://polling.finance.naver.com/api/realtime/domestic/index/$naverSymbol',
+            );
+            final rtRes = await http.get(rtUri, headers: {
+              'User-Agent': 'Mozilla/5.0',
+              'Referer': 'https://finance.naver.com',
+            }).timeout(const Duration(seconds: 5));
+            if (rtRes.statusCode == 200) {
+              final rtJson = jsonDecode(rtRes.body);
+              final item = (rtJson['datas'] as List?)?.firstOrNull;
+              if (item != null) {
+                // localTradedAt이 오늘 날짜인지 확인 (주말/공휴일 가짜 캔들 방지)
+                final tradedAtStr = item['localTradedAt'] as String? ?? '';
+                final tradedAt = DateTime.tryParse(tradedAtStr)?.toLocal();
+                final tradedDate = tradedAt == null
+                    ? null
+                    : DateTime(tradedAt.year, tradedAt.month, tradedAt.day);
+                if (tradedDate != null && tradedDate.isAtSameMomentAs(todayDate)) {
+                  double parse(String s) => double.tryParse(s.replaceAll(',', '')) ?? 0.0;
+                  final o = parse(item['openPrice'] as String? ?? '');
+                  final h = parse(item['highPrice'] as String? ?? '');
+                  final l = parse(item['lowPrice'] as String? ?? '');
+                  final c = parse(item['closePriceRaw'] as String? ?? '');
+                  if (o > 0 && h > 0 && l > 0 && c > 0) {
+                    out.add((date: todayDate, open: o, high: h, low: l, close: c));
+                  }
+                }
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
+      return out;
+    } catch (_) {
+      return [];
+    }
+  }
+
   /// OHLC 캔들 데이터 반환. 실패 시 빈 리스트.
   static Future<
     List<({DateTime date, double open, double high, double low, double close})>
@@ -281,6 +435,18 @@ class StockPriceService {
     String range = '1mo',
   }) async {
     final symbol = toSymbol(ticker, market);
+
+    // 코스피/코스닥 일봉은 네이버 파이낸스 우선 사용 (Yahoo Finance 누락 대응)
+    if (interval == '1d' && _naverSymbols.containsKey(ticker)) {
+      final naverSymbol = _naverSymbols[ticker]!;
+      final cacheKey = '$ticker:naver:$interval:$range';
+      if (_ohlcCache.containsKey(cacheKey)) return _ohlcCache[cacheKey]!;
+      final naverData = await _fetchNaverDailyOHLC(naverSymbol, range);
+      if (naverData.isNotEmpty) {
+        _ohlcCache[cacheKey] = naverData;
+        return naverData;
+      }
+    }
     final cacheKey = '$symbol:$interval:$range';
     if (_ohlcCache.containsKey(cacheKey)) return _ohlcCache[cacheKey]!;
     try {
