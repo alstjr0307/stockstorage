@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/announcement.dart';
 import '../models/comment.dart';
+import '../models/fmkorea_stock_mention.dart';
 import '../models/market_analysis.dart';
 import '../models/post.dart';
 import '../models/stock_pick.dart';
@@ -18,10 +19,12 @@ class FirestoreService {
       query = query.where('isPremium', isEqualTo: true);
     }
 
-    return query.snapshots().map((snapshot) => snapshot.docs
-        .map((doc) => StockPick.fromFirestore(doc))
-        .where((p) => !p.isCompleted)
-        .toList());
+    return query.snapshots().map(
+      (snapshot) => snapshot.docs
+          .map((doc) => StockPick.fromFirestore(doc))
+          .where((p) => !p.isCompleted)
+          .toList(),
+    );
   }
 
   Future<void> addStockPick(StockPick pick) {
@@ -29,7 +32,10 @@ class FirestoreService {
   }
 
   Future<void> updateStockPick(StockPick pick) {
-    return _db.collection('stock_picks').doc(pick.id).update(pick.toFirestore());
+    return _db
+        .collection('stock_picks')
+        .doc(pick.id)
+        .update(pick.toFirestore());
   }
 
   Future<void> deleteStockPick(String id) {
@@ -43,7 +49,9 @@ class FirestoreService {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((s) {
-          final list = s.docs.map((d) => Announcement.fromFirestore(d)).toList();
+          final list = s.docs
+              .map((d) => Announcement.fromFirestore(d))
+              .toList();
           list.sort((a, b) {
             if (a.isPinned == b.isPinned) return 0;
             return a.isPinned ? -1 : 1;
@@ -71,10 +79,9 @@ class FirestoreService {
   }
 
   Future<void> setNickname(String uid, String nickname) {
-    return _db
-        .collection('users')
-        .doc(uid)
-        .set({'nickname': nickname}, SetOptions(merge: true));
+    return _db.collection('users').doc(uid).set({
+      'nickname': nickname,
+    }, SetOptions(merge: true));
   }
 
   Future<bool> isNicknameTaken(String nickname, String currentUid) async {
@@ -100,11 +107,13 @@ class FirestoreService {
   Future<void> toggleFavorite(String uid, String pickId, bool isCurrentlyFav) {
     final ref = _db.collection('users').doc(uid);
     if (isCurrentlyFav) {
-      return ref.set({'favorites': FieldValue.arrayRemove([pickId])},
-          SetOptions(merge: true));
+      return ref.set({
+        'favorites': FieldValue.arrayRemove([pickId]),
+      }, SetOptions(merge: true));
     } else {
-      return ref.set({'favorites': FieldValue.arrayUnion([pickId])},
-          SetOptions(merge: true));
+      return ref.set({
+        'favorites': FieldValue.arrayUnion([pickId]),
+      }, SetOptions(merge: true));
     }
   }
 
@@ -124,8 +133,11 @@ class FirestoreService {
         .snapshots()
         .map((s) {
           final list = s.docs.map((d) => StockPick.fromFirestore(d)).toList();
-          list.sort((a, b) =>
-              (b.closedAt ?? DateTime(0)).compareTo(a.closedAt ?? DateTime(0)));
+          list.sort(
+            (a, b) => (b.closedAt ?? DateTime(0)).compareTo(
+              a.closedAt ?? DateTime(0),
+            ),
+          );
           return list;
         });
   }
@@ -136,7 +148,9 @@ class FirestoreService {
         .collection('market_analyses')
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((s) => s.docs.map((d) => MarketAnalysis.fromFirestore(d)).toList());
+        .map(
+          (s) => s.docs.map((d) => MarketAnalysis.fromFirestore(d)).toList(),
+        );
   }
 
   Future<void> addMarketAnalysis(MarketAnalysis a) {
@@ -172,7 +186,11 @@ class FirestoreService {
     batch.set(pickCommentRef, comment.toFirestore());
     // 내 댓글 목록용 사본
     batch.set(
-      _db.collection('users').doc(comment.uid).collection('myComments').doc(pickCommentRef.id),
+      _db
+          .collection('users')
+          .doc(comment.uid)
+          .collection('myComments')
+          .doc(pickCommentRef.id),
       {
         'pickId': pickId,
         'text': comment.content,
@@ -184,23 +202,27 @@ class FirestoreService {
 
   Future<void> deleteComment(String pickId, String commentId, {String? uid}) {
     final batch = _db.batch();
-    batch.delete(_db
-        .collection('stock_picks')
-        .doc(pickId)
-        .collection('comments')
-        .doc(commentId));
+    batch.delete(
+      _db
+          .collection('stock_picks')
+          .doc(pickId)
+          .collection('comments')
+          .doc(commentId),
+    );
     if (uid != null) {
-      batch.delete(_db
-          .collection('users')
-          .doc(uid)
-          .collection('myComments')
-          .doc(commentId));
+      batch.delete(
+        _db
+            .collection('users')
+            .doc(uid)
+            .collection('myComments')
+            .doc(commentId),
+      );
     }
     return batch.commit();
   }
 
   Future<List<({String pickId, String text, DateTime createdAt})>>
-      getMyComments(String uid) async {
+  getMyComments(String uid) async {
     final snap = await _db
         .collection('users')
         .doc(uid)
@@ -218,12 +240,12 @@ class FirestoreService {
   }
 
   Future<List<({String pickId, String text, DateTime createdAt})>>
-      getMyStockPickComments(String uid) {
+  getMyStockPickComments(String uid) {
     return getMyComments(uid);
   }
 
   Future<List<({String postId, String text, DateTime createdAt})>>
-      getMyPostComments(String uid) async {
+  getMyPostComments(String uid) async {
     final mirroredSnap = await _db
         .collection('users')
         .doc(uid)
@@ -237,12 +259,16 @@ class FirestoreService {
         return (
           postId: data['postId'] as String? ?? '',
           text: data['text'] as String? ?? '',
-          createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          createdAt:
+              (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
         );
       }).toList();
     }
 
-    final items = <({String commentId, String postId, String text, DateTime createdAt})>[];
+    final items =
+        <
+          ({String commentId, String postId, String text, DateTime createdAt})
+        >[];
 
     try {
       final snap = await _db
@@ -291,7 +317,11 @@ class FirestoreService {
       final batch = _db.batch();
       for (final item in items) {
         batch.set(
-          _db.collection('users').doc(uid).collection('myPostComments').doc(item.commentId),
+          _db
+              .collection('users')
+              .doc(uid)
+              .collection('myPostComments')
+              .doc(item.commentId),
           {
             'postId': item.postId,
             'text': item.text,
@@ -304,11 +334,10 @@ class FirestoreService {
     }
 
     return items
-        .map((item) => (
-              postId: item.postId,
-              text: item.text,
-              createdAt: item.createdAt,
-            ))
+        .map(
+          (item) =>
+              (postId: item.postId, text: item.text, createdAt: item.createdAt),
+        )
         .toList();
   }
 
@@ -333,21 +362,23 @@ class FirestoreService {
   // ── 관리자: 유저 목록 ─────────────────────────────────────────────────
   Future<List<Map<String, dynamic>>> getAdminUserList() async {
     final usersSnap = await _db.collection('users').get();
-    final results = await Future.wait(usersSnap.docs.map((doc) async {
-      final data = doc.data();
-      final commentsSnap = await _db
-          .collection('users')
-          .doc(doc.id)
-          .collection('myComments')
-          .count()
-          .get();
-      return {
-        'uid': doc.id,
-        'nickname': data['nickname'] as String? ?? '',
-        'createdAt': data['createdAt'] as Timestamp?,
-        'commentCount': commentsSnap.count ?? 0,
-      };
-    }));
+    final results = await Future.wait(
+      usersSnap.docs.map((doc) async {
+        final data = doc.data();
+        final commentsSnap = await _db
+            .collection('users')
+            .doc(doc.id)
+            .collection('myComments')
+            .count()
+            .get();
+        return {
+          'uid': doc.id,
+          'nickname': data['nickname'] as String? ?? '',
+          'createdAt': data['createdAt'] as Timestamp?,
+          'commentCount': commentsSnap.count ?? 0,
+        };
+      }),
+    );
     results.sort((a, b) {
       final ta = a['createdAt'] as Timestamp?;
       final tb = b['createdAt'] as Timestamp?;
@@ -369,7 +400,10 @@ class FirestoreService {
   }
 
   /// 관리자 수동 알림 발송 (notification_queue → Cloud Function → FCM 전송)
-  Future<void> sendPushNotification({required String title, required String body}) {
+  Future<void> sendPushNotification({
+    required String title,
+    required String body,
+  }) {
     return queueNotification(title, body);
   }
 
@@ -401,15 +435,9 @@ class FirestoreService {
   }
 
   Future<void> saveMemo(String uid, String pickId, String text) {
-    return _db
-        .collection('users')
-        .doc(uid)
-        .collection('memos')
-        .doc(pickId)
-        .set({
-      'text': text,
-      'updatedAt': Timestamp.fromDate(DateTime.now()),
-    });
+    return _db.collection('users').doc(uid).collection('memos').doc(pickId).set(
+      {'text': text, 'updatedAt': Timestamp.fromDate(DateTime.now())},
+    );
   }
 
   // ── pick 실시간 스트림 (투표 카운트 반영) ──────────────────────────────────
@@ -433,11 +461,18 @@ class FirestoreService {
   }
 
   Future<void> setVote(
-      String uid, String pickId, String? newVote, String? previousVote) async {
+    String uid,
+    String pickId,
+    String? newVote,
+    String? previousVote,
+  ) async {
     final batch = _db.batch();
     final pickRef = _db.collection('stock_picks').doc(pickId);
-    final voteRef =
-        _db.collection('users').doc(uid).collection('votes').doc(pickId);
+    final voteRef = _db
+        .collection('users')
+        .doc(uid)
+        .collection('votes')
+        .doc(pickId);
 
     if (previousVote == 'up') {
       batch.update(pickRef, {'upVotes': FieldValue.increment(-1)});
@@ -458,24 +493,13 @@ class FirestoreService {
     await batch.commit();
   }
 
-  // ── 실적 발표일 있는 픽 (캘린더용) ───────────────────────────────────────
-  Stream<List<StockPick>> getPicksWithEarnings() {
-    return _db
-        .collection('stock_picks')
-        .where('earningsDate', isGreaterThan: Timestamp(0, 0))
-        .snapshots()
-        .map((s) => s.docs.map((d) => StockPick.fromFirestore(d)).toList());
-  }
-
   // ── 3개월 이내 활성 픽 (실적 탭 자동화용) ────────────────────────────────
   Future<List<StockPick>> getRecentActivePicks() async {
-    final threeMonthsAgo =
-        DateTime.now().subtract(const Duration(days: 90));
+    final threeMonthsAgo = DateTime.now().subtract(const Duration(days: 90));
     final snapshot = await _db
         .collection('stock_picks')
         .where('status', isEqualTo: 'active')
-        .where('createdAt',
-            isGreaterThan: Timestamp.fromDate(threeMonthsAgo))
+        .where('createdAt', isGreaterThan: Timestamp.fromDate(threeMonthsAgo))
         .orderBy('createdAt', descending: true)
         .get();
     return snapshot.docs.map((d) => StockPick.fromFirestore(d)).toList();
@@ -497,7 +521,9 @@ class FirestoreService {
         .where('uid', isEqualTo: uid)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((s) => s.docs.map((d) => TradingJournal.fromFirestore(d)).toList());
+        .map(
+          (s) => s.docs.map((d) => TradingJournal.fromFirestore(d)).toList(),
+        );
   }
 
   Stream<List<TradingJournal>> getPublicJournals() {
@@ -506,7 +532,9 @@ class FirestoreService {
         .where('isPublic', isEqualTo: true)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((s) => s.docs.map((d) => TradingJournal.fromFirestore(d)).toList());
+        .map(
+          (s) => s.docs.map((d) => TradingJournal.fromFirestore(d)).toList(),
+        );
   }
 
   Future<(List<TradingJournal>, DocumentSnapshot?)> getPublicJournalsPaged({
@@ -520,7 +548,9 @@ class FirestoreService {
         .limit(limit);
     if (startAfter != null) query = query.startAfterDocument(startAfter);
     final snap = await query.get();
-    final journals = snap.docs.map((d) => TradingJournal.fromFirestore(d)).toList();
+    final journals = snap.docs
+        .map((d) => TradingJournal.fromFirestore(d))
+        .toList();
     final lastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
     return (journals, lastDoc);
   }
@@ -562,7 +592,10 @@ class FirestoreService {
       await batch.commit();
       return false;
     } else {
-      batch.set(likeRef, {'uid': uid, 'createdAt': Timestamp.fromDate(DateTime.now())});
+      batch.set(likeRef, {
+        'uid': uid,
+        'createdAt': Timestamp.fromDate(DateTime.now()),
+      });
       batch.update(journalRef, {'likes': FieldValue.increment(1)});
       await batch.commit();
       return true;
@@ -597,15 +630,13 @@ class FirestoreService {
   }
 
   Stream<List<Post>> getPostsByUid(String uid) {
-    return _db
-        .collection('posts')
-        .where('uid', isEqualTo: uid)
-        .snapshots()
-        .map((snap) {
-          final posts = snap.docs.map((d) => Post.fromFirestore(d)).toList();
-          posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-          return posts;
-        });
+    return _db.collection('posts').where('uid', isEqualTo: uid).snapshots().map(
+      (snap) {
+        final posts = snap.docs.map((d) => Post.fromFirestore(d)).toList();
+        posts.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        return posts;
+      },
+    );
   }
 
   Future<void> createPost(Post post) {
@@ -618,7 +649,11 @@ class FirestoreService {
 
   // returns true if now liked, false if unliked
   Future<bool> likePost(String postId, String uid) async {
-    final likeRef = _db.collection('posts').doc(postId).collection('likes').doc(uid);
+    final likeRef = _db
+        .collection('posts')
+        .doc(postId)
+        .collection('likes')
+        .doc(uid);
     final likeDoc = await likeRef.get();
     final batch = _db.batch();
     final postRef = _db.collection('posts').doc(postId);
@@ -628,7 +663,10 @@ class FirestoreService {
       await batch.commit();
       return false;
     } else {
-      batch.set(likeRef, {'uid': uid, 'createdAt': Timestamp.fromDate(DateTime.now())});
+      batch.set(likeRef, {
+        'uid': uid,
+        'createdAt': Timestamp.fromDate(DateTime.now()),
+      });
       batch.update(postRef, {'likes': FieldValue.increment(1)});
       await batch.commit();
       return true;
@@ -636,25 +674,51 @@ class FirestoreService {
   }
 
   Future<bool> hasLikedPost(String postId, String uid) async {
-    final doc = await _db.collection('posts').doc(postId).collection('likes').doc(uid).get();
+    final doc = await _db
+        .collection('posts')
+        .doc(postId)
+        .collection('likes')
+        .doc(uid)
+        .get();
     return doc.exists;
   }
 
   // ─── 자유게시판 댓글 ──────────────────────────────────────────────────────
 
   Stream<List<Comment>> getPostComments(String postId) {
-    return _db.collection('posts').doc(postId).collection('comments')
+    return _db
+        .collection('posts')
+        .doc(postId)
+        .collection('comments')
         .orderBy('createdAt', descending: false)
         .snapshots()
         .map((s) => s.docs.map(Comment.fromFirestore).toList());
   }
 
+  Future<int> getPostCommentCount(String postId) async {
+    final snap = await _db
+        .collection('posts')
+        .doc(postId)
+        .collection('comments')
+        .count()
+        .get();
+    return snap.count ?? 0;
+  }
+
   Future<void> addPostComment(String postId, Comment comment) {
-    final commentRef = _db.collection('posts').doc(postId).collection('comments').doc();
+    final commentRef = _db
+        .collection('posts')
+        .doc(postId)
+        .collection('comments')
+        .doc();
     final batch = _db.batch();
     batch.set(commentRef, comment.toFirestore());
     batch.set(
-      _db.collection('users').doc(comment.uid).collection('myPostComments').doc(commentRef.id),
+      _db
+          .collection('users')
+          .doc(comment.uid)
+          .collection('myPostComments')
+          .doc(commentRef.id),
       {
         'postId': postId,
         'text': comment.content,
@@ -665,7 +729,11 @@ class FirestoreService {
   }
 
   Future<void> deletePostComment(String postId, String commentId) async {
-    final commentRef = _db.collection('posts').doc(postId).collection('comments').doc(commentId);
+    final commentRef = _db
+        .collection('posts')
+        .doc(postId)
+        .collection('comments')
+        .doc(commentId);
     final commentSnap = await commentRef.get();
     final commentUid = commentSnap.data()?['uid'] as String?;
 
@@ -673,7 +741,11 @@ class FirestoreService {
     batch.delete(commentRef);
     if (commentUid != null && commentUid.isNotEmpty) {
       batch.delete(
-        _db.collection('users').doc(commentUid).collection('myPostComments').doc(commentId),
+        _db
+            .collection('users')
+            .doc(commentUid)
+            .collection('myPostComments')
+            .doc(commentId),
       );
     }
     await batch.commit();
@@ -682,18 +754,30 @@ class FirestoreService {
   // ─── 매매일지 댓글 ────────────────────────────────────────────────────────
 
   Stream<List<Comment>> getJournalComments(String journalId) {
-    return _db.collection('trading_journal').doc(journalId).collection('comments')
+    return _db
+        .collection('trading_journal')
+        .doc(journalId)
+        .collection('comments')
         .orderBy('createdAt', descending: false)
         .snapshots()
         .map((s) => s.docs.map(Comment.fromFirestore).toList());
   }
 
   Future<void> addJournalComment(String journalId, Comment comment) {
-    return _db.collection('trading_journal').doc(journalId).collection('comments').add(comment.toFirestore());
+    return _db
+        .collection('trading_journal')
+        .doc(journalId)
+        .collection('comments')
+        .add(comment.toFirestore());
   }
 
   Future<void> deleteJournalComment(String journalId, String commentId) {
-    return _db.collection('trading_journal').doc(journalId).collection('comments').doc(commentId).delete();
+    return _db
+        .collection('trading_journal')
+        .doc(journalId)
+        .collection('comments')
+        .doc(commentId)
+        .delete();
   }
 
   // ─── 신고 ─────────────────────────────────────────────────────────────────
@@ -716,7 +800,10 @@ class FirestoreService {
   }
 
   Future<List<Map<String, dynamic>>> getReports() async {
-    final snap = await _db.collection('reports').orderBy('createdAt', descending: true).get();
+    final snap = await _db
+        .collection('reports')
+        .orderBy('createdAt', descending: true)
+        .get();
     return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
   }
 
@@ -727,22 +814,61 @@ class FirestoreService {
   // ─── 차단 ─────────────────────────────────────────────────────────────────
 
   Future<void> blockUser(String uid, String targetUid) {
-    return _db.collection('users').doc(uid).collection('blockedUsers').doc(targetUid).set({
-      'createdAt': Timestamp.fromDate(DateTime.now()),
-    });
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('blockedUsers')
+        .doc(targetUid)
+        .set({'createdAt': Timestamp.fromDate(DateTime.now())});
   }
 
   Future<void> unblockUser(String uid, String targetUid) {
-    return _db.collection('users').doc(uid).collection('blockedUsers').doc(targetUid).delete();
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('blockedUsers')
+        .doc(targetUid)
+        .delete();
   }
 
   Future<List<String>> getBlockedUids(String uid) async {
-    final snap = await _db.collection('users').doc(uid).collection('blockedUsers').get();
+    final snap = await _db
+        .collection('users')
+        .doc(uid)
+        .collection('blockedUsers')
+        .get();
     return snap.docs.map((d) => d.id).toList();
   }
 
   Future<bool> isBlocked(String uid, String targetUid) async {
-    final doc = await _db.collection('users').doc(uid).collection('blockedUsers').doc(targetUid).get();
+    final doc = await _db
+        .collection('users')
+        .doc(uid)
+        .collection('blockedUsers')
+        .doc(targetUid)
+        .get();
     return doc.exists;
+  }
+
+  Stream<FmkoreaStockMentionsSnapshot?> getRealtimeFmkoreaStockMentions() {
+    return _db
+        .collection('fmkorea_stock_mentions_realtime')
+        .doc('today')
+        .snapshots()
+        .map((doc) {
+          if (!doc.exists) return null;
+          return FmkoreaStockMentionsSnapshot.fromFirestore(doc);
+        });
+  }
+
+  Future<FmkoreaStockMentionsSnapshot?>
+  getLatestDailyFmkoreaStockMentions() async {
+    final snap = await _db
+        .collection('fmkorea_stock_mentions_daily')
+        .orderBy('updatedAt', descending: true)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    return FmkoreaStockMentionsSnapshot.fromFirestore(snap.docs.first);
   }
 }

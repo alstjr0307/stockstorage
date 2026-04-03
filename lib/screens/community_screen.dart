@@ -55,8 +55,14 @@ class _CommunityScreenState extends State<CommunityScreen>
             child: TabBar(
               controller: _tabController,
               dividerColor: Colors.transparent,
-              labelStyle: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700),
-              unselectedLabelStyle: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
+              labelStyle: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+              unselectedLabelStyle: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
               labelColor: cs.onSurface,
               unselectedLabelColor: cs.onSurface.withValues(alpha: 0.45),
               indicatorSize: TabBarIndicatorSize.tab,
@@ -74,10 +80,7 @@ class _CommunityScreenState extends State<CommunityScreen>
         Expanded(
           child: TabBarView(
             controller: _tabController,
-            children: const [
-              _FreeBoardTab(),
-              _JournalTab(),
-            ],
+            children: const [_FreeBoardTab(), _JournalTab()],
           ),
         ),
       ],
@@ -139,7 +142,10 @@ class _JournalTabState extends State<_JournalTab> {
       reason: reason,
     );
     AnalyticsService.instance.logReportContent('journal');
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('신고가 접수되었습니다')));
+    if (mounted)
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('신고가 접수되었습니다')));
   }
 
   Future<void> _handleBlock(TradingJournal journal, String uid) async {
@@ -149,8 +155,14 @@ class _JournalTabState extends State<_JournalTab> {
         title: const Text('차단'),
         content: Text('${journal.nickname} 님을 차단하시겠습니까?\n차단된 유저의 글은 보이지 않습니다.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('차단', style: TextStyle(color: Colors.redAccent))),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('차단', style: TextStyle(color: Colors.redAccent)),
+          ),
         ],
       ),
     );
@@ -162,7 +174,9 @@ class _JournalTabState extends State<_JournalTab> {
         _blockedUids.add(journal.uid);
         _journals.removeWhere((j) => j.uid == journal.uid);
       });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('차단되었습니다')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('차단되었습니다')));
     }
   }
 
@@ -188,7 +202,9 @@ class _JournalTabState extends State<_JournalTab> {
       // 로그인 유저의 좋아요 상태 병렬 조회
       if (auth.isLoggedIn && filtered.isNotEmpty) {
         final liked = await Future.wait(
-          filtered.map((j) => _firestoreService.hasLikedJournal(j.id, auth.user!.uid)),
+          filtered.map(
+            (j) => _firestoreService.hasLikedJournal(j.id, auth.user!.uid),
+          ),
         );
         for (var k = 0; k < filtered.length; k++) {
           if (liked[k]) _likedIds.add(filtered[k].id);
@@ -208,7 +224,11 @@ class _JournalTabState extends State<_JournalTab> {
   }
 
   Future<void> _refresh() async {
-    setState(() { _journals.clear(); _lastDoc = null; _hasMore = true; });
+    setState(() {
+      _journals.clear();
+      _lastDoc = null;
+      _hasMore = true;
+    });
     await _loadMore();
   }
 
@@ -241,7 +261,9 @@ class _JournalTabState extends State<_JournalTab> {
     final auth = context.watch<AuthProvider>();
 
     if (_loading && _journals.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF3182F6)));
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF10B981)),
+      );
     }
 
     if (!_loading && _journals.isEmpty) {
@@ -255,7 +277,7 @@ class _JournalTabState extends State<_JournalTab> {
 
     return RefreshIndicator(
       onRefresh: _refresh,
-      color: const Color(0xFF3182F6),
+      color: const Color(0xFF10B981),
       child: ListView.builder(
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
@@ -265,7 +287,12 @@ class _JournalTabState extends State<_JournalTab> {
           if (i == _journals.length) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: CircularProgressIndicator(color: Color(0xFF3182F6), strokeWidth: 2)),
+              child: Center(
+                child: CircularProgressIndicator(
+                  color: Color(0xFF10B981),
+                  strokeWidth: 2,
+                ),
+              ),
             );
           }
           final journal = _journals[i];
@@ -277,11 +304,19 @@ class _JournalTabState extends State<_JournalTab> {
             isLiked: _likedIds.contains(journal.id),
             isLoadingLike: _loadingLikes.contains(journal.id),
             likeCount: _likeCountOverride[journal.id] ?? journal.likes,
-            onLike: auth.isLoggedIn ? () => _toggleLike(journal, auth.user!.uid) : null,
+            onLike: auth.isLoggedIn
+                ? () => _toggleLike(journal, auth.user!.uid)
+                : null,
             onTogglePrivate: isOwn
                 ? () async {
-                    await _firestoreService.toggleJournalPublic(journal.id, true);
-                    if (mounted) setState(() => _journals.removeWhere((j) => j.id == journal.id));
+                    await _firestoreService.toggleJournalPublic(
+                      journal.id,
+                      true,
+                    );
+                    if (mounted)
+                      setState(
+                        () => _journals.removeWhere((j) => j.id == journal.id),
+                      );
                   }
                 : null,
             onReport: (!isOwn && auth.isLoggedIn)
@@ -313,6 +348,7 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
   final Set<String> _loadingLikes = {};
   final Set<String> _blockedUids = {};
   final Map<String, int> _likeCountOverride = {};
+  final Map<String, int> _commentCountByPostId = {};
 
   final List<Post> _posts = [];
   DocumentSnapshot? _lastDoc;
@@ -355,11 +391,28 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
         startAfter: _lastDoc,
         limit: _pageSize,
       );
-      final filtered = items.where((p) => !_blockedUids.contains(p.uid)).toList();
+      final filtered = items
+          .where((p) => !_blockedUids.contains(p.uid))
+          .toList();
+      final postsNeedingCount = filtered
+          .where((p) => !_commentCountByPostId.containsKey(p.id))
+          .toList();
+      if (postsNeedingCount.isNotEmpty) {
+        final counts = await Future.wait(
+          postsNeedingCount.map(
+            (p) => _firestoreService.getPostCommentCount(p.id),
+          ),
+        );
+        for (var i = 0; i < postsNeedingCount.length; i++) {
+          _commentCountByPostId[postsNeedingCount[i].id] = counts[i];
+        }
+      }
       // 로그인 유저의 좋아요 상태 병렬 조회
       if (auth.isLoggedIn && filtered.isNotEmpty) {
         final liked = await Future.wait(
-          filtered.map((p) => _firestoreService.hasLikedPost(p.id, auth.user!.uid)),
+          filtered.map(
+            (p) => _firestoreService.hasLikedPost(p.id, auth.user!.uid),
+          ),
         );
         for (var k = 0; k < filtered.length; k++) {
           if (liked[k]) _likedIds.add(filtered[k].id);
@@ -379,7 +432,12 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
   }
 
   Future<void> _refresh() async {
-    setState(() { _posts.clear(); _lastDoc = null; _hasMore = true; });
+    setState(() {
+      _posts.clear();
+      _lastDoc = null;
+      _hasMore = true;
+      _commentCountByPostId.clear();
+    });
     await _loadMore();
   }
 
@@ -394,7 +452,10 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
       reason: reason,
     );
     AnalyticsService.instance.logReportContent('post');
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('신고가 접수되었습니다')));
+    if (mounted)
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('신고가 접수되었습니다')));
   }
 
   Future<bool> _handleBlock(Post post, String uid) async {
@@ -404,8 +465,14 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
         title: const Text('차단'),
         content: Text('${post.nickname} 님을 차단하시겠습니까?\n차단된 유저의 글은 보이지 않습니다.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('차단', style: TextStyle(color: Colors.redAccent))),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('차단', style: TextStyle(color: Colors.redAccent)),
+          ),
         ],
       ),
     );
@@ -417,7 +484,9 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
         _blockedUids.add(post.uid);
         _posts.removeWhere((p) => p.uid == post.uid);
       });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('차단되었습니다')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('차단되었습니다')));
     }
     return true;
   }
@@ -448,9 +517,9 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
 
   Future<void> _openWrite(AuthProvider auth) async {
     if (!auth.isLoggedIn) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('로그인이 필요합니다')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('로그인이 필요합니다')));
       return;
     }
     final uid = auth.user!.uid;
@@ -477,16 +546,16 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
           likeCount: _likeCountOverride[post.id] ?? post.likes,
           onLikeChanged: auth.isLoggedIn
               ? (nowLiked) => setState(() {
-                    if (nowLiked) {
-                      _likedIds.add(post.id);
-                      _likeCountOverride[post.id] =
-                          (_likeCountOverride[post.id] ?? post.likes) + 1;
-                    } else {
-                      _likedIds.remove(post.id);
-                      _likeCountOverride[post.id] =
-                          (_likeCountOverride[post.id] ?? post.likes) - 1;
-                    }
-                  })
+                  if (nowLiked) {
+                    _likedIds.add(post.id);
+                    _likeCountOverride[post.id] =
+                        (_likeCountOverride[post.id] ?? post.likes) + 1;
+                  } else {
+                    _likedIds.remove(post.id);
+                    _likeCountOverride[post.id] =
+                        (_likeCountOverride[post.id] ?? post.likes) - 1;
+                  }
+                })
               : null,
           onDelete: isOwn
               ? () async {
@@ -509,8 +578,14 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
 
+    if (!auth.isLoggedIn) {
+      return const _LoginGate();
+    }
+
     if (_loading && _posts.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF3182F6)));
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF10B981)),
+      );
     }
 
     return Stack(
@@ -525,17 +600,22 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
         else
           RefreshIndicator(
             onRefresh: _refresh,
-            color: const Color(0xFF3182F6),
+            color: const Color(0xFF10B981),
             child: ListView.builder(
               controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 84),
+              padding: const EdgeInsets.only(top: 4, bottom: 84),
               itemCount: _posts.length + (_hasMore ? 1 : 0),
               itemBuilder: (ctx, i) {
                 if (i == _posts.length) {
                   return const Padding(
                     padding: EdgeInsets.symmetric(vertical: 20),
-                    child: Center(child: CircularProgressIndicator(color: Color(0xFF3182F6), strokeWidth: 2)),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF10B981),
+                        strokeWidth: 2,
+                      ),
+                    ),
                   );
                 }
                 final post = _posts[i];
@@ -547,7 +627,10 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
                   isLiked: _likedIds.contains(post.id),
                   isLoadingLike: _loadingLikes.contains(post.id),
                   likeCount: _likeCountOverride[post.id] ?? post.likes,
-                  onLike: auth.isLoggedIn ? () => _toggleLike(post, auth.user!.uid) : null,
+                  commentCount: _commentCountByPostId[post.id] ?? 0,
+                  onLike: auth.isLoggedIn
+                      ? () => _toggleLike(post, auth.user!.uid)
+                      : null,
                   onTap: () => _openPost(context, post, auth),
                   onReport: null,
                   onBlock: null,
@@ -562,13 +645,53 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
           child: FloatingActionButton(
             heroTag: 'community_write_fab',
             onPressed: () => _openWrite(auth),
-            backgroundColor: const Color(0xFF3182F6),
+            backgroundColor: const Color(0xFF10B981),
             foregroundColor: Colors.white,
             elevation: 3,
             child: const Icon(Icons.edit_rounded, size: 22),
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── 로그인 게이트 ─────────────────────────────────────────────────────────────
+
+class _LoginGate extends StatelessWidget {
+  const _LoginGate();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.lock_outline_rounded,
+            size: 52,
+            color: cs.onSurface.withValues(alpha: 0.18),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '로그인 후 이용할 수 있습니다',
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: cs.onSurface.withValues(alpha: 0.5),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '커뮤니티는 로그인이 필요합니다',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: cs.onSurface.withValues(alpha: 0.3),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -593,17 +716,33 @@ class _EmptyState extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return RefreshIndicator(
       onRefresh: onRefresh,
-      color: const Color(0xFF4ADE80),
-      child: ListView(children: [
-        SizedBox(height: MediaQuery.of(context).size.height * 0.3),
-        Column(children: [
-          Icon(icon, color: cs.onSurface.withValues(alpha: 0.18), size: 56),
-          const SizedBox(height: 14),
-          Text(title, style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4), fontSize: 15)),
-          const SizedBox(height: 4),
-          Text(subtitle, style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.25), fontSize: 12)),
-        ]),
-      ]),
+      color: const Color(0xFF10B981),
+      child: ListView(
+        children: [
+          SizedBox(height: MediaQuery.of(context).size.height * 0.3),
+          Column(
+            children: [
+              Icon(icon, color: cs.onSurface.withValues(alpha: 0.18), size: 56),
+              const SizedBox(height: 14),
+              Text(
+                title,
+                style: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.4),
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.25),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -682,14 +821,19 @@ class _JournalCardState extends State<_JournalCard> {
     final journal = widget.journal;
     final isKrw = journal.market != 'US';
     final marketLabel = switch (journal.market) {
-      'KS' => 'KOSPI', 'KQ' => 'KOSDAQ', 'US' => 'NASDAQ', _ => journal.market,
+      'KS' => 'KOSPI',
+      'KQ' => 'KOSDAQ',
+      'US' => 'NASDAQ',
+      _ => journal.market,
     };
 
-    String fmtP(double p) =>
-        isKrw ? '₩${NumberFormat('#,###').format(p.toInt())}' : '\$${p.toStringAsFixed(2)}';
+    String fmtP(double p) => isKrw
+        ? '₩${NumberFormat('#,###').format(p.toInt())}'
+        : '\$${p.toStringAsFixed(2)}';
 
     final qtyStr = journal.quantity > 0
-        ? '${journal.quantity % 1 == 0 ? journal.quantity.toInt() : journal.quantity}주' : null;
+        ? '${journal.quantity % 1 == 0 ? journal.quantity.toInt() : journal.quantity}주'
+        : null;
 
     // 평가손익
     double? pnl, pnlPct;
@@ -716,7 +860,9 @@ class _JournalCardState extends State<_JournalCard> {
           Container(
             height: 3,
             decoration: const BoxDecoration(
-              gradient: LinearGradient(colors: [Color(0xFF3182F6), Color(0xFF4D9BFF)]),
+              gradient: LinearGradient(
+                colors: [Color(0xFF10B981), Color(0xFF4D9BFF)],
+              ),
               borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
           ),
@@ -726,56 +872,113 @@ class _JournalCardState extends State<_JournalCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 작성자 행
-                Row(children: [
-                  CircleAvatar(
-                    radius: 14,
-                    backgroundColor: const Color(0xFF3182F6).withValues(alpha: 0.12),
-                    child: Text(
-                      journal.nickname.isNotEmpty ? journal.nickname[0].toUpperCase() : '?',
-                      style: GoogleFonts.inter(color: const Color(0xFF3182F6), fontSize: 12, fontWeight: FontWeight.w800),
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 14,
+                      backgroundColor: const Color(
+                        0xFF10B981,
+                      ).withValues(alpha: 0.12),
+                      child: Text(
+                        journal.nickname.isNotEmpty
+                            ? journal.nickname[0].toUpperCase()
+                            : '?',
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF10B981),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [
-                        Text(journal.nickname, style: GoogleFonts.inter(color: cs.onSurface, fontSize: 13, fontWeight: FontWeight.w600)),
-                        if (widget.isOwn) ...[
-                          const SizedBox(width: 5),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF3182F6).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(9999),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                journal.nickname,
+                                style: GoogleFonts.inter(
+                                  color: cs.onSurface,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (widget.isOwn) ...[
+                                const SizedBox(width: 5),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFF10B981,
+                                    ).withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(9999),
+                                  ),
+                                  child: Text(
+                                    '나',
+                                    style: GoogleFonts.inter(
+                                      color: const Color(0xFF10B981),
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          Text(
+                            '${DateFormat('yyyy.MM.dd').format(journal.tradeDate)} 매수',
+                            style: GoogleFonts.inter(
+                              color: cs.onSurface.withValues(alpha: 0.35),
+                              fontSize: 11,
                             ),
-                            child: Text('나', style: GoogleFonts.inter(color: const Color(0xFF3182F6), fontSize: 9, fontWeight: FontWeight.w700)),
                           ),
                         ],
-                      ]),
-                      Text(
-                        '${DateFormat('yyyy.MM.dd').format(journal.tradeDate)} 매수',
-                        style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.35), fontSize: 11),
                       ),
-                    ]),
-                  ),
-                  // 마켓 배지
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: cs.onSurface.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(9999),
                     ),
-                    child: Text(marketLabel, style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4), fontSize: 10, fontWeight: FontWeight.w600)),
-                  ),
-                  if (widget.onReport != null || widget.onBlock != null) ...[
-                    const SizedBox(width: 4),
-                    _MoreMenu(onReport: widget.onReport, onBlock: widget.onBlock),
+                    // 마켓 배지
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.onSurface.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(9999),
+                      ),
+                      child: Text(
+                        marketLabel,
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.4),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (widget.onReport != null || widget.onBlock != null) ...[
+                      const SizedBox(width: 4),
+                      _MoreMenu(
+                        onReport: widget.onReport,
+                        onBlock: widget.onBlock,
+                      ),
+                    ],
                   ],
-                ]),
+                ),
                 const SizedBox(height: 14),
                 // 종목명
-                Text(journal.stockName, style: GoogleFonts.inter(
-                    color: cs.onSurface, fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: -0.2)),
+                Text(
+                  journal.stockName,
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 // 거래 정보 그리드 (2행)
                 if (journal.price > 0 || journal.quantity > 0)
@@ -792,9 +995,19 @@ class _JournalCardState extends State<_JournalCard> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               if (journal.price > 0)
-                                Expanded(child: _gridCell('매수가', fmtP(journal.price), cs)),
+                                Expanded(
+                                  child: _gridCell(
+                                    '매수가',
+                                    fmtP(journal.price),
+                                    cs,
+                                  ),
+                                ),
                               if (journal.price > 0 && qtyStr != null)
-                                VerticalDivider(width: 1, thickness: 1, color: cs.onSurface.withValues(alpha: 0.07)),
+                                VerticalDivider(
+                                  width: 1,
+                                  thickness: 1,
+                                  color: cs.onSurface.withValues(alpha: 0.07),
+                                ),
                               if (qtyStr != null)
                                 Expanded(child: _gridCell('수량', qtyStr, cs)),
                             ],
@@ -802,28 +1015,56 @@ class _JournalCardState extends State<_JournalCard> {
                         ),
                         // 2행: 현재가, 평가손익, 수익률
                         if (_price != null) ...[
-                          Divider(height: 1, thickness: 1, color: cs.onSurface.withValues(alpha: 0.07)),
+                          Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: cs.onSurface.withValues(alpha: 0.07),
+                          ),
                           IntrinsicHeight(
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                Expanded(child: _gridCell('현재가', fmtP(_price!.price), cs,
-                                    valueColor: _price!.isUp ? const Color(0xFFF04452) : const Color(0xFF1677FF))),
+                                Expanded(
+                                  child: _gridCell(
+                                    '현재가',
+                                    fmtP(_price!.price),
+                                    cs,
+                                    valueColor: _price!.isUp
+                                        ? const Color(0xFFF04452)
+                                        : const Color(0xFF1677FF),
+                                  ),
+                                ),
                                 if (pnl != null && pnlPct != null) ...[
-                                  VerticalDivider(width: 1, thickness: 1, color: cs.onSurface.withValues(alpha: 0.07)),
-                                  Expanded(child: _gridCell(
-                                    '평가손익',
-                                    '${isPnlUp ? '+' : ''}${fmtP(pnl)}',
-                                    cs,
-                                    valueColor: isPnlUp ? const Color(0xFFF04452) : const Color(0xFF1677FF),
-                                  )),
-                                  VerticalDivider(width: 1, thickness: 1, color: cs.onSurface.withValues(alpha: 0.07)),
-                                  Expanded(child: _gridCell(
-                                    '수익률',
-                                    '${isPnlUp ? '+' : ''}${pnlPct.toStringAsFixed(1)}%',
-                                    cs,
-                                    valueColor: isPnlUp ? const Color(0xFFF04452) : const Color(0xFF1677FF),
-                                  )),
+                                  VerticalDivider(
+                                    width: 1,
+                                    thickness: 1,
+                                    color: cs.onSurface.withValues(alpha: 0.07),
+                                  ),
+                                  Expanded(
+                                    child: _gridCell(
+                                      '평가손익',
+                                      '${isPnlUp ? '+' : ''}${fmtP(pnl)}',
+                                      cs,
+                                      valueColor: isPnlUp
+                                          ? const Color(0xFFF04452)
+                                          : const Color(0xFF1677FF),
+                                    ),
+                                  ),
+                                  VerticalDivider(
+                                    width: 1,
+                                    thickness: 1,
+                                    color: cs.onSurface.withValues(alpha: 0.07),
+                                  ),
+                                  Expanded(
+                                    child: _gridCell(
+                                      '수익률',
+                                      '${isPnlUp ? '+' : ''}${pnlPct.toStringAsFixed(1)}%',
+                                      cs,
+                                      valueColor: isPnlUp
+                                          ? const Color(0xFFF04452)
+                                          : const Color(0xFF1677FF),
+                                    ),
+                                  ),
                                 ],
                               ],
                             ),
@@ -835,10 +1076,16 @@ class _JournalCardState extends State<_JournalCard> {
                 // 메모
                 if (journal.note.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  Text(journal.note,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.55), fontSize: 13, height: 1.55)),
+                  Text(
+                    journal.note,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.55),
+                      fontSize: 13,
+                      height: 1.55,
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -847,27 +1094,38 @@ class _JournalCardState extends State<_JournalCard> {
           Divider(height: 1, color: cs.onSurface.withValues(alpha: 0.06)),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-            child: Row(children: [
-              _LikeButton(
-                isLiked: widget.isLiked,
-                isLoading: widget.isLoadingLike,
-                count: widget.likeCount,
-                onTap: widget.onLike,
-              ),
-              const Spacer(),
-              if (widget.isOwn && widget.onTogglePrivate != null)
-                GestureDetector(
-                  onTap: widget.onTogglePrivate,
-                  child: Row(children: [
-                    Icon(Icons.lock_outline, size: 14, color: cs.onSurface.withValues(alpha: 0.4)),
-                    const SizedBox(width: 4),
-                    Text('비공개로 전환',
-                        style: GoogleFonts.inter(
-                            fontSize: 11,
-                            color: cs.onSurface.withValues(alpha: 0.4))),
-                  ]),
+            child: Row(
+              children: [
+                _LikeButton(
+                  isLiked: widget.isLiked,
+                  isLoading: widget.isLoadingLike,
+                  count: widget.likeCount,
+                  onTap: widget.onLike,
                 ),
-            ]),
+                const Spacer(),
+                if (widget.isOwn && widget.onTogglePrivate != null)
+                  GestureDetector(
+                    onTap: widget.onTogglePrivate,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.lock_outline,
+                          size: 14,
+                          color: cs.onSurface.withValues(alpha: 0.4),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '비공개로 전환',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: cs.onSurface.withValues(alpha: 0.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
@@ -889,7 +1147,9 @@ class _JournalCardState extends State<_JournalCard> {
           Container(
             height: 3,
             decoration: const BoxDecoration(
-              gradient: LinearGradient(colors: [Color(0xFF94A3B8), Color(0xFF64748B)]),
+              gradient: LinearGradient(
+                colors: [Color(0xFF94A3B8), Color(0xFF64748B)],
+              ),
               borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
           ),
@@ -899,64 +1159,125 @@ class _JournalCardState extends State<_JournalCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // 작성자 행
-                Row(children: [
-                  CircleAvatar(
-                    radius: 14,
-                    backgroundColor: const Color(0xFF94A3B8).withValues(alpha: 0.12),
-                    child: Text(
-                      journal.nickname.isNotEmpty ? journal.nickname[0].toUpperCase() : '?',
-                      style: GoogleFonts.inter(color: const Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.w800),
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 14,
+                      backgroundColor: const Color(
+                        0xFF94A3B8,
+                      ).withValues(alpha: 0.12),
+                      child: Text(
+                        journal.nickname.isNotEmpty
+                            ? journal.nickname[0].toUpperCase()
+                            : '?',
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF94A3B8),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Row(children: [
-                        Text(journal.nickname, style: GoogleFonts.inter(color: cs.onSurface, fontSize: 13, fontWeight: FontWeight.w600)),
-                        if (widget.isOwn) ...[
-                          const SizedBox(width: 5),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF3182F6).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(9999),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                journal.nickname,
+                                style: GoogleFonts.inter(
+                                  color: cs.onSurface,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (widget.isOwn) ...[
+                                const SizedBox(width: 5),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFF10B981,
+                                    ).withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(9999),
+                                  ),
+                                  child: Text(
+                                    '나',
+                                    style: GoogleFonts.inter(
+                                      color: const Color(0xFF10B981),
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          Text(
+                            DateFormat('yyyy.MM.dd').format(journal.tradeDate),
+                            style: GoogleFonts.inter(
+                              color: cs.onSurface.withValues(alpha: 0.35),
+                              fontSize: 11,
                             ),
-                            child: Text('나', style: GoogleFonts.inter(color: const Color(0xFF3182F6), fontSize: 9, fontWeight: FontWeight.w700)),
                           ),
                         ],
-                      ]),
-                      Text(
-                        DateFormat('yyyy.MM.dd').format(journal.tradeDate),
-                        style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.35), fontSize: 11),
                       ),
-                    ]),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: cs.onSurface.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(9999),
                     ),
-                    child: Text('기타', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4), fontSize: 10, fontWeight: FontWeight.w600)),
-                  ),
-                  if (widget.onReport != null || widget.onBlock != null) ...[
-                    const SizedBox(width: 4),
-                    _MoreMenu(onReport: widget.onReport, onBlock: widget.onBlock),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.onSurface.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(9999),
+                      ),
+                      child: Text(
+                        '기타',
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.4),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (widget.onReport != null || widget.onBlock != null) ...[
+                      const SizedBox(width: 4),
+                      _MoreMenu(
+                        onReport: widget.onReport,
+                        onBlock: widget.onBlock,
+                      ),
+                    ],
                   ],
-                ]),
+                ),
                 const SizedBox(height: 14),
                 // 종목명
                 Text(
                   journal.stockName.isNotEmpty ? journal.stockName : '기타 메모',
-                  style: GoogleFonts.inter(color: cs.onSurface, fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: -0.2),
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                  ),
                 ),
                 // 메모
                 if (journal.note.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  Text(journal.note,
-                      maxLines: 5,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.65), fontSize: 13, height: 1.6)),
+                  Text(
+                    journal.note,
+                    maxLines: 5,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.65),
+                      fontSize: 13,
+                      height: 1.6,
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -964,56 +1285,90 @@ class _JournalCardState extends State<_JournalCard> {
           Divider(height: 1, color: cs.onSurface.withValues(alpha: 0.06)),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-            child: Row(children: [
-              _LikeButton(
-                isLiked: widget.isLiked,
-                isLoading: widget.isLoadingLike,
-                count: widget.likeCount,
-                onTap: widget.onLike,
-              ),
-              const SizedBox(width: 12),
-              _CommentButton(onTap: () => _openComments(context)),
-              const Spacer(),
-              if (widget.isOwn && widget.onTogglePrivate != null)
-                GestureDetector(
-                  onTap: widget.onTogglePrivate,
-                  child: Row(children: [
-                    Icon(Icons.lock_outline, size: 14, color: cs.onSurface.withValues(alpha: 0.4)),
-                    const SizedBox(width: 4),
-                    Text('비공개로 전환',
-                        style: GoogleFonts.inter(fontSize: 11, color: cs.onSurface.withValues(alpha: 0.4))),
-                  ]),
+            child: Row(
+              children: [
+                _LikeButton(
+                  isLiked: widget.isLiked,
+                  isLoading: widget.isLoadingLike,
+                  count: widget.likeCount,
+                  onTap: widget.onLike,
                 ),
-            ]),
+                const SizedBox(width: 12),
+                _CommentButton(onTap: () => _openComments(context)),
+                const Spacer(),
+                if (widget.isOwn && widget.onTogglePrivate != null)
+                  GestureDetector(
+                    onTap: widget.onTogglePrivate,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.lock_outline,
+                          size: 14,
+                          color: cs.onSurface.withValues(alpha: 0.4),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '비공개로 전환',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: cs.onSurface.withValues(alpha: 0.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _gridCell(String label, String value, ColorScheme cs, {Color? valueColor}) {
+  Widget _gridCell(
+    String label,
+    String value,
+    ColorScheme cs, {
+    Color? valueColor,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38), fontSize: 10)),
-        const SizedBox(height: 3),
-        Text(value,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: cs.onSurface.withValues(alpha: 0.38),
+              fontSize: 10,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
             style: GoogleFonts.robotoMono(
-                color: valueColor ?? cs.onSurface, fontSize: 13, fontWeight: FontWeight.w700),
-            maxLines: 1, overflow: TextOverflow.ellipsis),
-      ]),
+              color: valueColor ?? cs.onSurface,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 }
 
 // ── 게시글 카드 ───────────────────────────────────────────────────────────────
 
-class _PostCard extends StatelessWidget {
+class _PostCard extends StatefulWidget {
   final Post post;
   final bool isOwn;
   final bool isLiked;
   final bool isLoadingLike;
   final int likeCount;
+  final int commentCount;
   final VoidCallback? onLike;
   final VoidCallback onTap;
   final VoidCallback? onReport;
@@ -1026,6 +1381,7 @@ class _PostCard extends StatelessWidget {
     required this.isLiked,
     required this.isLoadingLike,
     required this.likeCount,
+    required this.commentCount,
     required this.onLike,
     required this.onTap,
     this.onReport,
@@ -1033,82 +1389,274 @@ class _PostCard extends StatelessWidget {
   });
 
   @override
+  State<_PostCard> createState() => _PostCardState();
+}
+
+class _PostCardState extends State<_PostCard> {
+  bool _expanded = false;
+
+  String _relativeTime(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return '방금 전';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}분 전';
+    if (diff.inHours < 24) return '${diff.inHours}시간 전';
+    if (diff.inDays < 7) return '${diff.inDays}일 전';
+    return DateFormat('MM.dd').format(dt);
+  }
+
+  static final _imgRegex = RegExp(r'!\[\]\(([^)]+)\)');
+
+  /// content에서 이미지 URL 목록 추출
+  List<String> _extractImageUrls(String content) =>
+      _imgRegex.allMatches(content).map((m) => m.group(1)!).toList();
+
+  /// content에서 이미지 마크다운 제거한 순수 텍스트
+  String _stripImages(String content) => content
+      .replaceAll(_imgRegex, '')
+      .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+      .trim();
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final post = widget.post;
+    final initial = post.nickname.isNotEmpty
+        ? post.nickname[0].toUpperCase()
+        : '?';
+    final imageUrls = _extractImageUrls(post.content);
+    final textContent = _stripImages(post.content);
+
     return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 15, 16, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 제목
-                  Text(post.title, style: GoogleFonts.inter(color: cs.onSurface, fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
-                  if (post.content.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(post.content,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.55), fontSize: 14, height: 1.55)),
+      onTap: widget.onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ① 작성자 행
+                Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: cs.onSurface.withValues(alpha: 0.08),
+                      child: Text(
+                        initial,
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.6),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                post.nickname,
+                                style: GoogleFonts.inter(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: cs.onSurface,
+                                ),
+                              ),
+                              if (widget.isOwn) ...[
+                                const SizedBox(width: 5),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFF10B981,
+                                    ).withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(9999),
+                                  ),
+                                  child: Text(
+                                    '나',
+                                    style: GoogleFonts.inter(
+                                      color: const Color(0xFF10B981),
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 1),
+                          Text(
+                            _relativeTime(post.createdAt),
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: cs.onSurface.withValues(alpha: 0.38),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (widget.onReport != null || widget.onBlock != null)
+                      _MoreMenu(
+                        onReport: widget.onReport,
+                        onBlock: widget.onBlock,
+                      ),
                   ],
-                ],
-              ),
-            ),
-            Divider(height: 1, color: cs.onSurface.withValues(alpha: 0.06)),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-              child: Row(children: [
-                CircleAvatar(
-                  radius: 11,
-                  backgroundColor: cs.onSurface.withValues(alpha: 0.07),
-                  child: Text(
-                    post.nickname.isNotEmpty ? post.nickname[0].toUpperCase() : '?',
-                    style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.55), fontSize: 10, fontWeight: FontWeight.w700),
+                ),
+
+                const SizedBox(height: 12),
+
+                // ② 제목
+                Text(
+                  post.title,
+                  style: GoogleFonts.inter(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                    color: cs.onSurface,
                   ),
                 ),
-                const SizedBox(width: 7),
-                Text(post.nickname, style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.55), fontSize: 12, fontWeight: FontWeight.w500)),
-                if (isOwn) ...[
-                  const SizedBox(width: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF3182F6).withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(9999),
+
+                // ③ 본문 프리뷰 + 더 보기
+                if (textContent.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  if (_expanded)
+                    Text(
+                      textContent,
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: cs.onSurface.withValues(alpha: 0.6),
+                        height: 1.6,
+                      ),
+                    )
+                  else
+                    _ContentPreview(
+                      content: textContent,
+                      onExpand: () => setState(() => _expanded = true),
                     ),
-                    child: Text('나', style: GoogleFonts.inter(color: const Color(0xFF3182F6), fontSize: 9, fontWeight: FontWeight.w700)),
+                ],
+
+                // ④ 이미지 (content에서 파싱)
+                if (imageUrls.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 220),
+                      child: Image.network(
+                        imageUrls.first,
+                        fit: BoxFit.contain,
+                        width: double.infinity,
+                        errorBuilder: (context, e, s) =>
+                            const SizedBox.shrink(),
+                      ),
+                    ),
                   ),
                 ],
-                Text('  ·  ', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.2), fontSize: 12)),
-                Text(DateFormat('MM.dd HH:mm').format(post.createdAt),
-                    style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.3), fontSize: 11)),
-                const Spacer(),
-                _LikeButton(isLiked: isLiked, isLoading: isLoadingLike, count: likeCount, onTap: onLike),
-                if (onReport != null || onBlock != null) ...[
-                  const SizedBox(width: 2),
-                  _MoreMenu(onReport: onReport, onBlock: onBlock),
-                ],
-              ]),
+
+                const SizedBox(height: 14),
+
+                // ⑤ 인터랙션 바
+                Row(
+                  children: [
+                    _LikeButton(
+                      isLiked: widget.isLiked,
+                      isLoading: widget.isLoadingLike,
+                      count: widget.likeCount,
+                      onTap: widget.onLike,
+                    ),
+                    const SizedBox(width: 18),
+                    Row(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            size: 18,
+                            color: cs.onSurface.withValues(alpha: 0.32),
+                          ),
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${widget.commentCount}',
+                          style: GoogleFonts.robotoMono(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurface.withValues(alpha: 0.42),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: cs.onSurface.withValues(alpha: 0.07),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ── 신고 사유 다이얼로그 (전역) ───────────────────────────────────────────────
+// ── 본문 더 보기 ──────────────────────────────────────────────────────────────
 
+class _ContentPreview extends StatelessWidget {
+  final String content;
+  final VoidCallback onExpand;
+
+  const _ContentPreview({required this.content, required this.onExpand});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final style = GoogleFonts.inter(
+      fontSize: 14,
+      color: cs.onSurface.withValues(alpha: 0.6),
+      height: 1.6,
+    );
+    // 줄바꿈 포함 100자 초과 or 줄바꿈 4개 이상이면 overflow로 간주
+    final looksLong =
+        content.length > 100 || '\n'.allMatches(content).length >= 4;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          content,
+          maxLines: 4,
+          overflow: TextOverflow.ellipsis,
+          style: style,
+        ),
+        if (looksLong)
+          GestureDetector(
+            onTap: onExpand,
+            child: Text(
+              '더 보기',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: const Color(0xFF10B981),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+// ── 신고 사유 다이얼로그 (전역) ───────────────────────────────────────────────
 
 // ── 공통 좋아요 버튼 ──────────────────────────────────────────────────────────
 
@@ -1118,7 +1666,12 @@ class _LikeButton extends StatelessWidget {
   final int count;
   final VoidCallback? onTap;
 
-  const _LikeButton({required this.isLiked, required this.isLoading, required this.count, required this.onTap});
+  const _LikeButton({
+    required this.isLiked,
+    required this.isLoading,
+    required this.count,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1127,16 +1680,38 @@ class _LikeButton extends StatelessWidget {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.all(4),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          isLoading
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 1.5, color: Color(0xFF3182F6)))
-              : Icon(isLiked ? Icons.favorite : Icons.favorite_border,
-                  size: 16, color: isLiked ? Colors.redAccent : cs.onSurface.withValues(alpha: 0.3)),
-          const SizedBox(width: 4),
-          Text('$count', style: GoogleFonts.inter(
-              color: isLiked ? Colors.redAccent : cs.onSurface.withValues(alpha: 0.4),
-              fontSize: 12, fontWeight: FontWeight.w600)),
-        ]),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            isLoading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: Color(0xFF10B981),
+                    ),
+                  )
+                : Icon(
+                    isLiked ? Icons.favorite : Icons.favorite_border,
+                    size: 16,
+                    color: isLiked
+                        ? Colors.redAccent
+                        : cs.onSurface.withValues(alpha: 0.3),
+                  ),
+            const SizedBox(width: 4),
+            Text(
+              '$count',
+              style: GoogleFonts.inter(
+                color: isLiked
+                    ? Colors.redAccent
+                    : cs.onSurface.withValues(alpha: 0.4),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1173,7 +1748,9 @@ class _PostDetailSheetState extends State<_PostDetailSheet> {
   Future<void> _openComments() async {
     String nickname = '익명';
     if (widget.auth.isLoggedIn) {
-      nickname = await widget.firestoreService.getNickname(widget.auth.user!.uid) ?? '익명';
+      nickname =
+          await widget.firestoreService.getNickname(widget.auth.user!.uid) ??
+          '익명';
     }
     if (!mounted) return;
     showModalBottomSheet(
@@ -1207,61 +1784,127 @@ class _PostDetailSheetState extends State<_PostDetailSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 핸들
-            Center(child: Container(
-              width: 36, height: 4,
-              decoration: BoxDecoration(color: cs.onSurface.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(2)),
-            )),
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: cs.onSurface.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
             const SizedBox(height: 20),
             // 제목 + 삭제
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(child: Text(widget.post.title,
-                  style: GoogleFonts.inter(color: cs.onSurface, fontSize: 20, fontWeight: FontWeight.w800))),
-              if (widget.isOwn && widget.onDelete != null)
-                IconButton(
-                  onPressed: () async {
-                    final ok = await showDialog<bool>(
-                      context: context,
-                      builder: (_) => AlertDialog(
-                        title: const Text('게시글 삭제'),
-                        content: const Text('이 게시글을 삭제하시겠습니까?'),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
-                          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('삭제', style: TextStyle(color: Colors.redAccent))),
-                        ],
-                      ),
-                    );
-                    if (ok == true) await widget.onDelete!();
-                  },
-                  icon: Icon(Icons.delete_outline, size: 20, color: cs.onSurface.withValues(alpha: 0.35)),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.post.title,
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
-            ]),
+                if (widget.isOwn && widget.onDelete != null)
+                  IconButton(
+                    onPressed: () async {
+                      final ok = await showDialog<bool>(
+                        context: context,
+                        builder: (_) => AlertDialog(
+                          title: const Text('게시글 삭제'),
+                          content: const Text('이 게시글을 삭제하시겠습니까?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('취소'),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              child: const Text(
+                                '삭제',
+                                style: TextStyle(color: Colors.redAccent),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (ok == true) await widget.onDelete!();
+                    },
+                    icon: Icon(
+                      Icons.delete_outline,
+                      size: 20,
+                      color: cs.onSurface.withValues(alpha: 0.35),
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 6),
             // 작성자 + 날짜
-            Row(children: [
-              CircleAvatar(
-                radius: 12,
-                backgroundColor: cs.onSurface.withValues(alpha: 0.08),
-                child: Text(widget.post.nickname.isNotEmpty ? widget.post.nickname[0].toUpperCase() : '?',
-                    style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.6), fontSize: 10, fontWeight: FontWeight.w700)),
-              ),
-              const SizedBox(width: 8),
-              Text(widget.post.nickname, style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.6), fontSize: 12, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 8),
-              Text(DateFormat('yyyy.MM.dd HH:mm').format(widget.post.createdAt),
-                  style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.3), fontSize: 11)),
-            ]),
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 12,
+                  backgroundColor: cs.onSurface.withValues(alpha: 0.08),
+                  child: Text(
+                    widget.post.nickname.isNotEmpty
+                        ? widget.post.nickname[0].toUpperCase()
+                        : '?',
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.6),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  widget.post.nickname,
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.6),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  DateFormat('yyyy.MM.dd HH:mm').format(widget.post.createdAt),
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.3),
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 20),
             Divider(color: cs.onSurface.withValues(alpha: 0.07), height: 1),
             const SizedBox(height: 16),
             // 본문
             if (widget.post.content.isNotEmpty)
-              Text(widget.post.content, style: GoogleFonts.inter(color: cs.onSurface, fontSize: 15, height: 1.75)),
+              Text(
+                widget.post.content,
+                style: GoogleFonts.inter(
+                  color: cs.onSurface,
+                  fontSize: 15,
+                  height: 1.75,
+                ),
+              ),
             const SizedBox(height: 24),
-            Row(children: [
-              _LikeButton(isLiked: widget.isLiked, isLoading: widget.isLoadingLike, count: widget.post.likes, onTap: widget.onLike),
-              const SizedBox(width: 12),
-              _CommentButton(onTap: _openComments),
-            ]),
+            Row(
+              children: [
+                _LikeButton(
+                  isLiked: widget.isLiked,
+                  isLoading: widget.isLoadingLike,
+                  count: widget.post.likes,
+                  onTap: widget.onLike,
+                ),
+                const SizedBox(width: 12),
+                _CommentButton(onTap: _openComments),
+              ],
+            ),
           ],
         ),
       ),
@@ -1282,12 +1925,25 @@ class _CommentButton extends StatelessWidget {
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.all(4),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.chat_bubble_outline, size: 16, color: cs.onSurface.withValues(alpha: 0.3)),
-          const SizedBox(width: 4),
-          Text('댓글', style: GoogleFonts.inter(
-              color: cs.onSurface.withValues(alpha: 0.4), fontSize: 12, fontWeight: FontWeight.w600)),
-        ]),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.chat_bubble_outline,
+              size: 16,
+              color: cs.onSurface.withValues(alpha: 0.3),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '댓글',
+              style: GoogleFonts.inter(
+                color: cs.onSurface.withValues(alpha: 0.4),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1304,7 +1960,11 @@ class _MoreMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return PopupMenuButton<String>(
-      icon: Icon(Icons.more_vert, size: 18, color: cs.onSurface.withValues(alpha: 0.3)),
+      icon: Icon(
+        Icons.more_vert,
+        size: 18,
+        color: cs.onSurface.withValues(alpha: 0.3),
+      ),
       padding: EdgeInsets.zero,
       color: cs.surface,
       onSelected: (v) {
@@ -1315,20 +1975,28 @@ class _MoreMenu extends StatelessWidget {
         if (onReport != null)
           PopupMenuItem(
             value: 'report',
-            child: Row(children: [
-              const Icon(Icons.flag_outlined, size: 16, color: Colors.orangeAccent),
-              const SizedBox(width: 8),
-              Text('신고하기', style: GoogleFonts.inter(fontSize: 13)),
-            ]),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.flag_outlined,
+                  size: 16,
+                  color: Colors.orangeAccent,
+                ),
+                const SizedBox(width: 8),
+                Text('신고하기', style: GoogleFonts.inter(fontSize: 13)),
+              ],
+            ),
           ),
         if (onBlock != null)
           PopupMenuItem(
             value: 'block',
-            child: Row(children: [
-              const Icon(Icons.block, size: 16, color: Colors.redAccent),
-              const SizedBox(width: 8),
-              Text('차단하기', style: GoogleFonts.inter(fontSize: 13)),
-            ]),
+            child: Row(
+              children: [
+                const Icon(Icons.block, size: 16, color: Colors.redAccent),
+                const SizedBox(width: 8),
+                Text('차단하기', style: GoogleFonts.inter(fontSize: 13)),
+              ],
+            ),
           ),
       ],
     );
@@ -1369,7 +2037,9 @@ class _CommentSheetState extends State<_CommentSheet> {
         ? widget.firestoreService.getPostComments(widget.docId)
         : widget.firestoreService.getJournalComments(widget.docId);
     if (widget.auth.isLoggedIn) {
-      widget.firestoreService.getBlockedUids(widget.auth.user!.uid).then((uids) {
+      widget.firestoreService.getBlockedUids(widget.auth.user!.uid).then((
+        uids,
+      ) {
         if (mounted) setState(() => _blockedUids.addAll(uids));
       });
     }
@@ -1392,7 +2062,10 @@ class _CommentSheetState extends State<_CommentSheet> {
       reason: reason,
     );
     AnalyticsService.instance.logReportContent('comment');
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('신고가 접수되었습니다')));
+    if (mounted)
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('신고가 접수되었습니다')));
   }
 
   Future<void> _handleBlock(Comment c) async {
@@ -1402,7 +2075,6 @@ class _CommentSheetState extends State<_CommentSheet> {
     AnalyticsService.instance.logBlockUser();
     if (mounted) setState(() => _blockedUids.add(c.uid));
   }
-
 
   Future<void> _submit() async {
     final text = _ctrl.text.trim();
@@ -1421,7 +2093,9 @@ class _CommentSheetState extends State<_CommentSheet> {
       } else {
         await widget.firestoreService.addJournalComment(widget.docId, comment);
       }
-      AnalyticsService.instance.logWriteCommunityComment(widget.collection == 'posts' ? 'post' : 'journal');
+      AnalyticsService.instance.logWriteCommunityComment(
+        widget.collection == 'posts' ? 'post' : 'journal',
+      );
       _ctrl.clear();
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -1432,7 +2106,10 @@ class _CommentSheetState extends State<_CommentSheet> {
     if (widget.collection == 'posts') {
       await widget.firestoreService.deletePostComment(widget.docId, commentId);
     } else {
-      await widget.firestoreService.deleteJournalComment(widget.docId, commentId);
+      await widget.firestoreService.deleteJournalComment(
+        widget.docId,
+        commentId,
+      );
     }
   }
 
@@ -1453,12 +2130,25 @@ class _CommentSheetState extends State<_CommentSheet> {
         mainAxisSize: MainAxisSize.min,
         children: [
           // 핸들
-          Center(child: Container(
-            width: 36, height: 4,
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(color: cs.onSurface.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(2)),
-          )),
-          Text('댓글', style: GoogleFonts.inter(color: cs.onSurface, fontSize: 15, fontWeight: FontWeight.w700)),
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: cs.onSurface.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          Text(
+            '댓글',
+            style: GoogleFonts.inter(
+              color: cs.onSurface,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 12),
           // 댓글 목록
           ConstrainedBox(
@@ -1467,91 +2157,186 @@ class _CommentSheetState extends State<_CommentSheet> {
               stream: _stream,
               builder: (context, snap) {
                 if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4ADE80)),
-                  ));
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF10B981),
+                      ),
+                    ),
+                  );
                 }
                 final comments = snap.data ?? [];
                 if (comments.isEmpty) {
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Center(child: Text('첫 댓글을 남겨보세요',
-                        style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.3), fontSize: 13))),
+                    child: Center(
+                      child: Text(
+                        '첫 댓글을 남겨보세요',
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.3),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
                   );
                 }
-                final visible = comments.where((c) => !_blockedUids.contains(c.uid)).toList();
+                final visible = comments
+                    .where((c) => !_blockedUids.contains(c.uid))
+                    .toList();
                 if (visible.isEmpty) {
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Center(child: Text('첫 댓글을 남겨보세요',
-                        style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.3), fontSize: 13))),
+                    child: Center(
+                      child: Text(
+                        '첫 댓글을 남겨보세요',
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.3),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
                   );
                 }
                 return ListView.separated(
                   shrinkWrap: true,
                   itemCount: visible.length,
-                  separatorBuilder: (context, i) => Divider(height: 1, color: cs.onSurface.withValues(alpha: 0.06)),
+                  separatorBuilder: (context, i) => Divider(
+                    height: 1,
+                    color: cs.onSurface.withValues(alpha: 0.06),
+                  ),
                   itemBuilder: (_, i) {
                     final c = visible[i];
                     final isOwn = widget.auth.user?.uid == c.uid;
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        CircleAvatar(
-                          radius: 14,
-                          backgroundColor: cs.onSurface.withValues(alpha: 0.08),
-                          child: Text(c.nickname.isNotEmpty ? c.nickname[0].toUpperCase() : '?',
-                              style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.6), fontSize: 10, fontWeight: FontWeight.w700)),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Row(children: [
-                            Text(c.nickname, style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.7), fontSize: 12, fontWeight: FontWeight.w600)),
-                            const SizedBox(width: 6),
-                            Text(DateFormat('MM.dd HH:mm').format(c.createdAt),
-                                style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.3), fontSize: 11)),
-                          ]),
-                          const SizedBox(height: 4),
-                          Text(c.content, style: GoogleFonts.inter(color: cs.onSurface, fontSize: 13, height: 1.5)),
-                        ])),
-                        if (isOwn)
-                          GestureDetector(
-                            onTap: () => _delete(c.id),
-                            child: Padding(
-                              padding: const EdgeInsets.only(left: 8, top: 2),
-                              child: Icon(Icons.close, size: 14, color: cs.onSurface.withValues(alpha: 0.25)),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CircleAvatar(
+                            radius: 14,
+                            backgroundColor: cs.onSurface.withValues(
+                              alpha: 0.08,
                             ),
-                          )
-                        else if (widget.auth.isLoggedIn)
-                          PopupMenuButton<String>(
-                            icon: Icon(Icons.more_vert, size: 16, color: cs.onSurface.withValues(alpha: 0.25)),
-                            padding: EdgeInsets.zero,
-                            color: cs.surface,
-                            onSelected: (v) {
-                              if (v == 'report') _handleReport(c);
-                              if (v == 'block') _handleBlock(c);
-                            },
-                            itemBuilder: (_) => [
-                              PopupMenuItem(
-                                value: 'report',
-                                child: Row(children: [
-                                  const Icon(Icons.flag_outlined, size: 15, color: Colors.orangeAccent),
-                                  const SizedBox(width: 8),
-                                  Text('신고하기', style: GoogleFonts.inter(fontSize: 13)),
-                                ]),
+                            child: Text(
+                              c.nickname.isNotEmpty
+                                  ? c.nickname[0].toUpperCase()
+                                  : '?',
+                              style: GoogleFonts.inter(
+                                color: cs.onSurface.withValues(alpha: 0.6),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
                               ),
-                              PopupMenuItem(
-                                value: 'block',
-                                child: Row(children: [
-                                  const Icon(Icons.block, size: 15, color: Colors.redAccent),
-                                  const SizedBox(width: 8),
-                                  Text('차단하기', style: GoogleFonts.inter(fontSize: 13)),
-                                ]),
-                              ),
-                            ],
+                            ),
                           ),
-                      ]),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      c.nickname,
+                                      style: GoogleFonts.inter(
+                                        color: cs.onSurface.withValues(
+                                          alpha: 0.7,
+                                        ),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      DateFormat(
+                                        'MM.dd HH:mm',
+                                      ).format(c.createdAt),
+                                      style: GoogleFonts.inter(
+                                        color: cs.onSurface.withValues(
+                                          alpha: 0.3,
+                                        ),
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  c.content,
+                                  style: GoogleFonts.inter(
+                                    color: cs.onSurface,
+                                    fontSize: 13,
+                                    height: 1.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (isOwn)
+                            GestureDetector(
+                              onTap: () => _delete(c.id),
+                              child: Padding(
+                                padding: const EdgeInsets.only(left: 8, top: 2),
+                                child: Icon(
+                                  Icons.close,
+                                  size: 14,
+                                  color: cs.onSurface.withValues(alpha: 0.25),
+                                ),
+                              ),
+                            )
+                          else if (widget.auth.isLoggedIn)
+                            PopupMenuButton<String>(
+                              icon: Icon(
+                                Icons.more_vert,
+                                size: 16,
+                                color: cs.onSurface.withValues(alpha: 0.25),
+                              ),
+                              padding: EdgeInsets.zero,
+                              color: cs.surface,
+                              onSelected: (v) {
+                                if (v == 'report') _handleReport(c);
+                                if (v == 'block') _handleBlock(c);
+                              },
+                              itemBuilder: (_) => [
+                                PopupMenuItem(
+                                  value: 'report',
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.flag_outlined,
+                                        size: 15,
+                                        color: Colors.orangeAccent,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '신고하기',
+                                        style: GoogleFonts.inter(fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'block',
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.block,
+                                        size: 15,
+                                        color: Colors.redAccent,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '차단하기',
+                                        style: GoogleFonts.inter(fontSize: 13),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
                     );
                   },
                 );
@@ -1563,37 +2348,68 @@ class _CommentSheetState extends State<_CommentSheet> {
           const SizedBox(height: 10),
           // 입력창
           if (widget.auth.isLoggedIn)
-            Row(children: [
-              Expanded(
-                child: TextField(
-                  controller: _ctrl,
-                  maxLines: 1,
-                  style: GoogleFonts.inter(color: cs.onSurface, fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: '댓글을 입력해주세요',
-                    hintStyle: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.3), fontSize: 13),
-                    filled: true,
-                    fillColor: cs.onSurface.withValues(alpha: 0.05),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide.none),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              _sending
-                  ? const SizedBox(width: 36, height: 36, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4ADE80)))
-                  : GestureDetector(
-                      onTap: _submit,
-                      child: Container(
-                        width: 36, height: 36,
-                        decoration: const BoxDecoration(color: Color(0xFF4ADE80), shape: BoxShape.circle),
-                        child: const Icon(Icons.send, size: 16, color: Colors.black),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _ctrl,
+                    maxLines: 1,
+                    style: GoogleFonts.inter(color: cs.onSurface, fontSize: 13),
+                    decoration: InputDecoration(
+                      hintText: '댓글을 입력해주세요',
+                      hintStyle: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.3),
+                        fontSize: 13,
+                      ),
+                      filled: true,
+                      fillColor: cs.onSurface.withValues(alpha: 0.05),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
                       ),
                     ),
-            ])
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _sending
+                    ? const SizedBox(
+                        width: 36,
+                        height: 36,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF10B981),
+                        ),
+                      )
+                    : GestureDetector(
+                        onTap: _submit,
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF10B981),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.send,
+                            size: 16,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+              ],
+            )
           else
-            Text('댓글을 작성하려면 로그인이 필요합니다.',
-                style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.35), fontSize: 12)),
+            Text(
+              '댓글을 작성하려면 로그인이 필요합니다.',
+              style: GoogleFonts.inter(
+                color: cs.onSurface.withValues(alpha: 0.35),
+                fontSize: 12,
+              ),
+            ),
         ],
       ),
     );

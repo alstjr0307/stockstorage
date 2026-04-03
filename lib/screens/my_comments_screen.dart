@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
@@ -101,8 +101,8 @@ class _MyCommentsScreenState extends State<MyCommentsScreen>
         ),
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: const Color(0xFF4ADE80),
-          labelColor: const Color(0xFF4ADE80),
+          indicatorColor: const Color(0xFF10B981),
+          labelColor: const Color(0xFF10B981),
           unselectedLabelColor: cs.onSurface.withValues(alpha: 0.4),
           labelStyle: GoogleFonts.inter(
             fontSize: 13,
@@ -128,7 +128,7 @@ class _MyCommentsScreenState extends State<MyCommentsScreen>
                 return const Center(
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: Color(0xFF4ADE80),
+                    color: Color(0xFF10B981),
                   ),
                 );
               }
@@ -159,9 +159,7 @@ class _MyCommentsScreenState extends State<MyCommentsScreen>
                         ? null
                         : () => Navigator.push(
                               context,
-                              MaterialPageRoute(
-                                builder: (_) => StockDetailScreen(pick: pick),
-                              ),
+                              stockDetailRoute(pick),
                             ),
                   );
                 },
@@ -175,7 +173,7 @@ class _MyCommentsScreenState extends State<MyCommentsScreen>
                 return const Center(
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: Color(0xFF4ADE80),
+                    color: Color(0xFF10B981),
                   ),
                 );
               }
@@ -273,7 +271,7 @@ class _CommentCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: deletedLabel
                         ? cs.onSurface.withValues(alpha: 0.2)
-                        : const Color(0xFF4ADE80),
+                        : const Color(0xFF10B981),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -285,7 +283,7 @@ class _CommentCard extends StatelessWidget {
                       color: deletedLabel
                           ? cs.onSurface.withValues(alpha: 0.35)
                           : titleAccent
-                              ? const Color(0xFF4ADE80)
+                              ? const Color(0xFF10B981)
                               : cs.onSurface.withValues(alpha: 0.8),
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -371,3 +369,5 @@ class _ErrorView extends StatelessWidget {
     );
   }
 }
+
+

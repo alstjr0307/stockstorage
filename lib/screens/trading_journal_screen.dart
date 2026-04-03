@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -42,7 +42,7 @@ class _NotLoggedIn extends StatelessWidget {
           const SizedBox(height: 20),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4ADE80),
+              backgroundColor: const Color(0xFF10B981),
               foregroundColor: Colors.black,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
@@ -94,7 +94,7 @@ class _JournalContentState extends State<_JournalContent> {
       floatingActionButton: FloatingActionButton(
         heroTag: 'journal_add_fab',
         onPressed: _openForm,
-        backgroundColor: const Color(0xFF4ADE80),
+        backgroundColor: const Color(0xFF10B981),
         foregroundColor: Colors.black,
         child: const Icon(Icons.add),
       ),
@@ -103,7 +103,7 @@ class _JournalContentState extends State<_JournalContent> {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
-                child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+                child: CircularProgressIndicator(color: Color(0xFF10B981)));
           }
           final journals = snapshot.data ?? [];
           if (journals.isEmpty) {
@@ -247,7 +247,7 @@ class _PortfolioSummarySectionState extends State<_PortfolioSummarySection> {
       }
     }
     final isPnlUp = totalPnl >= 0;
-    final pnlColor = isPnlUp ? const Color(0xFF4ADE80) : Colors.redAccent;
+    final pnlColor = isPnlUp ? const Color(0xFF10B981) : Colors.redAccent;
 
     String fmtAmt(double v) => '₩${NumberFormat('#,###').format(v.toInt())}';
 
@@ -270,12 +270,12 @@ class _PortfolioSummarySectionState extends State<_PortfolioSummarySection> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF4ADE80).withValues(alpha: 0.15),
+                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text('${widget.holdings.length}',
                     style: GoogleFonts.inter(
-                        color: const Color(0xFF4ADE80),
+                        color: const Color(0xFF10B981),
                         fontSize: 10,
                         fontWeight: FontWeight.w700)),
               ),
@@ -359,7 +359,7 @@ class _HoldingRow extends StatelessWidget {
     final isUp = pnl == null || pnl >= 0;
     final pnlColor = pnl == null
         ? cs.onSurface.withValues(alpha: 0.3)
-        : (pnl >= 0 ? const Color(0xFF4ADE80) : Colors.redAccent);
+        : (pnl >= 0 ? const Color(0xFF10B981) : Colors.redAccent);
 
     final qtyStr = remainingQty % 1 == 0
         ? '${remainingQty.toInt()}주'
@@ -474,7 +474,7 @@ class _JournalCardState extends State<_JournalCard> {
   }
 
   Color _actionColor() {
-    if (widget.journal.action == '매수') return const Color(0xFF4ADE80);
+    if (widget.journal.action == '매수') return const Color(0xFF10B981);
     if (widget.journal.action == '매도') return Colors.redAccent;
     return Colors.orangeAccent;
   }
@@ -704,7 +704,7 @@ class _JournalCardState extends State<_JournalCard> {
                             padding: const EdgeInsets.only(top: 2, right: 2),
                             child: Icon(Icons.public,
                                 size: 13,
-                                color: const Color(0xFF4ADE80).withValues(alpha: 0.6)),
+                                color: const Color(0xFF10B981).withValues(alpha: 0.6)),
                           ),
                         PopupMenuButton<String>(
                           icon: Icon(Icons.more_vert,
@@ -889,7 +889,7 @@ class _JournalCardState extends State<_JournalCard> {
                                   if (journal.price > 0) cell(
                                     '수익률',
                                     '${avgSellPrice >= journal.price ? '+' : ''}${((avgSellPrice - journal.price) / journal.price * 100).toStringAsFixed(2)}%',
-                                    valueColor: avgSellPrice >= journal.price ? const Color(0xFF4ADE80) : Colors.redAccent,
+                                    valueColor: avgSellPrice >= journal.price ? const Color(0xFF10B981) : Colors.redAccent,
                                   ),
                                 ],
                               ),
@@ -967,12 +967,12 @@ class _JournalCardState extends State<_JournalCard> {
                             horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                           color: isRealizedUp
-                              ? const Color(0xFF4ADE80).withValues(alpha: 0.1)
+                              ? const Color(0xFF10B981).withValues(alpha: 0.1)
                               : Colors.redAccent.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
                             color: isRealizedUp
-                                ? const Color(0xFF4ADE80).withValues(alpha: 0.25)
+                                ? const Color(0xFF10B981).withValues(alpha: 0.25)
                                 : Colors.redAccent.withValues(alpha: 0.25),
                           ),
                         ),
@@ -980,20 +980,20 @@ class _JournalCardState extends State<_JournalCard> {
                           Icon(
                             isRealizedUp ? Icons.trending_up : Icons.trending_down,
                             size: 14,
-                            color: isRealizedUp ? const Color(0xFF4ADE80) : Colors.redAccent,
+                            color: isRealizedUp ? const Color(0xFF10B981) : Colors.redAccent,
                           ),
                           const SizedBox(width: 6),
                           Text('실현손익  ',
                               style: GoogleFonts.inter(
                                   color: isRealizedUp
-                                      ? const Color(0xFF4ADE80)
+                                      ? const Color(0xFF10B981)
                                       : Colors.redAccent,
                                   fontSize: 11)),
                           Text(
                             '${isRealizedUp ? '+' : ''}${fmtP(realizedPnl)}',
                             style: GoogleFonts.robotoMono(
                                 color: isRealizedUp
-                                    ? const Color(0xFF4ADE80)
+                                    ? const Color(0xFF10B981)
                                     : Colors.redAccent,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700),
@@ -1003,7 +1003,7 @@ class _JournalCardState extends State<_JournalCard> {
                             '(${isRealizedUp ? '+' : ''}${realizedPnlPct!.toStringAsFixed(2)}%)',
                             style: GoogleFonts.inter(
                                 color: isRealizedUp
-                                    ? const Color(0xFF4ADE80).withValues(alpha: 0.8)
+                                    ? const Color(0xFF10B981).withValues(alpha: 0.8)
                                     : Colors.redAccent.withValues(alpha: 0.8),
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600),
@@ -1022,12 +1022,12 @@ class _JournalCardState extends State<_JournalCard> {
                               horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
                             color: isUp
-                                ? const Color(0xFF4ADE80).withValues(alpha: 0.08)
+                                ? const Color(0xFF10B981).withValues(alpha: 0.08)
                                 : Colors.redAccent.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
                               color: isUp
-                                  ? const Color(0xFF4ADE80).withValues(alpha: 0.2)
+                                  ? const Color(0xFF10B981).withValues(alpha: 0.2)
                                   : Colors.redAccent.withValues(alpha: 0.2),
                             ),
                           ),
@@ -1038,21 +1038,21 @@ class _JournalCardState extends State<_JournalCard> {
                                   : Icons.cancel_outlined,
                               size: 14,
                               color: isUp
-                                  ? const Color(0xFF4ADE80)
+                                  ? const Color(0xFF10B981)
                                   : Colors.redAccent,
                             ),
                             const SizedBox(width: 6),
                             Text('총 실현손익  ',
                                 style: GoogleFonts.inter(
                                     color: isUp
-                                        ? const Color(0xFF4ADE80)
+                                        ? const Color(0xFF10B981)
                                         : Colors.redAccent,
                                     fontSize: 11)),
                             Text(
                               '${isUp ? '+' : ''}${fmtP(pnlVal)}',
                               style: GoogleFonts.robotoMono(
                                   color: isUp
-                                      ? const Color(0xFF4ADE80)
+                                      ? const Color(0xFF10B981)
                                       : Colors.redAccent,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w700),
@@ -1070,7 +1070,7 @@ class _JournalCardState extends State<_JournalCard> {
                             const SizedBox(
                                 width: 10, height: 10,
                                 child: CircularProgressIndicator(
-                                    strokeWidth: 1.5, color: Color(0xFF4ADE80))),
+                                    strokeWidth: 1.5, color: Color(0xFF10B981))),
                             const SizedBox(width: 6),
                             Text('현재가 조회 중...',
                                 style: GoogleFonts.inter(
@@ -1094,7 +1094,7 @@ class _JournalCardState extends State<_JournalCard> {
                           Text(_price!.formattedChange,
                               style: GoogleFonts.inter(
                                   color: _price!.isUp
-                                      ? const Color(0xFF4ADE80)
+                                      ? const Color(0xFF10B981)
                                       : Colors.redAccent,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600)),
@@ -1106,12 +1106,12 @@ class _JournalCardState extends State<_JournalCard> {
                                 horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
                               color: isPnlUp
-                                  ? const Color(0xFF4ADE80).withValues(alpha: 0.1)
+                                  ? const Color(0xFF10B981).withValues(alpha: 0.1)
                                   : Colors.redAccent.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
                                 color: isPnlUp
-                                    ? const Color(0xFF4ADE80).withValues(alpha: 0.25)
+                                    ? const Color(0xFF10B981).withValues(alpha: 0.25)
                                     : Colors.redAccent.withValues(alpha: 0.25),
                               ),
                             ),
@@ -1120,21 +1120,21 @@ class _JournalCardState extends State<_JournalCard> {
                                 isPnlUp ? Icons.trending_up : Icons.trending_down,
                                 size: 14,
                                 color: isPnlUp
-                                    ? const Color(0xFF4ADE80)
+                                    ? const Color(0xFF10B981)
                                     : Colors.redAccent,
                               ),
                               const SizedBox(width: 6),
                               Text('평가손익  ',
                                   style: GoogleFonts.inter(
                                       color: isPnlUp
-                                          ? const Color(0xFF4ADE80)
+                                          ? const Color(0xFF10B981)
                                           : Colors.redAccent,
                                       fontSize: 11)),
                               Text(
                                 '${isPnlUp ? '+' : ''}${fmtP(pnl)}',
                                 style: GoogleFonts.robotoMono(
                                     color: isPnlUp
-                                        ? const Color(0xFF4ADE80)
+                                        ? const Color(0xFF10B981)
                                         : Colors.redAccent,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700),
@@ -1144,7 +1144,7 @@ class _JournalCardState extends State<_JournalCard> {
                                 '(${isPnlUp ? '+' : ''}${pnlPct!.toStringAsFixed(2)}%)',
                                 style: GoogleFonts.inter(
                                     color: isPnlUp
-                                        ? const Color(0xFF4ADE80).withValues(alpha: 0.8)
+                                        ? const Color(0xFF10B981).withValues(alpha: 0.8)
                                         : Colors.redAccent.withValues(alpha: 0.8),
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600),
@@ -1233,7 +1233,7 @@ class _JournalCardState extends State<_JournalCard> {
                                       '${isSpnlUp ? '+' : ''}${fmtP(spnl)}',
                                       style: GoogleFonts.robotoMono(
                                           color: isSpnlUp
-                                              ? const Color(0xFF4ADE80)
+                                              ? const Color(0xFF10B981)
                                               : Colors.redAccent,
                                           fontSize: 11,
                                           fontWeight: FontWeight.w600),
@@ -1268,7 +1268,7 @@ class _JournalCardState extends State<_JournalCard> {
                                     horizontal: 10, vertical: 7),
                                 decoration: BoxDecoration(
                                   color: isUp
-                                      ? const Color(0xFF4ADE80).withValues(alpha: 0.08)
+                                      ? const Color(0xFF10B981).withValues(alpha: 0.08)
                                       : Colors.redAccent.withValues(alpha: 0.08),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
@@ -1283,7 +1283,7 @@ class _JournalCardState extends State<_JournalCard> {
                                     '${isUp ? '+' : ''}${fmtP(total)}',
                                     style: GoogleFonts.robotoMono(
                                         color: isUp
-                                            ? const Color(0xFF4ADE80)
+                                            ? const Color(0xFF10B981)
                                             : Colors.redAccent,
                                         fontSize: 12,
                                         fontWeight: FontWeight.w700),
@@ -1361,7 +1361,7 @@ class _JournalDetailSheet extends StatelessWidget {
   });
 
   Color _actionColor() {
-    if (journal.action == '매수') return const Color(0xFF4ADE80);
+    if (journal.action == '매수') return const Color(0xFF10B981);
     if (journal.action == '매도') return Colors.redAccent;
     return Colors.orangeAccent;
   }
@@ -1442,22 +1442,22 @@ class _JournalDetailSheet extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: isUp ? const Color(0xFF4ADE80).withValues(alpha: 0.09) : Colors.redAccent.withValues(alpha: 0.09),
+        color: isUp ? const Color(0xFF10B981).withValues(alpha: 0.09) : Colors.redAccent.withValues(alpha: 0.09),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isUp ? const Color(0xFF4ADE80).withValues(alpha: 0.25) : Colors.redAccent.withValues(alpha: 0.25)),
+        border: Border.all(color: isUp ? const Color(0xFF10B981).withValues(alpha: 0.25) : Colors.redAccent.withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(label, style: GoogleFonts.inter(color: isUp ? const Color(0xFF4ADE80) : Colors.redAccent, fontSize: 11)),
+            Text(label, style: GoogleFonts.inter(color: isUp ? const Color(0xFF10B981) : Colors.redAccent, fontSize: 11)),
             const SizedBox(height: 4),
             Text(pct, style: GoogleFonts.inter(
-                color: (isUp ? const Color(0xFF4ADE80) : Colors.redAccent).withValues(alpha: 0.7),
+                color: (isUp ? const Color(0xFF10B981) : Colors.redAccent).withValues(alpha: 0.7),
                 fontSize: 13, fontWeight: FontWeight.w600)),
           ]),
           const Spacer(),
           Text(amt, style: GoogleFonts.inter(
-              color: isUp ? const Color(0xFF4ADE80) : Colors.redAccent,
+              color: isUp ? const Color(0xFF10B981) : Colors.redAccent,
               fontSize: 22, fontWeight: FontWeight.w800)),
         ],
       ),
@@ -1541,7 +1541,7 @@ class _JournalDetailSheet extends StatelessWidget {
               if (!isClosed && price != null) ...[
                 row('현재가', price!.formattedPrice),
                 row('오늘 변동', price!.formattedChange,
-                    valueColor: price!.isUp ? const Color(0xFF4ADE80) : Colors.redAccent),
+                    valueColor: price!.isUp ? const Color(0xFF10B981) : Colors.redAccent),
               ],
             ],
 
@@ -1626,14 +1626,14 @@ class _JournalDetailSheet extends StatelessWidget {
                               Text(
                                 '${sIsUp ? '+' : ''}${fmtP(sPnl)}',
                                 style: GoogleFonts.robotoMono(
-                                    color: sIsUp ? const Color(0xFF4ADE80) : Colors.redAccent,
+                                    color: sIsUp ? const Color(0xFF10B981) : Colors.redAccent,
                                     fontSize: 13, fontWeight: FontWeight.w700),
                               ),
                               if (sPnlPct != null)
                                 Text(
                                   '${sIsUp ? '+' : ''}${sPnlPct.toStringAsFixed(2)}%',
                                   style: GoogleFonts.inter(
-                                      color: (sIsUp ? const Color(0xFF4ADE80) : Colors.redAccent).withValues(alpha: 0.7),
+                                      color: (sIsUp ? const Color(0xFF10B981) : Colors.redAccent).withValues(alpha: 0.7),
                                       fontSize: 10, fontWeight: FontWeight.w600),
                                 ),
                             ])),
@@ -1658,13 +1658,13 @@ class _JournalDetailSheet extends StatelessWidget {
               Icon(
                 journal.isPublic ? Icons.public : Icons.lock_outline,
                 size: 14,
-                color: journal.isPublic ? const Color(0xFF4ADE80).withValues(alpha: 0.7) : cs.onSurface.withValues(alpha: 0.3),
+                color: journal.isPublic ? const Color(0xFF10B981).withValues(alpha: 0.7) : cs.onSurface.withValues(alpha: 0.3),
               ),
               const SizedBox(width: 6),
               Text(
                 journal.isPublic ? '커뮤니티에 공개됨' : '나만 볼 수 있음',
                 style: GoogleFonts.inter(
-                    color: journal.isPublic ? const Color(0xFF4ADE80).withValues(alpha: 0.7) : cs.onSurface.withValues(alpha: 0.3),
+                    color: journal.isPublic ? const Color(0xFF10B981).withValues(alpha: 0.7) : cs.onSurface.withValues(alpha: 0.3),
                     fontSize: 12),
               ),
             ]),
@@ -1849,7 +1849,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: Theme.of(context).colorScheme.copyWith(
-                primary: const Color(0xFF4ADE80),
+                primary: const Color(0xFF10B981),
                 onPrimary: Colors.black,
               ),
         ),
@@ -2011,7 +2011,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                   children: _actions.map((a) {
                     final selected = _action == a;
                     final color = a == '매수'
-                        ? const Color(0xFF4ADE80)
+                        ? const Color(0xFF10B981)
                         : a == '매도'
                             ? Colors.redAccent
                             : Colors.orangeAccent;
@@ -2139,20 +2139,20 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 13),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF4ADE80).withValues(alpha: 0.08),
+                                color: const Color(0xFF10B981).withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                    color: const Color(0xFF4ADE80).withValues(alpha: 0.3)),
+                                    color: const Color(0xFF10B981).withValues(alpha: 0.3)),
                               ),
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   const Icon(Icons.star_outline,
-                                      size: 15, color: Color(0xFF4ADE80)),
+                                      size: 15, color: Color(0xFF10B981)),
                                   const SizedBox(width: 6),
                                   Text('추천주에서 선택',
                                       style: GoogleFonts.inter(
-                                          color: const Color(0xFF4ADE80),
+                                          color: const Color(0xFF10B981),
                                           fontSize: 13,
                                           fontWeight: FontWeight.w600)),
                                 ],
@@ -2199,15 +2199,15 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 14, vertical: 12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF4ADE80).withValues(alpha: 0.08),
+                        color: const Color(0xFF10B981).withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                            color: const Color(0xFF4ADE80).withValues(alpha: 0.3)),
+                            color: const Color(0xFF10B981).withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         children: [
                           const Icon(Icons.star,
-                              size: 14, color: Color(0xFF4ADE80)),
+                              size: 14, color: Color(0xFF10B981)),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Column(
@@ -2266,7 +2266,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                               const SizedBox(
                                 width: 12, height: 12,
                                 child: CircularProgressIndicator(
-                                    strokeWidth: 1.5, color: Color(0xFF4ADE80)),
+                                    strokeWidth: 1.5, color: Color(0xFF10B981)),
                               ),
                               const SizedBox(width: 6),
                               Text('현재가 조회 중...',
@@ -2289,7 +2289,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                               Text(_priceResult!.formattedChange,
                                   style: GoogleFonts.inter(
                                       color: _priceResult!.isUp
-                                          ? const Color(0xFF4ADE80)
+                                          ? const Color(0xFF10B981)
                                           : Colors.redAccent,
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600)),
@@ -2367,7 +2367,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                           Row(
                             children: [
                               const Icon(Icons.arrow_upward,
-                                  size: 13, color: Color(0xFF4ADE80)),
+                                  size: 13, color: Color(0xFF10B981)),
                               const SizedBox(width: 6),
                               Expanded(
                                 child: Text(_stockName,
@@ -2413,7 +2413,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                               const SizedBox(
                                 width: 12, height: 12,
                                 child: CircularProgressIndicator(
-                                    strokeWidth: 1.5, color: Color(0xFF4ADE80)),
+                                    strokeWidth: 1.5, color: Color(0xFF10B981)),
                               ),
                               const SizedBox(width: 6),
                               Text('현재가 조회 중...',
@@ -2436,7 +2436,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                               Text(_priceResult!.formattedChange,
                                   style: GoogleFonts.inter(
                                       color: _priceResult!.isUp
-                                          ? const Color(0xFF4ADE80)
+                                          ? const Color(0xFF10B981)
                                           : Colors.redAccent,
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600)),
@@ -2573,7 +2573,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                       Icon(Icons.public_outlined,
                           size: 18,
                           color: _isPublic
-                              ? const Color(0xFF4ADE80)
+                              ? const Color(0xFF10B981)
                               : (isDark ? Colors.white38 : Colors.black38)),
                       const SizedBox(width: 10),
                       Expanded(
@@ -2597,8 +2597,8 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                       Switch(
                         value: _isPublic,
                         onChanged: (v) => setState(() => _isPublic = v),
-                        activeThumbColor: const Color(0xFF4ADE80),
-                        activeTrackColor: const Color(0xFF4ADE80).withValues(alpha: 0.4),
+                        activeThumbColor: const Color(0xFF10B981),
+                        activeTrackColor: const Color(0xFF10B981).withValues(alpha: 0.4),
                       ),
                     ],
                   ),
@@ -2610,12 +2610,12 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                   child: ElevatedButton(
                     onPressed: _saving ? null : _save,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4ADE80),
+                      backgroundColor: const Color(0xFF10B981),
                       foregroundColor: Colors.black,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14)),
                       disabledBackgroundColor:
-                          const Color(0xFF4ADE80).withValues(alpha: 0.4),
+                          const Color(0xFF10B981).withValues(alpha: 0.4),
                     ),
                     child: _saving
                         ? const SizedBox(
@@ -2746,7 +2746,7 @@ class _StockPickerSheetState extends State<_StockPickerSheet> {
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator(
-                    color: Color(0xFF4ADE80)))
+                    color: Color(0xFF10B981)))
                 : _filtered.isEmpty
                     ? Center(
                         child: Text('검색 결과가 없습니다',
@@ -2817,7 +2817,7 @@ class _StockPickerSheetState extends State<_StockPickerSheet> {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF4ADE80)
+                                      color: const Color(0xFF10B981)
                                           .withValues(alpha: 0.1),
                                       borderRadius:
                                           BorderRadius.circular(4),
@@ -2825,7 +2825,7 @@ class _StockPickerSheetState extends State<_StockPickerSheet> {
                                     child: Text(pick.market,
                                         style: GoogleFonts.inter(
                                             color:
-                                                const Color(0xFF4ADE80),
+                                                const Color(0xFF10B981),
                                             fontSize: 10,
                                             fontWeight:
                                                 FontWeight.w600)),
@@ -2904,7 +2904,7 @@ class _BuyPositionPickerSheet extends StatelessWidget {
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(
-                      child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+                      child: CircularProgressIndicator(color: Color(0xFF10B981)));
                 }
                 final allJournals = snapshot.data ?? [];
                 final buys = allJournals
@@ -2975,11 +2975,11 @@ class _BuyPositionPickerSheet extends StatelessWidget {
                             Container(
                               width: 36, height: 36,
                               decoration: BoxDecoration(
-                                color: const Color(0xFF4ADE80).withValues(alpha: 0.1),
+                                color: const Color(0xFF10B981).withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: const Icon(Icons.arrow_upward,
-                                  size: 18, color: Color(0xFF4ADE80)),
+                                  size: 18, color: Color(0xFF10B981)),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
@@ -3038,3 +3038,5 @@ class _BuyPositionPickerSheet extends StatelessWidget {
     );
   }
 }
+
+

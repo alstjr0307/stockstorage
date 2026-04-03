@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
@@ -47,7 +47,7 @@ class DeepLinkService {
     }
 
     navigatorKey.currentState?.push(
-      MaterialPageRoute(builder: (_) => StockDetailScreen(pick: pick)),
+      stockDetailRoute(pick),
     );
   }
 
@@ -75,3 +75,4 @@ class DeepLinkService {
   static String analysisUrl(MarketAnalysis a) =>
       'https://$_host/analysis/${a.id}';
 }
+

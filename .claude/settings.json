@@ -83,10 +83,38 @@
       "Bash(find /c/Users/alswp/AppData -path */flutter_markdown* -name *.dart)",
       "Bash(find /c/Users/alswp -path */flutter_markdown/lib/*.dart)",
       "Bash(grep -n \"sizedImageBuilder\\\\|MarkdownSizedImageBuilder\\\\|MarkdownImageConfig\" /c/Users/alswp/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_markdown-0.7.7+1/lib/*.dart)",
-      "Bash(grep -n \"class MarkdownImageConfig\" /c/Users/alswp/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_markdown-0.7.7+1/lib/src/*.dart)"
+      "Bash(grep -n \"class MarkdownImageConfig\" /c/Users/alswp/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_markdown-0.7.7+1/lib/src/*.dart)",
+      "WebFetch(domain:www.ig.com)",
+      "WebFetch(domain:www.fmkorea.com)",
+      "Bash(powershell -Command \"\\(Get-Content ''c:\\\\Users\\\\alswp\\\\stockstorage\\\\lib\\\\screens\\\\market_analysis_screen.dart'' -Raw\\) -replace \"\"import ''package:webview_flutter/webview_flutter.dart'';\"\", \"\"import ''package:http/http.dart'' as http;\"\" | Set-Content ''c:\\\\Users\\\\alswp\\\\stockstorage\\\\lib\\\\screens\\\\market_analysis_screen.dart'' -NoNewline\")",
+      "Bash(powershell -Command \":*)",
+      "Bash(powershell -Command \"cd ''c:\\\\Users\\\\alswp\\\\stockstorage''; flutter analyze lib/screens/market_analysis_screen.dart 2>&1 | Select-Object -Last 20\")",
+      "Bash(~/.pub-cache/bin/dart analyze:*)",
+      "Bash(cmd.exe /c \"cd /d c:\\\\Users\\\\alswp\\\\stockstorage && flutter analyze lib/screens/market_analysis_screen.dart\")",
+      "Bash(where.exe flutter:*)",
+      "Bash(powershell -Command \"Get-Content ''c:\\\\Users\\\\alswp\\\\stockstorage\\\\functions\\\\index.js'' | Measure-Object -Line\")",
+      "Bash(git checkout:*)",
+      "Bash(python -:*)",
+      "Bash(where.exe python:*)",
+      "Bash(where.exe python3:*)",
+      "Bash(ls /c/Python*)",
+      "Bash(powershell -Command \"where.exe python\")",
+      "Bash(powershell -Command \"where.exe node\")",
+      "Bash(curl -s \"https://asia-northeast3-stockstorage-13828.cloudfunctions.net/fetchFmkoreaIndexNow\")",
+      "Bash(gh auth:*)",
+      "Bash(curl -s -X POST -H \"Authorization: token GITHUB_TOKEN\" -H \"Accept: application/vnd.github+json\" \"https://api.github.com/repos/alstjr0307/stockstorage/actions/workflows/fmkorea-scraper.yml/dispatches\" -d '{\"\"ref\"\":\"\"main\"\"}')",
+      "Bash(node fmkorea_scraper.js)",
+      "Bash(schtasks /create /tn \"FMKorea Scraper\" /tr \"C:\\\\Users\\\\alswp\\\\stockstorage\\\\scraper\\\\run_local.bat\" /sc daily /st 09:00 /f)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(powershell -Command \"Stop-Process -Name node -Force\")",
+      "Bash(powershell -Command \"Stop-Process -Name node -Force 2>$null; echo done\")",
+      "Bash(ls c:/Users/alswp/stockstorage/*.json)",
+      "Bash(ls c:/Users/alswp/stockstorage/scraper/*.json)",
+      "Bash(node send_test_notification.js)"
     ],
     "additionalDirectories": [
-      "C:\\Users\\alswp\\Downloads"
+      "C:\\Users\\alswp\\Downloads",
+      "\\tmp"
     ]
   }
 }

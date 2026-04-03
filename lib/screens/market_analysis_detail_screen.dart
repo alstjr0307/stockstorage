@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -162,9 +162,9 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
         color: cs.onSurface.withValues(alpha: 0.72),
       ),
       blockquoteDecoration: BoxDecoration(
-        color: const Color(0xFF3182F6).withValues(alpha: 0.07),
+        color: const Color(0xFF10B981).withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF3182F6).withValues(alpha: 0.15)),
+        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.15)),
       ),
       blockquotePadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       h1: body(26, 1.25, weight: FontWeight.w700).copyWith(color: cs.onSurface),
@@ -272,7 +272,7 @@ class _HeroHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final accent = const Color(0xFF3182F6);
+    final accent = const Color(0xFF10B981);
 
     return SizedBox(
       width: double.infinity,
@@ -439,7 +439,7 @@ Widget _imagePlaceholder(BuildContext context, {double height = 220}) {
     color: cs.onSurface.withValues(alpha: 0.05),
     child: const Center(
       child: CircularProgressIndicator(
-        color: Color(0xFF3182F6),
+        color: Color(0xFF10B981),
         strokeWidth: 2,
       ),
     ),
@@ -460,3 +460,5 @@ Widget _imageError(BuildContext context) {
     ),
   );
 }
+
+

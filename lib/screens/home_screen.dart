@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -65,21 +66,47 @@ class _HomeScreenState extends State<HomeScreen> {
         final isDark = Theme.of(ctx).brightness == Brightness.dark;
         return AlertDialog(
           backgroundColor: isDark ? const Color(0xFF1A2035) : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Row(children: [
-            const Icon(Icons.info_outline_rounded, color: Color(0xFF4ADE80), size: 22),
-            const SizedBox(width: 8),
-            Text('이용 안내', style: GoogleFonts.inter(color: cs.onSurface, fontSize: 17, fontWeight: FontWeight.w800)),
-          ]),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              const Icon(
+                Icons.info_outline_rounded,
+                color: Color(0xFF10B981),
+                size: 22,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '이용 안내',
+                style: GoogleFonts.inter(
+                  color: cs.onSurface,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
           content: Text(
             '본 앱은 투자 공부 중인 개인이 관심 종목을 기록·공유하는 공간입니다.\n\n'
             '제공되는 정보는 투자 권유나 조언이 아니며, 일대일 투자 자문은 절대 하지 않습니다. 투자 판단과 그 결과에 대한 책임은 전적으로 본인에게 있습니다.',
-            style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.75), fontSize: 13, height: 1.65),
+            style: GoogleFonts.inter(
+              color: cs.onSurface.withValues(alpha: 0.75),
+              fontSize: 13,
+              height: 1.65,
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: Text('확인', style: GoogleFonts.inter(color: const Color(0xFF4ADE80), fontSize: 14, fontWeight: FontWeight.w700)),
+              child: Text(
+                '확인',
+                style: GoogleFonts.inter(
+                  color: const Color(0xFF10B981),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         );
@@ -117,13 +144,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 controller: _searchController,
                 autofocus: true,
                 style: GoogleFonts.inter(
-                    color: isDark ? Colors.white : Colors.black87,
-                    fontSize: 15),
+                  color: isDark ? Colors.white : Colors.black87,
+                  fontSize: 15,
+                ),
                 decoration: InputDecoration(
                   hintText: '종목명 또는 티커 검색...',
                   hintStyle: GoogleFonts.inter(
-                      color: isDark ? Colors.white38 : Colors.black38,
-                      fontSize: 15),
+                    color: isDark ? Colors.white38 : Colors.black38,
+                    fontSize: 15,
+                  ),
                   border: InputBorder.none,
                 ),
                 onChanged: (v) => setState(() => _searchQuery = v),
@@ -158,8 +187,10 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           if (auth.isAdmin)
             IconButton(
-              icon: const Icon(Icons.add_circle_outline,
-                  color: Color(0xFF4ADE80)),
+              icon: const Icon(
+                Icons.add_circle_outline,
+                color: Color(0xFF10B981),
+              ),
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const AdminScreen()),
@@ -192,17 +223,16 @@ class _HomeScreenState extends State<HomeScreen> {
           AnalyticsService.instance.logTabChange(tabNames[i]);
         },
         backgroundColor: bgColor,
-        selectedItemColor: const Color(0xFF4ADE80),
+        selectedItemColor: const Color(0xFF10B981),
         unselectedItemColor: isDark ? Colors.white38 : Colors.black38,
         type: BottomNavigationBarType.fixed,
         selectedLabelStyle: GoogleFonts.inter(
-            fontSize: 10, fontWeight: FontWeight.w600),
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+        ),
         unselectedLabelStyle: GoogleFonts.inter(fontSize: 10),
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.show_chart),
-            label: '추천주',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.show_chart), label: '추천주'),
           BottomNavigationBarItem(
             icon: Icon(Icons.account_balance_wallet_outlined),
             label: '내 종목',
@@ -271,11 +301,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   CircleAvatar(
-                    backgroundColor:
-                        const Color(0xFF4ADE80).withValues(alpha: 0.15),
+                    backgroundColor: const Color(
+                      0xFF10B981,
+                    ).withValues(alpha: 0.15),
                     radius: 28,
-                    child: const Icon(Icons.person,
-                        color: Color(0xFF4ADE80), size: 28),
+                    child: const Icon(
+                      Icons.person,
+                      color: Color(0xFF10B981),
+                      size: 28,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   FutureBuilder<String?>(
@@ -315,8 +349,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text(
                     auth.user?.email ?? '',
                     style: GoogleFonts.inter(
-                        color: isDark ? Colors.white38 : Colors.black38,
-                        fontSize: 12),
+                      color: isDark ? Colors.white38 : Colors.black38,
+                      fontSize: 12,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   // 내 댓글
@@ -324,25 +359,34 @@ class _HomeScreenState extends State<HomeScreen> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: isDark ? Colors.white70 : Colors.black54,
+                        foregroundColor: isDark
+                            ? Colors.white70
+                            : Colors.black54,
                         side: BorderSide(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.1)
-                                : Colors.black.withValues(alpha: 0.1)),
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : Colors.black.withValues(alpha: 0.1),
+                        ),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                      label: Text('내 댓글',
-                          style: GoogleFonts.inter(
-                              fontSize: 14, fontWeight: FontWeight.w500)),
+                      label: Text(
+                        '내 댓글',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                       onPressed: () {
                         Navigator.pop(context);
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                              builder: (_) => MyCommentsScreen(uid: uid)),
+                            builder: (_) => MyCommentsScreen(uid: uid),
+                          ),
                         );
                       },
                     ),
@@ -352,26 +396,34 @@ class _HomeScreenState extends State<HomeScreen> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor:
-                            isDark ? Colors.white70 : Colors.black54,
+                        foregroundColor: isDark
+                            ? Colors.white70
+                            : Colors.black54,
                         side: BorderSide(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.1)
-                                : Colors.black.withValues(alpha: 0.1)),
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : Colors.black.withValues(alpha: 0.1),
+                        ),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       icon: const Icon(Icons.article_outlined, size: 16),
-                      label: Text('내 작성 글',
-                          style: GoogleFonts.inter(
-                              fontSize: 14, fontWeight: FontWeight.w500)),
+                      label: Text(
+                        '내 작성 글',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                       onPressed: () {
                         Navigator.pop(context);
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                              builder: (_) => MyPostsScreen(uid: uid)),
+                            builder: (_) => MyPostsScreen(uid: uid),
+                          ),
                         );
                       },
                     ),
@@ -381,19 +433,23 @@ class _HomeScreenState extends State<HomeScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            Colors.redAccent.withValues(alpha: 0.15),
+                        backgroundColor: Colors.redAccent.withValues(
+                          alpha: 0.15,
+                        ),
                         foregroundColor: Colors.redAccent,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       onPressed: () {
                         Navigator.pop(context);
                         auth.signOut();
                       },
-                      child: Text('로그아웃',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                      child: Text(
+                        '로그아웃',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -401,15 +457,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     width: double.infinity,
                     child: TextButton(
                       style: TextButton.styleFrom(
-                        foregroundColor:
-                            isDark ? Colors.white24 : Colors.black26,
+                        foregroundColor: isDark
+                            ? Colors.white24
+                            : Colors.black26,
                       ),
                       onPressed: () {
                         Navigator.pop(context);
                         _showDeleteAccountDialog(auth);
                       },
-                      child: Text('계정 삭제',
-                          style: GoogleFonts.inter(fontSize: 13)),
+                      child: Text(
+                        '계정 삭제',
+                        style: GoogleFonts.inter(fontSize: 13),
+                      ),
                     ),
                   ),
                 ],
@@ -456,21 +515,29 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: isDark ? const Color(0xFF1A2035) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('계정 삭제',
-            style: GoogleFonts.inter(
-                color: isDark ? Colors.white : Colors.black87,
-                fontWeight: FontWeight.w700)),
+        title: Text(
+          '계정 삭제',
+          style: GoogleFonts.inter(
+            color: isDark ? Colors.white : Colors.black87,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         content: Text(
           '계정을 삭제하면 모든 데이터(관심 추천주, 메모, 댓글 등)가 영구적으로 삭제됩니다.\n\n정말 삭제하시겠습니까?',
           style: GoogleFonts.inter(
-              color: isDark ? Colors.white70 : Colors.black54, fontSize: 14),
+            color: isDark ? Colors.white70 : Colors.black54,
+            fontSize: 14,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('취소',
-                style: GoogleFonts.inter(
-                    color: isDark ? Colors.white54 : Colors.black45)),
+            child: Text(
+              '취소',
+              style: GoogleFonts.inter(
+                color: isDark ? Colors.white54 : Colors.black45,
+              ),
+            ),
           ),
           TextButton(
             onPressed: () async {
@@ -479,15 +546,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 await auth.deleteAccount();
               } on Exception catch (e) {
                 if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('삭제 실패: $e')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text('삭제 실패: $e')));
                 }
               }
             },
-            child: Text('삭제',
-                style: GoogleFonts.inter(
-                    color: Colors.redAccent, fontWeight: FontWeight.w700)),
+            child: Text(
+              '삭제',
+              style: GoogleFonts.inter(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -495,7 +566,6 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showNicknameDialog(AuthProvider auth, String? currentNickname) {
-
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final uid = auth.user!.uid;
     final controller = TextEditingController(text: currentNickname ?? '');
@@ -510,7 +580,8 @@ class _HomeScreenState extends State<HomeScreen> {
           return AlertDialog(
             backgroundColor: cardColor,
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16)),
+              borderRadius: BorderRadius.circular(16),
+            ),
             title: Text(
               '닉네임 설정',
               style: GoogleFonts.inter(
@@ -526,12 +597,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 TextField(
                   controller: controller,
                   style: GoogleFonts.inter(
-                      color: isDark ? Colors.white : Colors.black87),
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
                   decoration: InputDecoration(
                     hintText: '닉네임 입력 (2~12자)',
                     hintStyle: GoogleFonts.inter(
-                        color: isDark ? Colors.white38 : Colors.black38,
-                        fontSize: 13),
+                      color: isDark ? Colors.white38 : Colors.black38,
+                      fontSize: 13,
+                    ),
                     filled: true,
                     fillColor: isDark
                         ? Colors.white.withValues(alpha: 0.05)
@@ -553,30 +626,35 @@ class _HomeScreenState extends State<HomeScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: Text('취소',
-                    style: GoogleFonts.inter(
-                        color: isDark ? Colors.white54 : Colors.black45)),
+                child: Text(
+                  '취소',
+                  style: GoogleFonts.inter(
+                    color: isDark ? Colors.white54 : Colors.black45,
+                  ),
+                ),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4ADE80),
+                  backgroundColor: const Color(0xFF10B981),
                   foregroundColor: Colors.black,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
                 onPressed: checking
                     ? null
                     : () async {
                         final nick = controller.text.trim();
                         if (nick.length < 2 || nick.length > 12) {
-                          setDialogState(() =>
-                              errorMsg = '닉네임은 2~12자여야 합니다');
+                          setDialogState(() => errorMsg = '닉네임은 2~12자여야 합니다');
                           return;
                         }
                         setDialogState(() => checking = true);
-                        final taken = await _firestoreService
-                            .isNicknameTaken(nick, uid);
+                        final taken = await _firestoreService.isNicknameTaken(
+                          nick,
+                          uid,
+                        );
                         if (taken) {
                           setDialogState(() {
                             errorMsg = '이미 사용 중인 닉네임입니다';
@@ -592,11 +670,14 @@ class _HomeScreenState extends State<HomeScreen> {
                         width: 14,
                         height: 14,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.black),
+                          strokeWidth: 2,
+                          color: Colors.black,
+                        ),
                       )
-                    : Text('저장',
-                        style:
-                            GoogleFonts.inter(fontWeight: FontWeight.w600)),
+                    : Text(
+                        '저장',
+                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                      ),
               ),
             ],
           );
@@ -643,8 +724,9 @@ class _StockStoragePageState extends State<_StockStoragePage>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final tabBg = isDark ? const Color(0xFF131929) : const Color(0xFFF2F4F6);
     final tabSelected = isDark ? Colors.white : const Color(0xFF191F28);
-    final tabUnselected =
-        isDark ? Colors.white.withValues(alpha: 0.48) : const Color(0xFF8B95A1);
+    final tabUnselected = isDark
+        ? Colors.white.withValues(alpha: 0.48)
+        : const Color(0xFF8B95A1);
     return Column(
       children: [
         const SizedBox(height: 4),
@@ -701,7 +783,6 @@ class _StockStoragePageState extends State<_StockStoragePage>
       ],
     );
   }
-
 }
 
 // ─── 추천주 탭 ──────────────────────────────────────────────────────────────
@@ -725,6 +806,8 @@ class _StockListTabState extends State<_StockListTab>
   late Stream<List<StockPick>> _picksStream;
   late Stream<List<String>> _favStream;
   String? _trackedUid;
+  bool _playEntryAnimation = true;
+  bool _entryAnimationScheduled = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -768,20 +851,29 @@ class _StockListTabState extends State<_StockListTab>
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
-                child: CircularProgressIndicator(color: Color(0xFF3182F6)),
+                child: CircularProgressIndicator(color: Color(0xFF10B981)),
               );
             }
             if (snapshot.hasError) {
-              return Center(child: Text('오류: ${snapshot.error}', style: GoogleFonts.inter(color: Colors.redAccent)));
+              return Center(
+                child: Text(
+                  '오류: ${snapshot.error}',
+                  style: GoogleFonts.inter(color: Colors.redAccent),
+                ),
+              );
             }
 
             final allPicks = snapshot.data ?? [];
             final q = widget.searchQuery.toLowerCase();
             final picks = widget.searchQuery.isEmpty
                 ? allPicks
-                : allPicks.where((p) =>
-                    p.name.toLowerCase().contains(q) ||
-                    p.ticker.toLowerCase().contains(q)).toList();
+                : allPicks
+                      .where(
+                        (p) =>
+                            p.name.toLowerCase().contains(q) ||
+                            p.ticker.toLowerCase().contains(q),
+                      )
+                      .toList();
 
             if (picks.isEmpty) {
               return Center(
@@ -789,9 +881,19 @@ class _StockListTabState extends State<_StockListTab>
                   widget.searchQuery.isNotEmpty
                       ? "'${widget.searchQuery}' 검색 결과가 없습니다"
                       : '아직 등록된 종목이 없습니다',
-                  style: GoogleFonts.inter(color: isDark ? Colors.white38 : Colors.black38),
+                  style: GoogleFonts.inter(
+                    color: isDark ? Colors.white38 : Colors.black38,
+                  ),
                 ),
               );
+            }
+
+            if (_playEntryAnimation && !_entryAnimationScheduled) {
+              _entryAnimationScheduled = true;
+              Future.delayed(const Duration(milliseconds: 760), () {
+                if (!mounted) return;
+                setState(() => _playEntryAnimation = false);
+              });
             }
 
             const adInterval = 4;
@@ -799,24 +901,26 @@ class _StockListTabState extends State<_StockListTab>
             final totalCount = picks.length + adCount;
 
             return ListView.builder(
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+              padding: const EdgeInsets.fromLTRB(0, 10, 0, 24),
               itemCount: totalCount + 1,
               itemBuilder: (context, index) {
                 if (index == 0) return const _DisclaimerBanner();
                 final adjustedIndex = index - 1;
                 final adsBefore = adjustedIndex ~/ (adInterval + 1);
                 final actualIndex = adjustedIndex - adsBefore;
-                final isAdSlot = (adjustedIndex + 1) % (adInterval + 1) == 0 && adsBefore < adCount;
+                final isAdSlot =
+                    (adjustedIndex + 1) % (adInterval + 1) == 0 &&
+                    adsBefore < adCount;
 
                 if (isAdSlot) {
                   return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
                     child: BannerAdWidget(slotId: 'stock_tab_$adsBefore'),
                   );
                 }
 
                 final pick = picks[actualIndex];
-                return StockCard(
+                final card = StockCard(
                   key: ValueKey(pick.id),
                   pick: pick,
                   isLoggedIn: auth.isLoggedIn,
@@ -824,7 +928,11 @@ class _StockListTabState extends State<_StockListTab>
                   onFavoriteToggle: auth.isLoggedIn && uid != null
                       ? () {
                           final isFav = favIds.contains(pick.id);
-                          widget.firestoreService.toggleFavorite(uid, pick.id, isFav);
+                          widget.firestoreService.toggleFavorite(
+                            uid,
+                            pick.id,
+                            isFav,
+                          );
                           AnalyticsService.instance.logToggleFavorite(
                             ticker: pick.ticker,
                             name: pick.name,
@@ -833,7 +941,7 @@ class _StockListTabState extends State<_StockListTab>
                         }
                       : null,
                   onTap: () {
-                    if (pick.isPremium && !auth.isLoggedIn) {
+                    if (!auth.isLoggedIn) {
                       ScaffoldMessenger.of(context).hideCurrentSnackBar();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -842,7 +950,9 @@ class _StockListTabState extends State<_StockListTab>
                             label: '로그인',
                             onPressed: () => Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => const LoginScreen()),
+                              MaterialPageRoute(
+                                builder: (_) => const LoginScreen(),
+                              ),
                             ),
                           ),
                           duration: const Duration(seconds: 3),
@@ -850,55 +960,92 @@ class _StockListTabState extends State<_StockListTab>
                       );
                       return;
                     }
-                    Navigator.push(
-                      context,
-                      PageRouteBuilder(
-                        transitionDuration: const Duration(milliseconds: 340),
-                        reverseTransitionDuration: const Duration(milliseconds: 260),
-                        pageBuilder: (context, animation, secondaryAnimation) =>
-                            StockDetailScreen(pick: pick),
-                        transitionsBuilder:
-                            (context, animation, secondaryAnimation, child) {
-                          final fade = CurvedAnimation(
-                            parent: animation,
-                            curve: Curves.easeOutQuart,
-                          );
-                          final slide = Tween<Offset>(
-                            begin: const Offset(0, 0.07),
-                            end: Offset.zero,
-                          ).animate(
-                            CurvedAnimation(
-                              parent: animation,
-                              curve: Curves.easeOutQuart,
-                            ),
-                          );
-                          final scale = Tween<double>(
-                            begin: 0.985,
-                            end: 1,
-                          ).animate(
-                            CurvedAnimation(
-                              parent: animation,
-                              curve: Curves.easeOutQuart,
-                            ),
-                          );
-                          return FadeTransition(
-                            opacity: fade,
-                            child: SlideTransition(
-                              position: slide,
-                              child: ScaleTransition(
-                                scale: scale,
-                                child: child,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    );
+                    if (!kIsWeb &&
+                        Theme.of(context).platform == TargetPlatform.iOS) {
+                      Navigator.push(context, stockDetailRoute(pick));
+                    } else {
+                      Navigator.push(
+                        context,
+                        PageRouteBuilder(
+                          transitionDuration: const Duration(milliseconds: 340),
+                          reverseTransitionDuration: const Duration(
+                            milliseconds: 260,
+                          ),
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  StockDetailScreen(pick: pick),
+                          transitionsBuilder:
+                              (context, animation, secondaryAnimation, child) {
+                                final fade = CurvedAnimation(
+                                  parent: animation,
+                                  curve: Curves.easeOutQuart,
+                                );
+                                final slide =
+                                    Tween<Offset>(
+                                      begin: const Offset(0, 0.07),
+                                      end: Offset.zero,
+                                    ).animate(
+                                      CurvedAnimation(
+                                        parent: animation,
+                                        curve: Curves.easeOutQuart,
+                                      ),
+                                    );
+                                final scale =
+                                    Tween<double>(begin: 0.985, end: 1).animate(
+                                      CurvedAnimation(
+                                        parent: animation,
+                                        curve: Curves.easeOutQuart,
+                                      ),
+                                    );
+                                return FadeTransition(
+                                  opacity: fade,
+                                  child: SlideTransition(
+                                    position: slide,
+                                    child: ScaleTransition(
+                                      scale: scale,
+                                      child: child,
+                                    ),
+                                  ),
+                                );
+                              },
+                        ),
+                      );
+                    }
                   },
                 );
+                if (!_playEntryAnimation) return card;
+                return _StaggerReveal(order: actualIndex, child: card);
               },
             );
           },
+        );
+      },
+    );
+  }
+}
+
+class _StaggerReveal extends StatelessWidget {
+  const _StaggerReveal({required this.order, required this.child});
+
+  final int order;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final capped = order.clamp(0, 7);
+    final start = (0.06 + (capped * 0.08)).toDouble();
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 700),
+      curve: Interval(start, 1, curve: Curves.easeOutCubic),
+      child: child,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, (1 - value) * 12),
+            child: child,
+          ),
         );
       },
     );
@@ -913,36 +1060,41 @@ class _DisclaimerBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A2235) : const Color(0xFFF2F4F6),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.08)
-              : const Color(0xFFE8EAED),
-        ),
-      ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(
-          Icons.info_outline_rounded,
-          size: 15,
-          color: isDark ? Colors.white70 : const Color(0xFF6B7684),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            '투자 공부 중인 개인이 관심 종목을 공유하는 공간입니다.\n투자 권유 및 일대일 투자 자문은 절대 하지 않으며, 투자 판단과 결과에 대한 책임은 본인에게 있습니다.',
-            style: GoogleFonts.inter(
-              color: isDark ? Colors.white70 : const Color(0xFF6B7684),
-              fontSize: 12,
-              height: 1.5,
-            ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1A2235) : const Color(0xFFF2F4F6),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : const Color(0xFFE8EAED),
           ),
         ),
-      ]),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.info_outline_rounded,
+              size: 15,
+              color: isDark ? Colors.white70 : const Color(0xFF6B7684),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '투자 공부 중인 개인이 관심 종목을 공유하는 공간입니다.\n투자 권유 및 일대일 투자 자문은 절대 하지 않으며, 투자 판단과 결과에 대한 책임은 본인에게 있습니다.',
+                style: GoogleFonts.inter(
+                  color: isDark ? Colors.white70 : const Color(0xFF6B7684),
+                  fontSize: 12,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -980,14 +1132,18 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab>
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
-            child: CircularProgressIndicator(color: Color(0xFF3182F6)),
+            child: CircularProgressIndicator(color: Color(0xFF10B981)),
           );
         }
         final list = snapshot.data ?? [];
         if (list.isEmpty) {
           return Center(
-            child: Text('등록된 공지사항이 없습니다',
-                style: GoogleFonts.inter(color: isDark ? Colors.white38 : Colors.black38)),
+            child: Text(
+              '등록된 공지사항이 없습니다',
+              style: GoogleFonts.inter(
+                color: isDark ? Colors.white38 : Colors.black38,
+              ),
+            ),
           );
         }
         return ListView.builder(
@@ -1033,32 +1189,44 @@ class _AnnouncementCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (a.isPinned) ...[
-                  Row(children: [
-                    const Icon(Icons.push_pin, color: Color(0xFF3182F6), size: 14),
-                    const SizedBox(width: 4),
-                    Text(
-                      '고정 공지',
-                      style: GoogleFonts.inter(
-                        color: const Color(0xFF3182F6),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.push_pin,
+                        color: Color(0xFF10B981),
+                        size: 14,
                       ),
-                    ),
-                  ]),
+                      const SizedBox(width: 4),
+                      Text(
+                        '고정 공지',
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF10B981),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
                 ],
-                Text(a.title,
-                    style: GoogleFonts.inter(
-                        color: cs.onSurface,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 20,
-                        letterSpacing: -0.3)),
+                Text(
+                  a.title,
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 20,
+                    letterSpacing: -0.3,
+                  ),
+                ),
                 const SizedBox(height: 12),
-                Text(a.body,
-                    style: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.72),
-                        fontSize: 14,
-                        height: 1.65)),
+                Text(
+                  a.body,
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.72),
+                    fontSize: 14,
+                    height: 1.65,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1072,7 +1240,7 @@ class _AnnouncementCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: a.isPinned
-                ? const Color(0xFF3182F6).withValues(alpha: 0.32)
+                ? const Color(0xFF10B981).withValues(alpha: 0.32)
                 : borderColor,
           ),
         ),
@@ -1082,7 +1250,7 @@ class _AnnouncementCard extends StatelessWidget {
             if (a.isPinned)
               const Padding(
                 padding: EdgeInsets.only(top: 1, right: 6),
-                child: Icon(Icons.push_pin, color: Color(0xFF3182F6), size: 13),
+                child: Icon(Icons.push_pin, color: Color(0xFF10B981), size: 13),
               ),
             Expanded(
               child: Column(

@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+﻿import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -128,7 +128,7 @@ class _NightFuturesChartScreenState extends State<NightFuturesChartScreen> {
     final cs = Theme.of(context).colorScheme;
     final isUp = _change >= 0;
     final priceColor =
-        isUp ? const Color(0xFF4ADE80) : const Color(0xFFFF6B6B);
+        isUp ? const Color(0xFF10B981) : const Color(0xFFFF6B6B);
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -148,7 +148,7 @@ class _NightFuturesChartScreenState extends State<NightFuturesChartScreen> {
       ),
       body: _loading
           ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF4ADE80)))
+              child: CircularProgressIndicator(color: Color(0xFF10B981)))
           : _error != null
               ? Center(
                   child: Text(_error!,
@@ -346,3 +346,5 @@ class _NightFuturesChartScreenState extends State<NightFuturesChartScreen> {
     );
   }
 }
+
+

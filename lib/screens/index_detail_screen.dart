@@ -1,4 +1,4 @@
-import 'dart:ui' as ui;
+﻿import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -248,7 +248,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
               child: Center(
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Color(0xFF3182F6),
+                  color: Color(0xFF10B981),
                 ),
               ),
             )
@@ -452,7 +452,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
               child: Center(
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Color(0xFF3182F6),
+                  color: Color(0xFF10B981),
                 ),
               ),
             )
@@ -588,7 +588,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
         ),
         decoration: BoxDecoration(
           color: active
-              ? const Color(0xFF3182F6).withValues(alpha: 0.12)
+              ? const Color(0xFF10B981).withValues(alpha: 0.12)
               : cs.onSurface.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(999),
         ),
@@ -596,7 +596,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
           label,
           style: GoogleFonts.inter(
             color: active
-                ? const Color(0xFF3182F6)
+                ? const Color(0xFF10B981)
                 : Theme.of(
                     context,
                   ).colorScheme.onSurface.withValues(alpha: 0.55),
@@ -868,7 +868,7 @@ class _IndexFullscreenChartPageState extends State<_IndexFullscreenChartPage> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
           color: active
-              ? const Color(0xFF3182F6).withValues(alpha: 0.14)
+              ? const Color(0xFF10B981).withValues(alpha: 0.14)
               : cs.onSurface.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(10),
         ),
@@ -876,7 +876,7 @@ class _IndexFullscreenChartPageState extends State<_IndexFullscreenChartPage> {
           label,
           style: GoogleFonts.inter(
             color: active
-                ? const Color(0xFF3182F6)
+                ? const Color(0xFF10B981)
                 : cs.onSurface.withValues(alpha: 0.6),
             fontSize: 12,
             fontWeight: active ? FontWeight.w700 : FontWeight.w500,
@@ -1003,7 +1003,7 @@ class _IndexFullscreenChartPageState extends State<_IndexFullscreenChartPage> {
                       ? const Center(
                   child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Color(0xFF3182F6),
+                            color: Color(0xFF10B981),
                           ),
                         )
                       : LayoutBuilder(
@@ -1293,3 +1293,5 @@ class _CandlePainter extends CustomPainter {
         oldDelegate.visibleStart != visibleStart;
   }
 }
+
+

@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -303,14 +303,14 @@ class _WriteMarketAnalysisScreenState
             ),
             ListTile(
               leading: const Icon(Icons.photo_library_outlined,
-                  color: Color(0xFF4ADE80)),
+                  color: Color(0xFF10B981)),
               title: Text('갤러리에서 선택',
                   style: GoogleFonts.inter(color: cs.onSurface)),
               onTap: () { Navigator.pop(context); _pickImages(); },
             ),
             ListTile(
               leading: const Icon(Icons.camera_alt_outlined,
-                  color: Color(0xFF4ADE80)),
+                  color: Color(0xFF10B981)),
               title: Text('카메라로 촬영',
                   style: GoogleFonts.inter(color: cs.onSurface)),
               onTap: () { Navigator.pop(context); _pickFromCamera(); },
@@ -430,7 +430,7 @@ class _WriteMarketAnalysisScreenState
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
                 child: const Text('사진 없이 저장',
-                    style: TextStyle(color: Color(0xFF4ADE80))),
+                    style: TextStyle(color: Color(0xFF10B981))),
               ),
             ],
           ),
@@ -519,14 +519,14 @@ class _WriteMarketAnalysisScreenState
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Color(0xFF4ADE80))),
+                            strokeWidth: 2, color: Color(0xFF10B981))),
                   ))
               : TextButton(
                   onPressed: _submit,
                   child: Text(
                     widget.editing != null ? '수정' : '등록',
                     style: GoogleFonts.inter(
-                        color: const Color(0xFF4ADE80),
+                        color: const Color(0xFF10B981),
                         fontSize: 15,
                         fontWeight: FontWeight.w700),
                   ),
@@ -658,7 +658,7 @@ class _WriteMarketAnalysisScreenState
                   if (_imageCount > 0)
                     Text('$_imageCount/$_maxImages',
                         style: GoogleFonts.inter(
-                            color: const Color(0xFF4ADE80),
+                            color: const Color(0xFF10B981),
                             fontSize: 12,
                             fontWeight: FontWeight.w600)),
                 ],
@@ -798,3 +798,5 @@ class _FmtBtn extends StatelessWidget {
     );
   }
 }
+
+

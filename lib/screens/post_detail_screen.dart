@@ -1,4 +1,4 @@
-import 'package:cached_network_image/cached_network_image.dart';
+﻿import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -298,13 +298,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         Row(children: [
                           CircleAvatar(
                             radius: 14,
-                            backgroundColor: const Color(0xFF3182F6).withValues(alpha: 0.16),
+                            backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.16),
                             child: Text(
                               widget.post.nickname.isNotEmpty
                                   ? widget.post.nickname[0].toUpperCase()
                                   : '?',
                               style: GoogleFonts.inter(
-                                color: const Color(0xFF3182F6),
+                                color: const Color(0xFF10B981),
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -351,7 +351,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                       color: cs.onSurface.withValues(alpha: 0.05),
                                       child: const Center(
                                         child: CircularProgressIndicator(
-                                            color: Color(0xFF3182F6),
+                                            color: Color(0xFF10B981),
                                             strokeWidth: 2),
                                       ),
                                     ),
@@ -412,7 +412,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                       color: cs.onSurface.withValues(alpha: 0.05),
                                       child: const Center(
                                         child: CircularProgressIndicator(
-                                            color: Color(0xFF3182F6), strokeWidth: 2),
+                                            color: Color(0xFF10B981), strokeWidth: 2),
                                       ),
                                     ),
                                     errorWidget: (_, _, _) => Container(
@@ -451,7 +451,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       return const SliverToBoxAdapter(
                         child: Padding(
                           padding: EdgeInsets.all(32),
-                          child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3182F6))),
+                          child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF10B981))),
                         ),
                       );
                     }
@@ -734,7 +734,7 @@ class _CommentInput extends StatelessWidget {
                       height: 40,
                       child: Padding(
                         padding: EdgeInsets.all(8),
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3182F6)),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF10B981)),
                       ),
                     )
                   : GestureDetector(
@@ -743,7 +743,7 @@ class _CommentInput extends StatelessWidget {
                         width: 40,
                         height: 40,
                         decoration: const BoxDecoration(
-                          color: Color(0xFF3182F6),
+                          color: Color(0xFF10B981),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
@@ -764,3 +764,5 @@ class _CommentInput extends StatelessWidget {
     );
   }
 }
+
+

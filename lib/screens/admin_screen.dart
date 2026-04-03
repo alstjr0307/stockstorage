@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -52,8 +52,8 @@ class _AdminScreenState extends State<AdminScreen>
         ),
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: const Color(0xFF4ADE80),
-          labelColor: const Color(0xFF4ADE80),
+          indicatorColor: const Color(0xFF10B981),
+          labelColor: const Color(0xFF10B981),
           unselectedLabelColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
           labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14),
           unselectedLabelStyle: GoogleFonts.inter(fontSize: 14),
@@ -192,7 +192,7 @@ class _UploadTabState extends State<_UploadTab> {
             height: 52,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4ADE80),
+                backgroundColor: const Color(0xFF10B981),
                 foregroundColor: Colors.black,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14)),
@@ -244,7 +244,7 @@ class _UploadTabState extends State<_UploadTab> {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide:
-                  const BorderSide(color: Color(0xFF4ADE80), width: 1.5),
+                  const BorderSide(color: Color(0xFF10B981), width: 1.5),
             ),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -274,7 +274,7 @@ class _UploadTabState extends State<_UploadTab> {
               builder: (context, child) => Theme(
                 data: Theme.of(context).copyWith(
                   colorScheme: Theme.of(context).colorScheme.copyWith(
-                    primary: const Color(0xFF4ADE80),
+                    primary: const Color(0xFF10B981),
                     onPrimary: Colors.black,
                   ),
                 ),
@@ -359,7 +359,7 @@ class _UploadTabState extends State<_UploadTab> {
               '${pick.name} ${_isEdit ? '수정' : '등록'} 완료!',
               style: GoogleFonts.inter(),
             ),
-            backgroundColor: const Color(0xFF4ADE80),
+            backgroundColor: const Color(0xFF10B981),
           ),
         );
         if (_isEdit) {
@@ -409,7 +409,7 @@ class _ManageTab extends StatelessWidget {
             if (activeSnap.connectionState == ConnectionState.waiting ||
                 completedSnap.connectionState == ConnectionState.waiting) {
               return const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+                  child: CircularProgressIndicator(color: Color(0xFF10B981)));
             }
 
             final activePicks = activeSnap.data ?? [];
@@ -531,7 +531,7 @@ class _ManageCard extends StatelessWidget {
           if (!pick.isCompleted)
             IconButton(
               icon: const Icon(Icons.edit_outlined,
-                  color: Color(0xFF4ADE80), size: 20),
+                  color: Color(0xFF10B981), size: 20),
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -779,7 +779,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(_editing != null ? '공지 수정 완료' : '공지 등록 완료',
               style: GoogleFonts.inter()),
-          backgroundColor: const Color(0xFF4ADE80),
+          backgroundColor: const Color(0xFF10B981),
         ));
         _cancelEdit();
       }
@@ -852,7 +852,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
                 children: [
                   Switch(
                     value: _isPinned,
-                    activeThumbColor: const Color(0xFF4ADE80),
+                    activeThumbColor: const Color(0xFF10B981),
                     onChanged: (v) => setState(() => _isPinned = v),
                   ),
                   Text('상단 고정',
@@ -867,7 +867,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
                   const SizedBox(width: 8),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4ADE80),
+                      backgroundColor: const Color(0xFF10B981),
                       foregroundColor: Colors.black,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
@@ -895,7 +895,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+                    child: CircularProgressIndicator(color: Color(0xFF10B981)));
               }
               final list = snapshot.data ?? [];
               if (list.isEmpty) {
@@ -916,7 +916,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: a.isPinned
-                            ? const Color(0xFF4ADE80).withValues(alpha: 0.4)
+                            ? const Color(0xFF10B981).withValues(alpha: 0.4)
                             : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05),
                       ),
                     ),
@@ -926,7 +926,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
                           const Padding(
                             padding: EdgeInsets.only(right: 6),
                             child: Icon(Icons.push_pin,
-                                color: Color(0xFF4ADE80), size: 14),
+                                color: Color(0xFF10B981), size: 14),
                           ),
                         Expanded(
                           child: Column(
@@ -947,7 +947,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
                         ),
                         IconButton(
                           icon: const Icon(Icons.edit_outlined,
-                              color: Color(0xFF4ADE80), size: 18),
+                              color: Color(0xFF10B981), size: 18),
                           onPressed: () => _startEdit(a),
                         ),
                         IconButton(
@@ -980,7 +980,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide:
-                const BorderSide(color: Color(0xFF4ADE80), width: 1.5)),
+                const BorderSide(color: Color(0xFF10B981), width: 1.5)),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       );
@@ -1056,7 +1056,7 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
             height: 50,
             child: ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4ADE80),
+                backgroundColor: const Color(0xFF10B981),
                 foregroundColor: Colors.black,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
@@ -1074,7 +1074,7 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+                    child: CircularProgressIndicator(color: Color(0xFF10B981)));
               }
               final list = snapshot.data ?? [];
               if (list.isEmpty) {
@@ -1129,7 +1129,7 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
                         ),
                         IconButton(
                           icon: const Icon(Icons.edit_outlined,
-                              color: Color(0xFF4ADE80), size: 18),
+                              color: Color(0xFF10B981), size: 18),
                           onPressed: () => _openWrite(a),
                         ),
                         IconButton(
@@ -1245,10 +1245,10 @@ class _PushNotificationTabState extends State<_PushNotificationTab> {
             child: ElevatedButton.icon(
               onPressed: _sending ? null : _send,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4ADE80),
+                backgroundColor: const Color(0xFF10B981),
                 foregroundColor: Colors.black,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                disabledBackgroundColor: const Color(0xFF4ADE80).withValues(alpha: 0.4),
+                disabledBackgroundColor: const Color(0xFF10B981).withValues(alpha: 0.4),
               ),
               icon: _sending
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
@@ -1299,7 +1299,7 @@ class _UsersTabState extends State<_UsersTab> {
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+          return const Center(child: CircularProgressIndicator(color: Color(0xFF10B981)));
         }
         if (snapshot.hasError) {
           return Center(child: Text('오류: ${snapshot.error}', style: GoogleFonts.inter(color: cs.onSurface)));
@@ -1341,7 +1341,7 @@ class _UsersTabState extends State<_UsersTab> {
                         children: [
                           Text('오늘 가입', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 12)),
                           const SizedBox(height: 4),
-                          Text('+$todayCount명', style: GoogleFonts.inter(color: const Color(0xFF4ADE80), fontWeight: FontWeight.w700, fontSize: 22)),
+                          Text('+$todayCount명', style: GoogleFonts.inter(color: const Color(0xFF10B981), fontWeight: FontWeight.w700, fontSize: 22)),
                         ],
                       ),
                     ),
@@ -1397,7 +1397,7 @@ class _UsersTabState extends State<_UsersTab> {
                       Text(
                         '댓글 $commentCount',
                         style: GoogleFonts.inter(
-                          color: const Color(0xFF4ADE80),
+                          color: const Color(0xFF10B981),
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                         ),
@@ -1456,13 +1456,13 @@ class _ReportsTabState extends State<_ReportsTab> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    if (_loading) return const Center(child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+    if (_loading) return const Center(child: CircularProgressIndicator(color: Color(0xFF10B981)));
     if (_reports.isEmpty) {
       return Center(child: Text('신고 내역이 없습니다', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4))));
     }
     return RefreshIndicator(
       onRefresh: _load,
-      color: const Color(0xFF4ADE80),
+      color: const Color(0xFF10B981),
       child: ListView.separated(
         padding: const EdgeInsets.all(16),
         itemCount: _reports.length,
@@ -1517,3 +1517,5 @@ class _ReportsTabState extends State<_ReportsTab> {
     );
   }
 }
+
+

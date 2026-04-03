@@ -12,7 +12,8 @@ if (process.env.FIREBASE_SERVICE_ACCOUNT) {
 admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 const db = admin.firestore();
 
-const DAYS_BACK = Number(process.env.DAYS_BACK || 1);
+// Keep at least today + yesterday by default to avoid midnight boundary misses.
+const DAYS_BACK = Number(process.env.DAYS_BACK || 2);
 const COARSE_STEP = Number(process.env.COARSE_STEP || 1000);
 const CONCURRENCY = Number(process.env.CONCURRENCY || 10);
 const MAX_COARSE_PAGE = Number(process.env.MAX_COARSE_PAGE || 300000);

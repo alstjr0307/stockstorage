@@ -1,4 +1,4 @@
-import 'dart:ui' as ui;
+﻿import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -249,7 +249,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
                 color: selected
-                    ? const Color(0xFF4ADE80)
+                    ? const Color(0xFF10B981)
                     : cs.onSurface.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(20),
               ),
@@ -271,7 +271,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Row(children: [
-        _legendDot(const Color(0xFF4ADE80), '매수', cs),
+        _legendDot(const Color(0xFF10B981), '매수', cs),
         const SizedBox(width: 12),
         _legendDot(Colors.redAccent, '매도', cs),
       ]),
@@ -363,7 +363,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
               Text(fmt(e.$2),
                   style: GoogleFonts.robotoMono(
                       fontSize: 10,
-                      color: isGreen ? const Color(0xFF4ADE80) : Colors.redAccent)),
+                      color: isGreen ? const Color(0xFF10B981) : Colors.redAccent)),
             ]),
           ),
         ),
@@ -403,7 +403,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
                 '실현손익',
                 '${isPnlUp ? '+' : ''}${fmtP(totalPnl)}',
                 cs,
-                valueColor: isPnlUp ? const Color(0xFF4ADE80) : Colors.redAccent,
+                valueColor: isPnlUp ? const Color(0xFF10B981) : Colors.redAccent,
               ),
           ]),
           if (sells.isNotEmpty) ...[
@@ -461,7 +461,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
               style: GoogleFonts.robotoMono(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: isUp ? const Color(0xFF4ADE80) : Colors.redAccent)),
+                  color: isUp ? const Color(0xFF10B981) : Colors.redAccent)),
         if (widget.onEditSell != null)
           GestureDetector(
             onTap: () {
@@ -541,7 +541,7 @@ class _JournalCandlePainter extends CustomPainter {
     for (int i = 0; i < n; i++) {
       final c = candles[i];
       final isGreen = c.close >= c.open;
-      final baseColor = isGreen ? const Color(0xFF4ADE80) : Colors.redAccent;
+      final baseColor = isGreen ? const Color(0xFF10B981) : Colors.redAccent;
       final color = touchedIndex == i ? labelColor : baseColor;
 
       final bodyW = (totalCandleW * 0.6).clamp(2.0, 10.0);
@@ -618,7 +618,7 @@ class _JournalCandlePainter extends CustomPainter {
       if (m.price <= 0) continue;
       final py = toY(m.price);
       if (py < markerH || py > markerH + chartH) continue;
-      final color = m.isBuy ? const Color(0xFF4ADE80) : Colors.redAccent;
+      final color = m.isBuy ? const Color(0xFF10B981) : Colors.redAccent;
       final dashPaint = Paint()
         ..color = color.withValues(alpha: 0.45)
         ..strokeWidth = 1;
@@ -689,7 +689,7 @@ class _JournalCandlePainter extends CustomPainter {
           ? toY(candles[m.index].low)  // 매수: 캔들 아래 (위쪽 삼각형)
           : toY(candles[m.index].high); // 매도: 캔들 위 (아래쪽 삼각형)
 
-      final color = m.isBuy ? const Color(0xFF4ADE80) : Colors.redAccent;
+      final color = m.isBuy ? const Color(0xFF10B981) : Colors.redAccent;
       const triSize = 7.0;
       const gap = 4.0;
 
@@ -760,3 +760,5 @@ class _JournalCandlePainter extends CustomPainter {
       old.markers != markers ||
       old.visibleStart != visibleStart;
 }
+
+

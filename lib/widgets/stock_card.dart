@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:timeago/timeago.dart' as timeago;
+
 import '../models/stock_pick.dart';
 import '../services/stock_price_service.dart';
 
@@ -25,14 +26,26 @@ class StockCard extends StatefulWidget {
   State<StockCard> createState() => _StockCardState();
 }
 
-class _StockCardState extends State<StockCard> {
+class _StockCardState extends State<StockCard>
+    with SingleTickerProviderStateMixin {
   PriceResult? _priceResult;
   bool _loadingPrice = true;
+  AnimationController? _newPulseController;
+  Animation<double>? _newPulseScale;
+
+  StockPick get pick => widget.pick;
 
   @override
   void initState() {
     super.initState();
+    _ensurePulseAnimation();
     _fetchPrice();
+  }
+
+  @override
+  void dispose() {
+    _newPulseController?.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchPrice() async {
@@ -47,8 +60,6 @@ class _StockCardState extends State<StockCard> {
     });
   }
 
-  StockPick get pick => widget.pick;
-
   double get _liveReturnRate {
     if (_priceResult != null) {
       return ((_priceResult!.price - pick.buyPrice) / pick.buyPrice) * 100;
@@ -59,90 +70,105 @@ class _StockCardState extends State<StockCard> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isBlurred = pick.isPremium && !widget.isLoggedIn;
-    final returnRate = _liveReturnRate;
-    final isPositive = returnRate >= 0;
-    final accentColor =
-        isPositive ? const Color(0xFFF04452) : const Color(0xFF1677FF);
-
-    final cardColor = isDark ? const Color(0xFF131929) : Colors.white;
-    final borderColor = pick.isPremium
-        ? const Color(0xFFFFD700).withValues(alpha: 0.3)
-        : (isDark
-            ? Colors.white.withValues(alpha: 0.06)
-            : const Color(0xFFE8EAED));
     final textPrimary = isDark ? Colors.white : const Color(0xFF191F28);
     final textSecondary = isDark
         ? Colors.white.withValues(alpha: 0.48)
         : const Color(0xFF6B7684);
-    final textMuted = isDark
-        ? Colors.white.withValues(alpha: 0.60)
-        : const Color(0xFF8B95A1);
-    final tickerBg =
-        isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFF2F4F6);
-    final favUnfilledColor = isDark ? Colors.white24 : Colors.black26;
-    final buyPriceColor = isDark ? Colors.white60 : Colors.black54;
+    final textTertiary = isDark
+        ? Colors.white.withValues(alpha: 0.28)
+        : const Color(0xFFB0B8C1);
+    final tickerBg = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : const Color(0xFFF2F4F6);
+    final dividerColor = isDark
+        ? Colors.white.withValues(alpha: 0.14)
+        : const Color(0xFFD9DEE4);
+    final blurredCardBg = isDark
+        ? const Color(0xFF152621)
+        : const Color(0xFFF2FBF8);
+    final blurredBorder = isDark
+        ? const Color(0xFF10B981).withValues(alpha: 0.35)
+        : const Color(0xFF10B981).withValues(alpha: 0.24);
 
-    return GestureDetector(
+    final isBlurred = !widget.isLoggedIn;
+    final isNewPick = _isWithin24Hours(pick.createdAt);
+    final returnRate = _liveReturnRate;
+    final isPositive = returnRate >= 0;
+    final changeColor = isPositive
+        ? const Color(0xFFF04452)
+        : const Color(0xFF1677FF);
+
+    return InkWell(
       onTap: widget.onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: borderColor),
-          boxShadow: isDark
-              ? null
-              : const [
-                  BoxShadow(
-                    color: Color(0x0D000000),
-                    blurRadius: 10,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(20, isBlurred ? 10 : 14, 20, 0),
+        child: Container(
+          padding: isBlurred
+              ? const EdgeInsets.fromLTRB(14, 12, 14, 12)
+              : EdgeInsets.zero,
+          decoration: isBlurred
+              ? BoxDecoration(
+                  color: blurredCardBg,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: blurredBorder, width: 1.1),
+                )
+              : null,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (isNewPick) ...[
+                _buildNewTopAccent(isDark),
+                const SizedBox(height: 10),
+              ],
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          timeago.format(pick.createdAt, locale: 'ko'),
-                          style: GoogleFonts.inter(
-                            color: textSecondary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              timeago.format(pick.createdAt, locale: 'ko'),
+                              style: _pretendard(
+                                color: textTertiary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            if (isNewPick) ...[
+                              const SizedBox(width: 6),
+                              _buildNewBadge(isDark),
+                            ],
+                          ],
                         ),
                         const SizedBox(height: 6),
                         Row(
                           children: [
-                            Flexible(
+                            Expanded(
                               child: isBlurred
                                   ? Container(
-                                      height: 18,
-                                      width: 110,
+                                      height: 22,
+                                      width: 130,
                                       decoration: BoxDecoration(
-                                        color:
-                                            textPrimary.withValues(alpha: 0.12),
-                                        borderRadius: BorderRadius.circular(6),
+                                        color: textPrimary.withValues(
+                                          alpha: 0.12,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
                                     )
                                   : Text(
                                       pick.name,
-                                      style: GoogleFonts.inter(
-                                        color: textPrimary,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 18,
-                                        letterSpacing: -0.2,
-                                      ),
+                                      maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
+                                      style: _pretendard(
+                                        color: textPrimary,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -0.3,
+                                      ),
                                     ),
                             ),
                             if (!isBlurred) ...[
@@ -159,10 +185,48 @@ class _StockCardState extends State<StockCard> {
                                 child: Text(
                                   pick.ticker,
                                   style: GoogleFonts.robotoMono(
-                                    color: textMuted,
+                                    color: textSecondary,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
                                   ),
+                                ),
+                              ),
+                            ] else ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(
+                                    0xFF10B981,
+                                  ).withValues(alpha: isDark ? 0.2 : 0.14),
+                                  borderRadius: BorderRadius.circular(9999),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.lock_outline_rounded,
+                                      size: 11,
+                                      color: const Color(
+                                        0xFF10B981,
+                                      ).withValues(alpha: isDark ? 0.95 : 0.85),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '미리보기',
+                                      style: _pretendard(
+                                        color: const Color(0xFF10B981)
+                                            .withValues(
+                                              alpha: isDark ? 0.95 : 0.85,
+                                            ),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -171,126 +235,67 @@ class _StockCardState extends State<StockCard> {
                       ],
                     ),
                   ),
-                  if (pick.isPremium) ...[
-                    const SizedBox(width: 8),
-                    _buildPremiumBadge(),
-                  ],
                   if (widget.onFavoriteToggle != null) ...[
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: widget.onFavoriteToggle,
-                      child: Icon(
-                        widget.isFavorite
-                            ? Icons.favorite
-                            : Icons.favorite_border,
-                        color: widget.isFavorite
-                            ? Colors.redAccent
-                            : favUnfilledColor,
-                        size: 18,
+                    const SizedBox(width: 4),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: GestureDetector(
+                        onTap: widget.onFavoriteToggle,
+                        child: Icon(
+                          widget.isFavorite
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                          size: 20,
+                          color: widget.isFavorite
+                              ? Colors.redAccent
+                              : (isDark ? Colors.white24 : Colors.black26),
+                        ),
                       ),
                     ),
                   ],
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               Row(
                 children: [
-                  _buildPriceBox(
-                    '매수가',
-                    pick.buyPrice,
-                    pick.market,
-                    buyPriceColor,
-                    textSecondary,
+                  _buildPriceBlock(
+                    label: '추천가',
+                    value: _formatPrice(pick.buyPrice, pick.market),
+                    valueColor: textPrimary,
+                    labelColor: textSecondary,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Icon(
-                      Icons.trending_flat,
-                      color: accentColor.withValues(alpha: 0.45),
-                      size: 16,
-                    ),
+                  const SizedBox(width: 16),
+                  Container(width: 1, height: 30, color: dividerColor),
+                  const SizedBox(width: 16),
+                  _buildCurrentPriceBlock(
+                    labelColor: textSecondary,
+                    valueColor: changeColor,
                   ),
-                  _buildCurrentPriceBox(accentColor, textSecondary),
                   const Spacer(),
-                  _buildReturnBadge(returnRate, isPositive, accentColor),
+                  _buildReturnSummary(
+                    returnRate: returnRate,
+                    color: changeColor,
+                    labelColor: textSecondary,
+                  ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               if (isBlurred)
-                Stack(
-                  children: [
-                    Text(
-                      pick.reason,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        color: textPrimary,
-                        fontSize: 14,
-                        height: 1.55,
-                      ),
-                    ),
-                    Positioned.fill(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.transparent, cardColor],
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      bottom: 0,
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFFFFD700)
-                                    .withValues(alpha: 0.15)
-                                : const Color(0xFFFFD700)
-                                    .withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(9999),
-                            border: Border.all(
-                              color: isDark
-                                  ? const Color(0xFFFFD700)
-                                      .withValues(alpha: 0.4)
-                                  : const Color(0xFFB8860B)
-                                      .withValues(alpha: 0.6),
-                            ),
-                          ),
-                          child: Text(
-                            '로그인 필요',
-                            style: GoogleFonts.inter(
-                              color: isDark
-                                  ? const Color(0xFFFFD700)
-                                  : const Color(0xFF9A6E00),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                )
+                _buildBlurredReason(textSecondary, isDark, blurredCardBg)
               else
                 Text(
                   pick.reason,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    color: textPrimary,
-                    fontSize: 14,
-                    height: 1.55,
+                  style: _pretendard(
+                    color: textSecondary,
+                    fontSize: 15,
+                    height: 1.6,
                   ),
                 ),
+              const SizedBox(height: 14),
+              if (!isBlurred)
+                Divider(height: 1, thickness: 1, color: dividerColor),
             ],
           ),
         ),
@@ -298,44 +303,59 @@ class _StockCardState extends State<StockCard> {
     );
   }
 
-  Widget _buildReturnBadge(
-    double returnRate,
-    bool isPositive,
-    Color accentColor,
-  ) {
-    final arrow = isPositive ? '+' : '';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: accentColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(9999),
-      ),
-      child: Text(
-        '$arrow${returnRate.toStringAsFixed(1)}%',
-        style: GoogleFonts.robotoMono(
-          color: accentColor,
-          fontWeight: FontWeight.w700,
-          fontSize: 13,
+  Widget _buildPriceBlock({
+    required String label,
+    required String value,
+    required Color valueColor,
+    required Color labelColor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: _pretendard(
+            color: labelColor,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
         ),
-      ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: GoogleFonts.robotoMono(
+            color: valueColor,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildCurrentPriceBox(Color accentColor, Color labelColor) {
+  Widget _buildCurrentPriceBlock({
+    required Color labelColor,
+    required Color valueColor,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           '현재가',
-          style: GoogleFonts.inter(color: labelColor, fontSize: 11),
+          style: _pretendard(
+            color: labelColor,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+          ),
         ),
+        const SizedBox(height: 2),
         if (_loadingPrice)
           const SizedBox(
-            width: 12,
+            width: 14,
             height: 14,
             child: CircularProgressIndicator(
-              strokeWidth: 1.5,
-              color: Color(0xFF3182F6),
+              strokeWidth: 1.6,
+              color: Color(0xFF10B981),
             ),
           )
         else if (_priceResult == null)
@@ -343,69 +363,222 @@ class _StockCardState extends State<StockCard> {
             '--',
             style: GoogleFonts.robotoMono(
               color: labelColor,
-              fontWeight: FontWeight.w600,
               fontSize: 14,
+              fontWeight: FontWeight.w600,
             ),
           )
         else
           Text(
             _priceResult!.formattedPrice,
             style: GoogleFonts.robotoMono(
-              color: accentColor,
+              color: valueColor,
+              fontSize: 14,
               fontWeight: FontWeight.w700,
-              fontSize: 15,
             ),
           ),
       ],
     );
   }
 
-  Widget _buildPremiumBadge() {
+  Widget _buildReturnSummary({
+    required double returnRate,
+    required Color color,
+    required Color labelColor,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          '추천가 대비',
+          style: _pretendard(
+            color: labelColor,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 3),
+        _buildReturnBadge(returnRate, color),
+      ],
+    );
+  }
+
+  Widget _buildReturnBadge(double returnRate, Color color) {
+    final sign = returnRate > 0 ? '+' : '';
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFD700).withValues(alpha: 0.16),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(9999),
       ),
       child: Text(
-        'PREMIUM',
-        style: GoogleFonts.inter(
-          color: const Color(0xFF9A6E00),
-          fontSize: 10,
+        '$sign${returnRate.toStringAsFixed(1)}%',
+        style: GoogleFonts.robotoMono(
+          color: color,
+          fontSize: 13,
           fontWeight: FontWeight.w700,
-          letterSpacing: 0.2,
         ),
       ),
     );
   }
 
-  Widget _buildPriceBox(
-    String label,
-    double price,
-    String market,
-    Color valueColor,
-    Color labelColor,
+  Widget _buildNewBadge(bool isDark) {
+    const badge = Color(0xFFFACC15);
+    _ensurePulseAnimation();
+    return AnimatedBuilder(
+      animation: _newPulseScale!,
+      builder: (context, child) {
+        return Transform.scale(scale: _newPulseScale!.value, child: child);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: badge.withValues(alpha: isDark ? 0.24 : 0.2),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: badge.withValues(alpha: isDark ? 0.55 : 0.42),
+          ),
+        ),
+        child: Text(
+          'NEW',
+          style: GoogleFonts.robotoMono(
+            color: const Color(0xFF7A4B00),
+            fontSize: 10,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNewTopAccent(bool isDark) {
+    _ensurePulseAnimation();
+    const accent = Color(0xFFFACC15);
+    return AnimatedBuilder(
+      animation: _newPulseScale!,
+      builder: (context, child) {
+        final t = (_newPulseScale!.value - 0.9) / 0.22;
+        final opacity = (0.62 + (t.clamp(0.0, 1.0) * 0.38)).clamp(0.0, 1.0);
+        return Opacity(opacity: opacity, child: child);
+      },
+      child: Container(
+        height: 3,
+        width: 58,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          gradient: LinearGradient(
+            colors: [
+              accent.withValues(alpha: isDark ? 0.95 : 0.9),
+              accent.withValues(alpha: isDark ? 0.45 : 0.35),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _ensurePulseAnimation() {
+    if (_newPulseController != null && _newPulseScale != null) return;
+    final controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 620),
+    )..repeat(reverse: true);
+    _newPulseController = controller;
+    _newPulseScale = Tween<double>(
+      begin: 0.9,
+      end: 1.12,
+    ).animate(CurvedAnimation(parent: controller, curve: Curves.easeInOut));
+  }
+
+  Widget _buildBlurredReason(
+    Color textSecondary,
+    bool isDark,
+    Color baseBackground,
   ) {
-    final isKrw = market != 'US';
-    final formatted = isKrw
-        ? '₩${NumberFormat('#,###').format(price.toInt())}'
-        : '\$${price.toStringAsFixed(2)}';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Stack(
       children: [
         Text(
-          label,
-          style: GoogleFonts.inter(color: labelColor, fontSize: 11),
+          pick.reason,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: _pretendard(color: textSecondary, fontSize: 15, height: 1.6),
         ),
-        Text(
-          formatted,
-          style: GoogleFonts.robotoMono(
-            color: valueColor,
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  Colors.transparent,
+                  baseBackground.withValues(alpha: 0.96),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          right: 0,
+          top: 0,
+          bottom: 0,
+          child: Center(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF10B981).withValues(alpha: 0.18)
+                    : const Color(0xFF10B981).withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(9999),
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF10B981).withValues(alpha: 0.45)
+                      : const Color(0xFF10B981).withValues(alpha: 0.4),
+                ),
+              ),
+              child: Text(
+                '로그인 필요',
+                style: _pretendard(
+                  color: isDark
+                      ? const Color(0xFF34D399)
+                      : const Color(0xFF0E9F6E),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
         ),
       ],
     );
+  }
+
+  TextStyle _pretendard({
+    Color? color,
+    double? fontSize,
+    FontWeight? fontWeight,
+    double? letterSpacing,
+    double? height,
+  }) {
+    return TextStyle(
+      fontFamily: 'Pretendard',
+      color: color,
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      letterSpacing: letterSpacing,
+      height: height,
+    );
+  }
+
+  String _formatPrice(double price, String market) {
+    if (market == 'US') {
+      return '\$${price.toStringAsFixed(2)}';
+    }
+    return 'KRW ${NumberFormat('#,###').format(price.toInt())}';
+  }
+
+  bool _isWithin24Hours(DateTime createdAt) {
+    final now = DateTime.now();
+    final diff = now.difference(createdAt.toLocal());
+    return !diff.isNegative && diff <= const Duration(hours: 24);
   }
 }

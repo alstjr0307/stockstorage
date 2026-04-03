@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -92,9 +92,11 @@ class StockStorageApp extends StatelessWidget {
           // 라이트 테마
           theme: ThemeData(
             brightness: Brightness.light,
+            fontFamily: 'Pretendard',
+            textTheme: ThemeData.light().textTheme.apply(fontFamily: 'Pretendard'),
             scaffoldBackgroundColor: const Color(0xFFF0F4F8),
             colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF4ADE80),
+              seedColor: const Color(0xFF10B981),
               brightness: Brightness.light,
               surface: Colors.white,
             ),
@@ -109,9 +111,11 @@ class StockStorageApp extends StatelessWidget {
           // 다크 테마
           darkTheme: ThemeData(
             brightness: Brightness.dark,
+            fontFamily: 'Pretendard',
+            textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'Pretendard'),
             scaffoldBackgroundColor: const Color(0xFF0A0E1A),
             colorScheme: ColorScheme.fromSeed(
-              seedColor: const Color(0xFF4ADE80),
+              seedColor: const Color(0xFF10B981),
               brightness: Brightness.dark,
               surface: const Color(0xFF1A2035),
             ),
@@ -129,3 +133,5 @@ class StockStorageApp extends StatelessWidget {
     );
   }
 }
+
+

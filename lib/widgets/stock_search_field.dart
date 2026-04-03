@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../services/stock_price_service.dart';
@@ -91,7 +91,7 @@ class _StockSearchFieldState extends State<StockSearchField> {
         Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF1E2A40) : Colors.white;
     final borderColor = isDark
-        ? const Color(0xFF4ADE80).withValues(alpha: 0.12)
+        ? const Color(0xFF10B981).withValues(alpha: 0.12)
         : Colors.black.withValues(alpha: 0.08);
 
     return Positioned(
@@ -214,11 +214,11 @@ class _StockSearchFieldState extends State<StockSearchField> {
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Color(0xFF4ADE80))),
+                          strokeWidth: 2, color: Color(0xFF10B981))),
                 )
               : _selected
                   ? const Icon(Icons.check_circle,
-                      color: Color(0xFF4ADE80), size: 18)
+                      color: Color(0xFF10B981), size: 18)
                   : Icon(Icons.search,
                       color: cs.onSurface.withValues(alpha: 0.3), size: 18),
           border: OutlineInputBorder(
@@ -227,7 +227,7 @@ class _StockSearchFieldState extends State<StockSearchField> {
           focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
               borderSide:
-                  const BorderSide(color: Color(0xFF4ADE80), width: 1.5)),
+                  const BorderSide(color: Color(0xFF10B981), width: 1.5)),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
         ),
@@ -236,3 +236,5 @@ class _StockSearchFieldState extends State<StockSearchField> {
     );
   }
 }
+
+

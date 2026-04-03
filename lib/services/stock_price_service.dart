@@ -354,6 +354,93 @@ class StockPriceService {
           out.add((date: timestamps[i], open: o, high: h, low: l, close: c));
         }
       }
+      // 일봉 요청 시 Yahoo Finance가 당일 진행 중인 캔들을 누락하는 경우
+      // range=5d 보조 요청으로 당일 캔들을 추가
+      if (interval == '1d' && out.isNotEmpty) {
+        final nowKst = DateTime.now().toUtc().add(const Duration(hours: 9));
+        final todayDate = DateTime(nowKst.year, nowKst.month, nowKst.day);
+        final lastDate = DateTime(
+          out.last.date.year,
+          out.last.date.month,
+          out.last.date.day,
+        );
+        if (lastDate.isBefore(todayDate)) {
+          try {
+            final supUri = Uri.parse(
+              'https://query1.finance.yahoo.com/v8/finance/chart/$symbol'
+              '?interval=1d&range=5d',
+            );
+            final supRes = await http
+                .get(supUri, headers: {'User-Agent': 'Mozilla/5.0'})
+                .timeout(const Duration(seconds: 8));
+            if (supRes.statusCode == 200) {
+              final supJson = jsonDecode(supRes.body);
+              final supResult = supJson['chart']?['result']?[0];
+              if (supResult != null) {
+                final supTs =
+                    (supResult['timestamp'] as List<dynamic>?)
+                        ?.whereType<num>()
+                        .map(
+                          (v) => DateTime.fromMillisecondsSinceEpoch(
+                            v.toInt() * 1000,
+                            isUtc: true,
+                          ).add(const Duration(hours: 9)),
+                        )
+                        .toList();
+                final supQ = supResult['indicators']?['quote']?[0];
+                final supO = (supQ?['open'] as List<dynamic>?)
+                    ?.map((v) => v is num ? v.toDouble() : null)
+                    .toList();
+                final supH = (supQ?['high'] as List<dynamic>?)
+                    ?.map((v) => v is num ? v.toDouble() : null)
+                    .toList();
+                final supL = (supQ?['low'] as List<dynamic>?)
+                    ?.map((v) => v is num ? v.toDouble() : null)
+                    .toList();
+                final supC = (supQ?['close'] as List<dynamic>?)
+                    ?.map((v) => v is num ? v.toDouble() : null)
+                    .toList();
+                if (supTs != null &&
+                    supO != null &&
+                    supH != null &&
+                    supL != null &&
+                    supC != null) {
+                  for (var i = 0; i < supTs.length; i++) {
+                    final d = DateTime(
+                      supTs[i].year,
+                      supTs[i].month,
+                      supTs[i].day,
+                    );
+                    if (d.isAfter(lastDate)) {
+                      final o = supO[i];
+                      final h = supH[i];
+                      final l = supL[i];
+                      final c = supC[i];
+                      if (o != null &&
+                          h != null &&
+                          l != null &&
+                          c != null &&
+                          o > 0 &&
+                          h > 0 &&
+                          l > 0 &&
+                          c > 0) {
+                        out.add((
+                          date: supTs[i],
+                          open: o,
+                          high: h,
+                          low: l,
+                          close: c,
+                        ));
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          } catch (_) {}
+        }
+      }
+
       if (out.isNotEmpty) _ohlcCache[cacheKey] = out;
       return out;
     } catch (_) {
@@ -1009,6 +1096,9 @@ class DiscussionPost {
 
   String get readUrl =>
       'https://finance.naver.com/item/board_read.naver?code=$ticker&nid=$nid&page=1';
+
+  String get mobileReadUrl =>
+      'https://m.stock.naver.com/discussion/domestic/$ticker/posts/$nid';
 }
 
 class StockNews {

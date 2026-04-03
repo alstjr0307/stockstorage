@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -132,7 +132,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
         ),
       ),
       body: RefreshIndicator(
-        color: const Color(0xFF3182F6),
+        color: const Color(0xFF10B981),
         onRefresh: _refresh,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 14, 20, 100),
@@ -179,7 +179,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
                   style: GoogleFonts.inter(fontWeight: FontWeight.w800),
                 ),
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF3182F6),
+                  backgroundColor: const Color(0xFF10B981),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -335,7 +335,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
       return const SizedBox(
         height: 120,
         child: Center(
-          child: CircularProgressIndicator(color: Color(0xFF3182F6)),
+          child: CircularProgressIndicator(color: Color(0xFF10B981)),
         ),
       );
     }
@@ -648,8 +648,8 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
     if (score < 25) return const Color(0xFFEF4444);
     if (score < 45) return const Color(0xFFF97316);
     if (score < 56) return const Color(0xFFEAB308);
-    if (score < 75) return const Color(0xFF84CC16);
-    return const Color(0xFF4ADE80);
+    if (score < 75) return const Color(0xFF10B981);
+    return const Color(0xFF10B981);
   }
 
   String _fearAndGreedLabel(String rating) {
@@ -748,8 +748,8 @@ class SemicircleGaugePainter extends CustomPainter {
     (0.0, 0.25, Color(0xFFEF4444)),
     (0.25, 0.45, Color(0xFFF97316)),
     (0.45, 0.55, Color(0xFFEAB308)),
-    (0.55, 0.75, Color(0xFF84CC16)),
-    (0.75, 1.0, Color(0xFF4ADE80)),
+    (0.55, 0.75, Color(0xFF10B981)),
+    (0.75, 1.0, Color(0xFF10B981)),
   ];
 
   Color get _needleColor {
@@ -821,3 +821,5 @@ class SemicircleGaugePainter extends CustomPainter {
     return oldDelegate.score != score || oldDelegate.trackColor != trackColor;
   }
 }
+
+

@@ -1,4 +1,4 @@
-import 'dart:ui' as ui;
+﻿import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -27,7 +27,7 @@ const _comparePeriods = [
 
 // 기준 + 비교 슬롯 색상
 const _slotColors = [
-  Color(0xFF4ADE80), // base (green)
+  Color(0xFF10B981), // base (green)
   Color(0xFFFB923C), // compare 0 (orange)
   Color(0xFF60A5FA), // compare 1 (blue)
   Color(0xFFE879F9), // compare 2 (pink)
@@ -300,7 +300,7 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
                       child: Text('$tempAmount',
                           textAlign: TextAlign.center,
                           style: GoogleFonts.inter(
-                              color: const Color(0xFF4ADE80),
+                              color: const Color(0xFF10B981),
                               fontSize: 28,
                               fontWeight: FontWeight.w700)),
                     ),
@@ -327,7 +327,7 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                         decoration: BoxDecoration(
                           color: sel
-                              ? const Color(0xFF4ADE80)
+                              ? const Color(0xFF10B981)
                               : cs.onSurface.withValues(alpha: 0.07),
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -358,7 +358,7 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
                 onPressed: () => Navigator.pop(ctx, true),
                 child: Text('적용',
                     style: GoogleFonts.inter(
-                        color: const Color(0xFF4ADE80), fontWeight: FontWeight.w700)),
+                        color: const Color(0xFF10B981), fontWeight: FontWeight.w700)),
               ),
             ],
           );
@@ -514,16 +514,16 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
                     color: cs.surface,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                        color: const Color(0xFF4ADE80).withValues(alpha: 0.4)),
+                        color: const Color(0xFF10B981).withValues(alpha: 0.4)),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.add, color: Color(0xFF4ADE80), size: 16),
+                      const Icon(Icons.add, color: Color(0xFF10B981), size: 16),
                       const SizedBox(width: 6),
                       Text('종목 추가 (${_slotCount + 1}/4)',
                           style: GoogleFonts.inter(
-                            color: const Color(0xFF4ADE80),
+                            color: const Color(0xFF10B981),
                             fontSize: 13,
                             fontWeight: FontWeight.w600,
                           )),
@@ -566,8 +566,8 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
                 icon: const Icon(Icons.share_outlined, size: 16),
                 label: const Text('친구에게 공유하기'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF4ADE80),
-                  side: const BorderSide(color: Color(0xFF4ADE80), width: 1),
+                  foregroundColor: const Color(0xFF10B981),
+                  side: const BorderSide(color: Color(0xFF10B981), width: 1),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
@@ -668,7 +668,7 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
                         width: 16,
                         height: 16,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Color(0xFF4ADE80))))
+                            strokeWidth: 2, color: Color(0xFF10B981))))
                 : Icon(Icons.search,
                     color: cs.onSurface.withValues(alpha: 0.4), size: 20),
             suffixIcon: controller.text.isNotEmpty
@@ -726,12 +726,12 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
           color: _customSelected
-              ? const Color(0xFF4ADE80).withValues(alpha: 0.12)
+              ? const Color(0xFF10B981).withValues(alpha: 0.12)
               : cs.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: _customSelected
-                ? const Color(0xFF4ADE80)
+                ? const Color(0xFF10B981)
                 : cs.onSurface.withValues(alpha: 0.15),
           ),
         ),
@@ -741,13 +741,13 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
             Icon(Icons.date_range_rounded,
                 size: 14,
                 color: _customSelected
-                    ? const Color(0xFF4ADE80)
+                    ? const Color(0xFF10B981)
                     : cs.onSurface.withValues(alpha: 0.5)),
             const SizedBox(width: 6),
             Text(label,
                 style: GoogleFonts.inter(
                   color: _customSelected
-                      ? const Color(0xFF4ADE80)
+                      ? const Color(0xFF10B981)
                       : cs.onSurface.withValues(alpha: 0.6),
                   fontSize: 12,
                   fontWeight:
@@ -771,11 +771,11 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
               margin: const EdgeInsets.only(right: 4),
               padding: const EdgeInsets.symmetric(vertical: 7),
               decoration: BoxDecoration(
-                color: selected ? const Color(0xFF4ADE80) : cs.surface,
+                color: selected ? const Color(0xFF10B981) : cs.surface,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
                   color: selected
-                      ? const Color(0xFF4ADE80)
+                      ? const Color(0xFF10B981)
                       : cs.onSurface.withValues(alpha: 0.1),
                 ),
               ),
@@ -811,7 +811,7 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
             width: 16,
             height: 16,
             child: CircularProgressIndicator(
-                strokeWidth: 1.5, color: Color(0xFF4ADE80)));
+                strokeWidth: 1.5, color: Color(0xFF10B981)));
       }
       if (pct.isEmpty) return const SizedBox.shrink();
       final ret = pct.last;
@@ -831,7 +831,7 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
         Text('${isUp ? '+' : ''}${ret.toStringAsFixed(2)}%',
             style: GoogleFonts.inter(
                 color: isUp
-                    ? const Color(0xFF4ADE80)
+                    ? const Color(0xFF10B981)
                     : Colors.redAccent,
                 fontSize: 13,
                 fontWeight: FontWeight.w700)),
@@ -946,7 +946,7 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
                 width: 16,
                 height: 16,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Color(0xFF4ADE80)))
+                    strokeWidth: 2, color: Color(0xFF10B981)))
           else if (price != null) ...[
             Text(price.formattedPrice,
                 style: GoogleFonts.inter(
@@ -956,7 +956,7 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
             Text(price.formattedChange,
                 style: GoogleFonts.inter(
                     color: price.isUp
-                        ? const Color(0xFF4ADE80)
+                        ? const Color(0xFF10B981)
                         : Colors.redAccent,
                     fontSize: 11)),
           ] else
@@ -1030,7 +1030,7 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
               height: 200,
               child: Center(
                   child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Color(0xFF4ADE80))),
+                      strokeWidth: 2, color: Color(0xFF10B981))),
             )
           else if (basePct.isEmpty)
             SizedBox(
@@ -1169,7 +1169,7 @@ class _CompareLinePainter extends CustomPainter {
             ..strokeJoin = StrokeJoin.round);
     }
 
-    drawLine(basePct, const Color(0xFF4ADE80));
+    drawLine(basePct, const Color(0xFF10B981));
     for (int i = 0; i < comparePcts.length; i++) {
       drawLine(comparePcts[i], compareColors[i]);
     }
@@ -1292,3 +1292,5 @@ class _FullscreenCompareChartPageState
     );
   }
 }
+
+

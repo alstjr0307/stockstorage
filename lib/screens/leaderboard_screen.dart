@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../models/stock_pick.dart';
@@ -17,7 +17,7 @@ class LeaderboardScreen extends StatelessWidget {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
-            child: CircularProgressIndicator(color: Color(0xFF3182F6)),
+            child: CircularProgressIndicator(color: Color(0xFF10B981)),
           );
         }
 
@@ -151,15 +151,15 @@ class _LeaderboardContent extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF3182F6).withValues(alpha: 0.08),
+              color: const Color(0xFF10B981).withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                  color: const Color(0xFF3182F6).withValues(alpha: 0.2)),
+                  color: const Color(0xFF10B981).withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
                 const Icon(Icons.star_rounded,
-                    color: Color(0xFF3182F6), size: 16),
+                    color: Color(0xFF10B981), size: 16),
                 const SizedBox(width: 8),
                 Text('최고 수익 ',
                     style: GoogleFonts.inter(
@@ -303,3 +303,5 @@ class _LeaderboardContent extends StatelessWidget {
     );
   }
 }
+
+

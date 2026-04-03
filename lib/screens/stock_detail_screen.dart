@@ -1,6 +1,8 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -43,6 +45,13 @@ enum _Period {
   final String range;
 
   bool get isMinute => this == min1 || this == min5 || this == min60;
+}
+
+Route<dynamic> stockDetailRoute(StockPick pick) {
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+    return CupertinoPageRoute(builder: (_) => StockDetailScreen(pick: pick));
+  }
+  return MaterialPageRoute(builder: (_) => StockDetailScreen(pick: pick));
 }
 
 class StockDetailScreen extends StatefulWidget {
@@ -231,7 +240,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
             '메모가 저장되었습니다',
             style: GoogleFonts.inter(color: Colors.white),
           ),
-          backgroundColor: const Color(0xFF4ADE80).withValues(alpha: 0.9),
+          backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.9),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
@@ -465,6 +474,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
+      resizeToAvoidBottomInset: false,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -492,10 +502,10 @@ class _StockDetailScreenState extends State<StockDetailScreen>
               margin: const EdgeInsets.only(right: 4),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: const Color(0xFF3182F6).withValues(alpha: 0.12),
+                color: const Color(0xFF10B981).withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(9999),
                 border: Border.all(
-                  color: const Color(0xFF3182F6).withValues(alpha: 0.35),
+                  color: const Color(0xFF10B981).withValues(alpha: 0.35),
                 ),
               ),
               child: Row(
@@ -503,14 +513,14 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                 children: [
                   const Icon(
                     Icons.compare_arrows,
-                    color: Color(0xFF3182F6),
+                    color: Color(0xFF10B981),
                     size: 15,
                   ),
                   const SizedBox(width: 4),
                   Text(
                     '종목비교',
                     style: GoogleFonts.inter(
-                      color: const Color(0xFF3182F6),
+                      color: const Color(0xFF10B981),
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
@@ -681,8 +691,6 @@ class _StockDetailScreenState extends State<StockDetailScreen>
               ),
             ),
           ),
-          Divider(height: 1, color: cs.onSurface.withValues(alpha: 0.08)),
-
           // ── 탭 콘텐츠 ────────────────────────────────────────────
           Expanded(
             child: _DetailReveal(
@@ -698,7 +706,12 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                       child: SingleChildScrollView(
                         keyboardDismissBehavior:
                             ScrollViewKeyboardDismissBehavior.onDrag,
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+                        padding: EdgeInsets.fromLTRB(
+                          20,
+                          20,
+                          20,
+                          8 + MediaQuery.of(context).viewInsets.bottom,
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -763,7 +776,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                             decoration: BoxDecoration(
                                               color: isPositive
                                                   ? const Color(
-                                                      0xFF4ADE80,
+                                                      0xFF10B981,
                                                     ).withValues(alpha: 0.12)
                                                   : Colors.redAccent.withValues(
                                                       alpha: 0.12,
@@ -773,7 +786,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                               border: Border.all(
                                                 color: isPositive
                                                     ? const Color(
-                                                        0xFF4ADE80,
+                                                        0xFF10B981,
                                                       ).withValues(alpha: 0.4)
                                                     : Colors.redAccent
                                                           .withValues(
@@ -785,7 +798,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                               '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
                                               style: GoogleFonts.inter(
                                                 color: isPositive
-                                                    ? const Color(0xFF4ADE80)
+                                                    ? const Color(0xFF10B981)
                                                     : Colors.redAccent,
                                                 fontWeight: FontWeight.w800,
                                                 fontSize: 20,
@@ -857,7 +870,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                   pick.targetPrice,
                                                   pick.market,
                                                 ),
-                                                const Color(0xFF3182F6),
+                                                const Color(0xFF10B981),
                                               ),
                                             ),
                                           ],
@@ -914,7 +927,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                 text: '주식저장소',
                                                 style: GoogleFonts.inter(
                                                   color: const Color(
-                                                    0xFF4ADE80,
+                                                    0xFF10B981,
                                                   ),
                                                   fontSize: 11,
                                                   fontWeight: FontWeight.w800,
@@ -949,18 +962,18 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                         height: 16,
                                         child: CircularProgressIndicator(
                                           strokeWidth: 2,
-                                          color: Color(0xFF4ADE80),
+                                          color: Color(0xFF10B981),
                                         ),
                                       )
                                     : const Icon(
                                         Icons.camera_alt_outlined,
                                         size: 18,
-                                        color: Color(0xFF4ADE80),
+                                        color: Color(0xFF10B981),
                                       ),
                                 label: Text(
                                   _capturing ? '캡처 중...' : '캡처해서 공유하기',
                                   style: GoogleFonts.inter(
-                                    color: const Color(0xFF4ADE80),
+                                    color: const Color(0xFF10B981),
                                     fontWeight: FontWeight.w600,
                                     fontSize: 14,
                                   ),
@@ -970,7 +983,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                     vertical: 13,
                                   ),
                                   side: const BorderSide(
-                                    color: Color(0xFF4ADE80),
+                                    color: Color(0xFF10B981),
                                     width: 1.2,
                                   ),
                                   shape: RoundedRectangleBorder(
@@ -1076,7 +1089,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                         '$sign${changePct.toStringAsFixed(2)}%',
                         style: GoogleFonts.inter(
                           color: changePct >= 0
-                              ? const Color(0xFF4ADE80)
+                              ? const Color(0xFF10B981)
                               : Colors.redAccent,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -1156,7 +1169,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
               child: Center(
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Color(0xFF4ADE80),
+                  color: Color(0xFF10B981),
                 ),
               ),
             )
@@ -1192,7 +1205,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                             _ohlcLabel(
                               '고',
                               touched.high,
-                              color: const Color(0xFF4ADE80),
+                              color: const Color(0xFF10B981),
                             ),
                             _ohlcLabel(
                               '저',
@@ -1203,7 +1216,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                               '종',
                               touched.close,
                               color: touched.close >= touched.open
-                                  ? const Color(0xFF4ADE80)
+                                  ? const Color(0xFF10B981)
                                   : Colors.redAccent,
                             ),
                           ],
@@ -1263,12 +1276,12 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         ),
         decoration: BoxDecoration(
           color: active
-              ? const Color(0xFF4ADE80).withValues(alpha: 0.2)
+              ? const Color(0xFF10B981).withValues(alpha: 0.2)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: active
-                ? const Color(0xFF4ADE80).withValues(alpha: 0.5)
+                ? const Color(0xFF10B981).withValues(alpha: 0.5)
                 : cs.onSurface.withValues(alpha: 0.12),
           ),
         ),
@@ -1276,7 +1289,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           label,
           style: GoogleFonts.inter(
             color: active
-                ? const Color(0xFF4ADE80)
+                ? const Color(0xFF10B981)
                 : cs.onSurface.withValues(alpha: 0.38),
             fontSize: small ? 10 : 11,
             fontWeight: FontWeight.w600,
@@ -1321,7 +1334,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          const Icon(Icons.show_chart, color: Color(0xFF3182F6), size: 18),
+          const Icon(Icons.show_chart, color: Color(0xFF10B981), size: 18),
           const SizedBox(width: 10),
           Text(
             '현재가',
@@ -1338,7 +1351,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                     height: 16,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Color(0xFF3182F6),
+                      color: Color(0xFF10B981),
                     ),
                   )
                 : _livePrice == null
@@ -1485,7 +1498,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     final cs = Theme.of(context).colorScheme;
     final total = targetPrice - buyPrice;
     final progress = ((currentPrice - buyPrice) / total).clamp(0.0, 1.0);
-    final accentColor = isPositive ? const Color(0xFF4ADE80) : Colors.redAccent;
+    final accentColor = isPositive ? const Color(0xFF10B981) : Colors.redAccent;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1570,12 +1583,12 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
                     color: isUp
-                        ? const Color(0xFF4ADE80).withValues(alpha: 0.15)
+                        ? const Color(0xFF10B981).withValues(alpha: 0.15)
                         : cs.surface,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isUp
-                          ? const Color(0xFF4ADE80).withValues(alpha: 0.5)
+                          ? const Color(0xFF10B981).withValues(alpha: 0.5)
                           : cs.onSurface.withValues(alpha: 0.1),
                     ),
                   ),
@@ -1585,7 +1598,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                       Icon(
                         Icons.thumb_up_outlined,
                         color: isUp
-                            ? const Color(0xFF4ADE80)
+                            ? const Color(0xFF10B981)
                             : cs.onSurface.withValues(alpha: 0.38),
                         size: 18,
                       ),
@@ -1594,7 +1607,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                         '상승 $upCount',
                         style: GoogleFonts.inter(
                           color: isUp
-                              ? const Color(0xFF4ADE80)
+                              ? const Color(0xFF10B981)
                               : cs.onSurface.withValues(alpha: 0.6),
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
@@ -1670,95 +1683,94 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   // ── 뉴스 ──────────────────────────────────────────────────────────────────
   Widget _newsSection() {
     final cs = Theme.of(context).colorScheme;
+    final borderColor = cs.outlineVariant.withValues(alpha: 0.55);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionLabel('관련 뉴스'),
         const SizedBox(height: 8),
         if (_loadingNews)
-          Container(
-            height: 80,
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Center(
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Color(0xFF4ADE80),
+                color: Color(0xFF10B981),
               ),
             ),
           )
         else if (_news.isEmpty)
-          Text(
-            '관련 뉴스가 없습니다',
-            style: GoogleFonts.inter(
-              color: cs.onSurface.withValues(alpha: 0.3),
-              fontSize: 13,
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Text(
+              '관련 뉴스가 없습니다',
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.5),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           )
         else
-          ...(_news.map(
-            (n) => GestureDetector(
+          ...List.generate(_news.length, (index) {
+            final n = _news[index];
+            return InkWell(
               onTap: () => launchUrl(
                 Uri.parse(n.url),
                 mode: LaunchMode.externalApplication,
               ),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: cs.onSurface.withValues(alpha: 0.06),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      n.title,
-                      style: GoogleFonts.inter(
-                        color: cs.onSurface,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        height: 1.4,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
+              borderRadius: BorderRadius.circular(12),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          n.publisher,
-                          style: GoogleFonts.inter(
-                            color: cs.onSurface.withValues(alpha: 0.38),
-                            fontSize: 11,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                n.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: cs.onSurface,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.35,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '${n.publisher} · ${timeago.format(n.publishedAt, locale: 'ko')}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: cs.onSurface.withValues(alpha: 0.55),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          timeago.format(n.publishedAt, locale: 'ko'),
-                          style: GoogleFonts.inter(
-                            color: cs.onSurface.withValues(alpha: 0.3),
-                            fontSize: 11,
-                          ),
-                        ),
-                        const Spacer(),
                         Icon(
                           Icons.open_in_new,
-                          size: 12,
-                          color: cs.onSurface.withValues(alpha: 0.25),
+                          size: 14,
+                          color: cs.onSurface.withValues(alpha: 0.32),
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                  if (index != _news.length - 1)
+                    Divider(height: 1, thickness: 1, color: borderColor),
+                ],
               ),
-            ),
-          )),
+            );
+          }),
       ],
     );
   }
@@ -1766,6 +1778,13 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   // ── 종목토론방 ────────────────────────────────────────────────────────────
   Widget _discussionSection() {
     final cs = Theme.of(context).colorScheme;
+    final borderColor = cs.outlineVariant.withValues(alpha: 0.6);
+    final posts = _discussionPosts.take(10).toList();
+
+    String formatDate(DateTime date) {
+      return '${date.month}/${date.day} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1773,109 +1792,108 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           children: [
             _sectionLabel('종목토론방'),
             const Spacer(),
-            GestureDetector(
-              onTap: () => launchUrl(
+            TextButton(
+              onPressed: () => launchUrl(
                 Uri.parse(
-                  'https://finance.naver.com/item/board.nhn?code=${widget.pick.ticker}',
+                  'https://m.stock.naver.com/domestic/stock/${widget.pick.ticker}/discussion',
                 ),
                 mode: LaunchMode.externalApplication,
               ),
-              child: Text(
-                '네이버에서 보기',
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF4ADE80),
-                  fontSize: 12,
-                ),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF10B981),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                '네이버 바로가기',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
               ),
             ),
           ],
         ),
         const SizedBox(height: 8),
         if (_loadingDiscussion)
-          Container(
-            height: 80,
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Center(
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: Color(0xFF4ADE80),
+                color: Color(0xFF10B981),
               ),
             ),
           )
-        else if (_discussionPosts.isEmpty)
-          Text(
-            '게시글이 없습니다',
-            style: GoogleFonts.inter(
-              color: cs.onSurface.withValues(alpha: 0.3),
-              fontSize: 13,
+        else if (posts.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Text(
+              '게시글이 없습니다',
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.5),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           )
         else
-          ...(_discussionPosts
-              .take(10)
-              .map(
-                (p) => GestureDetector(
-                  onTap: () => launchUrl(
-                    Uri.parse(p.readUrl),
-                    mode: LaunchMode.externalApplication,
-                  ),
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 6),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cs.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: cs.onSurface.withValues(alpha: 0.06),
-                      ),
-                    ),
+          ...List.generate(posts.length, (index) {
+            final post = posts[index];
+            return InkWell(
+              onTap: () => launchUrl(
+                Uri.parse(post.mobileReadUrl),
+                mode: LaunchMode.externalApplication,
+              ),
+              borderRadius: BorderRadius.circular(12),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
-                          child: Text(
-                            p.title,
-                            style: GoogleFonts.inter(
-                              color: cs.onSurface.withValues(alpha: 0.85),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                post.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: cs.onSurface,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '${formatDate(post.date)} · 조회 ${post.viewCount}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: cs.onSurface.withValues(alpha: 0.55),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          '${p.date.month}/${p.date.day} ${p.date.hour.toString().padLeft(2, '0')}:${p.date.minute.toString().padLeft(2, '0')}',
-                          style: GoogleFonts.inter(
-                            color: cs.onSurface.withValues(alpha: 0.3),
-                            fontSize: 11,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
                         Icon(
-                          Icons.visibility_outlined,
-                          size: 11,
-                          color: cs.onSurface.withValues(alpha: 0.25),
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          '${p.viewCount}',
-                          style: GoogleFonts.inter(
-                            color: cs.onSurface.withValues(alpha: 0.3),
-                            fontSize: 11,
-                          ),
+                          Icons.chevron_right,
+                          size: 16,
+                          color: cs.onSurface.withValues(alpha: 0.32),
                         ),
                       ],
                     ),
                   ),
-                ),
-              )),
+                  if (index != posts.length - 1)
+                    Divider(height: 1, thickness: 1, color: borderColor),
+                ],
+              ),
+            );
+          }),
       ],
     );
   }
@@ -1894,7 +1912,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: _memoChanged
-                  ? const Color(0xFF4ADE80).withValues(alpha: 0.4)
+                  ? const Color(0xFF10B981).withValues(alpha: 0.4)
                   : cs.onSurface.withValues(alpha: 0.06),
             ),
           ),
@@ -1936,7 +1954,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4ADE80),
+                        backgroundColor: const Color(0xFF10B981),
                         foregroundColor: Colors.black,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -1988,7 +2006,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                     child: Center(
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: Color(0xFF4ADE80),
+                        color: Color(0xFF10B981),
                       ),
                     ),
                   ),
@@ -2138,7 +2156,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                           height: 16,
                           child: CircularProgressIndicator(
                             strokeWidth: 1.5,
-                            color: Color(0xFF4ADE80),
+                            color: Color(0xFF10B981),
                           ),
                         )
                       : Icon(
@@ -2186,7 +2204,11 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         left: 16,
         right: 16,
         top: 10,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 10,
+        bottom: max(
+              MediaQuery.of(context).viewInsets.bottom,
+              MediaQuery.of(context).padding.bottom,
+            ) +
+            10,
       ),
       decoration: BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
@@ -2228,7 +2250,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
             child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: const Color(0xFF4ADE80),
+                color: const Color(0xFF10B981),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: _submitting
@@ -2403,7 +2425,7 @@ class _StockCandlePainter extends CustomPainter {
     for (int i = 0; i < n; i++) {
       final c = candles[i];
       final isGreen = c.close >= c.open;
-      final baseColor = isGreen ? const Color(0xFF4ADE80) : Colors.redAccent;
+      final baseColor = isGreen ? const Color(0xFF10B981) : Colors.redAccent;
       final color = touchedIndex == i ? labelColor : baseColor;
 
       final totalCandleW = chartW / n;
@@ -2724,7 +2746,7 @@ class _FullscreenCandleChartPageState
                                   '고',
                                   touched.high,
                                   cs,
-                                  color: const Color(0xFF4ADE80),
+                                  color: const Color(0xFF10B981),
                                 ),
                                 _ohlcLabel(
                                   '저',
@@ -2737,7 +2759,7 @@ class _FullscreenCandleChartPageState
                                   touched.close,
                                   cs,
                                   color: touched.close >= touched.open
-                                      ? const Color(0xFF4ADE80)
+                                      ? const Color(0xFF10B981)
                                       : Colors.redAccent,
                                 ),
                               ],
@@ -2866,7 +2888,7 @@ class _FullscreenCandleChartPageState
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
           color: active
-              ? const Color(0xFF4ADE80)
+              ? const Color(0xFF10B981)
               : cs.onSurface.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -2914,3 +2936,7 @@ class _FullscreenCandleChartPageState
     );
   }
 }
+
+
+
+

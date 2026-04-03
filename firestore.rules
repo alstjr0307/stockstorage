@@ -106,6 +106,16 @@ service cloud.firestore {
       allow write: if isLoggedIn();
     }
 
+    match /fmkorea_stock_mentions_daily/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /fmkorea_stock_mentions_realtime/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /market_investor_flow/{docId} {
       allow read: if true;
       allow write: if false;
