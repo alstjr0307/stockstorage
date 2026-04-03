@@ -209,7 +209,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final auth = context.watch<AuthProvider>();
 
     return GestureDetector(
@@ -224,7 +223,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           icon: Icon(Icons.arrow_back_ios_new, size: 18, color: cs.onSurface),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('게시글', style: GoogleFonts.inter(color: cs.onSurface, fontSize: 16, fontWeight: FontWeight.w700)),
+        title: Text('자유게시판', style: GoogleFonts.inter(color: cs.onSurface, fontSize: 16, fontWeight: FontWeight.w700)),
         centerTitle: true,
         actions: [
           if (widget.isOwn && widget.onDelete != null)
@@ -299,15 +298,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         Row(children: [
                           CircleAvatar(
                             radius: 14,
-                            backgroundColor: isDark
-                                ? const Color(0xFF4ADE80).withValues(alpha: 0.12)
-                                : const Color(0xFF4ADE80).withValues(alpha: 0.18),
+                            backgroundColor: const Color(0xFF3182F6).withValues(alpha: 0.16),
                             child: Text(
                               widget.post.nickname.isNotEmpty
                                   ? widget.post.nickname[0].toUpperCase()
                                   : '?',
                               style: GoogleFonts.inter(
-                                color: const Color(0xFF4ADE80),
+                                color: const Color(0xFF3182F6),
                                 fontSize: 11,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -354,7 +351,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                       color: cs.onSurface.withValues(alpha: 0.05),
                                       child: const Center(
                                         child: CircularProgressIndicator(
-                                            color: Color(0xFF4ADE80),
+                                            color: Color(0xFF3182F6),
                                             strokeWidth: 2),
                                       ),
                                     ),
@@ -415,7 +412,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                       color: cs.onSurface.withValues(alpha: 0.05),
                                       child: const Center(
                                         child: CircularProgressIndicator(
-                                            color: Color(0xFF4ADE80), strokeWidth: 2),
+                                            color: Color(0xFF3182F6), strokeWidth: 2),
                                       ),
                                     ),
                                     errorWidget: (_, _, _) => Container(
@@ -454,7 +451,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                       return const SliverToBoxAdapter(
                         child: Padding(
                           padding: EdgeInsets.all(32),
-                          child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4ADE80))),
+                          child: Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3182F6))),
                         ),
                       );
                     }
@@ -462,7 +459,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         .where((c) => !_blockedCommentUids.contains(c.uid))
                         .toList();
                     final commentCount = comments.length;
-                    if (snap.connectionState != ConnectionState.waiting)
+                    if (snap.connectionState != ConnectionState.waiting) {
                       return SliverMainAxisGroup(slivers: [
                         SliverToBoxAdapter(
                           child: Padding(
@@ -510,6 +507,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             ),
                           ),
                       ]);
+                    }
                     return const SliverToBoxAdapter(child: SizedBox.shrink());
                   },
                 ),
@@ -557,7 +555,7 @@ class _LikeRow extends StatelessWidget {
           const SizedBox(width: 5),
           Text(
             '$count',
-            style: GoogleFonts.inter(
+            style: GoogleFonts.robotoMono(
               color: isLiked ? Colors.redAccent : cs.onSurface.withValues(alpha: 0.4),
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -736,7 +734,7 @@ class _CommentInput extends StatelessWidget {
                       height: 40,
                       child: Padding(
                         padding: EdgeInsets.all(8),
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF4ADE80)),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3182F6)),
                       ),
                     )
                   : GestureDetector(
@@ -745,10 +743,10 @@ class _CommentInput extends StatelessWidget {
                         width: 40,
                         height: 40,
                         decoration: const BoxDecoration(
-                          color: Color(0xFF4ADE80),
+                          color: Color(0xFF3182F6),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.send_rounded, size: 18, color: Colors.black),
+                        child: const Icon(Icons.send_rounded, size: 18, color: Colors.white),
                       ),
                     ),
             ])

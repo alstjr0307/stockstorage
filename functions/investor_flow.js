@@ -52,6 +52,41 @@ function getKstDateKey(date = new Date()) {
   return formatter.format(date);
 }
 
+function getKstDateParts(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: SEOUL_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(date);
+  const map = {};
+  for (const part of parts) {
+    if (part.type !== 'literal') map[part.type] = part.value;
+  }
+  return {
+    weekday: String(map.weekday || '').toLowerCase(),
+    hour: Number(map.hour || '0'),
+    minute: Number(map.minute || '0'),
+  };
+}
+
+function shouldRunInvestorFlowNow(date = new Date()) {
+  const { weekday, hour, minute } = getKstDateParts(date);
+  const isWeekday = ['mon', 'tue', 'wed', 'thu', 'fri'].includes(weekday);
+  if (!isWeekday) return false;
+
+  // KST 기준 장마감 직후(15:35)부터 16:30까지 다중 재시도.
+  const totalMinutes = hour * 60 + minute;
+  const from = 15 * 60 + 35;
+  const to = 16 * 60 + 30;
+  return totalMinutes >= from && totalMinutes <= to;
+}
+
 function buildNaverUrl({ sosok, investorGubun }) {
   return `https://finance.naver.com/sise/sise_deal_rank_iframe.naver?sosok=${sosok}&investor_gubun=${investorGubun}&type=buy`;
 }
@@ -166,13 +201,16 @@ async function saveDailyInvestorFlow(data) {
 
 const crawlDailyInvestorFlow = onSchedule(
   {
-    schedule: '10 16 * * 1-5',
+    schedule: 'every 5 minutes',
     timeZone: SEOUL_TZ,
     region: 'asia-northeast3',
     timeoutSeconds: 120,
     memory: '512MiB',
   },
   async () => {
+    if (!shouldRunInvestorFlowNow()) {
+      return;
+    }
     const data = await collectDailyInvestorFlow();
     await saveDailyInvestorFlow(data);
   },

@@ -40,23 +40,35 @@ class _CommunityScreenState extends State<CommunityScreen>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       children: [
-        // 탭바
-        Container(
-          color: cs.surface,
-          child: TabBar(
-            controller: _tabController,
-            labelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700),
-            unselectedLabelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w500),
-            labelColor: const Color(0xFF4ADE80),
-            unselectedLabelColor: cs.onSurface.withValues(alpha: 0.4),
-            indicatorColor: const Color(0xFF4ADE80),
-            indicatorWeight: 2,
-            tabs: const [
-              Tab(text: '자유게시판'),
-              Tab(text: '매매일지 공유'),
-            ],
+        const SizedBox(height: 6),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF131929) : const Color(0xFFF2F4F6),
+              borderRadius: BorderRadius.circular(9999),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              dividerColor: Colors.transparent,
+              labelStyle: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700),
+              unselectedLabelStyle: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
+              labelColor: cs.onSurface,
+              unselectedLabelColor: cs.onSurface.withValues(alpha: 0.45),
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicator: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(9999),
+              ),
+              tabs: const [
+                Tab(text: '자유게시판'),
+                Tab(text: '매매일지 공유'),
+              ],
+            ),
           ),
         ),
         Expanded(
@@ -229,7 +241,7 @@ class _JournalTabState extends State<_JournalTab> {
     final auth = context.watch<AuthProvider>();
 
     if (_loading && _journals.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF3182F6)));
     }
 
     if (!_loading && _journals.isEmpty) {
@@ -243,17 +255,17 @@ class _JournalTabState extends State<_JournalTab> {
 
     return RefreshIndicator(
       onRefresh: _refresh,
-      color: const Color(0xFF4ADE80),
+      color: const Color(0xFF3182F6),
       child: ListView.builder(
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
         itemCount: _journals.length + (_hasMore ? 1 : 0),
         itemBuilder: (ctx, i) {
           if (i == _journals.length) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
-              child: Center(child: CircularProgressIndicator(color: Color(0xFF4ADE80), strokeWidth: 2)),
+              child: Center(child: CircularProgressIndicator(color: Color(0xFF3182F6), strokeWidth: 2)),
             );
           }
           final journal = _journals[i];
@@ -498,7 +510,7 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
     final auth = context.watch<AuthProvider>();
 
     if (_loading && _posts.isEmpty) {
-      return const Center(child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+      return const Center(child: CircularProgressIndicator(color: Color(0xFF3182F6)));
     }
 
     return Stack(
@@ -513,17 +525,17 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
         else
           RefreshIndicator(
             onRefresh: _refresh,
-            color: const Color(0xFF4ADE80),
+            color: const Color(0xFF3182F6),
             child: ListView.builder(
               controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 84),
               itemCount: _posts.length + (_hasMore ? 1 : 0),
               itemBuilder: (ctx, i) {
                 if (i == _posts.length) {
                   return const Padding(
                     padding: EdgeInsets.symmetric(vertical: 20),
-                    child: Center(child: CircularProgressIndicator(color: Color(0xFF4ADE80), strokeWidth: 2)),
+                    child: Center(child: CircularProgressIndicator(color: Color(0xFF3182F6), strokeWidth: 2)),
                   );
                 }
                 final post = _posts[i];
@@ -545,13 +557,13 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
           ),
         // 글쓰기 FAB
         Positioned(
-          right: 16,
+          right: 20,
           bottom: 24,
           child: FloatingActionButton(
             heroTag: 'community_write_fab',
             onPressed: () => _openWrite(auth),
-            backgroundColor: const Color(0xFF4ADE80),
-            foregroundColor: Colors.black,
+            backgroundColor: const Color(0xFF3182F6),
+            foregroundColor: Colors.white,
             elevation: 3,
             child: const Icon(Icons.edit_rounded, size: 22),
           ),
@@ -695,21 +707,21 @@ class _JournalCardState extends State<_JournalCard> {
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.onSurface.withValues(alpha: 0.07)),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 상단 초록 바
+          // 상단 액센트 바
           Container(
             height: 3,
             decoration: const BoxDecoration(
-              gradient: LinearGradient(colors: [Color(0xFF4ADE80), Color(0xFF22C55E)]),
+              gradient: LinearGradient(colors: [Color(0xFF3182F6), Color(0xFF4D9BFF)]),
               borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -717,10 +729,10 @@ class _JournalCardState extends State<_JournalCard> {
                 Row(children: [
                   CircleAvatar(
                     radius: 14,
-                    backgroundColor: const Color(0xFF4ADE80).withValues(alpha: 0.12),
+                    backgroundColor: const Color(0xFF3182F6).withValues(alpha: 0.12),
                     child: Text(
                       journal.nickname.isNotEmpty ? journal.nickname[0].toUpperCase() : '?',
-                      style: GoogleFonts.inter(color: const Color(0xFF4ADE80), fontSize: 12, fontWeight: FontWeight.w800),
+                      style: GoogleFonts.inter(color: const Color(0xFF3182F6), fontSize: 12, fontWeight: FontWeight.w800),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -733,10 +745,10 @@ class _JournalCardState extends State<_JournalCard> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF4ADE80).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(4),
+                              color: const Color(0xFF3182F6).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(9999),
                             ),
-                            child: Text('나', style: GoogleFonts.inter(color: const Color(0xFF4ADE80), fontSize: 9, fontWeight: FontWeight.w700)),
+                            child: Text('나', style: GoogleFonts.inter(color: const Color(0xFF3182F6), fontSize: 9, fontWeight: FontWeight.w700)),
                           ),
                         ],
                       ]),
@@ -751,7 +763,7 @@ class _JournalCardState extends State<_JournalCard> {
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
                       color: cs.onSurface.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(9999),
                     ),
                     child: Text(marketLabel, style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4), fontSize: 10, fontWeight: FontWeight.w600)),
                   ),
@@ -763,7 +775,7 @@ class _JournalCardState extends State<_JournalCard> {
                 const SizedBox(height: 14),
                 // 종목명
                 Text(journal.stockName, style: GoogleFonts.inter(
-                    color: cs.onSurface, fontSize: 18, fontWeight: FontWeight.w800)),
+                    color: cs.onSurface, fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: -0.2)),
                 const SizedBox(height: 12),
                 // 거래 정보 그리드 (2행)
                 if (journal.price > 0 || journal.quantity > 0)
@@ -796,21 +808,21 @@ class _JournalCardState extends State<_JournalCard> {
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 Expanded(child: _gridCell('현재가', fmtP(_price!.price), cs,
-                                    valueColor: _price!.isUp ? const Color(0xFF4ADE80) : Colors.redAccent)),
+                                    valueColor: _price!.isUp ? const Color(0xFFF04452) : const Color(0xFF1677FF))),
                                 if (pnl != null && pnlPct != null) ...[
                                   VerticalDivider(width: 1, thickness: 1, color: cs.onSurface.withValues(alpha: 0.07)),
                                   Expanded(child: _gridCell(
                                     '평가손익',
                                     '${isPnlUp ? '+' : ''}${fmtP(pnl)}',
                                     cs,
-                                    valueColor: isPnlUp ? const Color(0xFF4ADE80) : Colors.redAccent,
+                                    valueColor: isPnlUp ? const Color(0xFFF04452) : const Color(0xFF1677FF),
                                   )),
                                   VerticalDivider(width: 1, thickness: 1, color: cs.onSurface.withValues(alpha: 0.07)),
                                   Expanded(child: _gridCell(
                                     '수익률',
                                     '${isPnlUp ? '+' : ''}${pnlPct.toStringAsFixed(1)}%',
                                     cs,
-                                    valueColor: isPnlUp ? const Color(0xFF4ADE80) : Colors.redAccent,
+                                    valueColor: isPnlUp ? const Color(0xFFF04452) : const Color(0xFF1677FF),
                                   )),
                                 ],
                               ],
@@ -834,7 +846,7 @@ class _JournalCardState extends State<_JournalCard> {
           // 하단: 좋아요 + 비공개 토글
           Divider(height: 1, color: cs.onSurface.withValues(alpha: 0.06)),
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
             child: Row(children: [
               _LikeButton(
                 isLiked: widget.isLiked,
@@ -869,7 +881,7 @@ class _JournalCardState extends State<_JournalCard> {
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.onSurface.withValues(alpha: 0.07)),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -882,7 +894,7 @@ class _JournalCardState extends State<_JournalCard> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -906,10 +918,10 @@ class _JournalCardState extends State<_JournalCard> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF4ADE80).withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(4),
+                              color: const Color(0xFF3182F6).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(9999),
                             ),
-                            child: Text('나', style: GoogleFonts.inter(color: const Color(0xFF4ADE80), fontSize: 9, fontWeight: FontWeight.w700)),
+                            child: Text('나', style: GoogleFonts.inter(color: const Color(0xFF3182F6), fontSize: 9, fontWeight: FontWeight.w700)),
                           ),
                         ],
                       ]),
@@ -923,7 +935,7 @@ class _JournalCardState extends State<_JournalCard> {
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
                       color: cs.onSurface.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(9999),
                     ),
                     child: Text('기타', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4), fontSize: 10, fontWeight: FontWeight.w600)),
                   ),
@@ -936,7 +948,7 @@ class _JournalCardState extends State<_JournalCard> {
                 // 종목명
                 Text(
                   journal.stockName.isNotEmpty ? journal.stockName : '기타 메모',
-                  style: GoogleFonts.inter(color: cs.onSurface, fontSize: 18, fontWeight: FontWeight.w800),
+                  style: GoogleFonts.inter(color: cs.onSurface, fontSize: 19, fontWeight: FontWeight.w800, letterSpacing: -0.2),
                 ),
                 // 메모
                 if (journal.note.isNotEmpty) ...[
@@ -951,7 +963,7 @@ class _JournalCardState extends State<_JournalCard> {
           ),
           Divider(height: 1, color: cs.onSurface.withValues(alpha: 0.06)),
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
             child: Row(children: [
               _LikeButton(
                 isLiked: widget.isLiked,
@@ -1026,35 +1038,35 @@ class _PostCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
+        margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
           color: cs.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: cs.onSurface.withValues(alpha: 0.07)),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 13, 14, 12),
+              padding: const EdgeInsets.fromLTRB(16, 15, 16, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 제목
-                  Text(post.title, style: GoogleFonts.inter(color: cs.onSurface, fontSize: 15, fontWeight: FontWeight.w700)),
+                  Text(post.title, style: GoogleFonts.inter(color: cs.onSurface, fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
                   if (post.content.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Text(post.content,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 13, height: 1.5)),
+                        style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.55), fontSize: 14, height: 1.55)),
                   ],
                 ],
               ),
             ),
             Divider(height: 1, color: cs.onSurface.withValues(alpha: 0.06)),
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 8, 14, 9),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
               child: Row(children: [
                 CircleAvatar(
                   radius: 11,
@@ -1069,12 +1081,12 @@ class _PostCard extends StatelessWidget {
                 if (isOwn) ...[
                   const SizedBox(width: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF4ADE80).withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(4),
+                      color: const Color(0xFF3182F6).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(9999),
                     ),
-                    child: Text('나', style: GoogleFonts.inter(color: const Color(0xFF4ADE80), fontSize: 9, fontWeight: FontWeight.w700)),
+                    child: Text('나', style: GoogleFonts.inter(color: const Color(0xFF3182F6), fontSize: 9, fontWeight: FontWeight.w700)),
                   ),
                 ],
                 Text('  ·  ', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.2), fontSize: 12)),
@@ -1117,7 +1129,7 @@ class _LikeButton extends StatelessWidget {
         padding: const EdgeInsets.all(4),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           isLoading
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 1.5, color: Color(0xFF4ADE80)))
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 1.5, color: Color(0xFF3182F6)))
               : Icon(isLiked ? Icons.favorite : Icons.favorite_border,
                   size: 16, color: isLiked ? Colors.redAccent : cs.onSurface.withValues(alpha: 0.3)),
           const SizedBox(width: 4),

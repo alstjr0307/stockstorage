@@ -4,52 +4,79 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../services/ad_service.dart';
 
 class BannerAdWidget extends StatefulWidget {
-  const BannerAdWidget({super.key});
+  const BannerAdWidget({
+    super.key,
+    required this.slotId,
+  });
+
+  final String slotId;
 
   @override
   State<BannerAdWidget> createState() => _BannerAdWidgetState();
 }
 
 class _BannerAdWidgetState extends State<BannerAdWidget> {
-  BannerAd? _bannerAd;
-  bool _isLoaded = false;
+  static final Map<String, _BannerAdEntry> _adCache = <String, _BannerAdEntry>{};
+  late final _BannerAdEntry _entry;
 
   @override
   void initState() {
     super.initState();
-    if (!kIsWeb && AdService.adsEnabled) _loadBanner();
-  }
-
-  void _loadBanner() {
-    final ad = BannerAd(
-      adUnitId: AdService.bannerAdUnitId,
-      size: AdSize.banner,
-      request: const AdRequest(),
-      listener: BannerAdListener(
-        onAdLoaded: (_) => setState(() => _isLoaded = true),
-        onAdFailedToLoad: (ad, _) {
-          ad.dispose();
-          _bannerAd = null;
-        },
-      ),
-    );
-    ad.load();
-    _bannerAd = ad;
-  }
-
-  @override
-  void dispose() {
-    _bannerAd?.dispose();
-    super.dispose();
+    _entry = _adCache.putIfAbsent(widget.slotId, () => _BannerAdEntry());
+    _entry.ensureLoaded();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb || !_isLoaded || _bannerAd == null) return const SizedBox.shrink();
+    if (kIsWeb || !AdService.adsEnabled) return const SizedBox.shrink();
+
     return SizedBox(
-      width: _bannerAd!.size.width.toDouble(),
-      height: _bannerAd!.size.height.toDouble(),
-      child: AdWidget(ad: _bannerAd!),
+      height: AdSize.banner.height.toDouble(),
+      child: ValueListenableBuilder<bool>(
+        valueListenable: _entry.loaded,
+        builder: (context, isLoaded, child) {
+          if (!isLoaded || _entry.ad == null) {
+            return const SizedBox.shrink();
+          }
+          return Center(
+            child: SizedBox(
+              width: _entry.ad!.size.width.toDouble(),
+              height: _entry.ad!.size.height.toDouble(),
+              child: AdWidget(ad: _entry.ad!),
+            ),
+          );
+        },
+      ),
     );
+  }
+}
+
+class _BannerAdEntry {
+  BannerAd? ad;
+  final ValueNotifier<bool> loaded = ValueNotifier<bool>(false);
+  bool _loading = false;
+
+  void ensureLoaded() {
+    if (_loading || loaded.value || ad != null) return;
+    _loading = true;
+    final banner = BannerAd(
+      adUnitId: AdService.bannerAdUnitId,
+      size: AdSize.banner,
+      request: const AdRequest(),
+      listener: BannerAdListener(
+        onAdLoaded: (_) {
+          loaded.value = true;
+          _loading = false;
+        },
+        onAdFailedToLoad: (failedAd, _) {
+          failedAd.dispose();
+          ad = null;
+          loaded.value = false;
+          _loading = false;
+        },
+      ),
+    );
+    ad = banner;
+    banner.load();
   }
 }

@@ -641,26 +641,47 @@ class _StockStoragePageState extends State<_StockStoragePage>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cs = Theme.of(context).colorScheme;
+    final tabBg = isDark ? const Color(0xFF131929) : const Color(0xFFF2F4F6);
+    final tabSelected = isDark ? Colors.white : const Color(0xFF191F28);
+    final tabUnselected =
+        isDark ? Colors.white.withValues(alpha: 0.48) : const Color(0xFF8B95A1);
     return Column(
       children: [
         const SizedBox(height: 4),
-        Container(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          child: TabBar(
-            controller: _tabController,
-            indicatorColor: const Color(0xFF4ADE80),
-            indicatorWeight: 2,
-            labelColor: const Color(0xFF4ADE80),
-            unselectedLabelColor: isDark ? Colors.white38 : Colors.black38,
-            labelStyle: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
-            unselectedLabelStyle: GoogleFonts.inter(fontSize: 13),
-            dividerColor: cs.onSurface.withValues(alpha: 0.08),
-            tabs: const [
-              Tab(text: '추천주'),
-              Tab(text: '종료 추천주'),
-              Tab(text: '공지사항'),
-            ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: tabBg,
+              borderRadius: BorderRadius.circular(9999),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              dividerColor: Colors.transparent,
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicator: BoxDecoration(
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.12)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(9999),
+              ),
+              labelColor: tabSelected,
+              unselectedLabelColor: tabUnselected,
+              labelStyle: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+              unselectedLabelStyle: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+              tabs: const [
+                Tab(text: '추천주'),
+                Tab(text: '종료 추천주'),
+                Tab(text: '공지사항'),
+              ],
+            ),
           ),
         ),
         Expanded(
@@ -746,7 +767,9 @@ class _StockListTabState extends State<_StockListTab>
           stream: _picksStream,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+              return const Center(
+                child: CircularProgressIndicator(color: Color(0xFF3182F6)),
+              );
             }
             if (snapshot.hasError) {
               return Center(child: Text('오류: ${snapshot.error}', style: GoogleFonts.inter(color: Colors.redAccent)));
@@ -776,17 +799,20 @@ class _StockListTabState extends State<_StockListTab>
             final totalCount = picks.length + adCount;
 
             return ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 20),
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
               itemCount: totalCount + 1,
               itemBuilder: (context, index) {
-                if (index == 0) return _DisclaimerBanner();
+                if (index == 0) return const _DisclaimerBanner();
                 final adjustedIndex = index - 1;
                 final adsBefore = adjustedIndex ~/ (adInterval + 1);
                 final actualIndex = adjustedIndex - adsBefore;
                 final isAdSlot = (adjustedIndex + 1) % (adInterval + 1) == 0 && adsBefore < adCount;
 
                 if (isAdSlot) {
-                  return const Padding(padding: EdgeInsets.symmetric(vertical: 4), child: BannerAdWidget());
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: BannerAdWidget(slotId: 'stock_tab_$adsBefore'),
+                  );
                 }
 
                 final pick = picks[actualIndex];
@@ -826,7 +852,47 @@ class _StockListTabState extends State<_StockListTab>
                     }
                     Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => StockDetailScreen(pick: pick)),
+                      PageRouteBuilder(
+                        transitionDuration: const Duration(milliseconds: 340),
+                        reverseTransitionDuration: const Duration(milliseconds: 260),
+                        pageBuilder: (context, animation, secondaryAnimation) =>
+                            StockDetailScreen(pick: pick),
+                        transitionsBuilder:
+                            (context, animation, secondaryAnimation, child) {
+                          final fade = CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutQuart,
+                          );
+                          final slide = Tween<Offset>(
+                            begin: const Offset(0, 0.07),
+                            end: Offset.zero,
+                          ).animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutQuart,
+                            ),
+                          );
+                          final scale = Tween<double>(
+                            begin: 0.985,
+                            end: 1,
+                          ).animate(
+                            CurvedAnimation(
+                              parent: animation,
+                              curve: Curves.easeOutQuart,
+                            ),
+                          );
+                          return FadeTransition(
+                            opacity: fade,
+                            child: SlideTransition(
+                              position: slide,
+                              child: ScaleTransition(
+                                scale: scale,
+                                child: child,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     );
                   },
                 );
@@ -842,23 +908,38 @@ class _StockListTabState extends State<_StockListTab>
 // ─── 면책 배너 ────────────────────────────────────────────────────────────────
 
 class _DisclaimerBanner extends StatelessWidget {
+  const _DisclaimerBanner();
+
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.amber.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+        color: isDark ? const Color(0xFF1A2235) : const Color(0xFFF2F4F6),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : const Color(0xFFE8EAED),
+        ),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Icon(Icons.warning_amber_rounded, size: 14, color: Colors.amber),
-        const SizedBox(width: 7),
+        Icon(
+          Icons.info_outline_rounded,
+          size: 15,
+          color: isDark ? Colors.white70 : const Color(0xFF6B7684),
+        ),
+        const SizedBox(width: 8),
         Expanded(
           child: Text(
             '투자 공부 중인 개인이 관심 종목을 공유하는 공간입니다.\n투자 권유 및 일대일 투자 자문은 절대 하지 않으며, 투자 판단과 결과에 대한 책임은 본인에게 있습니다.',
-            style: GoogleFonts.inter(color: Colors.amber.withValues(alpha: 0.85), fontSize: 11, height: 1.5),
+            style: GoogleFonts.inter(
+              color: isDark ? Colors.white70 : const Color(0xFF6B7684),
+              fontSize: 12,
+              height: 1.5,
+            ),
           ),
         ),
       ]),
@@ -898,7 +979,9 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab>
       stream: _stream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFF3182F6)),
+          );
         }
         final list = snapshot.data ?? [];
         if (list.isEmpty) {
@@ -908,7 +991,7 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab>
           );
         }
         return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(0, 8, 0, 20),
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
           itemCount: list.length,
           itemBuilder: (context, index) => _AnnouncementCard(a: list[index]),
         );
@@ -924,7 +1007,11 @@ class _AnnouncementCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? const Color(0xFF1A2035) : Colors.white;
+    final cs = Theme.of(context).colorScheme;
+    final cardColor = isDark ? const Color(0xFF131929) : Colors.white;
+    final borderColor = isDark
+        ? Colors.white.withValues(alpha: 0.06)
+        : const Color(0xFFE8EAED);
 
     return GestureDetector(
       onTap: () => showModalBottomSheet(
@@ -947,59 +1034,92 @@ class _AnnouncementCard extends StatelessWidget {
               children: [
                 if (a.isPinned) ...[
                   Row(children: [
-                    const Icon(Icons.push_pin, color: Color(0xFF4ADE80), size: 14),
+                    const Icon(Icons.push_pin, color: Color(0xFF3182F6), size: 14),
                     const SizedBox(width: 4),
-                    Text('고정 공지', style: GoogleFonts.inter(color: const Color(0xFF4ADE80), fontSize: 11)),
+                    Text(
+                      '고정 공지',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF3182F6),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ]),
                   const SizedBox(height: 8),
                 ],
                 Text(a.title,
                     style: GoogleFonts.inter(
-                        color: isDark ? Colors.white : Colors.black87,
+                        color: cs.onSurface,
                         fontWeight: FontWeight.w700,
-                        fontSize: 17)),
+                        fontSize: 20,
+                        letterSpacing: -0.3)),
                 const SizedBox(height: 12),
                 Text(a.body,
                     style: GoogleFonts.inter(
-                        color: isDark ? Colors.white70 : Colors.black54,
+                        color: cs.onSurface.withValues(alpha: 0.72),
                         fontSize: 14,
-                        height: 1.7)),
+                        height: 1.65)),
               ],
             ),
           ),
         ),
       ),
       child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         decoration: BoxDecoration(
           color: cardColor,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: a.isPinned
-                ? const Color(0xFF4ADE80).withValues(alpha: 0.4)
-                : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.06)),
+                ? const Color(0xFF3182F6).withValues(alpha: 0.32)
+                : borderColor,
           ),
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (a.isPinned)
               const Padding(
-                padding: EdgeInsets.only(right: 6),
-                child: Icon(Icons.push_pin, color: Color(0xFF4ADE80), size: 13),
+                padding: EdgeInsets.only(top: 1, right: 6),
+                child: Icon(Icons.push_pin, color: Color(0xFF3182F6), size: 13),
               ),
             Expanded(
-              child: Text(
-                a.title,
-                style: GoogleFonts.inter(
-                    color: isDark ? Colors.white70 : Colors.black54,
-                    fontSize: 13,
-                    fontWeight: a.isPinned ? FontWeight.w600 : FontWeight.w400),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    a.title,
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (a.body.isNotEmpty) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      a.body.replaceAll('\n', ' '),
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.52),
+                        fontSize: 13,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
               ),
             ),
-            Icon(Icons.chevron_right, color: isDark ? Colors.white24 : Colors.black26, size: 16),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.chevron_right,
+              color: cs.onSurface.withValues(alpha: 0.24),
+              size: 18,
+            ),
           ],
         ),
       ),

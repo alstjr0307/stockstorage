@@ -17,7 +17,8 @@ class LeaderboardScreen extends StatelessWidget {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
-              child: CircularProgressIndicator(color: Color(0xFF4ADE80)));
+            child: CircularProgressIndicator(color: Color(0xFF3182F6)),
+          );
         }
 
         final completedPicks = snapshot.data ?? [];
@@ -68,7 +69,7 @@ class _LeaderboardContent extends StatelessWidget {
       ..sort((a, b) => b.actualReturnRate.compareTo(a.actualReturnRate));
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
       children: [
         _buildStatsCard(cs, total, wins, winRate, avgReturn, best),
         const SizedBox(height: 20),
@@ -96,7 +97,7 @@ class _LeaderboardContent extends StatelessWidget {
         color: cs.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: const Color(0xFF4ADE80).withValues(alpha: 0.25)),
+            color: cs.onSurface.withValues(alpha: 0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -128,7 +129,7 @@ class _LeaderboardContent extends StatelessWidget {
                   color: cs.onSurface.withValues(alpha: 0.1)),
               Expanded(
                 child: _statItem(cs, '승률',
-                    '${winRate.toStringAsFixed(1)}%', const Color(0xFF4ADE80)),
+                    '${winRate.toStringAsFixed(1)}%', cs.onSurface.withValues(alpha: 0.82)),
               ),
               Container(
                   width: 1,
@@ -140,8 +141,8 @@ class _LeaderboardContent extends StatelessWidget {
                   '평균 수익률',
                   '${isAvgPositive ? '+' : ''}${avgReturn.toStringAsFixed(2)}%',
                   isAvgPositive
-                      ? const Color(0xFF4ADE80)
-                      : Colors.redAccent,
+                      ? const Color(0xFFF04452)
+                      : const Color(0xFF1677FF),
                 ),
               ),
             ],
@@ -150,15 +151,15 @@ class _LeaderboardContent extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF4ADE80).withValues(alpha: 0.08),
+              color: const Color(0xFF3182F6).withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                  color: const Color(0xFF4ADE80).withValues(alpha: 0.2)),
+                  color: const Color(0xFF3182F6).withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
                 const Icon(Icons.star_rounded,
-                    color: Color(0xFF4ADE80), size: 16),
+                    color: Color(0xFF3182F6), size: 16),
                 const SizedBox(width: 8),
                 Text('최고 수익 ',
                     style: GoogleFonts.inter(
@@ -173,7 +174,7 @@ class _LeaderboardContent extends StatelessWidget {
                 Text(
                   '+${best.actualReturnRate.toStringAsFixed(2)}%',
                   style: GoogleFonts.inter(
-                      color: const Color(0xFF4ADE80),
+                      color: const Color(0xFFF04452),
                       fontWeight: FontWeight.w700,
                       fontSize: 13),
                 ),
@@ -222,14 +223,14 @@ class _LeaderboardContent extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: rank <= 3
               ? rankColor.withValues(alpha: 0.35)
-              : cs.onSurface.withValues(alpha: 0.06),
+              : cs.onSurface.withValues(alpha: 0.08),
         ),
       ),
       child: Row(
@@ -250,8 +251,9 @@ class _LeaderboardContent extends StatelessWidget {
                 Text(pick.name,
                     style: GoogleFonts.inter(
                         color: cs.onSurface,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14)),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        letterSpacing: -0.2)),
                 const SizedBox(height: 3),
                 Text(
                   '${pick.ticker}  ${formatPrice(pick.buyPrice)} → ${formatPrice(pick.closedPrice ?? 0)}',
@@ -270,16 +272,16 @@ class _LeaderboardContent extends StatelessWidget {
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: isPositive
-                      ? const Color(0xFF4ADE80).withValues(alpha: 0.15)
-                      : Colors.redAccent.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
+                      ? const Color(0xFFF04452).withValues(alpha: 0.12)
+                      : const Color(0xFF1677FF).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(9999),
                 ),
                 child: Text(
                   '${isPositive ? '+' : ''}${ret.toStringAsFixed(2)}%',
-                  style: GoogleFonts.inter(
+                  style: GoogleFonts.robotoMono(
                     color: isPositive
-                        ? const Color(0xFF4ADE80)
-                        : Colors.redAccent,
+                        ? const Color(0xFFF04452)
+                        : const Color(0xFF1677FF),
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
                   ),

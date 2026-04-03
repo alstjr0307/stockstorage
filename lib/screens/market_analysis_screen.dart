@@ -150,11 +150,17 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       color: const Color(0xFF3182F6),
       onRefresh: _refreshAll,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
         children: [
-          _buildIndicesPanel(context),
-          const SizedBox(height: 28),
-          _buildIndicatorShortcuts(context),
+          _StaggerReveal(
+            delay: const Duration(milliseconds: 40),
+            child: _buildIndicesPanel(context),
+          ),
+          const SizedBox(height: 32),
+          _StaggerReveal(
+            delay: const Duration(milliseconds: 140),
+            child: _buildIndicatorShortcuts(context),
+          ),
         ],
       ),
     );
@@ -162,7 +168,6 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
 
   Widget _buildIndicatorShortcuts(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final items = [
       (
         title: '외인 · 기관 수급',
@@ -212,46 +217,30 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           '세부 지표',
           style: GoogleFonts.inter(
             color: cs.onSurface,
-            fontSize: 20,
+            fontSize: 22,
             fontWeight: FontWeight.w700,
-            letterSpacing: -0.4,
+            letterSpacing: -0.5,
           ),
         ),
         const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: cs.onSurface.withValues(alpha: isDark ? 0.06 : 0.0)),
-            boxShadow: isDark ? null : [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
+        Column(
+          children: [
+            for (var i = 0; i < items.length; i++) ...[
+              _IndicatorShortcutCard(
+                title: items[i].title,
+                subtitle: items[i].subtitle,
+                icon: items[i].icon,
+                accent: items[i].accent,
+                onTap: items[i].onTap,
               ),
-            ],
-          ),
-          child: Column(
-            children: [
-              for (var i = 0; i < items.length; i++) ...[
-                _IndicatorShortcutCard(
-                  title: items[i].title,
-                  subtitle: items[i].subtitle,
-                  icon: items[i].icon,
-                  accent: items[i].accent,
-                  onTap: items[i].onTap,
+              if (i < items.length - 1)
+                Container(
+                  height: 1,
+                  margin: const EdgeInsets.only(left: 14 + 36 + 10),
+                  color: cs.onSurface.withValues(alpha: 0.06),
                 ),
-                if (i < items.length - 1)
-                  Divider(
-                    height: 1,
-                    thickness: 1,
-                    indent: 20 + 40 + 14,
-                    endIndent: 0,
-                    color: cs.onSurface.withValues(alpha: 0.06),
-                  ),
-              ],
             ],
-          ),
+          ],
         ),
       ],
     );
@@ -263,7 +252,9 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        _StaggerReveal(
+          delay: const Duration(milliseconds: 40),
+          child: Row(
           children: [
             Expanded(
               child: Column(
@@ -312,28 +303,141 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
               ),
           ],
         ),
-        const SizedBox(height: 14),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: _indices.length - 1,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-            childAspectRatio: 1.1,
-          ),
-          itemBuilder: (context, index) {
-            return _buildIndexCard(
-              context,
-              _indices[index].$1,
-              _indices[index].$2,
-            );
-          },
         ),
-        const SizedBox(height: 12),
-        _buildWideIndexCard(context, 'WTI 오일', 'CL=F'),
+        const SizedBox(height: 10),
+        for (var i = 0; i < _indices.length; i++) ...[
+          _StaggerReveal(
+            delay: Duration(milliseconds: 120 + (i * 90)),
+            duration: const Duration(milliseconds: 420),
+            beginOffset: const Offset(0, 0.12),
+            child: _buildIndexRow(
+              context,
+              _indices[i].$1,
+              _indices[i].$2,
+            ),
+          ),
+          if (i < _indices.length - 1)
+            Container(
+              margin: const EdgeInsets.only(left: 40),
+              height: 1,
+              color: cs.onSurface.withValues(alpha: 0.07),
+            ),
+        ],
       ],
+    );
+  }
+
+  Widget _buildIndexRow(BuildContext context, String name, String symbol) {
+    final cs = Theme.of(context).colorScheme;
+    final result = _prices[name];
+    final accent = _indexAccentColors[name] ?? const Color(0xFF3182F6);
+    final isUp = result?.isUp ?? true;
+    final moveColor = isUp ? const Color(0xFFF04452) : const Color(0xFF1677FF);
+
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => IndexDetailScreen(
+              name: name,
+              symbol: symbol,
+              initialPrice: result,
+            ),
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                _indexIconFor(name),
+                color: accent,
+                size: 16,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _indexDescriptions[name] ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.45),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            if (_loadingIndices && result == null)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFF3182F6),
+                ),
+              )
+            else if (result == null)
+              Text(
+                '--',
+                style: GoogleFonts.robotoMono(
+                  color: cs.onSurface.withValues(alpha: 0.3),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    _displayValue(name, result),
+                    style: GoogleFonts.robotoMono(
+                      color: cs.onSurface,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${isUp ? '+' : ''}${result.changeRate.toStringAsFixed(2)}%',
+                    style: GoogleFonts.robotoMono(
+                      color: moveColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -363,41 +467,69 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: cs.onSurface.withValues(alpha: isDark ? 0.09 : 0.0),
+            color: cs.onSurface.withValues(alpha: 0.08),
             width: 1,
           ),
           color: cs.surface,
-          boxShadow: isDark ? null : [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          boxShadow: isDark
+              ? null
+              : const [
+                  BoxShadow(
+                    color: Color(0x0D000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ],
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  color: accent,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      _indexIconFor(name),
+                      color: accent,
+                      size: 16,
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  Expanded(
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
+                      ),
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 17,
+                    color: cs.onSurface.withValues(alpha: 0.22),
+                  ),
+                ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 10),
               Text(
                 _indexDescriptions[name] ?? '',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.inter(
-                  color: cs.onSurface.withValues(alpha: 0.38),
-                  fontSize: 11,
+                  color: cs.onSurface.withValues(alpha: 0.45),
+                  fontSize: 12,
                   fontWeight: FontWeight.w400,
                 ),
               ),
@@ -416,7 +548,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                   '--',
                   style: GoogleFonts.robotoMono(
                     color: cs.onSurface.withValues(alpha: 0.3),
-                    fontSize: 18,
+                    fontSize: 20,
                     fontWeight: FontWeight.w600,
                   ),
                 )
@@ -425,14 +557,14 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                   _displayValue(name, result),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.robotoMono(
-                    color: cs.onSurface,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    height: 1.1,
+                    style: GoogleFonts.robotoMono(
+                      color: cs.onSurface,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      height: 1.1,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 7),
                 _buildChangeRateBadge(moveColor, isUp, result.changeRate),
               ],
             ],
@@ -444,18 +576,29 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
 
   Widget _buildChangeRateBadge(Color color, bool isUp, double changeRate) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(9999),
       ),
-      child: Text(
-        '${isUp ? '+' : ''}${changeRate.toStringAsFixed(2)}%',
-        style: GoogleFonts.robotoMono(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isUp ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+            color: color,
+            size: 12,
+          ),
+          const SizedBox(width: 3),
+          Text(
+            '${isUp ? '+' : ''}${changeRate.toStringAsFixed(2)}%',
+            style: GoogleFonts.robotoMono(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -488,26 +631,17 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                 .map((item) => item.createdAt)
                 .reduce((a, b) => a.isAfter(b) ? a : b);
 
-        final isDark = Theme.of(context).brightness == Brightness.dark;
         return ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
           children: [
-            Row(
+            _StaggerReveal(
+              delay: const Duration(milliseconds: 40),
+              child: Row(
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        '시황분석',
-                        style: GoogleFonts.inter(
-                          color: cs.onSurface,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
                       Text(
                         latestDate == null
                             ? '등록된 분석이 없습니다'
@@ -523,23 +657,19 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                 ),
               ],
             ),
+            ),
             const SizedBox(height: 20),
             if (list.isEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 60),
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  borderRadius: BorderRadius.circular(16),
-                  border: isDark
-                      ? Border.all(color: cs.onSurface.withValues(alpha: 0.06))
-                      : null,
-                ),
+              _StaggerReveal(
+                delay: const Duration(milliseconds: 140),
+                child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 56),
                 child: Center(
                   child: Column(
                     children: [
                       Icon(
                         Icons.article_outlined,
-                        size: 32,
+                        size: 30,
                         color: cs.onSurface.withValues(alpha: 0.2),
                       ),
                       const SizedBox(height: 12),
@@ -554,12 +684,23 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                     ],
                   ),
                 ),
+                )
               )
             else
               for (var i = 0; i < list.length; i++) ...[
-                _buildAnalysisCard(context, list[i]),
+                if (i < 8)
+                  _StaggerReveal(
+                    delay: Duration(milliseconds: 100 + (i * 30)),
+                    child: _buildAnalysisCard(context, list[i]),
+                  )
+                else
+                  _buildAnalysisCard(context, list[i]),
                 if (i < list.length - 1)
-                  Divider(height: 1, thickness: 1, color: cs.onSurface.withValues(alpha: 0.07)),
+                  Container(
+                    margin: const EdgeInsets.only(left: 2),
+                    height: 1,
+                    color: cs.onSurface.withValues(alpha: 0.07),
+                  ),
               ],
           ],
         );
@@ -593,37 +734,39 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: cs.onSurface.withValues(alpha: isDark ? 0.09 : 0.0),
+            color: cs.onSurface.withValues(alpha: 0.08),
             width: 1,
           ),
           color: cs.surface,
-          boxShadow: isDark ? null : [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          boxShadow: isDark
+              ? null
+              : const [
+                  BoxShadow(
+                    color: Color(0x0D000000),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ],
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 42,
+                height: 42,
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
+                  color: accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(13),
                 ),
                 child: Icon(
-                  Icons.local_gas_station_rounded,
+                  _indexIconFor(name),
                   color: accent,
-                  size: 20,
+                  size: 21,
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -632,8 +775,9 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                       name,
                       style: GoogleFonts.inter(
                         color: cs.onSurface,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.2,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -642,7 +786,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.38),
+                        color: cs.onSurface.withValues(alpha: 0.45),
                         fontSize: 12,
                         fontWeight: FontWeight.w400,
                       ),
@@ -677,7 +821,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                       _displayValue(name, result),
                       style: GoogleFonts.robotoMono(
                         color: cs.onSurface,
-                        fontSize: 20,
+                        fontSize: 22,
                         fontWeight: FontWeight.w700,
                         height: 1.1,
                       ),
@@ -699,81 +843,93 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     final preview = analysis.body.replaceAll('\n', ' ').trim();
     final dateLabel = _analysisFmt.format(analysis.createdAt);
 
-    return Column(
-      children: [
-        InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => MarketAnalysisDetailScreen(analysis: analysis),
-              ),
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: cs.onSurface.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(9999),
-                      ),
-                      child: Text(
-                        dateLabel,
-                        style: GoogleFonts.inter(
-                          color: cs.onSurface.withValues(alpha: 0.55),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    if (hasImage)
-                      Icon(
-                        Icons.image_outlined,
-                        size: 16,
-                        color: cs.onSurface.withValues(alpha: 0.3),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  analysis.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
-                    color: cs.onSurface,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    height: 1.3,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                if (preview.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    preview,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.5),
-                      fontSize: 15,
-                      height: 1.65,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => MarketAnalysisDetailScreen(analysis: analysis),
           ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: cs.onSurface.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(9999),
+                  ),
+                  child: Text(
+                    dateLabel,
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.55),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                if (hasImage)
+                  Icon(
+                    Icons.image_outlined,
+                    size: 16,
+                    color: cs.onSurface.withValues(alpha: 0.3),
+                  ),
+              ],
+              ),
+            const SizedBox(height: 10),
+            Text(
+              analysis.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.inter(
+                color: cs.onSurface,
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                height: 1.3,
+                letterSpacing: -0.5,
+              ),
+            ),
+            if (preview.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                preview,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.5),
+                  fontSize: 15,
+                  height: 1.65,
+                ),
+              ),
+            ],
+          ],
         ),
-      ],
+      ),
     );
+  }
+
+  IconData _indexIconFor(String name) {
+    switch (name) {
+      case 'KOSPI':
+      case 'KOSDAQ':
+        return Icons.show_chart_rounded;
+      case 'S&P 500':
+        return Icons.account_balance_rounded;
+      case 'NASDAQ':
+        return Icons.memory_rounded;
+      case 'WTI 오일':
+        return Icons.local_gas_station_rounded;
+      default:
+        return Icons.trending_up_rounded;
+    }
   }
 
 }
@@ -783,7 +939,6 @@ class _InvestorFlowCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
           .collection('market_investor_flow')
@@ -792,19 +947,7 @@ class _InvestorFlowCard extends StatelessWidget {
           .snapshots(),
       builder: (context, snapshot) {
         return Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: cs.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
+          padding: const EdgeInsets.fromLTRB(2, 0, 2, 0),
           child: _buildBody(context, snapshot),
         );
       },
@@ -845,7 +988,9 @@ class _InvestorFlowCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        _StaggerReveal(
+          delay: const Duration(milliseconds: 40),
+          child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
@@ -856,17 +1001,18 @@ class _InvestorFlowCard extends StatelessWidget {
                     '마감 수급 TOP5',
                     style: GoogleFonts.inter(
                       color: cs.onSurface,
-                      fontSize: 19,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.5,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     '순매수 금액 기준 · 외인/기관 상위 5종목',
                     style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.5),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                      color: cs.onSurface.withValues(alpha: 0.45),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],
@@ -878,7 +1024,6 @@ class _InvestorFlowCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: cs.onSurface.withValues(alpha: 0.05),
                 borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: cs.onSurface.withValues(alpha: 0.07)),
               ),
               child: Text(
                 data.marketDate,
@@ -891,17 +1036,32 @@ class _InvestorFlowCard extends StatelessWidget {
             ),
           ],
         ),
+        ),
         const SizedBox(height: 18),
-        _InvestorFlowMarketBlock(
+        _StaggerReveal(
+          delay: const Duration(milliseconds: 120),
+          child: _InvestorFlowMarketBlock(
           marketLabel: 'KOSPI',
           foreignTop5: data.kospiForeignTop5,
           institutionTop5: data.kospiInstitutionTop5,
         ),
-        const SizedBox(height: 14),
-        _InvestorFlowMarketBlock(
+        ),
+        const SizedBox(height: 20),
+        _StaggerReveal(
+          delay: const Duration(milliseconds: 180),
+          child: Container(
+          height: 1,
+          color: cs.onSurface.withValues(alpha: 0.08),
+        ),
+        ),
+        const SizedBox(height: 20),
+        _StaggerReveal(
+          delay: const Duration(milliseconds: 240),
+          child: _InvestorFlowMarketBlock(
           marketLabel: 'KOSDAQ',
           foreignTop5: data.kosdaqForeignTop5,
           institutionTop5: data.kosdaqInstitutionTop5,
+        ),
         ),
       ],
     );
@@ -920,6 +1080,76 @@ class _InvestorFlowCard extends StatelessWidget {
             fontWeight: FontWeight.w600,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _StaggerReveal extends StatefulWidget {
+  const _StaggerReveal({
+    required this.child,
+    this.delay = Duration.zero,
+    this.duration = const Duration(milliseconds: 300),
+    this.beginOffset = const Offset(0, 0.02),
+    super.key,
+  });
+
+  final Widget child;
+  final Duration delay;
+  final Duration duration;
+  final Offset beginOffset;
+
+  @override
+  State<_StaggerReveal> createState() => _StaggerRevealState();
+}
+
+class _StaggerRevealState extends State<_StaggerReveal>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  late final Animation<Offset> _offset;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: widget.duration,
+    );
+    final curve = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    );
+    _opacity = Tween<double>(begin: 0, end: 1).animate(curve);
+    _offset = Tween<Offset>(
+      begin: widget.beginOffset,
+      end: Offset.zero,
+    ).animate(curve);
+    _play();
+  }
+
+  Future<void> _play() async {
+    if (widget.delay > Duration.zero) {
+      await Future.delayed(widget.delay);
+    }
+    if (mounted) {
+      _controller.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(
+        position: _offset,
+        child: RepaintBoundary(child: widget.child),
       ),
     );
   }
@@ -948,19 +1178,19 @@ class _IndicatorShortcutCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         child: Row(
           children: [
             Container(
-              width: 40,
-              height: 40,
+              width: 36,
+              height: 36,
               decoration: BoxDecoration(
                 color: accent.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: Icon(icon, size: 20, color: accent),
+              child: Icon(icon, size: 18, color: accent),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1039,7 +1269,7 @@ class _IndicatorDetailScaffold extends StatelessWidget {
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
           children: [child],
         ),
       ),
@@ -1157,6 +1387,7 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final captureFrame = _showWatermark || _capturing;
 
     return Scaffold(
       appBar: AppBar(
@@ -1168,16 +1399,17 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
               '마감수급',
               style: GoogleFonts.inter(
                 color: cs.onSurface,
-                fontSize: 18,
+                fontSize: 20,
                 fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
               ),
             ),
             Text(
               '외국인과 기관이 가장 많이 순매수한 종목',
               style: GoogleFonts.inter(
-                color: cs.onSurface.withValues(alpha: 0.54),
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+                color: cs.onSurface.withValues(alpha: 0.5),
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ],
@@ -1192,13 +1424,17 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
           children: [
-            RepaintBoundary(
+            _StaggerReveal(
+              delay: const Duration(milliseconds: 40),
+              child: RepaintBoundary(
               key: _captureKey,
               child: Container(
                 color: Theme.of(context).scaffoldBackgroundColor,
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                padding: captureFrame
+                    ? const EdgeInsets.fromLTRB(12, 0, 12, 8)
+                    : const EdgeInsets.fromLTRB(0, 0, 0, 8),
                 child: Column(
                   children: [
                     const _InvestorFlowCard(),
@@ -1216,9 +1452,12 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
                   ],
                 ),
               ),
+              ),
             ),
             const SizedBox(height: 16),
-            SizedBox(
+            _StaggerReveal(
+              delay: const Duration(milliseconds: 140),
+              child: SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: _capturing ? null : _captureAndShare,
@@ -1248,6 +1487,7 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
+              ),
               ),
             ),
           ],
@@ -1319,6 +1559,7 @@ class _FmkoreaIndexDetailScreenState extends State<_FmkoreaIndexDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final captureFrame = _showWatermark || _capturing;
 
     return Scaffold(
       appBar: AppBar(
@@ -1330,16 +1571,17 @@ class _FmkoreaIndexDetailScreenState extends State<_FmkoreaIndexDetailScreen> {
               '펨코지수',
               style: GoogleFonts.inter(
                 color: cs.onSurface,
-                fontSize: 18,
+                fontSize: 20,
                 fontWeight: FontWeight.w800,
+                letterSpacing: -0.4,
               ),
             ),
             Text(
               '게시글 수와 KOSPI 흐름 비교',
               style: GoogleFonts.inter(
-                color: cs.onSurface.withValues(alpha: 0.54),
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+                color: cs.onSurface.withValues(alpha: 0.5),
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ],
@@ -1347,13 +1589,15 @@ class _FmkoreaIndexDetailScreenState extends State<_FmkoreaIndexDetailScreen> {
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
           children: [
             RepaintBoundary(
               key: _captureKey,
               child: Container(
                 color: Theme.of(context).scaffoldBackgroundColor,
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+                padding: captureFrame
+                    ? const EdgeInsets.fromLTRB(12, 0, 12, 8)
+                    : const EdgeInsets.fromLTRB(0, 0, 0, 8),
                 child: Column(
                   children: [
                     const _FmkoreaIndexCard(),
@@ -1426,14 +1670,7 @@ class _InvestorFlowMarketBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.onSurface.withValues(alpha: 0.02),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
-      ),
-      child: Column(
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -1466,11 +1703,6 @@ class _InvestorFlowMarketBlock extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Container(
-            height: 1,
-            color: cs.onSurface.withValues(alpha: 0.08),
-          ),
-          const SizedBox(height: 12),
           _InvestorFlowGroup(
             title: '외국인 순매수',
             color: const Color(0xFF3182F6),
@@ -1478,7 +1710,7 @@ class _InvestorFlowMarketBlock extends StatelessWidget {
             icon: Icons.trending_up_rounded,
             emoji: '🌎',
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           _InvestorFlowGroup(
             title: '기관 순매수',
             color: const Color(0xFFEA580C),
@@ -1487,7 +1719,6 @@ class _InvestorFlowMarketBlock extends StatelessWidget {
             emoji: '🏦',
           ),
         ],
-      ),
     );
   }
 }
@@ -1563,9 +1794,9 @@ class _InvestorFlowGroup extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Container(
-            height: 3,
+            height: 1,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.85),
+              color: color.withValues(alpha: 0.35),
               borderRadius: BorderRadius.circular(999),
             ),
           ),
@@ -1800,18 +2031,9 @@ class _FmkoreaIndexCard extends StatelessWidget {
             final focusedKospiChange =
                 kospiSnapshot?.sameDayChangeByDate[focusedEntry.dateKey];
             return Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
               decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 10,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                color: Theme.of(context).scaffoldBackgroundColor,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1823,8 +2045,9 @@ class _FmkoreaIndexCard extends StatelessWidget {
                           '펨코 지수',
                           style: GoogleFonts.inter(
                             color: cs.onSurface,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.5,
                           ),
                         ),
                       ),
@@ -1846,10 +2069,11 @@ class _FmkoreaIndexCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+                  ],
+                ),
+                  const SizedBox(height: 20),
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
                         child: _buildFmkoreaCountSummaryCard(
@@ -1888,19 +2112,16 @@ class _FmkoreaIndexCard extends StatelessWidget {
                     ],
                   ),
                   if (effectiveInsight != null) ...[
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 16),
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
+                        horizontal: 16,
+                        vertical: 14,
                       ),
                       decoration: BoxDecoration(
-                        color: effectiveInsight.color.withValues(alpha: 0.08),
+                        color: effectiveInsight.color.withValues(alpha: 0.07),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: effectiveInsight.color.withValues(alpha: 0.18),
-                        ),
                       ),
                       child: Row(
                         children: [
@@ -1924,13 +2145,9 @@ class _FmkoreaIndexCard extends StatelessWidget {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: cs.onSurface.withValues(alpha: 0.03),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                  const SizedBox(height: 28),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1938,8 +2155,9 @@ class _FmkoreaIndexCard extends StatelessWidget {
                           '최근 20일 게시글 수 · KOSPI 변동률',
                           style: GoogleFonts.inter(
                             color: cs.onSurface,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -1953,7 +2171,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 12),
                         SizedBox(
-                          height: 180,
+                          height: 188,
                           child: _FmkoreaTrendChart(
                             points: chartEntries
                                 .map(
@@ -1972,13 +2190,15 @@ class _FmkoreaIndexCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 24),
                   Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: cs.onSurface.withValues(alpha: 0.03),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
+                    height: 1,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    color: cs.onSurface.withValues(alpha: 0.08),
+                  ),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1986,8 +2206,9 @@ class _FmkoreaIndexCard extends StatelessWidget {
                           '최근 날짜별 게시글 수 · KOSPI 변동률',
                           style: GoogleFonts.inter(
                             color: cs.onSurface,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -2001,9 +2222,11 @@ class _FmkoreaIndexCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 12),
                         ...recentEntries.reversed.map(
-                          (entry) => Padding(
-                            padding: const EdgeInsets.only(bottom: 10),
-                            child: _buildFmkoreaDailyRow(
+                          (entry) {
+                            final isLast = entry == recentEntries.first;
+                            return Column(
+                              children: [
+                                _buildFmkoreaDailyRow(
                               context,
                               entry: entry,
                               kospiChange:
@@ -2013,7 +2236,14 @@ class _FmkoreaIndexCard extends StatelessWidget {
                               isWeekend: !entry.isWeekday,
                               updatedAt: entry.updatedAt,
                             ),
-                          ),
+                                if (!isLast)
+                                  Container(
+                                    height: 1,
+                                    color: cs.onSurface.withValues(alpha: 0.06),
+                                  ),
+                              ],
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -2223,11 +2453,9 @@ class _FmkoreaIndexCard extends StatelessWidget {
   }) {
     final cs = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(2, 0, 2, 0),
       decoration: BoxDecoration(
-        color: cs.surface,
-        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.transparent,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2284,13 +2512,10 @@ class _FmkoreaIndexCard extends StatelessWidget {
             const SizedBox(height: 10),
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: cs.surface.withValues(alpha: 0.82),
+                color: insight.color.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: cs.onSurface.withValues(alpha: 0.05),
-                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2360,17 +2585,12 @@ class _FmkoreaIndexCard extends StatelessWidget {
             ? const Color(0xFFF04452)
             : const Color(0xFF1677FF);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 14),
       decoration: BoxDecoration(
         color: isFocused
-            ? const Color(0xFF3182F6).withValues(alpha: 0.06)
-            : cs.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isFocused
-              ? const Color(0xFF3182F6).withValues(alpha: 0.2)
-              : cs.onSurface.withValues(alpha: 0.06),
-        ),
+            ? const Color(0xFF3182F6).withValues(alpha: 0.04)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [

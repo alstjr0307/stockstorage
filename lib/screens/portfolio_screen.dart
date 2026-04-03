@@ -46,22 +46,34 @@ class _PortfolioScreenState extends State<PortfolioScreen>
     final cs = Theme.of(context).colorScheme;
     return Column(
       children: [
-        Container(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          child: TabBar(
-            controller: _tabController,
-            indicatorColor: const Color(0xFF4ADE80),
-            indicatorWeight: 2,
-            labelColor: const Color(0xFF4ADE80),
-            unselectedLabelColor: isDark ? Colors.white38 : Colors.black38,
-            labelStyle:
-                GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
-            unselectedLabelStyle: GoogleFonts.inter(fontSize: 13),
-            dividerColor: cs.onSurface.withValues(alpha: 0.08),
-            tabs: const [
-              Tab(text: '내 매매일지'),
-              Tab(text: '관심 추천주'),
-            ],
+        const SizedBox(height: 6),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF131929) : const Color(0xFFF2F4F6),
+              borderRadius: BorderRadius.circular(9999),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              dividerColor: Colors.transparent,
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicator: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(9999),
+              ),
+              labelColor: cs.onSurface,
+              unselectedLabelColor: cs.onSurface.withValues(alpha: 0.45),
+              labelStyle:
+                  GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
+              unselectedLabelStyle:
+                  GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500),
+              tabs: const [
+                Tab(text: '내 매매일지'),
+                Tab(text: '관심 추천주'),
+              ],
+            ),
           ),
         ),
         Expanded(
@@ -107,15 +119,15 @@ class _NotLoggedIn extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            '추천주을 추가하고 수익률을 확인하세요',
+            '추천주를 추가하고 수익률을 확인하세요',
             style: GoogleFonts.inter(
                 color: cs.onSurface.withValues(alpha: 0.25), fontSize: 13),
           ),
           const SizedBox(height: 20),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4ADE80),
-              foregroundColor: Colors.black,
+              backgroundColor: const Color(0xFF3182F6),
+              foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
               padding:
@@ -212,7 +224,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
             if (picksSnapshot.connectionState == ConnectionState.waiting) {
               return const Center(
                   child: CircularProgressIndicator(
-                      color: Color(0xFF4ADE80)));
+                      color: Color(0xFF3182F6)));
             }
 
             final allPicks = picksSnapshot.data ?? [];
@@ -232,7 +244,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                         color: cs.onSurface.withValues(alpha: 0.2), size: 52),
                     const SizedBox(height: 14),
                     Text(
-                      '추천주을 추가해보세요',
+                      '추천주를 추가해보세요',
                       style: GoogleFonts.inter(
                           color: cs.onSurface.withValues(alpha: 0.4),
                           fontSize: 15),
@@ -264,7 +276,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                 withPrice.isEmpty ? 0.0 : totalReturn / withPrice.length;
 
             return ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 100),
               children: [
                 _buildStatsHeader(context, favPicks.length, positiveCount,
                     withPrice.length, avgReturn, favPicks),
@@ -291,6 +303,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
       int withPrice, double avgReturn, List<StockPick> picks) {
     final cs = Theme.of(context).colorScheme;
     final isPositive = avgReturn >= 0;
+    final avgColor = isPositive ? const Color(0xFFF04452) : const Color(0xFF1677FF);
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -298,9 +311,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
         color: cs.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isPositive
-              ? const Color(0xFF4ADE80).withValues(alpha: 0.25)
-              : Colors.redAccent.withValues(alpha: 0.25),
+          color: cs.onSurface.withValues(alpha: 0.08),
         ),
       ),
       child: Column(
@@ -339,17 +350,17 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF4ADE80).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(20),
+                        color: const Color(0xFF3182F6).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(9999),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.ios_share_rounded, size: 13, color: Color(0xFF4ADE80)),
+                          const Icon(Icons.ios_share_rounded, size: 13, color: Color(0xFF3182F6)),
                           const SizedBox(width: 4),
                           Text(
                             '공유',
                             style: GoogleFonts.inter(
-                                color: const Color(0xFF4ADE80),
+                                color: const Color(0xFF3182F6),
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600),
                           ),
@@ -371,7 +382,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                   withPrice == 0
                       ? '--'
                       : '${isPositive ? '+' : ''}${avgReturn.toStringAsFixed(2)}%',
-                  isPositive ? const Color(0xFF4ADE80) : Colors.redAccent,
+                  avgColor,
                 ),
               ),
               Container(
@@ -380,7 +391,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                   color: cs.onSurface.withValues(alpha: 0.1)),
               Expanded(
                 child: _statItem(
-                    context, '수익 중', '$positive개', const Color(0xFF4ADE80)),
+                    context, '수익 중', '$positive개', const Color(0xFFF04452)),
               ),
               Container(
                   width: 1,
@@ -388,7 +399,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                   color: cs.onSurface.withValues(alpha: 0.1)),
               Expanded(
                 child: _statItem(
-                    context, '손실 중', '${withPrice - positive}개', Colors.redAccent),
+                    context, '손실 중', '${withPrice - positive}개', const Color(0xFF1677FF)),
               ),
             ],
           ),
@@ -407,7 +418,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                 color: cs.onSurface.withValues(alpha: 0.38), fontSize: 11)),
         const SizedBox(height: 6),
         Text(value,
-            style: GoogleFonts.inter(
+            style: GoogleFonts.robotoMono(
                 color: color, fontWeight: FontWeight.w700, fontSize: 15)),
       ],
     );
@@ -435,12 +446,12 @@ class _PortfolioContentState extends State<_PortfolioContent> {
         MaterialPageRoute(builder: (_) => StockDetailScreen(pick: pick)),
       ),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         decoration: BoxDecoration(
           color: cs.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
         ),
         child: Row(
           children: [
@@ -449,7 +460,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: cs.onSurface.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(9999),
                 border:
                     Border.all(color: cs.onSurface.withValues(alpha: 0.1)),
               ),
@@ -470,8 +481,9 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                     pick.name,
                     style: GoogleFonts.inter(
                         color: cs.onSurface,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        letterSpacing: -0.2),
                   ),
                   const SizedBox(height: 3),
                   Row(
@@ -496,7 +508,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                         Text(
                           '현재 ${formatPrice(livePrice)}',
                           style: GoogleFonts.inter(
-                              color: const Color(0xFF4ADE80), fontSize: 11),
+                              color: const Color(0xFFF04452), fontSize: 11),
                         ),
                       ],
                     ],
@@ -509,15 +521,15 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: isPositive
-                    ? const Color(0xFF4ADE80).withValues(alpha: 0.15)
-                    : Colors.redAccent.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
+                    ? const Color(0xFFF04452).withValues(alpha: 0.12)
+                    : const Color(0xFF1677FF).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(9999),
               ),
               child: Text(
                 '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(1)}%',
-                style: GoogleFonts.inter(
+                style: GoogleFonts.robotoMono(
                   color:
-                      isPositive ? const Color(0xFF4ADE80) : Colors.redAccent,
+                      isPositive ? const Color(0xFFF04452) : const Color(0xFF1677FF),
                   fontWeight: FontWeight.w700,
                   fontSize: 13,
                 ),

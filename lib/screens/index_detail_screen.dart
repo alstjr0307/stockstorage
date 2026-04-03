@@ -181,12 +181,12 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
     final cs = theme.colorScheme;
     final price = _price;
     final isUp = price?.isUp ?? true;
-    final moveColor = isUp ? const Color(0xFF22C55E) : const Color(0xFFEF4444);
+    final moveColor = isUp ? const Color(0xFFF04452) : const Color(0xFF1677FF);
 
     return Scaffold(
       backgroundColor: theme.brightness == Brightness.dark
           ? const Color(0xFF0A0E1A)
-          : const Color(0xFFF4F7FB),
+          : const Color(0xFFF8F9FA),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -200,7 +200,8 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
           style: GoogleFonts.inter(
             color: cs.onSurface,
             fontWeight: FontWeight.w800,
-            fontSize: 17,
+            fontSize: 19,
+            letterSpacing: -0.3,
           ),
         ),
         centerTitle: true,
@@ -215,11 +216,11 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
         child: Column(
           children: [
             _buildHeroCard(context, moveColor, price),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             _buildChartCard(context),
           ],
         ),
@@ -235,17 +236,11 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
     final cs = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(0, 0, 0, 18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: LinearGradient(
-          colors: Theme.of(context).brightness == Brightness.dark
-              ? const [Color(0xFF182235), Color(0xFF0D1423)]
-              : const [Color(0xFFEAFEF1), Color(0xFFF8FBFF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+        border: Border(
+          bottom: BorderSide(color: cs.onSurface.withValues(alpha: 0.08)),
         ),
-        border: Border.all(color: moveColor.withValues(alpha: 0.18)),
       ),
       child: _loadingPrice || price == null
           ? const SizedBox(
@@ -253,7 +248,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
               child: Center(
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Color(0xFF4ADE80),
+                  color: Color(0xFF3182F6),
                 ),
               ),
             )
@@ -273,7 +268,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                   _formatValue(price.price),
                   style: GoogleFonts.robotoMono(
                     color: cs.onSurface,
-                    fontSize: 34,
+                    fontSize: 36,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -324,24 +319,11 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
         ? ((lastClose - firstClose) / firstClose) * 100
         : 0.0;
     final deltaColor = deltaPct >= 0
-        ? const Color(0xFF22C55E)
-        : const Color(0xFFEF4444);
+        ? const Color(0xFFF04452)
+        : const Color(0xFF1677FF);
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 0, 2, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -369,10 +351,10 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
               GestureDetector(
                 onTap: hasData ? _openFullscreenChart : null,
                 child: Container(
-                  padding: const EdgeInsets.all(4),
+                  padding: const EdgeInsets.all(5),
                   decoration: BoxDecoration(
-                    border: Border.all(color: cs.onSurface.withValues(alpha: 0.15)),
-                    borderRadius: BorderRadius.circular(6),
+                    color: cs.onSurface.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     Icons.fullscreen,
@@ -470,7 +452,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
               child: Center(
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Color(0xFF4ADE80),
+                  color: Color(0xFF3182F6),
                 ),
               ),
             )
@@ -606,23 +588,18 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
         ),
         decoration: BoxDecoration(
           color: active
-              ? const Color(0xFF4ADE80).withValues(alpha: 0.16)
+              ? const Color(0xFF3182F6).withValues(alpha: 0.12)
               : cs.onSurface.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: active
-                ? const Color(0xFF4ADE80).withValues(alpha: 0.34)
-                : cs.onSurface.withValues(alpha: 0.08),
-          ),
         ),
         child: Text(
           label,
           style: GoogleFonts.inter(
             color: active
-                ? const Color(0xFF1F9D55)
+                ? const Color(0xFF3182F6)
                 : Theme.of(
                     context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.58),
+                  ).colorScheme.onSurface.withValues(alpha: 0.55),
             fontSize: compact ? 11 : 12,
             fontWeight: FontWeight.w700,
           ),
@@ -891,14 +868,16 @@ class _IndexFullscreenChartPageState extends State<_IndexFullscreenChartPage> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
           color: active
-              ? const Color(0xFF4ADE80)
+              ? const Color(0xFF3182F6).withValues(alpha: 0.14)
               : cs.onSurface.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Text(
           label,
           style: GoogleFonts.inter(
-            color: active ? Colors.black : cs.onSurface.withValues(alpha: 0.6),
+            color: active
+                ? const Color(0xFF3182F6)
+                : cs.onSurface.withValues(alpha: 0.6),
             fontSize: 12,
             fontWeight: active ? FontWeight.w700 : FontWeight.w500,
           ),
@@ -1022,9 +1001,9 @@ class _IndexFullscreenChartPageState extends State<_IndexFullscreenChartPage> {
                 Expanded(
                   child: _loading
                       ? const Center(
-                          child: CircularProgressIndicator(
+                  child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: Color(0xFF4ADE80),
+                            color: Color(0xFF3182F6),
                           ),
                         )
                       : LayoutBuilder(

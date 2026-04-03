@@ -24,7 +24,7 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
     final renderedBody = _normalizeBodyForMarkdown(analysis.body);
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0E1A) : const Color(0xFFF4F7FB),
+      backgroundColor: isDark ? const Color(0xFF0A0E1A) : const Color(0xFFF8F9FA),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -41,8 +41,9 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
           '시황 분석',
           style: GoogleFonts.inter(
             color: cs.onSurface,
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.3,
           ),
         ),
         centerTitle: true,
@@ -59,59 +60,55 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 48),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 760),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _HeroHeader(
-                    analysis: analysis,
-                    coverImage: coverImage,
-                    isDark: isDark,
-                  ),
-                  const SizedBox(height: 20),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: cs.surface,
-                      borderRadius: BorderRadius.circular(28),
-                      border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.05),
-                          blurRadius: 28,
-                          offset: const Offset(0, 12),
-                        ),
-                      ],
+                  _StaggerReveal(
+                    delay: const Duration(milliseconds: 40),
+                    child: _HeroHeader(
+                      analysis: analysis,
+                      coverImage: coverImage,
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(22, 26, 22, 28),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          MarkdownBody(
-                            data: renderedBody,
-                            selectable: true,
-                            softLineBreak: true,
-                            shrinkWrap: true,
-                            sizedImageBuilder: (config) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              child: _InlineImage(url: config.uri.toString()),
-                            ),
-                            styleSheet: _markdownStyleSheet(context),
+                  ),
+                  const SizedBox(height: 28),
+                  _StaggerReveal(
+                    delay: const Duration(milliseconds: 110),
+                    child: Container(
+                      height: 1,
+                      color: cs.onSurface.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  _StaggerReveal(
+                    delay: const Duration(milliseconds: 180),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        MarkdownBody(
+                          data: renderedBody,
+                          selectable: true,
+                          softLineBreak: true,
+                          shrinkWrap: true,
+                          sizedImageBuilder: (config) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            child: _InlineImage(url: config.uri.toString()),
                           ),
-                          if (extraImages.isNotEmpty) ...[
-                            const SizedBox(height: 28),
-                            ...extraImages.map(
-                              (url) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: _InlineImage(url: url),
-                              ),
+                          styleSheet: _markdownStyleSheet(context),
+                        ),
+                        if (extraImages.isNotEmpty) ...[
+                          const SizedBox(height: 28),
+                          ...extraImages.map(
+                            (url) => Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: _InlineImage(url: url),
                             ),
-                          ],
+                          ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
                 ],
@@ -143,7 +140,7 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
   MarkdownStyleSheet _markdownStyleSheet(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    TextStyle body(double size, double height, {FontWeight weight = FontWeight.w500}) {
+    TextStyle body(double size, double height, {FontWeight weight = FontWeight.w400}) {
       return GoogleFonts.inter(
         color: cs.onSurface.withValues(alpha: 0.88),
         fontSize: size,
@@ -153,26 +150,26 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
     }
 
     return MarkdownStyleSheet(
-      p: body(15, 1.8),
-      pPadding: const EdgeInsets.only(bottom: 14),
-      strong: body(15, 1.8, weight: FontWeight.w800).copyWith(color: cs.onSurface),
-      em: body(15, 1.8).copyWith(fontStyle: FontStyle.italic),
-      del: body(15, 1.8).copyWith(
+      p: body(16, 1.65),
+      pPadding: const EdgeInsets.only(bottom: 16),
+      strong: body(16, 1.65, weight: FontWeight.w700).copyWith(color: cs.onSurface),
+      em: body(16, 1.65).copyWith(fontStyle: FontStyle.italic),
+      del: body(16, 1.65).copyWith(
         color: cs.onSurface.withValues(alpha: 0.5),
         decoration: TextDecoration.lineThrough,
       ),
-      blockquote: body(14, 1.7).copyWith(
+      blockquote: body(15, 1.65).copyWith(
         color: cs.onSurface.withValues(alpha: 0.72),
       ),
       blockquoteDecoration: BoxDecoration(
-        color: const Color(0xFF4ADE80).withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF4ADE80).withValues(alpha: 0.16)),
+        color: const Color(0xFF3182F6).withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF3182F6).withValues(alpha: 0.15)),
       ),
       blockquotePadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      h1: body(26, 1.25, weight: FontWeight.w800).copyWith(color: cs.onSurface),
-      h2: body(22, 1.3, weight: FontWeight.w800).copyWith(color: cs.onSurface),
-      h3: body(18, 1.4, weight: FontWeight.w700).copyWith(color: cs.onSurface),
+      h1: body(26, 1.25, weight: FontWeight.w700).copyWith(color: cs.onSurface),
+      h2: body(22, 1.3, weight: FontWeight.w700).copyWith(color: cs.onSurface),
+      h3: body(18, 1.4, weight: FontWeight.w600).copyWith(color: cs.onSurface),
       h1Padding: const EdgeInsets.only(top: 12, bottom: 12),
       h2Padding: const EdgeInsets.only(top: 10, bottom: 10),
       h3Padding: const EdgeInsets.only(top: 8, bottom: 8),
@@ -184,10 +181,10 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
       ),
       codeblockDecoration: BoxDecoration(
         color: cs.onSurface.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(12),
       ),
       codeblockPadding: const EdgeInsets.all(16),
-      listBullet: body(15, 1.8),
+      listBullet: body(16, 1.65),
       horizontalRuleDecoration: BoxDecoration(
         border: Border(
           top: BorderSide(color: cs.onSurface.withValues(alpha: 0.08)),
@@ -197,41 +194,94 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
   }
 }
 
+class _StaggerReveal extends StatefulWidget {
+  const _StaggerReveal({
+    required this.child,
+    this.delay = Duration.zero,
+    super.key,
+  });
+
+  final Widget child;
+  final Duration delay;
+
+  @override
+  State<_StaggerReveal> createState() => _StaggerRevealState();
+}
+
+class _StaggerRevealState extends State<_StaggerReveal>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _opacity;
+  late final Animation<Offset> _offset;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    final curve = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutCubic,
+    );
+    _opacity = Tween<double>(begin: 0, end: 1).animate(curve);
+    _offset = Tween<Offset>(
+      begin: const Offset(0, 0.02),
+      end: Offset.zero,
+    ).animate(curve);
+    _play();
+  }
+
+  Future<void> _play() async {
+    if (widget.delay > Duration.zero) {
+      await Future.delayed(widget.delay);
+    }
+    if (mounted) {
+      _controller.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: SlideTransition(
+        position: _offset,
+        child: RepaintBoundary(child: widget.child),
+      ),
+    );
+  }
+}
+
 class _HeroHeader extends StatelessWidget {
   final MarketAnalysis analysis;
   final String? coverImage;
-  final bool isDark;
 
   const _HeroHeader({
     required this.analysis,
     required this.coverImage,
-    required this.isDark,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final accent = const Color(0xFF4ADE80);
+    final accent = const Color(0xFF3182F6);
 
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32),
-        gradient: LinearGradient(
-          colors: isDark
-              ? const [Color(0xFF182235), Color(0xFF0D1423)]
-              : const [Color(0xFFE8FFF0), Color(0xFFF8FBFF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        border: Border.all(color: accent.withValues(alpha: isDark ? 0.18 : 0.22)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (coverImage != null)
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               child: AspectRatio(
                 aspectRatio: 16 / 9,
                 child: CachedNetworkImage(
@@ -243,7 +293,7 @@ class _HeroHeader extends StatelessWidget {
               ),
             ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+            padding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -257,17 +307,17 @@ class _HeroHeader extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
-                Text(
-                  analysis.title,
-                  style: GoogleFonts.inter(
-                    color: cs.onSurface,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    height: 1.3,
-                    letterSpacing: -0.4,
-                  ),
-                ),
+                const SizedBox(height: 12),
+          Text(
+            analysis.title,
+            style: GoogleFonts.inter(
+              color: cs.onSurface,
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              height: 1.25,
+              letterSpacing: -0.6,
+            ),
+          ),
                 const SizedBox(height: 10),
                 Container(
                   width: 44,
@@ -289,12 +339,10 @@ class _HeroHeader extends StatelessWidget {
 class _MetaChip extends StatelessWidget {
   final IconData icon;
   final String label;
-  final bool accent;
 
   const _MetaChip({
     required this.icon,
     required this.label,
-    this.accent = false,
   });
 
   @override
@@ -304,15 +352,8 @@ class _MetaChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: accent
-            ? const Color(0xFF4ADE80).withValues(alpha: 0.14)
-            : cs.surface.withValues(alpha: 0.72),
+        color: cs.onSurface.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: accent
-              ? const Color(0xFF4ADE80).withValues(alpha: 0.26)
-              : cs.onSurface.withValues(alpha: 0.08),
-        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -320,15 +361,15 @@ class _MetaChip extends StatelessWidget {
           Icon(
             icon,
             size: 13,
-            color: accent ? const Color(0xFF1F9D55) : cs.onSurface.withValues(alpha: 0.7),
+            color: cs.onSurface.withValues(alpha: 0.55),
           ),
           const SizedBox(width: 5),
           Text(
             label,
             style: GoogleFonts.inter(
-              color: cs.onSurface.withValues(alpha: 0.8),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
+              color: cs.onSurface.withValues(alpha: 0.75),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -349,9 +390,13 @@ class _TopActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return SizedBox(
+    return Container(
       width: 40,
       height: 40,
+      decoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(999),
+      ),
       child: IconButton(
         padding: EdgeInsets.zero,
         splashRadius: 20,
@@ -394,7 +439,7 @@ Widget _imagePlaceholder(BuildContext context, {double height = 220}) {
     color: cs.onSurface.withValues(alpha: 0.05),
     child: const Center(
       child: CircularProgressIndicator(
-        color: Color(0xFF4ADE80),
+        color: Color(0xFF3182F6),
         strokeWidth: 2,
       ),
     ),
