@@ -110,7 +110,8 @@
       "Bash(powershell -Command \"Stop-Process -Name node -Force 2>$null; echo done\")",
       "Bash(ls c:/Users/alswp/stockstorage/*.json)",
       "Bash(ls c:/Users/alswp/stockstorage/scraper/*.json)",
-      "Bash(node send_test_notification.js)"
+      "Bash(node send_test_notification.js)",
+      "Bash(git pull:*)"
     ],
     "additionalDirectories": [
       "C:\\Users\\alswp\\Downloads",
