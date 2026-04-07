@@ -237,9 +237,10 @@ function parseTokenToDateKey(token, now) {
 
 async function scrapePageTokens(browser, pageNum, retries = 2) {
   const url = `https://www.fmkorea.com/stock?page=${pageNum}`;
-  const page = await browser.newPage();
+  let page = null;
 
   try {
+    page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 800 });
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'ko-KR,ko;q=0.9' });
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
@@ -268,7 +269,11 @@ async function scrapePageTokens(browser, pageNum, retries = 2) {
     };
   } catch (err) {
     if (retries > 0) {
-      await page.close();
+      if (page) {
+        try {
+          await page.close();
+        } catch (_) {}
+      }
       return scrapePageTokens(browser, pageNum, retries - 1);
     }
 
@@ -282,7 +287,11 @@ async function scrapePageTokens(browser, pageNum, retries = 2) {
       error: String(err),
     };
   } finally {
-    await page.close();
+    if (page) {
+      try {
+        await page.close();
+      } catch (_) {}
+    }
   }
 }
 
