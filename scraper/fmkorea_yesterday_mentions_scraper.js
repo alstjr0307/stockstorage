@@ -1,5 +1,7 @@
-﻿const puppeteerExtra = require('puppeteer-extra');
+const puppeteerExtra = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const admin = require('firebase-admin');
+puppeteerExtra.use(StealthPlugin());
 
 let serviceAccount;
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
@@ -68,6 +70,10 @@ function getTodayKey(nowKst) {
 function resolveTargetDateKey(nowKst) {
   if (process.env.TARGET_DATE_KEY) return process.env.TARGET_DATE_KEY;
   const mode = String(process.env.TARGET_MODE || 'today').toLowerCase();
+  // 00:00~00:10 실행은 전날 집계 마감으로 처리한다.
+  if (mode === 'today' && nowKst.getHours() === 0 && nowKst.getMinutes() <= 10) {
+    return getYesterdayKey(nowKst);
+  }
   if (mode === 'yesterday') return getYesterdayKey(nowKst);
   return getTodayKey(nowKst);
 }
@@ -182,7 +188,8 @@ async function scrapePageRows(browser, pageNum, retries = 2) {
     await page.setViewport({ width: 1280, height: 800 });
     await page.setExtraHTTPHeaders({ 'Accept-Language': 'ko-KR,ko;q=0.9' });
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 35000 });
-    await page.waitForSelector('table tbody tr td.time', { timeout: 12000 });
+    await sleep(2500);
+    await page.waitForSelector('table tbody tr td.time', { timeout: 20000 });
 
     const rows = await page.$$eval('table tbody tr:not(.notice)', (trs) =>
       trs
@@ -233,6 +240,9 @@ async function loadManualAliases() {
         aliases: Array.isArray(item.aliases)
           ? item.aliases.map((x) => String(x || '').trim()).filter(Boolean)
           : [],
+        negative_aliases: Array.isArray(item.negative_aliases)
+          ? item.negative_aliases.map((x) => String(x || '').trim()).filter(Boolean)
+          : [],
       }))
       .filter((x) => x.ticker && x.name);
   } catch (_) {
@@ -251,12 +261,14 @@ async function loadAliasUniverse() {
         ticker: item.ticker,
         name: item.name,
         aliases: new Set([item.name, item.ticker]),
+        negative_aliases: new Set(),
       });
     }
     const entity = byTicker.get(item.ticker);
     entity.aliases.add(item.name);
     entity.aliases.add(item.ticker);
     for (const a of item.aliases) entity.aliases.add(a);
+    for (const a of item.negative_aliases) entity.negative_aliases.add(a);
   }
 
   const universe = [];
@@ -296,6 +308,7 @@ async function loadAliasUniverse() {
       ticker: entity.ticker,
       name: entity.name,
       aliases: aliasEntries,
+      negative_aliases: Array.from(entity.negative_aliases).map((a) => normalizeForContains(a)),
     });
   }
   return universe;
@@ -307,6 +320,8 @@ function extractMentionTickers(title, universe) {
   const tickers = new Set();
   for (const stock of universe) {
     if (EXCLUDED_STOCK_NAMES.has(String(stock.name || '').trim())) continue;
+    // negative_aliases: 제목에 이 단어가 포함되면 해당 종목 집계 제외
+    if (stock.negative_aliases && stock.negative_aliases.some((neg) => compactTitle.includes(neg))) continue;
     for (const alias of stock.aliases) {
       const haystack = alias.useCompact ? compactTitle : plainTitle;
       if (haystack.includes(alias.key)) {
@@ -403,15 +418,22 @@ async function collectTargetDateTitleRows(browser, targetDateKey, nowKst) {
   let scannedPages = 0;
   let seenOlderThanTarget = false;
   let hitAnyTarget = false;
+  let consecutiveFailures = 0;
 
   for (let pageNum = 1; pageNum <= MAX_PAGES; pageNum += 1) {
     const { ok, rows, error } = await scrapePageRows(browser, pageNum);
     scannedPages += 1;
 
     if (!ok) {
+      consecutiveFailures += 1;
       console.log(`[page=${pageNum}] failed: ${error || 'unknown'}`);
+      if (consecutiveFailures >= 5) {
+        console.log('[stop] too many consecutive page failures');
+        break;
+      }
       continue;
     }
+    consecutiveFailures = 0;
     if (!rows.length) {
       console.log(`[page=${pageNum}] empty rows, stop`);
       break;
@@ -441,6 +463,12 @@ async function collectTargetDateTitleRows(browser, targetDateKey, nowKst) {
     console.log(
       `[page=${pageNum}] targetRows=${pageHasTarget ? 'yes' : 'no'} oldest=${oldestOnPage || '-'} totalMatched=${matchedRows.length}`,
     );
+
+    // 타겟 날짜보다 과거 날짜가 이미 노출됐는데 타겟이 1건도 없으면 더 볼 필요가 없다.
+    if (seenOlderThanTarget && !hitAnyTarget) {
+      console.log('[stop] target date not found before older dates');
+      break;
+    }
 
     if (seenOlderThanTarget && !pageHasTarget && hitAnyTarget) {
       console.log('[stop] passed target date range');
@@ -635,4 +663,5 @@ main().catch((err) => {
   console.error('[fatal]', err);
   process.exit(1);
 });
+
 
