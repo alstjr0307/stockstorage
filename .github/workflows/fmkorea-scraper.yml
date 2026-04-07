@@ -4,13 +4,13 @@ on:
   schedule:
     # HOT 종목(mentions): 30분 간격 (UTC 기준, 혼잡 시간대 회피)
     - cron: '7,37 * * * *'
-    # 펨코 지수: 09:07, 13:07, 18:07, 23:07 KST
-    - cron: '7 0,4,9,14 * * *'
+    # 펨코 지수: 1시간 간격 (UTC 기준, 혼잡/중복 회피)
+    - cron: '12 * * * *'
   workflow_dispatch:
 
 jobs:
   scrape-index:
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '7 0,4,9,14 * * *'
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '12 * * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
