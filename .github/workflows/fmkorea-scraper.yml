@@ -2,35 +2,60 @@ name: FMKorea Scraper
 
 on:
   schedule:
-    # 매일 09:00, 13:00, 18:00, 23:00 KST (UTC 00:00, 04:00, 09:00, 14:00)
-    - cron: '0 0 * * *'
-    - cron: '0 4 * * *'
-    - cron: '0 9 * * *'
-    - cron: '0 14 * * *'
-  workflow_dispatch: # 수동 실행 버튼
+    # HOT 종목(mentions): 매시 5분 (UTC 기준)
+    - cron: '5 * * * *'
+    # 펨코 지수: 09:00, 13:00, 18:00, 23:00 KST
+    - cron: '0 0,4,9,14 * * *'
+  workflow_dispatch:
 
 jobs:
-  scrape:
+  scrape-index:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 0,4,9,14 * * *'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
+    timeout-minutes: 12
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Node.js 설정
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: scraper/package.json
+          cache-dependency-path: scraper/package-lock.json
 
-      - name: 의존성 설치
+      - name: Install dependencies
         working-directory: scraper
-        run: npm install
+        run: npm ci
 
-      - name: 크롤링 실행
+      - name: Run FMKorea index scraper
         working-directory: scraper
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: node fmkorea_scraper.js
+
+  scrape-hot-stocks:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '5 * * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: scraper/package-lock.json
+
+      - name: Install dependencies
+        working-directory: scraper
+        run: npm ci
+
+      - name: Run FMKorea hot stocks scraper
+        working-directory: scraper
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          TARGET_MODE: today
+        run: node fmkorea_yesterday_mentions_scraper.js
