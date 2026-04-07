@@ -2,8 +2,8 @@ name: FMKorea Scraper
 
 on:
   schedule:
-    # HOT 종목(mentions): 매시 5분 (UTC 기준)
-    - cron: '5 * * * *'
+    # HOT 종목(mentions): 30분 간격 (UTC 기준)
+    - cron: '*/30 * * * *'
     # 펨코 지수: 09:00, 13:00, 18:00, 23:00 KST
     - cron: '0 0,4,9,14 * * *'
   workflow_dispatch:
@@ -35,7 +35,7 @@ jobs:
         run: node fmkorea_scraper.js
 
   scrape-hot-stocks:
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '5 * * * *'
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '*/30 * * * *'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
