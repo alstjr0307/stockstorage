@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../services/ad_service.dart';
 import '../services/auth_service.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -9,42 +10,47 @@ class AuthProvider extends ChangeNotifier {
   bool get isAdmin => _authService.isAdmin;
   bool get isLoggedIn => user != null;
 
+  void _notify() {
+    AdService.setAdmin(isAdmin);
+    _notify();
+  }
+
   Future<void> signIn(String email, String password) async {
     await _authService.signInWithEmail(email, password);
-    notifyListeners();
+    _notify();
   }
 
   Future<User?> signUp(String email, String password) async {
     final cred = await _authService.signUpWithEmail(email, password);
-    notifyListeners();
+    _notify();
     return cred.user;
   }
 
   Future<User?> signInWithGoogle() async {
     final cred = await _authService.signInWithGoogle();
-    notifyListeners();
+    _notify();
     return cred?.user;
   }
 
   Future<User?> signInWithKakao() async {
     final cred = await _authService.signInWithKakao();
-    notifyListeners();
+    _notify();
     return cred?.user;
   }
 
   Future<User?> signInWithApple() async {
     final cred = await _authService.signInWithApple();
-    notifyListeners();
+    _notify();
     return cred?.user;
   }
 
   Future<void> signOut() async {
     await _authService.signOut();
-    notifyListeners();
+    _notify();
   }
 
   Future<void> deleteAccount() async {
     await _authService.deleteAccount();
-    notifyListeners();
+    _notify();
   }
 }

@@ -28,7 +28,7 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb || !AdService.adsEnabled) return const SizedBox.shrink();
+    if (kIsWeb || !AdService.adsEnabled || AdService.isAdmin) return const SizedBox.shrink();
 
     return SizedBox(
       height: AdSize.banner.height.toDouble(),

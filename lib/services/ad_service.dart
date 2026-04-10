@@ -10,6 +10,10 @@ class AdService {
   AdService._();
   static final instance = AdService._();
 
+  static bool _isAdmin = false;
+  static bool get isAdmin => _isAdmin;
+  static void setAdmin(bool value) => _isAdmin = value;
+
   // ── 광고 단위 ID ────────────────────────────────────────────────────────
   static String get _bannerAdUnitId {
     if (kIsWeb) return '';
@@ -75,7 +79,7 @@ class AdService {
   }
 
   void showInterstitialIfReady() {
-    if (!_adsEnabled) return;
+    if (!_adsEnabled || _isAdmin) return;
     _stockViewCount++;
     if (_stockViewCount % _interstitialEvery != 0) return;
     if (_isInterstitialReady && _interstitialAd != null) {
@@ -85,13 +89,13 @@ class AdService {
   }
 
   void showIndicatorDetailInterstitialIfReady() {
-    if (!_adsEnabled) return;
+    if (!_adsEnabled || _isAdmin) return;
     _indicatorDetailOpenCount++;
+    if (_indicatorDetailOpenCount == 1) return; // 첫 진입은 광고 스킵
     if ((_indicatorDetailOpenCount - 1) % _interstitialEvery != 0) return;
     if (_isInterstitialReady && _interstitialAd != null) {
       _interstitialAd!.show();
       AnalyticsService.instance.logAdInterstitialShown();
     }
   }
-
 }

@@ -70,7 +70,7 @@ class _JournalContent extends StatefulWidget {
 class _JournalContentState extends State<_JournalContent> {
   final _firestoreService = FirestoreService();
 
-  void _openForm({TradingJournal? existing}) async {
+  void _openForm({TradingJournal? existing, TradingJournal? linkedBuy, double remainingQty = 0}) async {
     final nickname = await _firestoreService.getNickname(widget.uid) ?? '익명';
     if (!mounted) return;
     await showModalBottomSheet(
@@ -82,6 +82,8 @@ class _JournalContentState extends State<_JournalContent> {
         nickname: nickname,
         existing: existing,
         firestoreService: _firestoreService,
+        initialLinkedBuyJournal: linkedBuy,
+        initialRemainingQty: remainingQty,
       ),
     );
   }
@@ -168,6 +170,30 @@ class _JournalContentState extends State<_JournalContent> {
                       firestoreService: _firestoreService,
                       onEdit: () => _openForm(existing: j),
                       onEditLinkedSell: (sell) => _openForm(existing: sell),
+                      onSellQuick: (buy, remainingQty) => _openForm(linkedBuy: buy, remainingQty: remainingQty),
+                      onDeleteLinkedSell: (sell) async {
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('매도 내역 삭제'),
+                            content: const Text('이 매도 내역을 삭제하시겠습니까?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('취소'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text('삭제',
+                                    style: TextStyle(color: Colors.redAccent)),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (ok == true) {
+                          await _firestoreService.deleteJournal(sell.id);
+                        }
+                      },
                     );
                   },
                 ),
@@ -439,6 +465,8 @@ class _JournalCard extends StatefulWidget {
   final FirestoreService firestoreService;
   final VoidCallback onEdit;
   final void Function(TradingJournal)? onEditLinkedSell;
+  final void Function(TradingJournal)? onDeleteLinkedSell;
+  final void Function(TradingJournal buy, double remainingQty)? onSellQuick;
 
   const _JournalCard({
     super.key,
@@ -447,6 +475,8 @@ class _JournalCard extends StatefulWidget {
     required this.firestoreService,
     required this.onEdit,
     this.onEditLinkedSell,
+    this.onDeleteLinkedSell,
+    this.onSellQuick,
   });
 
   @override
@@ -1247,6 +1277,15 @@ class _JournalCardState extends State<_JournalCard> {
                                           color: cs.onSurface.withValues(alpha: 0.3)),
                                     ),
                                   ],
+                                  if (widget.onDeleteLinkedSell != null) ...[
+                                    const SizedBox(width: 6),
+                                    GestureDetector(
+                                      onTap: () => widget.onDeleteLinkedSell!(sell),
+                                      child: Icon(Icons.delete_outline,
+                                          size: 14,
+                                          color: Colors.redAccent.withValues(alpha: 0.5)),
+                                    ),
+                                  ],
                                 ]),
                               );
                             }),
@@ -1298,6 +1337,30 @@ class _JournalCardState extends State<_JournalCard> {
                   ],
                 ),
               ),
+            // ── 빠른 매도 행
+            if (journal.action == '매수' && !isClosed && widget.onSellQuick != null) ...[
+              Divider(height: 1, color: cs.onSurface.withValues(alpha: 0.07)),
+              GestureDetector(
+                onTap: () => widget.onSellQuick!(journal, remainingQty),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  color: Colors.redAccent.withValues(alpha: 0.04),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.trending_down_rounded, size: 15, color: Colors.redAccent),
+                      const SizedBox(width: 6),
+                      Text('매도',
+                          style: GoogleFonts.inter(
+                              color: Colors.redAccent,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
               ],
             ),
             // ── 대각선 CLOSED 워터마크
@@ -1682,12 +1745,16 @@ class _JournalFormSheet extends StatefulWidget {
   final String nickname;
   final TradingJournal? existing;
   final FirestoreService firestoreService;
+  final TradingJournal? initialLinkedBuyJournal;
+  final double initialRemainingQty;
 
   const _JournalFormSheet({
     required this.uid,
     required this.nickname,
     required this.firestoreService,
     this.existing,
+    this.initialLinkedBuyJournal,
+    this.initialRemainingQty = 0,
   });
 
   @override
@@ -1744,10 +1811,21 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
       _action = e.action;
       _tradeDate = e.tradeDate;
       _isPublic = e.isPublic;
-      _manualMode = true; // 수정 시 직접 입력 모드로 (StockSearchField에 초기값 표시)
+      _manualMode = true;
       if (e.action == '매도' && e.linkedBuyId.isNotEmpty) {
         _loadRemainingForEdit(e);
       }
+    } else if (widget.initialLinkedBuyJournal != null) {
+      final buy = widget.initialLinkedBuyJournal!;
+      _action = '매도';
+      _linkedBuyJournal = buy;
+      _remainingQty = widget.initialRemainingQty;
+      _stockName = buy.stockName;
+      _ticker = buy.ticker;
+      _market = buy.market;
+      _rawMarket = {'KS', 'KQ', 'US'}.contains(buy.market) ? buy.market : '';
+      _manualMode = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _fetchPrice());
     }
   }
 

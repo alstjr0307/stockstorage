@@ -7,6 +7,7 @@ import '../models/comment.dart';
 import '../models/post.dart';
 import '../models/trading_journal.dart';
 import '../providers/auth_provider.dart';
+import '../services/auth_service.dart';
 import '../services/analytics_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
@@ -104,6 +105,7 @@ class _JournalTabState extends State<_JournalTab> {
   final Set<String> _loadingLikes = {};
   final Set<String> _blockedUids = {};
   final Map<String, int> _likeCountOverride = {};
+  final Map<String, int> _commentCountByJournalId = {};
 
   final List<TradingJournal> _journals = [];
   DocumentSnapshot? _lastDoc;
@@ -199,6 +201,20 @@ class _JournalTabState extends State<_JournalTab> {
       final filtered = items
           .where((j) => j.action != '매도' && !_blockedUids.contains(j.uid))
           .toList();
+      // 댓글 수 조회
+      final journalsNeedingCount = filtered
+          .where((j) => !_commentCountByJournalId.containsKey(j.id))
+          .toList();
+      if (journalsNeedingCount.isNotEmpty) {
+        final counts = await Future.wait(
+          journalsNeedingCount.map(
+            (j) => _firestoreService.getJournalCommentCount(j.id),
+          ),
+        );
+        for (var i = 0; i < journalsNeedingCount.length; i++) {
+          _commentCountByJournalId[journalsNeedingCount[i].id] = counts[i];
+        }
+      }
       // 로그인 유저의 좋아요 상태 병렬 조회
       if (auth.isLoggedIn && filtered.isNotEmpty) {
         final liked = await Future.wait(
@@ -228,6 +244,7 @@ class _JournalTabState extends State<_JournalTab> {
       _journals.clear();
       _lastDoc = null;
       _hasMore = true;
+      _commentCountByJournalId.clear();
     });
     await _loadMore();
   }
@@ -304,6 +321,7 @@ class _JournalTabState extends State<_JournalTab> {
             isLiked: _likedIds.contains(journal.id),
             isLoadingLike: _loadingLikes.contains(journal.id),
             likeCount: _likeCountOverride[journal.id] ?? journal.likes,
+            commentCount: _commentCountByJournalId[journal.id] ?? 0,
             onLike: auth.isLoggedIn
                 ? () => _toggleLike(journal, auth.user!.uid)
                 : null,
@@ -755,6 +773,7 @@ class _JournalCard extends StatefulWidget {
   final bool isLiked;
   final bool isLoadingLike;
   final int likeCount;
+  final int commentCount;
   final VoidCallback? onLike;
   final VoidCallback? onTogglePrivate;
   final VoidCallback? onReport;
@@ -767,6 +786,7 @@ class _JournalCard extends StatefulWidget {
     required this.isLiked,
     required this.isLoadingLike,
     required this.likeCount,
+    required this.commentCount,
     required this.onLike,
     this.onTogglePrivate,
     this.onReport,
@@ -1090,7 +1110,7 @@ class _JournalCardState extends State<_JournalCard> {
               ],
             ),
           ),
-          // 하단: 좋아요 + 비공개 토글
+          // 하단: 좋아요 + 댓글 + 비공개 토글
           Divider(height: 1, color: cs.onSurface.withValues(alpha: 0.06)),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
@@ -1102,6 +1122,8 @@ class _JournalCardState extends State<_JournalCard> {
                   count: widget.likeCount,
                   onTap: widget.onLike,
                 ),
+                const SizedBox(width: 12),
+                _CommentButton(onTap: () => _openComments(context), count: widget.commentCount),
                 const Spacer(),
                 if (widget.isOwn && widget.onTogglePrivate != null)
                   GestureDetector(
@@ -1294,7 +1316,7 @@ class _JournalCardState extends State<_JournalCard> {
                   onTap: widget.onLike,
                 ),
                 const SizedBox(width: 12),
-                _CommentButton(onTap: () => _openComments(context)),
+                _CommentButton(onTap: () => _openComments(context), count: widget.commentCount),
                 const Spacer(),
                 if (widget.isOwn && widget.onTogglePrivate != null)
                   GestureDetector(
@@ -1467,6 +1489,11 @@ class _PostCardState extends State<_PostCard> {
                                   color: cs.onSurface,
                                 ),
                               ),
+                              if (AuthService.adminUids.contains(post.uid)) ...[
+                                const SizedBox(width: 4),
+                                const Icon(Icons.workspace_premium_rounded,
+                                    size: 15, color: Color(0xFFFBBF24)),
+                              ],
                               if (widget.isOwn) ...[
                                 const SizedBox(width: 5),
                                 Container(
@@ -1531,7 +1558,7 @@ class _PostCardState extends State<_PostCard> {
                     Text(
                       textContent,
                       style: GoogleFonts.inter(
-                        fontSize: 14,
+                        fontSize: 15,
                         color: cs.onSurface.withValues(alpha: 0.6),
                         height: 1.6,
                       ),
@@ -1622,7 +1649,7 @@ class _ContentPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final style = GoogleFonts.inter(
-      fontSize: 14,
+      fontSize: 15,
       color: cs.onSurface.withValues(alpha: 0.6),
       height: 1.6,
     );
@@ -1916,28 +1943,33 @@ class _PostDetailSheetState extends State<_PostDetailSheet> {
 
 class _CommentButton extends StatelessWidget {
   final VoidCallback? onTap;
-  const _CommentButton({required this.onTap});
+  final int? count;
+  const _CommentButton({required this.onTap, this.count});
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final label = (count != null && count! > 0) ? '댓글 $count' : '댓글 달기';
     return GestureDetector(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.all(4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: const Color(0xFF10B981).withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(20),
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.chat_bubble_outline,
-              size: 16,
-              color: cs.onSurface.withValues(alpha: 0.3),
+            const Icon(
+              Icons.chat_bubble_rounded,
+              size: 13,
+              color: Color(0xFF10B981),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 5),
             Text(
-              '댓글',
+              label,
               style: GoogleFonts.inter(
-                color: cs.onSurface.withValues(alpha: 0.4),
+                color: const Color(0xFF10B981),
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -2103,6 +2135,24 @@ class _CommentSheetState extends State<_CommentSheet> {
   }
 
   Future<void> _delete(String commentId) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('댓글 삭제'),
+        content: const Text('이 댓글을 삭제하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('삭제', style: TextStyle(color: Colors.redAccent)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
     if (widget.collection == 'posts') {
       await widget.firestoreService.deletePostComment(widget.docId, commentId);
     } else {
@@ -2125,7 +2175,7 @@ class _CommentSheetState extends State<_CommentSheet> {
         color: bgColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      padding: EdgeInsets.fromLTRB(16, 12, 16, bottomPad + 16),
+      padding: EdgeInsets.fromLTRB(12, 12, 12, bottomPad + 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -2203,8 +2253,9 @@ class _CommentSheetState extends State<_CommentSheet> {
                   shrinkWrap: true,
                   itemCount: visible.length,
                   separatorBuilder: (context, i) => Divider(
-                    height: 1,
-                    color: cs.onSurface.withValues(alpha: 0.06),
+                    height: 16,
+                    thickness: 1,
+                    color: cs.onSurface.withValues(alpha: 0.08),
                   ),
                   itemBuilder: (_, i) {
                     final c = visible[i];
