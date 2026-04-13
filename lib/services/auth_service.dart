@@ -46,8 +46,7 @@ class AuthService {
       return result;
     }
 
-    // 캐시된 stale 토큰 방지: disconnect로 완전히 초기화 후 fresh 토큰 발급
-    try { await _googleSignIn.disconnect(); } catch (_) {}
+    await _googleSignIn.signOut();
     final googleUser = await _googleSignIn.signIn();
     if (googleUser == null) return null;
 
