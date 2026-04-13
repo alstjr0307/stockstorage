@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/cupertino.dart';
@@ -474,570 +474,617 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-      resizeToAvoidBottomInset: false,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
+        resizeToAvoidBottomInset: false,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: cs.onSurface, size: 18),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          pick.ticker,
-          style: GoogleFonts.robotoMono(
-            color: cs.onSurface,
-            fontWeight: FontWeight.w700,
+        appBar: AppBar(
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios, color: cs.onSurface, size: 18),
+            onPressed: () => Navigator.pop(context),
           ),
-        ),
-        actions: [
-          GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => StockCompareScreen(basePick: widget.pick),
-              ),
+          title: Text(
+            pick.ticker,
+            style: GoogleFonts.robotoMono(
+              color: cs.onSurface,
+              fontWeight: FontWeight.w700,
             ),
-            child: Container(
-              margin: const EdgeInsets.only(right: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(9999),
-                border: Border.all(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.35),
+          ),
+          actions: [
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => StockCompareScreen(basePick: widget.pick),
                 ),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.compare_arrows,
-                    color: Color(0xFF10B981),
-                    size: 15,
+              child: Container(
+                margin: const EdgeInsets.only(right: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(9999),
+                  border: Border.all(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.35),
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '종목비교',
-                    style: GoogleFonts.inter(
-                      color: const Color(0xFF10B981),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.compare_arrows,
+                      color: Color(0xFF10B981),
+                      size: 15,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 4),
+                    Text(
+                      '종목비교',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF10B981),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          IconButton(
-            key: _shareButtonKey,
-            icon: Icon(
-              Icons.share_outlined,
-              color: cs.onSurface.withValues(alpha: 0.54),
-              size: 20,
+            IconButton(
+              key: _shareButtonKey,
+              icon: Icon(
+                Icons.share_outlined,
+                color: cs.onSurface.withValues(alpha: 0.54),
+                size: 20,
+              ),
+              onPressed: _shareStock,
             ),
-            onPressed: _shareStock,
-          ),
-          IconButton(
-            icon: Icon(
-              Icons.refresh,
-              color: cs.onSurface.withValues(alpha: 0.38),
-              size: 20,
+            IconButton(
+              icon: Icon(
+                Icons.refresh,
+                color: cs.onSurface.withValues(alpha: 0.38),
+                size: 20,
+              ),
+              onPressed: () {
+                setState(() {
+                  _loadingPrice = true;
+                  _loadingChart = true;
+                });
+                _fetchPrice();
+                _fetchChart(++_fetchSeq);
+              },
             ),
-            onPressed: () {
-              setState(() {
-                _loadingPrice = true;
-                _loadingChart = true;
-              });
-              _fetchPrice();
-              _fetchChart(++_fetchSeq);
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // ── 상단 고정 영역 ──────────────────────────────────────
-          _DetailReveal(
-            show: _revealReady,
-            delayMs: 30,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                // 종목 헤더
-                Row(
+          ],
+        ),
+        body: Column(
+          children: [
+            // ── 상단 고정 영역 ──────────────────────────────────────
+            _DetailReveal(
+              show: _revealReady,
+              delayMs: 30,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            pick.name,
-                            style: GoogleFonts.inter(
-                              color: cs.onSurface,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
+                    // 종목 헤더
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                pick.name,
+                                style: GoogleFonts.inter(
+                                  color: cs.onSurface,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  _marketBadge(pick.market),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    DateFormat(
+                                      'yyyy.MM.dd',
+                                    ).format(pick.createdAt),
+                                    style: GoogleFonts.inter(
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.38,
+                                      ),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isPositive
+                                ? const Color(
+                                    0xFFF04452,
+                                  ).withValues(alpha: 0.12)
+                                : const Color(
+                                    0xFF1677FF,
+                                  ).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isPositive
+                                  ? const Color(
+                                      0xFFF04452,
+                                    ).withValues(alpha: 0.4)
+                                  : const Color(
+                                      0xFF1677FF,
+                                    ).withValues(alpha: 0.4),
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
-                              _marketBadge(pick.market),
-                              const SizedBox(width: 8),
                               Text(
-                                DateFormat('yyyy.MM.dd').format(pick.createdAt),
+                                '매수가 대비',
                                 style: GoogleFonts.inter(
-                                  color: cs.onSurface.withValues(alpha: 0.38),
-                                  fontSize: 12,
+                                  color: isPositive
+                                      ? const Color(
+                                          0xFFF04452,
+                                        ).withValues(alpha: 0.75)
+                                      : const Color(
+                                          0xFF1677FF,
+                                        ).withValues(alpha: 0.75),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
+                                style: GoogleFonts.robotoMono(
+                                  color: isPositive
+                                      ? const Color(0xFFF04452)
+                                      : const Color(0xFF1677FF),
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 22,
                                 ),
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isPositive
-                            ? const Color(0xFFF04452).withValues(alpha: 0.12)
-                            : const Color(0xFF1677FF).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: isPositive
-                              ? const Color(0xFFF04452).withValues(alpha: 0.4)
-                              : const Color(0xFF1677FF).withValues(alpha: 0.4),
                         ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '매수가 대비',
-                            style: GoogleFonts.inter(
-                              color: isPositive
-                                  ? const Color(0xFFF04452).withValues(alpha: 0.75)
-                                  : const Color(0xFF1677FF).withValues(alpha: 0.75),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
-                            style: GoogleFonts.robotoMono(
-                              color: isPositive
-                                  ? const Color(0xFFF04452)
-                                  : const Color(0xFF1677FF),
-                              fontWeight: FontWeight.w800,
-                              fontSize: 22,
-                            ),
-                          ),
-                        ],
-                      ),
+                      ],
                     ),
+                    const SizedBox(height: 12),
+                    // 실시간 현재가 카드 (PER/PBR 통합)
+                    _livePriceCard(pick, formatter),
+                    const SizedBox(height: 12),
                   ],
                 ),
-                const SizedBox(height: 12),
-                // 실시간 현재가 카드 (PER/PBR 통합)
-                _livePriceCard(pick, formatter),
-                const SizedBox(height: 12),
-                ],
               ),
             ),
-          ),
 
-          // ── 탭바 ────────────────────────────────────────────────
-          _DetailReveal(
-            show: _revealReady,
-            delayMs: 140,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: cs.onSurface.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(9999),
-                ),
-                child: TabBar(
-                  controller: _tabController,
-                  dividerColor: Colors.transparent,
-                  labelColor: cs.onSurface,
-                  unselectedLabelColor: cs.onSurface.withValues(alpha: 0.45),
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  indicator: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
+            // ── 탭바 ────────────────────────────────────────────────
+            _DetailReveal(
+              show: _revealReady,
+              delayMs: 140,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: cs.onSurface.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(9999),
                   ),
-                  labelStyle: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                  child: TabBar(
+                    controller: _tabController,
+                    dividerColor: Colors.transparent,
+                    labelColor: cs.onSurface,
+                    unselectedLabelColor: cs.onSurface.withValues(alpha: 0.45),
+                    indicatorSize: TabBarIndicatorSize.tab,
+                    indicator: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(9999),
+                    ),
+                    labelStyle: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    unselectedLabelStyle: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    tabs: [
+                      const Tab(text: '개요'),
+                      const Tab(text: '관련 뉴스'),
+                      Tab(text: isKorean ? '종목토론방' : ''),
+                    ],
                   ),
-                  unselectedLabelStyle: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  tabs: [
-                    const Tab(text: '개요'),
-                    const Tab(text: '관련 뉴스'),
-                    Tab(text: isKorean ? '종목토론방' : ''),
-                  ],
                 ),
               ),
             ),
-          ),
-          // ── 탭 콘텐츠 ────────────────────────────────────────────
-          Expanded(
-            child: _DetailReveal(
-              show: _revealReady,
-              delayMs: 220,
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                // ① 개요 탭
-                Column(
+            // ── 탭 콘텐츠 ────────────────────────────────────────────
+            Expanded(
+              child: _DetailReveal(
+                show: _revealReady,
+                delayMs: 220,
+                child: TabBarView(
+                  controller: _tabController,
                   children: [
-                    Expanded(
-                      child: SingleChildScrollView(
-                        keyboardDismissBehavior:
-                            ScrollViewKeyboardDismissBehavior.onDrag,
-                        padding: EdgeInsets.fromLTRB(
-                          20,
-                          20,
-                          20,
-                          8 + MediaQuery.of(context).viewInsets.bottom,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // ── 캡처 영역 시작 ──
-                            RepaintBoundary(
-                              key: _captureKey,
-                              child: Container(
-                                color: _capturing ? cs.surface : null,
-                                padding: _capturing
-                                    ? const EdgeInsets.symmetric(
-                                        horizontal: 20,
-                                        vertical: 16,
-                                      )
-                                    : EdgeInsets.zero,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // 종목명 + 수익률 (캡처 시에만 표시)
-                                    if (_capturing) ...[
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  pick.name,
-                                                  style: GoogleFonts.inter(
-                                                    color: cs.onSurface,
-                                                    fontSize: 20,
-                                                    fontWeight: FontWeight.w800,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Row(
+                    // ① 개요 탭
+                    Column(
+                      children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            keyboardDismissBehavior:
+                                ScrollViewKeyboardDismissBehavior.onDrag,
+                            padding: EdgeInsets.fromLTRB(
+                              20,
+                              20,
+                              20,
+                              8 + MediaQuery.of(context).viewInsets.bottom,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // ── 캡처 영역 시작 ──
+                                RepaintBoundary(
+                                  key: _captureKey,
+                                  child: Container(
+                                    color: _capturing ? cs.surface : null,
+                                    padding: _capturing
+                                        ? const EdgeInsets.symmetric(
+                                            horizontal: 20,
+                                            vertical: 16,
+                                          )
+                                        : EdgeInsets.zero,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        // 종목명 + 수익률 (캡처 시에만 표시)
+                                        if (_capturing) ...[
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
                                                   children: [
-                                                    _marketBadge(pick.market),
-                                                    const SizedBox(width: 8),
                                                     Text(
-                                                      DateFormat(
-                                                        'yyyy.MM.dd',
-                                                      ).format(pick.createdAt),
+                                                      pick.name,
                                                       style: GoogleFonts.inter(
-                                                        color: cs.onSurface
-                                                            .withValues(
-                                                              alpha: 0.38,
-                                                            ),
-                                                        fontSize: 11,
+                                                        color: cs.onSurface,
+                                                        fontSize: 20,
+                                                        fontWeight:
+                                                            FontWeight.w800,
                                                       ),
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    Row(
+                                                      children: [
+                                                        _marketBadge(
+                                                          pick.market,
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 8,
+                                                        ),
+                                                        Text(
+                                                          DateFormat(
+                                                            'yyyy.MM.dd',
+                                                          ).format(
+                                                            pick.createdAt,
+                                                          ),
+                                                          style:
+                                                              GoogleFonts.inter(
+                                                                color: cs
+                                                                    .onSurface
+                                                                    .withValues(
+                                                                      alpha:
+                                                                          0.38,
+                                                                    ),
+                                                                fontSize: 11,
+                                                              ),
+                                                        ),
+                                                      ],
                                                     ),
                                                   ],
                                                 ),
-                                              ],
-                                            ),
-                                          ),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 12,
-                                              vertical: 8,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: isPositive
-                                                  ? const Color(
-                                                      0xFF10B981,
-                                                    ).withValues(alpha: 0.12)
-                                                  : Colors.redAccent.withValues(
-                                                      alpha: 0.12,
+                                              ),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 8,
                                                     ),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              border: Border.all(
-                                                color: isPositive
-                                                    ? const Color(
-                                                        0xFF10B981,
-                                                      ).withValues(alpha: 0.4)
-                                                    : Colors.redAccent
-                                                          .withValues(
+                                                decoration: BoxDecoration(
+                                                  color: isPositive
+                                                      ? const Color(
+                                                          0xFF10B981,
+                                                        ).withValues(
+                                                          alpha: 0.12,
+                                                        )
+                                                      : Colors.redAccent
+                                                            .withValues(
+                                                              alpha: 0.12,
+                                                            ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  border: Border.all(
+                                                    color: isPositive
+                                                        ? const Color(
+                                                            0xFF10B981,
+                                                          ).withValues(
                                                             alpha: 0.4,
-                                                          ),
-                                              ),
-                                            ),
-                                            child: Text(
-                                              '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
-                                              style: GoogleFonts.inter(
-                                                color: isPositive
-                                                    ? const Color(0xFF10B981)
-                                                    : Colors.redAccent,
-                                                fontWeight: FontWeight.w800,
-                                                fontSize: 20,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 12),
-                                      // 현재가 카드
-                                      _livePriceCard(pick, formatter),
-                                      const SizedBox(height: 12),
-                                    ],
-                                    // 일봉 차트
-                                    _chartCard(),
-                                    const SizedBox(height: 14),
-                                    // 매수가 / 현재가 / 목표가 (카드리스)
-                                    Column(
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: _priceItem(
-                                                context,
-                                                '매수가',
-                                                _formatPrice(
-                                                  pick.buyPrice,
-                                                  pick.market,
-                                                ),
-                                                cs.onSurface.withValues(
-                                                  alpha: 0.6,
-                                                ),
-                                              ),
-                                            ),
-                                            Container(
-                                              width: 1,
-                                              height: 40,
-                                              color: cs.onSurface.withValues(
-                                                alpha: 0.1,
-                                              ),
-                                            ),
-                                            Expanded(
-                                              child: _priceItem(
-                                                context,
-                                                '현재가',
-                                                _livePrice != null
-                                                    ? _livePrice!
-                                                          .formattedPrice
-                                                    : (_loadingPrice
-                                                          ? '로딩중'
-                                                          : '--'),
-                                                isPositive
-                                                    ? const Color(0xFFF04452)
-                                                    : const Color(0xFF1677FF),
-                                              ),
-                                            ),
-                                            Container(
-                                              width: 1,
-                                              height: 40,
-                                              color: cs.onSurface.withValues(
-                                                alpha: 0.1,
-                                              ),
-                                            ),
-                                            Expanded(
-                                              child: _priceItem(
-                                                context,
-                                                '목표가',
-                                                _formatPrice(
-                                                  pick.targetPrice,
-                                                  pick.market,
-                                                ),
-                                                const Color(0xFF10B981),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        if (_livePrice != null &&
-                                            pick.targetPrice >
-                                                pick.buyPrice) ...[
-                                          const SizedBox(height: 12),
-                                          _priceProgressBar(
-                                            pick.buyPrice,
-                                            _livePrice!.price,
-                                            pick.targetPrice,
-                                            isPositive,
-                                          ),
-                                        ],
-                                        const SizedBox(height: 2),
-                                        Divider(
-                                          height: 16,
-                                          thickness: 1,
-                                          color: cs.onSurface.withValues(alpha: 0.07),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 14),
-                                    // 매수 근거
-                                    Text(
-                                      '매수 근거',
-                                      style: GoogleFonts.inter(
-                                        color: cs.onSurface.withValues(
-                                          alpha: 0.5,
-                                        ),
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      pick.reason,
-                                      style: GoogleFonts.inter(
-                                        color: cs.onSurface,
-                                        fontSize: 13,
-                                        height: 1.8,
-                                      ),
-                                    ),
-                                    // 워터마크
-                                    if (_showCaptureWatermark) ...[
-                                      const SizedBox(height: 14),
-                                      Center(
-                                        child: RichText(
-                                          text: TextSpan(
-                                            children: [
-                                              TextSpan(
-                                                text: '주식저장소',
-                                                style: GoogleFonts.inter(
-                                                  color: const Color(
-                                                    0xFF10B981,
+                                                          )
+                                                        : Colors.redAccent
+                                                              .withValues(
+                                                                alpha: 0.4,
+                                                              ),
                                                   ),
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w800,
                                                 ),
-                                              ),
-                                              TextSpan(
-                                                text: ' 앱에서 확인하세요 📈',
-                                                style: GoogleFonts.inter(
-                                                  color: cs.onSurface
-                                                      .withValues(alpha: 0.4),
-                                                  fontSize: 11,
+                                                child: Text(
+                                                  '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
+                                                  style: GoogleFonts.inter(
+                                                    color: isPositive
+                                                        ? const Color(
+                                                            0xFF10B981,
+                                                          )
+                                                        : Colors.redAccent,
+                                                    fontWeight: FontWeight.w800,
+                                                    fontSize: 20,
+                                                  ),
                                                 ),
                                               ),
                                             ],
                                           ),
+                                          const SizedBox(height: 12),
+                                          // 현재가 카드
+                                          _livePriceCard(pick, formatter),
+                                          const SizedBox(height: 12),
+                                        ],
+                                        // 일봉 차트
+                                        _chartCard(),
+                                        const SizedBox(height: 14),
+                                        // 매수가 / 현재가 / 목표가 (카드리스)
+                                        Column(
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: _priceItem(
+                                                    context,
+                                                    '매수가',
+                                                    _formatPrice(
+                                                      pick.buyPrice,
+                                                      pick.market,
+                                                    ),
+                                                    cs.onSurface.withValues(
+                                                      alpha: 0.6,
+                                                    ),
+                                                  ),
+                                                ),
+                                                Container(
+                                                  width: 1,
+                                                  height: 40,
+                                                  color: cs.onSurface
+                                                      .withValues(alpha: 0.1),
+                                                ),
+                                                Expanded(
+                                                  child: _priceItem(
+                                                    context,
+                                                    '현재가',
+                                                    _livePrice != null
+                                                        ? _livePrice!
+                                                              .formattedPrice
+                                                        : (_loadingPrice
+                                                              ? '로딩중'
+                                                              : '--'),
+                                                    isPositive
+                                                        ? const Color(
+                                                            0xFFF04452,
+                                                          )
+                                                        : const Color(
+                                                            0xFF1677FF,
+                                                          ),
+                                                  ),
+                                                ),
+                                                Container(
+                                                  width: 1,
+                                                  height: 40,
+                                                  color: cs.onSurface
+                                                      .withValues(alpha: 0.1),
+                                                ),
+                                                Expanded(
+                                                  child: _priceItem(
+                                                    context,
+                                                    '목표가',
+                                                    _formatPrice(
+                                                      pick.targetPrice,
+                                                      pick.market,
+                                                    ),
+                                                    const Color(0xFF10B981),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            if (_livePrice != null &&
+                                                pick.targetPrice >
+                                                    pick.buyPrice) ...[
+                                              const SizedBox(height: 12),
+                                              _priceProgressBar(
+                                                pick.buyPrice,
+                                                _livePrice!.price,
+                                                pick.targetPrice,
+                                                isPositive,
+                                              ),
+                                            ],
+                                            const SizedBox(height: 2),
+                                            Divider(
+                                              height: 16,
+                                              thickness: 1,
+                                              color: cs.onSurface.withValues(
+                                                alpha: 0.07,
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                      ),
-                                    ],
-                                  ],
+                                        const SizedBox(height: 14),
+                                        // 매수 근거
+                                        Text(
+                                          '매수 근거',
+                                          style: GoogleFonts.inter(
+                                            color: cs.onSurface.withValues(
+                                              alpha: 0.5,
+                                            ),
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          pick.reason,
+                                          style: GoogleFonts.inter(
+                                            color: cs.onSurface,
+                                            fontSize: 14,
+                                            height: 1.8,
+                                          ),
+                                        ),
+                                        // 워터마크
+                                        if (_showCaptureWatermark) ...[
+                                          const SizedBox(height: 14),
+                                          Center(
+                                            child: RichText(
+                                              text: TextSpan(
+                                                children: [
+                                                  TextSpan(
+                                                    text: '주식저장소',
+                                                    style: GoogleFonts.inter(
+                                                      color: const Color(
+                                                        0xFF10B981,
+                                                      ),
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                    ),
+                                                  ),
+                                                  TextSpan(
+                                                    text: ' 앱에서 확인하세요 📈',
+                                                    style: GoogleFonts.inter(
+                                                      color: cs.onSurface
+                                                          .withValues(
+                                                            alpha: 0.4,
+                                                          ),
+                                                      fontSize: 11,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                            // ── 캡처 영역 끝 ──
-                            const SizedBox(height: 10),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: _capturing ? null : _captureAndShare,
-                                icon: _capturing
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Color(0xFF10B981),
-                                        ),
-                                      )
-                                    : const Icon(
-                                        Icons.camera_alt_outlined,
-                                        size: 18,
+                                // ── 캡처 영역 끝 ──
+                                const SizedBox(height: 10),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton.icon(
+                                    onPressed: _capturing
+                                        ? null
+                                        : _captureAndShare,
+                                    icon: _capturing
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Color(0xFF10B981),
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.camera_alt_outlined,
+                                            size: 18,
+                                            color: Color(0xFF10B981),
+                                          ),
+                                    label: Text(
+                                      _capturing ? '캡처 중...' : '캡처해서 공유하기',
+                                      style: GoogleFonts.inter(
+                                        color: const Color(0xFF10B981),
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 13,
+                                      ),
+                                      side: const BorderSide(
                                         color: Color(0xFF10B981),
+                                        width: 1.2,
                                       ),
-                                label: Text(
-                                  _capturing ? '캡처 중...' : '캡처해서 공유하기',
-                                  style: GoogleFonts.inter(
-                                    color: const Color(0xFF10B981),
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 13,
-                                  ),
-                                  side: const BorderSide(
-                                    color: Color(0xFF10B981),
-                                    width: 1.2,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
+                                const SizedBox(height: 20),
+                                // 투표
+                                _voteSection(),
+                                const SizedBox(height: 20),
+                                // 메모
+                                if (_currentUser != null) ...[
+                                  _memoSection(),
+                                  const SizedBox(height: 20),
+                                ],
+                                // 댓글
+                                _commentSection(),
+                                const SizedBox(height: 8),
+                              ],
                             ),
-                            const SizedBox(height: 20),
-                            // 투표
-                            _voteSection(),
-                            const SizedBox(height: 20),
-                            // 메모
-                            if (_currentUser != null) ...[
-                              _memoSection(),
-                              const SizedBox(height: 20),
-                            ],
-                            // 댓글
-                            _commentSection(),
-                            const SizedBox(height: 8),
-                          ],
-                        ),
-                      ),
-                    ),
-                    _commentInput(),
-                  ],
-                ),
-
-                // ② 관련 뉴스 탭
-                SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-                  child: _newsSection(),
-                ),
-
-                // ③ 종목토론방 탭
-                isKorean
-                    ? SingleChildScrollView(
-                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
-                        child: _discussionSection(),
-                      )
-                    : Center(
-                        child: Text(
-                          '한국 주식에서만 제공됩니다',
-                          style: GoogleFonts.inter(
-                            color: cs.onSurface.withValues(alpha: 0.3),
                           ),
                         ),
-                      ),
-                ],
+                        _commentInput(),
+                      ],
+                    ),
+
+                    // ② 관련 뉴스 탭
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                      child: _newsSection(),
+                    ),
+
+                    // ③ 종목토론방 탭
+                    isKorean
+                        ? SingleChildScrollView(
+                            padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                            child: _discussionSection(),
+                          )
+                        : Center(
+                            child: Text(
+                              '한국 주식에서만 제공됩니다',
+                              style: GoogleFonts.inter(
+                                color: cs.onSurface.withValues(alpha: 0.3),
+                              ),
+                            ),
+                          ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -2204,7 +2251,8 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         left: 16,
         right: 16,
         top: 10,
-        bottom: max(
+        bottom:
+            max(
               MediaQuery.of(context).viewInsets.bottom,
               MediaQuery.of(context).padding.bottom,
             ) +
@@ -2936,7 +2984,3 @@ class _FullscreenCandleChartPageState
     );
   }
 }
-
-
-
-

@@ -49,7 +49,78 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       initAds();
       await _showDisclaimerIfNeeded();
+      await _checkNicknameIfNeeded();
     });
+  }
+
+  Future<void> _checkNicknameIfNeeded() async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isLoggedIn || !mounted) return;
+    final uid = auth.user!.uid;
+    final nickname = await _firestoreService.getNickname(uid);
+    if ((nickname == null || nickname.isEmpty) && mounted) {
+      final ctrl = TextEditingController();
+      await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) {
+          final cs = Theme.of(ctx).colorScheme;
+          return AlertDialog(
+            title: Text('닉네임 설정',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('댓글에 표시될 닉네임을 입력해주세요.',
+                    style: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.55),
+                        fontSize: 13)),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: ctrl,
+                  autofocus: true,
+                  style: GoogleFonts.inter(color: cs.onSurface),
+                  decoration: InputDecoration(
+                    hintText: '닉네임',
+                    hintStyle: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.3)),
+                    filled: true,
+                    fillColor: cs.onSurface.withValues(alpha: 0.05),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                          color: Color(0xFF10B981), width: 1.5),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  final nick = ctrl.text.trim();
+                  await _firestoreService.setNickname(
+                      uid, nick.isEmpty ? '익명' : nick);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                },
+                child: Text('확인',
+                    style: GoogleFonts.inter(
+                        color: const Color(0xFF10B981),
+                        fontWeight: FontWeight.w700)),
+              ),
+            ],
+          );
+        },
+      );
+      ctrl.dispose();
+    }
   }
 
   Future<void> _showDisclaimerIfNeeded() async {

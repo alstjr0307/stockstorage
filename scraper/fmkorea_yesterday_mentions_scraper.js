@@ -554,15 +554,47 @@ async function saveResult({
 
   await ref.set(payload, { merge: true });
 
-  if (isTodayTarget) {
+  if (isTodayTarget && topMentions.length > 0 && matchedPostCount > 0) {
     const realtimeRef = db.collection('fmkorea_stock_mentions_realtime').doc('today');
-    await realtimeRef.set(
-      {
-        ...payload,
-        id: 'today',
-      },
-      { merge: true },
-    );
+    const toNum = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+    const existingSnap = await realtimeRef.get();
+    if (existingSnap.exists) {
+      const prev = existingSnap.data() || {};
+      const prevDateKey = String(prev.dateKey || '');
+      const prevMatched = toNum(prev.matchedPostCount);
+      const prevPosts = toNum(prev.totalPosts);
+      const prevMentions = Array.isArray(prev.topMentions) ? prev.topMentions : [];
+
+      // 같은 날짜(today)에서 누적 값이 감소하면 부분 스크래핑으로 판단하고 기존 TOP을 유지한다.
+      const regressed =
+        prevDateKey === targetDateKey &&
+        prevMentions.length > 0 &&
+        (matchedPostCount < prevMatched || totalPosts < prevPosts);
+
+      if (regressed) {
+        console.log(
+          `[realtime] keep previous topMentions (regressed) prevMatched=${prevMatched} newMatched=${matchedPostCount} prevPosts=${prevPosts} newPosts=${totalPosts}`,
+        );
+      } else {
+        await realtimeRef.set(
+          {
+            ...payload,
+            id: 'today',
+          },
+          { merge: true },
+        );
+      }
+    } else {
+      await realtimeRef.set(
+        {
+          ...payload,
+          id: 'today',
+        },
+        { merge: true },
+      );
+    }
+  } else if (isTodayTarget) {
+    console.log('[realtime] skip overwrite because result is empty');
   }
 
   if (SAVE_ALIAS_CANDIDATES && Array.isArray(aliasCandidates)) {

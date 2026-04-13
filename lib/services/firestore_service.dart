@@ -763,6 +763,16 @@ class FirestoreService {
         .map((s) => s.docs.map(Comment.fromFirestore).toList());
   }
 
+  Future<int> getJournalCommentCount(String journalId) async {
+    final snap = await _db
+        .collection('trading_journal')
+        .doc(journalId)
+        .collection('comments')
+        .count()
+        .get();
+    return snap.count ?? 0;
+  }
+
   Future<void> addJournalComment(String journalId, Comment comment) {
     return _db
         .collection('trading_journal')
@@ -855,9 +865,27 @@ class FirestoreService {
         .collection('fmkorea_stock_mentions_realtime')
         .doc('today')
         .snapshots()
+        .asyncMap((doc) async {
+          if (doc.exists) {
+            final parsed = FmkoreaStockMentionsSnapshot.fromFirestore(doc);
+            if (parsed.topMentions.isNotEmpty) return parsed;
+          }
+          final today = await getTodayDailyFmkoreaStockMentions();
+          if (today != null) return today;
+          return getLatestDailyFmkoreaStockMentions();
+        });
+  }
+
+  Stream<FmkoreaStockMentionsSnapshot?> getRealtimeOnlyFmkoreaStockMentions() {
+    return _db
+        .collection('fmkorea_stock_mentions_realtime')
+        .doc('today')
+        .snapshots()
         .map((doc) {
           if (!doc.exists) return null;
-          return FmkoreaStockMentionsSnapshot.fromFirestore(doc);
+          final parsed = FmkoreaStockMentionsSnapshot.fromFirestore(doc);
+          if (parsed.topMentions.isEmpty) return null;
+          return parsed;
         });
   }
 
@@ -870,5 +898,43 @@ class FirestoreService {
         .get();
     if (snap.docs.isEmpty) return null;
     return FmkoreaStockMentionsSnapshot.fromFirestore(snap.docs.first);
+  }
+
+  Future<FmkoreaStockMentionsSnapshot?>
+  getTodayDailyFmkoreaStockMentions() async {
+    final nowUtc = DateTime.now().toUtc();
+    final nowKst = nowUtc.add(const Duration(hours: 9));
+    final mm = nowKst.month.toString().padLeft(2, '0');
+    final dd = nowKst.day.toString().padLeft(2, '0');
+    final docId = '${nowKst.year}-$mm-$dd';
+    final doc = await _db
+        .collection('fmkorea_stock_mentions_daily')
+        .doc(docId)
+        .get();
+    if (!doc.exists) return null;
+    final parsed = FmkoreaStockMentionsSnapshot.fromFirestore(doc);
+    if (parsed.topMentions.isEmpty) return null;
+    return parsed;
+  }
+
+  Future<FmkoreaStockMentionsSnapshot?>
+  getPreviousDailyFmkoreaStockMentions() async {
+    final nowUtc = DateTime.now().toUtc();
+    final nowKst = nowUtc.add(const Duration(hours: 9));
+    final mm = nowKst.month.toString().padLeft(2, '0');
+    final dd = nowKst.day.toString().padLeft(2, '0');
+    final todayDocId = '${nowKst.year}-$mm-$dd';
+
+    final snap = await _db
+        .collection('fmkorea_stock_mentions_daily')
+        .orderBy('updatedAt', descending: true)
+        .limit(7)
+        .get();
+    for (final doc in snap.docs) {
+      if (doc.id == todayDocId) continue;
+      final parsed = FmkoreaStockMentionsSnapshot.fromFirestore(doc);
+      if (parsed.topMentions.isNotEmpty) return parsed;
+    }
+    return null;
   }
 }

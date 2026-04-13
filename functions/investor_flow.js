@@ -83,7 +83,7 @@ function shouldRunInvestorFlowNow(date = new Date()) {
   // KST 기준 장마감 직후(15:35)부터 16:30까지 다중 재시도.
   const totalMinutes = hour * 60 + minute;
   const from = 15 * 60 + 35;
-  const to = 16 * 60 + 30;
+  const to = 19 * 60;
   return totalMinutes >= from && totalMinutes <= to;
 }
 
@@ -99,6 +99,12 @@ function getNaverDateKey(date = new Date()) {
     day: '2-digit',
   });
   return formatter.format(date).replace(/-/g, '.');
+}
+
+function toMarketDateKey(naverDateKey) {
+  const m = String(naverDateKey || '').match(/^(\d{2})\.(\d{2})\.(\d{2})$/);
+  if (!m) return null;
+  return `20${m[1]}-${m[2]}-${m[3]}`;
 }
 
 function parseNumber(text) {
@@ -129,10 +135,18 @@ async function fetchTop5FromNaver(config) {
     }) ??
     boxes[boxes.length - 1] ??
     null;
+  const sourceDateKey = targetBox
+    ? $(targetBox).find('.sise_guide_date').first().text().trim()
+    : null;
   const rows = [];
 
   if (!targetBox) {
-    return [];
+    return {
+      items: [],
+      sourceDateKey: null,
+      expectedDate,
+      isExpectedDate: false,
+    };
   }
 
   $(targetBox)
@@ -162,18 +176,25 @@ async function fetchTop5FromNaver(config) {
     });
   });
 
-  return rows.slice(0, 5).map((item, index) => ({
-    rank: index + 1,
-    ...item,
-  }));
+  return {
+    items: rows.slice(0, 5).map((item, index) => ({
+      rank: index + 1,
+      ...item,
+    })),
+    sourceDateKey,
+    expectedDate,
+    isExpectedDate: sourceDateKey === expectedDate,
+  };
 }
 
 async function collectDailyInvestorFlow() {
   const result = {
     marketDate: getKstDateKey(),
+    expectedDate: getNaverDateKey(),
     fetchedAt: new Date(),
     source: 'finance.naver.com',
     basis: 'market_close',
+    sources: {},
     kospi: {
       foreignTop5: [],
       institutionTop5: [],
@@ -185,9 +206,40 @@ async function collectDailyInvestorFlow() {
   };
 
   for (const source of SOURCES) {
-    const top5 = await fetchTop5FromNaver(source);
-    result[source.market][source.key] = top5;
+    try {
+      const fetched = await fetchTop5FromNaver(source);
+      result[source.market][source.key] = fetched.items;
+      result.sources[`${source.market}.${source.key}`] = {
+        sourceDateKey: fetched.sourceDateKey,
+        expectedDate: fetched.expectedDate,
+        isExpectedDate: fetched.isExpectedDate,
+        count: fetched.items.length,
+      };
+    } catch (err) {
+      result[source.market][source.key] = [];
+      result.sources[`${source.market}.${source.key}`] = {
+        sourceDateKey: null,
+        expectedDate: result.expectedDate,
+        isExpectedDate: false,
+        count: 0,
+        error: String(err?.message || err),
+      };
+    }
   }
+
+  const sourceDateKeys = Object.values(result.sources)
+    .map((entry) => entry.sourceDateKey)
+    .filter((value) => typeof value === 'string');
+  const latestSourceDateKey = sourceDateKeys.length
+    ? sourceDateKeys.sort().at(-1)
+    : null;
+  const marketDateFromSource = toMarketDateKey(latestSourceDateKey);
+  if (marketDateFromSource) {
+    result.marketDate = marketDateFromSource;
+  }
+  result.isExpectedDate = Object.values(result.sources).every(
+    (entry) => entry.isExpectedDate === true,
+  );
 
   return result;
 }
@@ -212,6 +264,14 @@ const crawlDailyInvestorFlow = onSchedule(
       return;
     }
     const data = await collectDailyInvestorFlow();
+    if (!data.isExpectedDate) {
+      console.log('skip stale investor flow snapshot', {
+        expectedDate: data.expectedDate,
+        marketDate: data.marketDate,
+        sources: data.sources,
+      });
+      return;
+    }
     await saveDailyInvestorFlow(data);
   },
 );

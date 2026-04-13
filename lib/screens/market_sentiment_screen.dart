@@ -1,10 +1,11 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../services/stock_price_service.dart';
@@ -25,6 +26,8 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
   bool _loadingFearAndGreed = true;
   bool _capturing = false;
   bool _showWatermark = false;
+  DateTime? _pricesFetchedAt;
+  DateTime? _fearAndGreedFetchedAt;
 
   Rect _shareOrigin() {
     final size = MediaQuery.sizeOf(context);
@@ -61,6 +64,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
         for (var i = 0; i < _symbols.length; i++) {
           _prices[_symbols[i].$1] = results[i];
         }
+        _pricesFetchedAt = DateTime.now();
       });
     } finally {
       if (mounted) setState(() => _loadingPrices = false);
@@ -74,7 +78,22 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
     setState(() {
       _fearAndGreed = result;
       _loadingFearAndGreed = false;
+      _fearAndGreedFetchedAt = DateTime.now();
     });
+  }
+
+  DateTime? get _latestFetchedAt {
+    if (_pricesFetchedAt == null) return _fearAndGreedFetchedAt;
+    if (_fearAndGreedFetchedAt == null) return _pricesFetchedAt;
+    return _pricesFetchedAt!.isAfter(_fearAndGreedFetchedAt!)
+        ? _pricesFetchedAt
+        : _fearAndGreedFetchedAt;
+  }
+
+  String? get _dataAsOfText {
+    final dt = _latestFetchedAt;
+    if (dt == null) return null;
+    return '기준 ${DateFormat('MM.dd HH:mm').format(dt)}';
   }
 
   Future<void> _captureAndShare() async {
@@ -198,6 +217,29 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return [
+      if (_dataAsOfText != null)
+        _StaggerReveal(
+          delay: const Duration(milliseconds: 20),
+          child: Row(
+            children: [
+              Icon(
+                Icons.schedule_rounded,
+                size: 14,
+                color: cs.onSurface.withValues(alpha: 0.45),
+              ),
+              const SizedBox(width: 5),
+              Text(
+                _dataAsOfText!,
+                style: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.48),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      if (_dataAsOfText != null) const SizedBox(height: 8),
       _StaggerReveal(
         delay: const Duration(milliseconds: 40),
         child: _buildSectionHeader(context, '공포와 탐욕'),
@@ -308,15 +350,6 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
             fontSize: 24,
             fontWeight: FontWeight.w900,
             letterSpacing: -0.6,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          '실시간 시장 온도와 흐름을 확인하세요',
-          style: GoogleFonts.inter(
-            color: cs.onSurface.withValues(alpha: 0.45),
-            fontSize: 12.5,
-            fontWeight: FontWeight.w500,
           ),
         ),
         const SizedBox(height: 10),
@@ -483,7 +516,9 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
   }) {
     final cs = Theme.of(context).colorScheme;
     final isPositive = changeText == null || !changeText.startsWith('-');
-    final color = isPositive ? const Color(0xFFF04452) : const Color(0xFF1677FF);
+    final color = isPositive
+        ? const Color(0xFFF04452)
+        : const Color(0xFF1677FF);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -571,7 +606,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
             description,
             style: GoogleFonts.inter(
               color: cs.onSurface.withValues(alpha: 0.58),
-              fontSize: 12.5,
+              fontSize: 13.5,
               height: 1.56,
             ),
           ),
@@ -671,10 +706,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
 }
 
 class _StaggerReveal extends StatefulWidget {
-  const _StaggerReveal({
-    required this.child,
-    this.delay = Duration.zero,
-  });
+  const _StaggerReveal({required this.child, this.delay = Duration.zero});
 
   final Widget child;
   final Duration delay;
@@ -736,10 +768,7 @@ class _StaggerRevealState extends State<_StaggerReveal>
 }
 
 class SemicircleGaugePainter extends CustomPainter {
-  const SemicircleGaugePainter({
-    required this.score,
-    required this.trackColor,
-  });
+  const SemicircleGaugePainter({required this.score, required this.trackColor});
 
   final double score;
   final Color trackColor;
@@ -821,5 +850,3 @@ class SemicircleGaugePainter extends CustomPainter {
     return oldDelegate.score != score || oldDelegate.trackColor != trackColor;
   }
 }
-
-

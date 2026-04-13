@@ -28,6 +28,8 @@ class MarketAnalysisScreen extends StatefulWidget {
 class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   final _firestoreService = FirestoreService();
   final GlobalKey _fmkoreaHotShareCardKey = GlobalKey();
+  int _fmkoreaHotTabIndex = 0;
+  late Future<FmkoreaStockMentionsSnapshot?> _previousDailyHotFuture;
 
   static const _indices = [
     ('KOSPI', '^KS11'),
@@ -69,6 +71,8 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   @override
   void initState() {
     super.initState();
+    _previousDailyHotFuture = _firestoreService
+        .getPreviousDailyFmkoreaStockMentions();
     _fetchIndices();
   }
 
@@ -102,6 +106,10 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   }
 
   Future<void> _refreshAll() async {
+    setState(() {
+      _previousDailyHotFuture = _firestoreService
+          .getPreviousDailyFmkoreaStockMentions();
+    });
     await _fetchIndices(forceRefresh: true);
   }
 
@@ -146,7 +154,10 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return TabBar(
       labelStyle: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600),
-      unselectedLabelStyle: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w500),
+      unselectedLabelStyle: GoogleFonts.inter(
+        fontSize: 15,
+        fontWeight: FontWeight.w500,
+      ),
       labelColor: cs.onSurface,
       unselectedLabelColor: cs.onSurface.withValues(alpha: 0.38),
       dividerColor: Colors.transparent,
@@ -245,7 +256,9 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           AdService.instance.showIndicatorDetailInterstitialIfReady();
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const _InvestorFlowDetailScreen()),
+            MaterialPageRoute(
+              builder: (_) => const _InvestorFlowDetailScreen(),
+            ),
           );
         },
       ),
@@ -271,7 +284,9 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           AdService.instance.showIndicatorDetailInterstitialIfReady();
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const _FmkoreaIndexDetailScreen()),
+            MaterialPageRoute(
+              builder: (_) => const _FmkoreaIndexDetailScreen(),
+            ),
           );
         },
       ),
@@ -307,7 +322,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
               if (i < items.length - 1)
                 Container(
                   height: 1,
-                  margin: const EdgeInsets.only(left: 14 + 36 + 10),
+                  margin: const EdgeInsets.only(left: 8 + 36 + 10),
                   color: cs.onSurface.withValues(alpha: 0.06),
                 ),
             ],
@@ -320,62 +335,158 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   Widget _buildFmkoreaMentionsSection(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    return StreamBuilder<FmkoreaStockMentionsSnapshot?>(
-      stream: _firestoreService.getRealtimeFmkoreaStockMentions(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFF10B981),
-                strokeWidth: 2,
-              ),
-            ),
-          );
-        }
+    Widget emptyMessage(String text) {
+      return Text(
+        text,
+        style: GoogleFonts.inter(
+          color: cs.onSurface.withValues(alpha: 0.45),
+          fontSize: 12,
+        ),
+      );
+    }
 
-        if (snapshot.hasError) {
-          return Text(
-            '펨코 언급 종목 데이터를 불러오지 못했습니다',
-            style: GoogleFonts.inter(
-              color: cs.onSurface.withValues(alpha: 0.45),
-              fontSize: 12,
-            ),
-          );
-        }
-
-        final realtime = snapshot.data;
-        if (realtime != null && realtime.topMentions.isNotEmpty) {
-          return _buildFmkoreaMentionsRows(
-            context,
-            title: '펨코 실시간 HOT 종목',
-            data: realtime,
-            isRealtime: true,
-          );
-        }
-
-        return FutureBuilder<FmkoreaStockMentionsSnapshot?>(
-          future: _firestoreService.getLatestDailyFmkoreaStockMentions(),
-          builder: (context, dailySnapshot) {
-            final daily = dailySnapshot.data;
-            if (daily == null || daily.topMentions.isEmpty) {
-              return Text(
-                '아직 표시할 펨코 언급 종목이 없습니다',
-                style: GoogleFonts.inter(
-                  color: cs.onSurface.withValues(alpha: 0.45),
-                  fontSize: 12,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(9999),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _fmkoreaHotTabIndex = 0),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    curve: Curves.easeOutCubic,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _fmkoreaHotTabIndex == 0
+                          ? cs.surface
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(9999),
+                    ),
+                    child: Text(
+                      '\uC624\uB298 \uC2E4\uC2DC\uAC04',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        color: _fmkoreaHotTabIndex == 0
+                            ? cs.onSurface
+                            : cs.onSurface.withValues(alpha: 0.5),
+                        fontSize: 13,
+                        fontWeight: _fmkoreaHotTabIndex == 0
+                            ? FontWeight.w700
+                            : FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _fmkoreaHotTabIndex = 1),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    curve: Curves.easeOutCubic,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _fmkoreaHotTabIndex == 1
+                          ? cs.surface
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(9999),
+                    ),
+                    child: Text(
+                      '\uC804\uC77C HOT',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.inter(
+                        color: _fmkoreaHotTabIndex == 1
+                            ? cs.onSurface
+                            : cs.onSurface.withValues(alpha: 0.5),
+                        fontSize: 13,
+                        fontWeight: _fmkoreaHotTabIndex == 1
+                            ? FontWeight.w700
+                            : FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        if (_fmkoreaHotTabIndex == 0)
+          StreamBuilder<FmkoreaStockMentionsSnapshot?>(
+            stream: _firestoreService.getRealtimeOnlyFmkoreaStockMentions(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFF10B981),
+                      strokeWidth: 2,
+                    ),
+                  ),
+                );
+              }
+              if (snapshot.hasError) {
+                return emptyMessage(
+                  '\uC2E4\uC2DC\uAC04 HOT \uB370\uC774\uD130\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.',
+                );
+              }
+              final realtime = snapshot.data;
+              if (realtime == null || realtime.topMentions.isEmpty) {
+                return emptyMessage(
+                  '\uC624\uB298 \uC2E4\uC2DC\uAC04 HOT \uB370\uC774\uD130\uAC00 \uC544\uC9C1 \uC5C6\uC2B5\uB2C8\uB2E4.',
+                );
+              }
+              return _buildFmkoreaMentionsRows(
+                context,
+                title:
+                    '\uD3A8\uCF54 \uC624\uB298 \uC2E4\uC2DC\uAC04 HOT \uC885\uBAA9',
+                data: realtime,
+                isRealtime: true,
               );
-            }
-            return _buildFmkoreaMentionsRows(
-              context,
-              title: '펨코 최근 HOT 종목',
-              data: daily,
-            );
-          },
-        );
-      },
+            },
+          )
+        else
+          FutureBuilder<FmkoreaStockMentionsSnapshot?>(
+            future: _previousDailyHotFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFF10B981),
+                      strokeWidth: 2,
+                    ),
+                  ),
+                );
+              }
+              if (snapshot.hasError) {
+                return emptyMessage(
+                  '\uC804\uC77C HOT \uB370\uC774\uD130\uB97C \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.',
+                );
+              }
+              final daily = snapshot.data;
+              if (daily == null || daily.topMentions.isEmpty) {
+                return emptyMessage(
+                  '\uD45C\uC2DC\uD560 \uC804\uC77C HOT \uB370\uC774\uD130\uAC00 \uC544\uC9C1 \uC5C6\uC2B5\uB2C8\uB2E4.',
+                );
+              }
+              return _buildFmkoreaMentionsRows(
+                context,
+                title: '\uD3A8\uCF54 \uC804\uC77C HOT \uC885\uBAA9',
+                data: daily,
+              );
+            },
+          ),
+      ],
     );
   }
 
@@ -395,10 +506,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       return Column(
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 11,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
             child: Row(
               children: [
                 Container(
@@ -426,9 +534,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        rows[i].name.isEmpty
-                            ? rows[i].ticker
-                            : rows[i].name,
+                        rows[i].name.isEmpty ? rows[i].ticker : rows[i].name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.inter(
@@ -441,9 +547,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                       Text(
                         rows[i].ticker,
                         style: GoogleFonts.robotoMono(
-                          color: cs.onSurface.withValues(
-                            alpha: 0.45,
-                          ),
+                          color: cs.onSurface.withValues(alpha: 0.45),
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
@@ -476,71 +580,75 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-          Row(
-            children: [
-              Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Center(child: Text('🔥', style: TextStyle(fontSize: 14))),
+        Row(
+          children: [
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(width: 8),
-              Expanded(child: _buildHotTitle(title, cs)),
-              if (isRealtime) ...[
-                const SizedBox(width: 4),
-                IconButton(
-                  tooltip: '공유',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () => _openFmkoreaHotShareSheet(context, data),
-                  icon: const Icon(
-                    Icons.ios_share_rounded,
-                    color: Color(0xFF10B981),
-                    size: 20,
-                  ),
+              child: const Center(
+                child: Text('🔥', style: TextStyle(fontSize: 14)),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: _buildHotTitle(title, cs)),
+            if (isRealtime) ...[
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: '공유',
+                visualDensity: VisualDensity.compact,
+                onPressed: () => _openFmkoreaHotShareSheet(context, data),
+                icon: const Icon(
+                  Icons.ios_share_rounded,
+                  color: Color(0xFF10B981),
+                  size: 20,
                 ),
-              ],
+              ),
             ],
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          updatedAt == null
+              ? '업데이트 시간 정보 없음 · 커뮤니티 열기 기준'
+              : '업데이트 $updatedAt · 게시글 ${data.totalPosts}개 집계',
+          style: GoogleFonts.inter(
+            color: cs.onSurface.withValues(alpha: 0.45),
+            fontSize: 12,
           ),
-          const SizedBox(height: 6),
-          Text(
-            updatedAt == null
-                ? '업데이트 시간 정보 없음 · 커뮤니티 열기 기준'
-                : '업데이트 $updatedAt · 게시글 ${data.totalPosts}개 집계',
-            style: GoogleFonts.inter(
-              color: cs.onSurface.withValues(alpha: 0.45),
-              fontSize: 12,
-            ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
+            border: Border.all(color: cs.onSurface.withValues(alpha: 0.12)),
           ),
-          const SizedBox(height: 8),
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
-              border: Border.all(color: cs.onSurface.withValues(alpha: 0.12)),
+          child: _VisibilityTriggered(
+            enabled: isRealtime,
+            childWhenInactive: Column(
+              children: [
+                for (var i = 0; i < rows.length; i++) buildMentionRow(i),
+              ],
             ),
-            child: _VisibilityTriggered(
-              enabled: isRealtime,
-              childWhenInactive: Column(
-                children: [for (var i = 0; i < rows.length; i++) buildMentionRow(i)],
-              ),
-              builder: () => Column(
-                children: [
-                  for (var i = 0; i < rows.length; i++)
-                    _StaggerReveal(
-                      key: ValueKey(
-                        '${data.mode}|${data.dateKey}|${data.updatedAt?.millisecondsSinceEpoch ?? 0}|'
-                        '${rows[i].ticker}|${rows[i].mentionCount}|$i',
-                      ),
-                      delay: Duration(milliseconds: 220 + (i * 120)),
-                      child: buildMentionRow(i),
+            builder: () => Column(
+              children: [
+                for (var i = 0; i < rows.length; i++)
+                  _StaggerReveal(
+                    key: ValueKey(
+                      '${data.mode}|${data.dateKey}|${data.updatedAt?.millisecondsSinceEpoch ?? 0}|'
+                      '${rows[i].ticker}|${rows[i].mentionCount}|$i',
                     ),
-                ],
-              ),
+                    delay: Duration(milliseconds: 220 + (i * 120)),
+                    child: buildMentionRow(i),
+                  ),
+              ],
             ),
           ),
+        ),
       ],
     );
   }
@@ -580,7 +688,6 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     );
   }
 
-
   Widget _buildIndicesPanel(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Column(
@@ -590,54 +697,54 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           onceKey: 'major_indices_header_once_v4',
           delay: const Duration(milliseconds: 40),
           child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '주요 지수',
-                    style: GoogleFonts.inter(
-                      color: cs.onSurface,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.5,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '주요 지수',
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _indicesFetchedAt == null
-                        ? '핵심 시장 지수를 빠르게 확인하세요'
-                        : '기준 ${DateFormat('HH:mm').format(_indicesFetchedAt!)}',
-                    style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.45),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
+                    const SizedBox(height: 4),
+                    Text(
+                      _indicesFetchedAt == null
+                          ? '핵심 시장 지수를 빠르게 확인하세요'
+                          : '기준 ${DateFormat('HH:mm').format(_indicesFetchedAt!)}',
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.45),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            if (_loadingIndices)
-              const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Color(0xFF3182F6),
-                ),
-              )
-            else
-              IconButton(
-                onPressed: () => _fetchIndices(forceRefresh: true),
-                visualDensity: VisualDensity.compact,
-                icon: Icon(
-                  Icons.refresh_rounded,
-                  color: cs.onSurface.withValues(alpha: 0.46),
+                  ],
                 ),
               ),
-          ],
-        ),
+              if (_loadingIndices)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF3182F6),
+                  ),
+                )
+              else
+                IconButton(
+                  onPressed: () => _fetchIndices(forceRefresh: true),
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    Icons.refresh_rounded,
+                    color: cs.onSurface.withValues(alpha: 0.46),
+                  ),
+                ),
+            ],
+          ),
         ),
         const SizedBox(height: 10),
         for (var i = 0; i < _indices.length; i++) ...[
@@ -646,11 +753,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             delay: Duration(milliseconds: 120 + (i * 90)),
             duration: const Duration(milliseconds: 420),
             beginOffset: const Offset(0, 0.12),
-            child: _buildIndexRow(
-              context,
-              _indices[i].$1,
-              _indices[i].$2,
-            ),
+            child: _buildIndexRow(context, _indices[i].$1, _indices[i].$2),
           ),
           if (i < _indices.length - 1)
             Container(
@@ -885,13 +988,13 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                   _displayValue(name, result),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.robotoMono(
-                      color: cs.onSurface,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      height: 1.1,
-                    ),
+                  style: GoogleFonts.robotoMono(
+                    color: cs.onSurface,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    height: 1.1,
                   ),
+                ),
                 const SizedBox(height: 7),
                 _buildChangeRateBadge(moveColor, isUp, result.changeRate),
               ],
@@ -956,8 +1059,8 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
         final latestDate = list.isEmpty
             ? null
             : list
-                .map((item) => item.createdAt)
-                .reduce((a, b) => a.isAfter(b) ? a : b);
+                  .map((item) => item.createdAt)
+                  .reduce((a, b) => a.isAfter(b) ? a : b);
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
@@ -965,54 +1068,54 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             _StaggerReveal(
               delay: const Duration(milliseconds: 40),
               child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        latestDate == null
-                            ? '등록된 분석이 없습니다'
-                            : '최신 ${_analysisFmt.format(latestDate)} · 총 ${list.length}개',
-                        style: GoogleFonts.inter(
-                          color: cs.onSurface.withValues(alpha: 0.45),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w400,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          latestDate == null
+                              ? '등록된 분석이 없습니다'
+                              : '최신 ${_analysisFmt.format(latestDate)} · 총 ${list.length}개',
+                          style: GoogleFonts.inter(
+                            color: cs.onSurface.withValues(alpha: 0.45),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
             ),
             const SizedBox(height: 20),
             if (list.isEmpty)
               _StaggerReveal(
                 delay: const Duration(milliseconds: 140),
                 child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 56),
-                child: Center(
-                  child: Column(
-                    children: [
-                      Icon(
-                        Icons.article_outlined,
-                        size: 30,
-                        color: cs.onSurface.withValues(alpha: 0.2),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        '등록된 시황 분석이 없습니다.',
-                        style: GoogleFonts.inter(
-                          color: cs.onSurface.withValues(alpha: 0.38),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w400,
+                  padding: const EdgeInsets.symmetric(vertical: 56),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.article_outlined,
+                          size: 30,
+                          color: cs.onSurface.withValues(alpha: 0.2),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 12),
+                        Text(
+                          '등록된 시황 분석이 없습니다.',
+                          style: GoogleFonts.inter(
+                            color: cs.onSurface.withValues(alpha: 0.38),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                )
               )
             else
               for (var i = 0; i < list.length; i++) ...[
@@ -1185,7 +1288,10 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: cs.onSurface.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(9999),
@@ -1207,7 +1313,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                     color: cs.onSurface.withValues(alpha: 0.3),
                   ),
               ],
-              ),
+            ),
             const SizedBox(height: 10),
             Text(
               analysis.title,
@@ -1260,27 +1366,16 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     final emoji = _indexEmojiFor(name);
     if (emoji != null) {
       return Center(
-        child: Text(
-          emoji,
-          style: TextStyle(
-            fontSize: size,
-            height: 1,
-          ),
-        ),
+        child: Text(emoji, style: TextStyle(fontSize: size, height: 1)),
       );
     }
-    return Icon(
-      _indexIconFor(name),
-      color: accent,
-      size: size,
-    );
+    return Icon(_indexIconFor(name), color: accent, size: size);
   }
 
   String? _indexEmojiFor(String name) {
     if (name == 'USD/KRW') return '💱';
     return null;
   }
-
 }
 
 class _InvestorFlowCard extends StatelessWidget {
@@ -1340,77 +1435,80 @@ class _InvestorFlowCard extends StatelessWidget {
         _StaggerReveal(
           delay: const Duration(milliseconds: 40),
           child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '마감 수급 TOP5',
-                    style: GoogleFonts.inter(
-                      color: cs.onSurface,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.5,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '마감 수급 TOP5',
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '순매수 금액 기준 · 외인/기관 상위 5종목',
-                    style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.45),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
+                    const SizedBox(height: 4),
+                    Text(
+                      '순매수 금액 기준 · 외인/기관 상위 5종목',
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.45),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: cs.onSurface.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                data.marketDate,
-                style: GoogleFonts.inter(
-                  color: cs.onSurface.withValues(alpha: 0.72),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
+                  ],
                 ),
               ),
-            ),
-          ],
-        ),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: cs.onSurface.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  data.marketDate,
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.72),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 18),
         _StaggerReveal(
           delay: const Duration(milliseconds: 120),
           child: _InvestorFlowMarketBlock(
-          marketLabel: 'KOSPI',
-          foreignTop5: data.kospiForeignTop5,
-          institutionTop5: data.kospiInstitutionTop5,
-        ),
+            marketLabel: 'KOSPI',
+            foreignTop5: data.kospiForeignTop5,
+            institutionTop5: data.kospiInstitutionTop5,
+          ),
         ),
         const SizedBox(height: 20),
         _StaggerReveal(
           delay: const Duration(milliseconds: 180),
           child: Container(
-          height: 1,
-          color: cs.onSurface.withValues(alpha: 0.08),
-        ),
+            height: 1,
+            color: cs.onSurface.withValues(alpha: 0.08),
+          ),
         ),
         const SizedBox(height: 20),
         _StaggerReveal(
           delay: const Duration(milliseconds: 240),
           child: _InvestorFlowMarketBlock(
-          marketLabel: 'KOSDAQ',
-          foreignTop5: data.kosdaqForeignTop5,
-          institutionTop5: data.kosdaqInstitutionTop5,
-        ),
+            marketLabel: 'KOSDAQ',
+            foreignTop5: data.kosdaqForeignTop5,
+            institutionTop5: data.kosdaqInstitutionTop5,
+          ),
         ),
       ],
     );
@@ -1435,10 +1533,7 @@ class _InvestorFlowCard extends StatelessWidget {
 }
 
 class _FmkoreaHotShareSheet extends StatefulWidget {
-  const _FmkoreaHotShareSheet({
-    required this.shareCardKey,
-    required this.data,
-  });
+  const _FmkoreaHotShareSheet({required this.shareCardKey, required this.data});
 
   final GlobalKey shareCardKey;
   final FmkoreaStockMentionsSnapshot data;
@@ -1776,10 +1871,7 @@ class _StaggerRevealState extends State<_StaggerReveal>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: widget.duration,
-    );
+    _controller = AnimationController(vsync: this, duration: widget.duration);
     final curve = CurvedAnimation(
       parent: _controller,
       curve: Curves.easeOutCubic,
@@ -1851,7 +1943,7 @@ class _IndicatorShortcutCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
         child: Row(
           children: [
             Container(
@@ -2102,63 +2194,61 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
             _StaggerReveal(
               delay: const Duration(milliseconds: 40),
               child: RepaintBoundary(
-              key: _captureKey,
-              child: Container(
-                color: Theme.of(context).scaffoldBackgroundColor,
-                padding: captureFrame
-                    ? const EdgeInsets.fromLTRB(12, 0, 12, 8)
-                    : const EdgeInsets.fromLTRB(0, 0, 0, 8),
-                child: Column(
-                  children: [
-                    const _InvestorFlowCard(),
-                    if (_showWatermark) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        '주식저장소 앱에서 확인하세요.',
-                        style: GoogleFonts.inter(
-                          color: cs.onSurface.withValues(alpha: 0.4),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
+                key: _captureKey,
+                child: Container(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  padding: captureFrame
+                      ? const EdgeInsets.fromLTRB(12, 0, 12, 8)
+                      : const EdgeInsets.fromLTRB(0, 0, 0, 8),
+                  child: Column(
+                    children: [
+                      const _InvestorFlowCard(),
+                      if (_showWatermark) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          '주식저장소 앱에서 확인하세요.',
+                          style: GoogleFonts.inter(
+                            color: cs.onSurface.withValues(alpha: 0.4),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
               ),
             ),
             const SizedBox(height: 16),
             _StaggerReveal(
               delay: const Duration(milliseconds: 140),
               child: SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: _capturing ? null : _captureAndShare,
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _capturing ? null : _captureAndShare,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: _capturing
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.camera_alt_outlined),
+                  label: Text(
+                    _capturing ? '캡처 중...' : '캡처해서 공유하기',
+                    style: GoogleFonts.inter(fontWeight: FontWeight.w800),
                   ),
                 ),
-                icon: _capturing
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : const Icon(Icons.camera_alt_outlined),
-                label: Text(
-                  _capturing ? '캡처 중...' : '캡처해서 공유하기',
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
               ),
             ),
           ],
@@ -2166,7 +2256,6 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
       ),
     );
   }
-
 }
 
 class _FmkoreaIndexDetailScreen extends StatefulWidget {
@@ -2312,9 +2401,7 @@ class _FmkoreaIndexDetailScreenState extends State<_FmkoreaIndexDetailScreen> {
                     : const Icon(Icons.camera_alt_outlined),
                 label: Text(
                   _capturing ? '캡처 중...' : '캡처해서 공유하기',
-                  style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w800),
                 ),
               ),
             ),
@@ -2340,54 +2427,54 @@ class _InvestorFlowMarketBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: cs.onSurface.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  marketLabel,
-                  style: GoogleFonts.inter(
-                    color: cs.onSurface,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.2,
-                  ),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: cs.onSurface.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                marketLabel,
+                style: GoogleFonts.inter(
+                  color: cs.onSurface,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.2,
                 ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                'TOP5',
-                style: GoogleFonts.robotoMono(
-                  color: cs.onSurface.withValues(alpha: 0.45),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'TOP5',
+              style: GoogleFonts.robotoMono(
+                color: cs.onSurface.withValues(alpha: 0.45),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          _InvestorFlowGroup(
-            title: '외국인 순매수',
-            color: const Color(0xFF3182F6),
-            items: foreignTop5,
-            icon: Icons.trending_up_rounded,
-            emoji: '🌎',
-          ),
-          const SizedBox(height: 12),
-          _InvestorFlowGroup(
-            title: '기관 순매수',
-            color: const Color(0xFFEA580C),
-            items: institutionTop5,
-            icon: Icons.account_balance_rounded,
-            emoji: '🏦',
-          ),
-        ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _InvestorFlowGroup(
+          title: '외국인 순매수',
+          color: const Color(0xFF3182F6),
+          items: foreignTop5,
+          icon: Icons.trending_up_rounded,
+          emoji: '🌎',
+        ),
+        const SizedBox(height: 12),
+        _InvestorFlowGroup(
+          title: '기관 순매수',
+          color: const Color(0xFFEA580C),
+          items: institutionTop5,
+          icon: Icons.account_balance_rounded,
+          emoji: '🏦',
+        ),
+      ],
     );
   }
 }
@@ -2674,7 +2761,9 @@ class _FmkoreaIndexCard extends StatelessWidget {
             .toList();
         final todayEntry = todayMatches.isEmpty ? null : todayMatches.last;
         final focusedEntry =
-            todayEntry != null && entries.length >= 2 && latest.dateKey == todayKey
+            todayEntry != null &&
+                entries.length >= 2 &&
+                latest.dateKey == todayKey
             ? entries[entries.length - 2]
             : latest;
         final recentEntries = entries.length > 7
@@ -2726,7 +2815,9 @@ class _FmkoreaIndexCard extends StatelessWidget {
                           vertical: 5,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF3182F6).withValues(alpha: 0.13),
+                          color: const Color(
+                            0xFF3182F6,
+                          ).withValues(alpha: 0.13),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
@@ -2738,8 +2829,8 @@ class _FmkoreaIndexCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                  ],
-                ),
+                    ],
+                  ),
                   const SizedBox(height: 20),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2759,8 +2850,8 @@ class _FmkoreaIndexCard extends StatelessWidget {
                           subtitleColor: focusedKospiChange == null
                               ? null
                               : focusedKospiChange >= 0
-                                  ? const Color(0xFFF04452)
-                                  : const Color(0xFF1677FF),
+                              ? const Color(0xFFF04452)
+                              : const Color(0xFF1677FF),
                           insight: effectiveInsight,
                         ),
                       ),
@@ -2890,36 +2981,35 @@ class _FmkoreaIndexCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        ...recentEntries.reversed.map(
-                          (entry) {
-                            final isLast = entry == recentEntries.first;
-                            return Column(
-                              children: [
-                                _buildFmkoreaDailyRow(
-                              context,
-                              entry: entry,
-                              kospiChange:
-                                  kospiSnapshot?.sameDayChangeByDate[entry.dateKey],
-                              isToday: entry.dateKey == todayKey,
-                              isFocused: entry.dateKey == focusedEntry.dateKey,
-                              isWeekend: !entry.isWeekday,
-                              updatedAt: entry.updatedAt,
-                            ),
-                                if (!isLast)
-                                  Container(
-                                    height: 1,
-                                    color: cs.onSurface.withValues(alpha: 0.06),
-                                  ),
-                              ],
-                            );
-                          },
-                        ),
+                        ...recentEntries.reversed.map((entry) {
+                          final isLast = entry == recentEntries.first;
+                          return Column(
+                            children: [
+                              _buildFmkoreaDailyRow(
+                                context,
+                                entry: entry,
+                                kospiChange: kospiSnapshot
+                                    ?.sameDayChangeByDate[entry.dateKey],
+                                isToday: entry.dateKey == todayKey,
+                                isFocused:
+                                    entry.dateKey == focusedEntry.dateKey,
+                                isWeekend: !entry.isWeekday,
+                                updatedAt: entry.updatedAt,
+                              ),
+                              if (!isLast)
+                                Container(
+                                  height: 1,
+                                  color: cs.onSurface.withValues(alpha: 0.06),
+                                ),
+                            ],
+                          );
+                        }),
                       ],
                     ),
                   ),
-                  ],
-                ),
-              );
+                ],
+              ),
+            );
           },
         );
       },
@@ -2931,7 +3021,9 @@ class _FmkoreaIndexCard extends StatelessWidget {
     _FmkoreaDailyCount target,
   ) {
     if (entries.length < 5) return null;
-    final targetIndex = entries.indexWhere((entry) => entry.dateKey == target.dateKey);
+    final targetIndex = entries.indexWhere(
+      (entry) => entry.dateKey == target.dateKey,
+    );
     if (targetIndex <= 0) return null;
     final baseline = entries
         .sublist(0, targetIndex)
@@ -2952,12 +3044,12 @@ class _FmkoreaIndexCard extends StatelessWidget {
     final color = diffRate >= 35
         ? const Color(0xFFF04452)
         : diffRate >= 15
-            ? const Color(0xFFFF9500)
-            : diffRate >= -10
-                ? const Color(0xFF0DC99A)
-                : diffRate >= -25
-                    ? const Color(0xFF3182F6)
-                    : const Color(0xFF6366F1);
+        ? const Color(0xFFFF9500)
+        : diffRate >= -10
+        ? const Color(0xFF0DC99A)
+        : diffRate >= -25
+        ? const Color(0xFF3182F6)
+        : const Color(0xFF6366F1);
 
     return _FmkoreaWeekdayInsight(
       average: average,
@@ -2986,16 +3078,16 @@ class _FmkoreaIndexCard extends StatelessWidget {
       final body = await res.transform(const SystemEncoding().decoder).join();
       client.close();
       // format: ["YYYYMMDD", open, high, low, close, ...]
-      final rows = RegExp(r'\["(\d{8})",\s*[\d.]+,\s*[\d.]+,\s*[\d.]+,\s*([\d.]+)').allMatches(body);
-      return rows
-          .map((m) {
-            final dateRaw = m.group(1)!;
-            final close = double.parse(m.group(2)!);
-            final dateKey =
-                '${dateRaw.substring(0, 4)}.${dateRaw.substring(4, 6)}.${dateRaw.substring(6, 8)}';
-            return (dateKey, close);
-          })
-          .toList();
+      final rows = RegExp(
+        r'\["(\d{8})",\s*[\d.]+,\s*[\d.]+,\s*[\d.]+,\s*([\d.]+)',
+      ).allMatches(body);
+      return rows.map((m) {
+        final dateRaw = m.group(1)!;
+        final close = double.parse(m.group(2)!);
+        final dateKey =
+            '${dateRaw.substring(0, 4)}.${dateRaw.substring(4, 6)}.${dateRaw.substring(6, 8)}';
+        return (dateKey, close);
+      }).toList();
     } catch (_) {
       return [];
     }
@@ -3017,7 +3109,9 @@ class _FmkoreaIndexCard extends StatelessWidget {
           )).map((e) => (DateFormat('yyyy.MM.dd').format(e.$1), e.$2)).toList();
     if (history.length < 2) return null;
 
-    final countByDate = {for (final entry in entries) entry.dateKey: entry.count.toDouble()};
+    final countByDate = {
+      for (final entry in entries) entry.dateKey: entry.count.toDouble(),
+    };
     final sameDayChangeByDate = <String, double>{};
     final xs = <double>[];
     final ys = <double>[];
@@ -3030,10 +3124,12 @@ class _FmkoreaIndexCard extends StatelessWidget {
       final currentKey = current.$1;
       final currentDate = DateFormat('yyyy.MM.dd').parse(currentKey);
       final changeRate = ((current.$2 - previous.$2) / previous.$2) * 100;
-      final prevDayKey = DateFormat('yyyy.MM.dd')
-          .format(currentDate.subtract(const Duration(days: 1)));
-      final nextDayKey = DateFormat('yyyy.MM.dd')
-          .format(currentDate.add(const Duration(days: 1)));
+      final prevDayKey = DateFormat(
+        'yyyy.MM.dd',
+      ).format(currentDate.subtract(const Duration(days: 1)));
+      final nextDayKey = DateFormat(
+        'yyyy.MM.dd',
+      ).format(currentDate.add(const Duration(days: 1)));
       final mappedKey = _resolveKospiDateKey(
         countByDate: countByDate,
         currentKey: currentKey,
@@ -3042,17 +3138,15 @@ class _FmkoreaIndexCard extends StatelessWidget {
       );
       sameDayChangeByDate[mappedKey] = changeRate;
 
-      final prevKey = _previousWeekdayKey(DateFormat('yyyy.MM.dd').parse(mappedKey));
+      final prevKey = _previousWeekdayKey(
+        DateFormat('yyyy.MM.dd').parse(mappedKey),
+      );
       final postCount = countByDate[prevKey];
       if (postCount == null) continue;
       xs.add(postCount);
       ys.add(changeRate);
       points.add(
-        _FmkoreaScatterPoint(
-          x: postCount,
-          y: changeRate,
-          label: currentKey,
-        ),
+        _FmkoreaScatterPoint(x: postCount, y: changeRate, label: currentKey),
       );
     }
 
@@ -3152,9 +3246,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.fromLTRB(2, 0, 2, 0),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-      ),
+      decoration: BoxDecoration(color: Colors.transparent),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -3280,8 +3372,8 @@ class _FmkoreaIndexCard extends StatelessWidget {
     final changeColor = kospiChange == null
         ? cs.onSurface.withValues(alpha: 0.42)
         : kospiChange >= 0
-            ? const Color(0xFFF04452)
-            : const Color(0xFF1677FF);
+        ? const Color(0xFFF04452)
+        : const Color(0xFF1677FF);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 14),
       decoration: BoxDecoration(
@@ -3314,7 +3406,9 @@ class _FmkoreaIndexCard extends StatelessWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF0EA5E9).withValues(alpha: 0.12),
+                          color: const Color(
+                            0xFF0EA5E9,
+                          ).withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(999),
                         ),
                         child: Text(
@@ -3369,8 +3463,8 @@ class _FmkoreaIndexCard extends StatelessWidget {
                 isWeekend && kospiChange == null
                     ? '주말'
                     : kospiChange == null
-                        ? '-'
-                        : _formatSignedPercent(kospiChange),
+                    ? '-'
+                    : _formatSignedPercent(kospiChange),
                 style: GoogleFonts.inter(
                   color: isWeekend && kospiChange == null
                       ? const Color(0xFFF59E0B)
@@ -3462,12 +3556,18 @@ class _FmkoreaTrendChartState extends State<_FmkoreaTrendChart> {
             builder: (context, constraints) {
               return GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTapDown: (details) =>
-                    _selectPoint(details.localPosition.dx, constraints.maxWidth),
-                onHorizontalDragStart: (details) =>
-                    _selectPoint(details.localPosition.dx, constraints.maxWidth),
-                onHorizontalDragUpdate: (details) =>
-                    _selectPoint(details.localPosition.dx, constraints.maxWidth),
+                onTapDown: (details) => _selectPoint(
+                  details.localPosition.dx,
+                  constraints.maxWidth,
+                ),
+                onHorizontalDragStart: (details) => _selectPoint(
+                  details.localPosition.dx,
+                  constraints.maxWidth,
+                ),
+                onHorizontalDragUpdate: (details) => _selectPoint(
+                  details.localPosition.dx,
+                  constraints.maxWidth,
+                ),
                 child: CustomPaint(
                   painter: _FmkoreaTrendPainter(
                     points: widget.points,
@@ -3493,8 +3593,8 @@ class _FmkoreaTrendChartState extends State<_FmkoreaTrendChart> {
     final kospiColor = point.kospiChange == null
         ? cs.onSurface.withValues(alpha: 0.5)
         : point.kospiChange! >= 0
-            ? const Color(0xFFF04452)
-            : const Color(0xFF1677FF);
+        ? const Color(0xFFF04452)
+        : const Color(0xFF1677FF);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -3616,8 +3716,8 @@ class _FmkoreaTrendPainter extends CustomPainter {
     final maxAbsChange = changes.isEmpty
         ? 1.0
         : changes
-            .map((v) => v.abs())
-            .fold<double>(1.0, (m, v) => v > m ? v : m);
+              .map((v) => v.abs())
+              .fold<double>(1.0, (m, v) => v > m ? v : m);
 
     final axisPaint = Paint()
       ..color = axisColor
@@ -3656,7 +3756,8 @@ class _FmkoreaTrendPainter extends CustomPainter {
         ..strokeWidth = 1,
     );
 
-    final barPaint = Paint()..color = const Color(0xFF3182F6).withValues(alpha: 0.35);
+    final barPaint = Paint()
+      ..color = const Color(0xFF3182F6).withValues(alpha: 0.35);
     final todayBarPaint = Paint()..color = const Color(0xFF3182F6);
     final weekendBarPaint = Paint()
       ..color = const Color(0xFFF59E0B).withValues(alpha: 0.28);
@@ -3680,7 +3781,9 @@ class _FmkoreaTrendPainter extends CustomPainter {
             ..strokeWidth = 1,
         );
       }
-      final barHeight = maxCount == 0 ? 0.0 : (point.count / maxCount) * (chartHeight * 0.78);
+      final barHeight = maxCount == 0
+          ? 0.0
+          : (point.count / maxCount) * (chartHeight * 0.78);
       final barRect = RRect.fromRectAndRadius(
         Rect.fromLTWH(
           x - (barStep * 0.28),
@@ -3695,13 +3798,14 @@ class _FmkoreaTrendPainter extends CustomPainter {
         point.isToday
             ? todayBarPaint
             : point.isWeekend
-                ? weekendBarPaint
-                : barPaint,
+            ? weekendBarPaint
+            : barPaint,
       );
 
       if (point.kospiChange != null) {
         final normalized = (point.kospiChange! / maxAbsChange).clamp(-1.0, 1.0);
-        final y = topPad + (chartHeight * 0.5) - (normalized * (chartHeight * 0.34));
+        final y =
+            topPad + (chartHeight * 0.5) - (normalized * (chartHeight * 0.34));
         if (!hasLineStart) {
           path.moveTo(x, y);
           hasLineStart = true;
@@ -3728,10 +3832,7 @@ class _FmkoreaTrendPainter extends CustomPainter {
           ),
           textDirection: ui.TextDirection.ltr,
         )..layout();
-        tp.paint(
-          canvas,
-          Offset(x - tp.width / 2, topPad + chartHeight + 6),
-        );
+        tp.paint(canvas, Offset(x - tp.width / 2, topPad + chartHeight + 6));
       }
     }
 
@@ -3918,8 +4019,7 @@ class _FmkoreaStoredSummary {
         )
         .toList();
 
-    final correlation =
-        corr == null || corrSample < 1
+    final correlation = corr == null || corrSample < 1
         ? null
         : _FmkoreaKospiCorrelation(
             correlation: corr,
