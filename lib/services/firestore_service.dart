@@ -78,21 +78,24 @@ class FirestoreService {
     return doc.data()?['nickname'] as String?;
   }
 
-  Future<void> setNickname(String uid, String nickname) {
-    return _db.collection('users').doc(uid).set({
+  Future<void> setNickname(String uid, String nickname) async {
+    // 기존 닉네임 삭제 후 새 닉네임 등록
+    final userDoc = await _db.collection('users').doc(uid).get();
+    final oldNickname = userDoc.data()?['nickname'] as String?;
+    if (oldNickname != null && oldNickname != nickname) {
+      await _db.collection('nicknames').doc(oldNickname).delete();
+    }
+    await _db.collection('nicknames').doc(nickname).set({'uid': uid});
+    await _db.collection('users').doc(uid).set({
       'nickname': nickname,
     }, SetOptions(merge: true));
   }
 
   Future<bool> isNicknameTaken(String nickname, String currentUid) async {
-    final query = await _db
-        .collection('users')
-        .where('nickname', isEqualTo: nickname)
-        .limit(1)
-        .get();
-    if (query.docs.isEmpty) return false;
+    final doc = await _db.collection('nicknames').doc(nickname).get();
+    if (!doc.exists) return false;
     // 자기 자신 닉네임은 중복 허용
-    return query.docs.first.id != currentUid;
+    return doc.data()?['uid'] != currentUid;
   }
 
   // ── 추천주 ────────────────────────────────────────────────────────────

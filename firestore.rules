@@ -63,6 +63,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ─── nicknames: 닉네임 중복 확인용 (공개 읽기, 본인만 쓰기) ─────────
+    match /nicknames/{nickname} {
+      allow read: if true;
+      allow create, update: if isLoggedIn() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isLoggedIn() && (resource == null || resource.data.uid == request.auth.uid);
+    }
+
     // ─── users: 본인 데이터만 읽기/쓰기, 관리자 전체 읽기 ────────────
     match /users/{uid} {
       allow read: if isAdmin() || (isLoggedIn() && request.auth.uid == uid);
