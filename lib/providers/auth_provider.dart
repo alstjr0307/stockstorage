@@ -12,7 +12,7 @@ class AuthProvider extends ChangeNotifier {
 
   void _notify() {
     AdService.setAdmin(isAdmin);
-    _notify();
+    notifyListeners();
   }
 
   Future<void> signIn(String email, String password) async {

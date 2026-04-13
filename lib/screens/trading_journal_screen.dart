@@ -1822,7 +1822,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
       _remainingQty = widget.initialRemainingQty;
       _stockName = buy.stockName;
       _ticker = buy.ticker;
-      _market = buy.market;
+      _market = buy.market == 'US' ? 'US' : 'KR';
       _rawMarket = {'KS', 'KQ', 'US'}.contains(buy.market) ? buy.market : '';
       _manualMode = true;
       WidgetsBinding.instance.addPostFrameCallback((_) => _fetchPrice());
