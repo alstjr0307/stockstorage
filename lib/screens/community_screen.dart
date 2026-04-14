@@ -12,6 +12,8 @@ import '../services/analytics_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
 import '../utils/dialogs.dart';
+import '../widgets/user_level_avatar.dart';
+import 'journal_chart_screen.dart';
 import 'post_detail_screen.dart';
 import 'write_post_screen.dart';
 
@@ -101,6 +103,7 @@ class _JournalTab extends StatefulWidget {
 class _JournalTabState extends State<_JournalTab> {
   final _firestoreService = FirestoreService();
   final _scrollController = ScrollController();
+  final _searchController = TextEditingController();
   final Set<String> _likedIds = {};
   final Set<String> _loadingLikes = {};
   final Set<String> _blockedUids = {};
@@ -108,6 +111,7 @@ class _JournalTabState extends State<_JournalTab> {
   final Map<String, int> _commentCountByJournalId = {};
 
   final List<TradingJournal> _journals = [];
+  String _searchQuery = '';
   DocumentSnapshot? _lastDoc;
   bool _loading = false;
   bool _hasMore = true;
@@ -185,7 +189,18 @@ class _JournalTabState extends State<_JournalTab> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  List<TradingJournal> _filteredJournals() {
+    final q = _searchQuery.trim().toLowerCase();
+    if (q.isEmpty) return _journals;
+    return _journals.where((j) {
+      final stock = j.stockName.toLowerCase();
+      final ticker = j.ticker.toLowerCase();
+      return stock.contains(q) || ticker.contains(q);
+    }).toList();
   }
 
   Future<void> _loadMore() async {
@@ -276,6 +291,9 @@ class _JournalTabState extends State<_JournalTab> {
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
+    final cs = Theme.of(context).colorScheme;
+    final filtered = _filteredJournals();
+    final isSearching = _searchQuery.trim().isNotEmpty;
 
     if (_loading && _journals.isEmpty) {
       return const Center(
@@ -299,9 +317,80 @@ class _JournalTabState extends State<_JournalTab> {
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-        itemCount: _journals.length + (_hasMore ? 1 : 0),
+        itemCount: 1 + filtered.length + (_hasMore && !isSearching ? 1 : 0),
         itemBuilder: (ctx, i) {
-          if (i == _journals.length) {
+          if (i == 0) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: TextField(
+                controller: _searchController,
+                onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                onChanged: (v) => setState(() => _searchQuery = v),
+                style: GoogleFonts.inter(color: cs.onSurface, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: '종목명/티커 검색',
+                  hintStyle: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.38),
+                    fontSize: 13,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    size: 20,
+                    color: cs.onSurface.withValues(alpha: 0.35),
+                  ),
+                  suffixIcon: _searchQuery.isEmpty
+                      ? null
+                      : GestureDetector(
+                          onTap: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 18,
+                            color: cs.onSurface.withValues(alpha: 0.35),
+                          ),
+                        ),
+                  filled: true,
+                  fillColor: cs.onSurface.withValues(alpha: 0.05),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: cs.onSurface.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF10B981),
+                      width: 1.2,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+
+          if (filtered.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 48),
+              child: Center(
+                child: Text(
+                  '검색 결과가 없습니다',
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.45),
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            );
+          }
+
+          if (i == filtered.length + 1) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
               child: Center(
@@ -312,11 +401,20 @@ class _JournalTabState extends State<_JournalTab> {
               ),
             );
           }
-          final journal = _journals[i];
+          final journal = filtered[i - 1];
           final isOwn = auth.user?.uid == journal.uid;
+          final linkedSells = _journals
+              .where(
+                (j) =>
+                    j.uid == journal.uid &&
+                    j.action == '매도' &&
+                    j.linkedBuyId == journal.id,
+              )
+              .toList();
           return _JournalCard(
             key: ValueKey(journal.id),
             journal: journal,
+            linkedSells: linkedSells,
             isOwn: isOwn,
             isLiked: _likedIds.contains(journal.id),
             isLoadingLike: _loadingLikes.contains(journal.id),
@@ -769,6 +867,7 @@ class _EmptyState extends StatelessWidget {
 
 class _JournalCard extends StatefulWidget {
   final TradingJournal journal;
+  final List<TradingJournal> linkedSells;
   final bool isOwn;
   final bool isLiked;
   final bool isLoadingLike;
@@ -782,6 +881,7 @@ class _JournalCard extends StatefulWidget {
   const _JournalCard({
     super.key,
     required this.journal,
+    this.linkedSells = const [],
     required this.isOwn,
     required this.isLiked,
     required this.isLoadingLike,
@@ -835,6 +935,27 @@ class _JournalCardState extends State<_JournalCard> {
     if (mounted) setState(() => _price = result);
   }
 
+  bool _canOpenChart(TradingJournal journal) {
+    return journal.action == '매수' &&
+        journal.ticker.isNotEmpty &&
+        {'KS', 'KQ', 'US'}.contains(journal.market);
+  }
+
+  void _openChart(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => JournalChartScreen(
+          buy: widget.journal,
+          linkedSells: widget.linkedSells,
+          firestoreService: _firestoreService,
+          onEdit: () {},
+          showEditButton: false,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -862,11 +983,27 @@ class _JournalCardState extends State<_JournalCard> {
       pnlPct = (_price!.price - journal.price) / journal.price * 100;
     }
     final isPnlUp = pnl == null || pnl >= 0;
+    const upColor = Color(0xFFF04452);
+    const downColor = Color(0xFF1677FF);
+    final currentPrice = _price?.price;
+    final evalAmount = (currentPrice != null && journal.quantity > 0)
+        ? currentPrice * journal.quantity
+        : null;
+    final pnlText = pnl != null ? '${isPnlUp ? '+' : ''}${fmtP(pnl)}' : '-';
+    final pnlPctText = pnlPct != null
+        ? '${isPnlUp ? '+' : ''}${pnlPct.toStringAsFixed(1)}%'
+        : '-';
+    final pnlColor = pnl != null
+        ? (isPnlUp ? upColor : downColor)
+        : cs.onSurface.withValues(alpha: 0.45);
+    final currentColor = _price != null
+        ? (_price!.isUp ? upColor : downColor)
+        : cs.onSurface.withValues(alpha: 0.45);
 
     // '기타' 간소화 카드
     if (journal.action == '기타') return _buildEtcCard(cs);
 
-    return Container(
+    final card = Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: cs.surface,
@@ -894,20 +1031,16 @@ class _JournalCardState extends State<_JournalCard> {
                 // 작성자 행
                 Row(
                   children: [
-                    CircleAvatar(
+                    UserLevelAvatar(
+                      uid: journal.uid,
                       radius: 14,
                       backgroundColor: const Color(
                         0xFF10B981,
                       ).withValues(alpha: 0.12),
-                      child: Text(
-                        journal.nickname.isNotEmpty
-                            ? journal.nickname[0].toUpperCase()
-                            : '?',
-                        style: GoogleFonts.inter(
-                          color: const Color(0xFF10B981),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      textStyle: GoogleFonts.inter(
+                        color: const Color(0xFF10B981),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -1000,7 +1133,7 @@ class _JournalCardState extends State<_JournalCard> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                // 거래 정보 그리드 (2행)
+                // 거래 정보 그리드 (3행 2열)
                 if (journal.price > 0 || journal.quantity > 0)
                   Container(
                     decoration: BoxDecoration(
@@ -1009,101 +1142,111 @@ class _JournalCardState extends State<_JournalCard> {
                     ),
                     child: Column(
                       children: [
-                        // 1행: 매수가, 수량
+                        // 1행: 매수가 | 현재가
                         IntrinsicHeight(
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              if (journal.price > 0)
-                                Expanded(
-                                  child: _gridCell(
-                                    '매수가',
-                                    fmtP(journal.price),
-                                    cs,
-                                  ),
+                              Expanded(
+                                child: _gridCell(
+                                  '매수가',
+                                  journal.price > 0 ? fmtP(journal.price) : '-',
+                                  cs,
                                 ),
-                              if (journal.price > 0 && qtyStr != null)
-                                VerticalDivider(
-                                  width: 1,
-                                  thickness: 1,
-                                  color: cs.onSurface.withValues(alpha: 0.07),
+                              ),
+                              VerticalDivider(
+                                width: 1,
+                                thickness: 1,
+                                color: cs.onSurface.withValues(alpha: 0.07),
+                              ),
+                              Expanded(
+                                child: _gridCell(
+                                  '현재가',
+                                  currentPrice != null
+                                      ? fmtP(currentPrice)
+                                      : '-',
+                                  cs,
+                                  valueColor: currentColor,
                                 ),
-                              if (qtyStr != null)
-                                Expanded(child: _gridCell('수량', qtyStr, cs)),
+                              ),
                             ],
                           ),
                         ),
-                        // 2행: 현재가, 평가손익, 수익률
-                        if (_price != null) ...[
-                          Divider(
-                            height: 1,
-                            thickness: 1,
-                            color: cs.onSurface.withValues(alpha: 0.07),
-                          ),
-                          IntrinsicHeight(
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Expanded(
-                                  child: _gridCell(
-                                    '현재가',
-                                    fmtP(_price!.price),
-                                    cs,
-                                    valueColor: _price!.isUp
-                                        ? const Color(0xFFF04452)
-                                        : const Color(0xFF1677FF),
-                                  ),
+                        Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: cs.onSurface.withValues(alpha: 0.07),
+                        ),
+                        // 2행: 수량 | 평가금액
+                        IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                child: _gridCell('수량', qtyStr ?? '-', cs),
+                              ),
+                              VerticalDivider(
+                                width: 1,
+                                thickness: 1,
+                                color: cs.onSurface.withValues(alpha: 0.07),
+                              ),
+                              Expanded(
+                                child: _gridCell(
+                                  '평가금액',
+                                  evalAmount != null ? fmtP(evalAmount) : '-',
+                                  cs,
                                 ),
-                                if (pnl != null && pnlPct != null) ...[
-                                  VerticalDivider(
-                                    width: 1,
-                                    thickness: 1,
-                                    color: cs.onSurface.withValues(alpha: 0.07),
-                                  ),
-                                  Expanded(
-                                    child: _gridCell(
-                                      '평가손익',
-                                      '${isPnlUp ? '+' : ''}${fmtP(pnl)}',
-                                      cs,
-                                      valueColor: isPnlUp
-                                          ? const Color(0xFFF04452)
-                                          : const Color(0xFF1677FF),
-                                    ),
-                                  ),
-                                  VerticalDivider(
-                                    width: 1,
-                                    thickness: 1,
-                                    color: cs.onSurface.withValues(alpha: 0.07),
-                                  ),
-                                  Expanded(
-                                    child: _gridCell(
-                                      '수익률',
-                                      '${isPnlUp ? '+' : ''}${pnlPct.toStringAsFixed(1)}%',
-                                      cs,
-                                      valueColor: isPnlUp
-                                          ? const Color(0xFFF04452)
-                                          : const Color(0xFF1677FF),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
+                        Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: cs.onSurface.withValues(alpha: 0.07),
+                        ),
+                        // 3행: 수익률 | 평가손익
+                        IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                child: _gridCell(
+                                  '수익률',
+                                  pnlPctText,
+                                  cs,
+                                  valueColor: pnlColor,
+                                ),
+                              ),
+                              VerticalDivider(
+                                width: 1,
+                                thickness: 1,
+                                color: cs.onSurface.withValues(alpha: 0.07),
+                              ),
+                              Expanded(
+                                child: _gridCell(
+                                  '평가손익',
+                                  pnlText,
+                                  cs,
+                                  valueColor: pnlColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 // 메모
                 if (journal.note.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  Text(
-                    journal.note,
+                  _ExpandableNotePreview(
+                    content: journal.note,
                     maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.inter(
                       color: cs.onSurface.withValues(alpha: 0.55),
-                      fontSize: 13,
-                      height: 1.55,
+                      fontSize: 14,
+                      height: 1.6,
                     ),
                   ),
                 ],
@@ -1123,7 +1266,10 @@ class _JournalCardState extends State<_JournalCard> {
                   onTap: widget.onLike,
                 ),
                 const SizedBox(width: 12),
-                _CommentButton(onTap: () => _openComments(context), count: widget.commentCount),
+                _CommentButton(
+                  onTap: () => _openComments(context),
+                  count: widget.commentCount,
+                ),
                 const Spacer(),
                 if (widget.isOwn && widget.onTogglePrivate != null)
                   GestureDetector(
@@ -1152,6 +1298,8 @@ class _JournalCardState extends State<_JournalCard> {
         ],
       ),
     );
+    if (!_canOpenChart(journal)) return card;
+    return GestureDetector(onTap: () => _openChart(context), child: card);
   }
 
   Widget _buildEtcCard(ColorScheme cs) {
@@ -1183,20 +1331,16 @@ class _JournalCardState extends State<_JournalCard> {
                 // 작성자 행
                 Row(
                   children: [
-                    CircleAvatar(
+                    UserLevelAvatar(
+                      uid: journal.uid,
                       radius: 14,
                       backgroundColor: const Color(
                         0xFF94A3B8,
                       ).withValues(alpha: 0.12),
-                      child: Text(
-                        journal.nickname.isNotEmpty
-                            ? journal.nickname[0].toUpperCase()
-                            : '?',
-                        style: GoogleFonts.inter(
-                          color: const Color(0xFF94A3B8),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      textStyle: GoogleFonts.inter(
+                        color: const Color(0xFF94A3B8),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -1290,13 +1434,12 @@ class _JournalCardState extends State<_JournalCard> {
                 // 메모
                 if (journal.note.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  Text(
-                    journal.note,
-                    maxLines: 5,
-                    overflow: TextOverflow.ellipsis,
+                  _ExpandableNotePreview(
+                    content: journal.note,
+                    maxLines: 3,
                     style: GoogleFonts.inter(
                       color: cs.onSurface.withValues(alpha: 0.65),
-                      fontSize: 13,
+                      fontSize: 14,
                       height: 1.6,
                     ),
                   ),
@@ -1316,7 +1459,10 @@ class _JournalCardState extends State<_JournalCard> {
                   onTap: widget.onLike,
                 ),
                 const SizedBox(width: 12),
-                _CommentButton(onTap: () => _openComments(context), count: widget.commentCount),
+                _CommentButton(
+                  onTap: () => _openComments(context),
+                  count: widget.commentCount,
+                ),
                 const Spacer(),
                 if (widget.isOwn && widget.onTogglePrivate != null)
                   GestureDetector(
@@ -1442,9 +1588,6 @@ class _PostCardState extends State<_PostCard> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final post = widget.post;
-    final initial = post.nickname.isNotEmpty
-        ? post.nickname[0].toUpperCase()
-        : '?';
     final imageUrls = _extractImageUrls(post.content);
     final textContent = _stripImages(post.content);
 
@@ -1462,16 +1605,14 @@ class _PostCardState extends State<_PostCard> {
                 // ① 작성자 행
                 Row(
                   children: [
-                    CircleAvatar(
+                    UserLevelAvatar(
+                      uid: post.uid,
                       radius: 20,
                       backgroundColor: cs.onSurface.withValues(alpha: 0.08),
-                      child: Text(
-                        initial,
-                        style: GoogleFonts.inter(
-                          color: cs.onSurface.withValues(alpha: 0.6),
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      textStyle: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.6),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -1491,8 +1632,11 @@ class _PostCardState extends State<_PostCard> {
                               ),
                               if (AuthService.adminUids.contains(post.uid)) ...[
                                 const SizedBox(width: 4),
-                                const Icon(Icons.workspace_premium_rounded,
-                                    size: 15, color: Color(0xFFFBBF24)),
+                                const Icon(
+                                  Icons.workspace_premium_rounded,
+                                  size: 15,
+                                  color: Color(0xFFFBBF24),
+                                ),
                               ],
                               if (widget.isOwn) ...[
                                 const SizedBox(width: 5),
@@ -1679,6 +1823,67 @@ class _ContentPreview extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _ExpandableNotePreview extends StatefulWidget {
+  final String content;
+  final TextStyle style;
+  final int maxLines;
+
+  const _ExpandableNotePreview({
+    required this.content,
+    required this.style,
+    this.maxLines = 3,
+  });
+
+  @override
+  State<_ExpandableNotePreview> createState() => _ExpandableNotePreviewState();
+}
+
+class _ExpandableNotePreviewState extends State<_ExpandableNotePreview> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tp = TextPainter(
+          text: TextSpan(text: widget.content, style: widget.style),
+          maxLines: widget.maxLines,
+          textDirection: Directionality.of(context),
+        )..layout(maxWidth: constraints.maxWidth);
+        final hasOverflow = tp.didExceedMaxLines;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.content,
+              style: widget.style,
+              maxLines: _expanded ? null : widget.maxLines,
+              overflow: _expanded
+                  ? TextOverflow.visible
+                  : TextOverflow.ellipsis,
+            ),
+            if (hasOverflow && !_expanded) ...[
+              const SizedBox(height: 4),
+              GestureDetector(
+                onTap: () => setState(() => _expanded = true),
+                child: Text(
+                  '더보기',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: const Color(0xFF10B981),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 }
@@ -1873,18 +2078,14 @@ class _PostDetailSheetState extends State<_PostDetailSheet> {
             // 작성자 + 날짜
             Row(
               children: [
-                CircleAvatar(
+                UserLevelAvatar(
+                  uid: widget.post.uid,
                   radius: 12,
                   backgroundColor: cs.onSurface.withValues(alpha: 0.08),
-                  child: Text(
-                    widget.post.nickname.isNotEmpty
-                        ? widget.post.nickname[0].toUpperCase()
-                        : '?',
-                    style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.6),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  textStyle: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.6),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -2265,20 +2466,16 @@ class _CommentSheetState extends State<_CommentSheet> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          CircleAvatar(
+                          UserLevelAvatar(
+                            uid: c.uid,
                             radius: 14,
                             backgroundColor: cs.onSurface.withValues(
                               alpha: 0.08,
                             ),
-                            child: Text(
-                              c.nickname.isNotEmpty
-                                  ? c.nickname[0].toUpperCase()
-                                  : '?',
-                              style: GoogleFonts.inter(
-                                color: cs.onSurface.withValues(alpha: 0.6),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
-                              ),
+                            textStyle: GoogleFonts.inter(
+                              color: cs.onSurface.withValues(alpha: 0.6),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                           const SizedBox(width: 10),

@@ -66,16 +66,21 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (ctx) {
           final cs = Theme.of(ctx).colorScheme;
           return AlertDialog(
-            title: Text('닉네임 설정',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+            title: Text(
+              '닉네임 설정',
+              style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('댓글에 표시될 닉네임을 입력해주세요.',
-                    style: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.55),
-                        fontSize: 13)),
+                Text(
+                  '댓글에 표시될 닉네임을 입력해주세요.',
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.55),
+                    fontSize: 13,
+                  ),
+                ),
                 const SizedBox(height: 14),
                 TextField(
                   controller: ctrl,
@@ -84,7 +89,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   decoration: InputDecoration(
                     hintText: '닉네임',
                     hintStyle: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.3)),
+                      color: cs.onSurface.withValues(alpha: 0.3),
+                    ),
                     filled: true,
                     fillColor: cs.onSurface.withValues(alpha: 0.05),
                     border: OutlineInputBorder(
@@ -94,10 +100,14 @@ class _HomeScreenState extends State<HomeScreen> {
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                       borderSide: const BorderSide(
-                          color: Color(0xFF10B981), width: 1.5),
+                        color: Color(0xFF10B981),
+                        width: 1.5,
+                      ),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 12),
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                   ),
                 ),
               ],
@@ -107,13 +117,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 onPressed: () async {
                   final nick = ctrl.text.trim();
                   await _firestoreService.setNickname(
-                      uid, nick.isEmpty ? '익명' : nick);
+                    uid,
+                    nick.isEmpty ? '익명' : nick,
+                  );
                   if (ctx.mounted) Navigator.pop(ctx);
                 },
-                child: Text('확인',
-                    style: GoogleFonts.inter(
-                        color: const Color(0xFF10B981),
-                        fontWeight: FontWeight.w700)),
+                child: Text(
+                  '확인',
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF10B981),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ],
           );
@@ -424,6 +439,44 @@ class _HomeScreenState extends State<HomeScreen> {
                       fontSize: 12,
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  StreamBuilder<Map<String, int>>(
+                    stream: _firestoreService.watchUserLevelInfo(uid),
+                    builder: (ctx, snap) {
+                      final stats =
+                          snap.data ??
+                          const {
+                            'level': 1,
+                            'postCount': 0,
+                            'attendanceCount': 0,
+                          };
+                      final level = stats['level'] ?? 1;
+                      final postCount = stats['postCount'] ?? 0;
+                      final attendanceCount = stats['attendanceCount'] ?? 0;
+                      return Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        alignment: WrapAlignment.center,
+                        children: [
+                          _buildProfileStatChip(
+                            label: 'Lv.$level',
+                            icon: Icons.workspace_premium_outlined,
+                            isDark: isDark,
+                          ),
+                          _buildProfileStatChip(
+                            label: '글 $postCount',
+                            icon: Icons.edit_note_outlined,
+                            isDark: isDark,
+                          ),
+                          _buildProfileStatChip(
+                            label: '출석 $attendanceCount',
+                            icon: Icons.calendar_today_outlined,
+                            isDark: isDark,
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                   const SizedBox(height: 16),
                   // 내 댓글
                   SizedBox(
@@ -575,6 +628,42 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildProfileStatChip({
+    required String label,
+    required IconData icon,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.06)
+            : Colors.black.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.12)
+              : Colors.black.withValues(alpha: 0.08),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: const Color(0xFF10B981)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              color: isDark ? Colors.white70 : Colors.black87,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }

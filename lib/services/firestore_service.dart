@@ -9,6 +9,167 @@ import '../models/trading_journal.dart';
 
 class FirestoreService {
   final _db = FirebaseFirestore.instance;
+  static const int _postScore = 3;
+  static const int _attendanceScore = 1;
+  static const List<int> _levelThresholds = [
+    0, // Lv.1
+    10, // Lv.2
+    25, // Lv.3
+    45, // Lv.4
+    70, // Lv.5
+    100, // Lv.6
+    135, // Lv.7
+    175, // Lv.8
+    220, // Lv.9
+    270, // Lv.10
+    325, // Lv.11
+    385, // Lv.12
+    450, // Lv.13
+    520, // Lv.14
+    595, // Lv.15
+    675, // Lv.16
+    760, // Lv.17
+    850, // Lv.18
+    945, // Lv.19
+    1045, // Lv.20
+  ];
+  static const int _afterTableStep = 110;
+
+  int calculateUserLevel({
+    required int postCount,
+    required int attendanceCount,
+  }) {
+    final score =
+        (postCount * _postScore) + (attendanceCount * _attendanceScore);
+    var level = 1;
+    for (var i = 1; i < _levelThresholds.length; i++) {
+      if (score >= _levelThresholds[i]) {
+        level = i + 1;
+      } else {
+        return level;
+      }
+    }
+    final extraXp = score - _levelThresholds.last;
+    return level + (extraXp ~/ _afterTableStep);
+  }
+
+  String _kstDayKey([DateTime? now]) {
+    final base = now ?? DateTime.now();
+    final kst = base.toUtc().add(const Duration(hours: 9));
+    final mm = kst.month.toString().padLeft(2, '0');
+    final dd = kst.day.toString().padLeft(2, '0');
+    return '${kst.year}-$mm-$dd';
+  }
+
+  Stream<Map<String, int>> watchUserLevelInfo(String uid) {
+    return _db.collection('users').doc(uid).snapshots().map((doc) {
+      final data = doc.data() ?? <String, dynamic>{};
+      final postCount = (data['postCount'] as num?)?.toInt() ?? 0;
+      final attendanceCount = (data['attendanceCount'] as num?)?.toInt() ?? 0;
+      final level =
+          (data['level'] as num?)?.toInt() ??
+          calculateUserLevel(
+            postCount: postCount,
+            attendanceCount: attendanceCount,
+          );
+      return {
+        'level': level,
+        'postCount': postCount,
+        'attendanceCount': attendanceCount,
+      };
+    });
+  }
+
+  Stream<int> watchPublicUserLevel(String uid) {
+    if (uid.isEmpty) return Stream.value(1);
+    return _db.collection('user_public').doc(uid).snapshots().map((doc) {
+      final level = (doc.data()?['level'] as num?)?.toInt();
+      return level ?? 1;
+    });
+  }
+
+  Future<void> recordDailyAttendance(String uid, {DateTime? now}) async {
+    final todayKey = _kstDayKey(now);
+    final userRef = _db.collection('users').doc(uid);
+    final publicRef = _db.collection('user_public').doc(uid);
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(userRef);
+      final data = snap.data() ?? <String, dynamic>{};
+      final currentPostCount = (data['postCount'] as num?)?.toInt() ?? 0;
+      final currentAttendance = (data['attendanceCount'] as num?)?.toInt() ?? 0;
+      final currentLevel = (data['level'] as num?)?.toInt() ?? 1;
+      final lastAttendanceDate = data['lastAttendanceDate'] as String?;
+
+      if (lastAttendanceDate == todayKey) {
+        final recomputed = calculateUserLevel(
+          postCount: currentPostCount,
+          attendanceCount: currentAttendance,
+        );
+        if (currentLevel != recomputed || !snap.exists) {
+          tx.set(userRef, {
+            'level': recomputed,
+            'postCount': currentPostCount,
+            'attendanceCount': currentAttendance,
+            'lastActiveAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+          tx.set(publicRef, {'level': recomputed}, SetOptions(merge: true));
+        } else {
+          tx.set(userRef, {
+            'lastActiveAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
+        }
+        return;
+      }
+
+      final nextAttendance = currentAttendance + 1;
+      final nextLevel = calculateUserLevel(
+        postCount: currentPostCount,
+        attendanceCount: nextAttendance,
+      );
+
+      tx.set(userRef, {
+        'attendanceCount': nextAttendance,
+        'postCount': currentPostCount,
+        'level': nextLevel,
+        'lastAttendanceDate': todayKey,
+        'lastActiveAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      tx.set(publicRef, {'level': nextLevel}, SetOptions(merge: true));
+    });
+  }
+
+  Future<void> _adjustPostCount(String uid, int delta) async {
+    final userRef = _db.collection('users').doc(uid);
+    final publicRef = _db.collection('user_public').doc(uid);
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(userRef);
+      final data = snap.data() ?? <String, dynamic>{};
+      final currentPostCount = (data['postCount'] as num?)?.toInt() ?? 0;
+      final currentAttendance = (data['attendanceCount'] as num?)?.toInt() ?? 0;
+      final nextPostCount = (currentPostCount + delta) < 0
+          ? 0
+          : (currentPostCount + delta);
+      final nextLevel = calculateUserLevel(
+        postCount: nextPostCount,
+        attendanceCount: currentAttendance,
+      );
+      tx.set(userRef, {
+        'postCount': nextPostCount,
+        'attendanceCount': currentAttendance,
+        'level': nextLevel,
+        'lastActiveAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      tx.set(publicRef, {'level': nextLevel}, SetOptions(merge: true));
+    });
+  }
+
+  Future<void> recordPostCreated(String uid) {
+    return _adjustPostCount(uid, 1);
+  }
+
+  Future<void> recordPostRemoved(String uid) {
+    return _adjustPostCount(uid, -1);
+  }
 
   Stream<List<StockPick>> getStockPicks({bool premiumOnly = false}) {
     Query query = _db
@@ -87,6 +248,9 @@ class FirestoreService {
     }
     await _db.collection('nicknames').doc(nickname).set({'uid': uid});
     await _db.collection('users').doc(uid).set({
+      'nickname': nickname,
+    }, SetOptions(merge: true));
+    await _db.collection('user_public').doc(uid).set({
       'nickname': nickname,
     }, SetOptions(merge: true));
   }
@@ -558,25 +722,53 @@ class FirestoreService {
     return (journals, lastDoc);
   }
 
-  Future<void> addJournal(TradingJournal journal) {
-    return _db.collection('trading_journal').add(journal.toFirestore());
+  Future<void> addJournal(TradingJournal journal) async {
+    await _db.collection('trading_journal').add(journal.toFirestore());
+    if (journal.isPublic) {
+      await recordPostCreated(journal.uid);
+    }
   }
 
-  Future<void> updateJournal(TradingJournal journal) {
-    return _db
-        .collection('trading_journal')
-        .doc(journal.id)
-        .update(journal.toFirestore());
+  Future<void> updateJournal(TradingJournal journal) async {
+    final ref = _db.collection('trading_journal').doc(journal.id);
+    final before = await ref.get();
+    final wasPublic = before.data()?['isPublic'] as bool? ?? false;
+    await ref.update(journal.toFirestore());
+    final isPublic = journal.isPublic;
+    if (!wasPublic && isPublic) {
+      await recordPostCreated(journal.uid);
+    } else if (wasPublic && !isPublic) {
+      await recordPostRemoved(journal.uid);
+    }
   }
 
-  Future<void> deleteJournal(String id) {
-    return _db.collection('trading_journal').doc(id).delete();
+  Future<void> deleteJournal(String id) async {
+    final ref = _db.collection('trading_journal').doc(id);
+    final snap = await ref.get();
+    final data = snap.data();
+    final uid = data?['uid'] as String?;
+    final isPublic = data?['isPublic'] as bool? ?? false;
+    await ref.delete();
+    if (uid != null && uid.isNotEmpty && isPublic) {
+      await recordPostRemoved(uid);
+    }
   }
 
-  Future<void> toggleJournalPublic(String id, bool isCurrentlyPublic) {
-    return _db.collection('trading_journal').doc(id).update({
-      'isPublic': !isCurrentlyPublic,
-    });
+  Future<void> toggleJournalPublic(String id, bool isCurrentlyPublic) async {
+    final ref = _db.collection('trading_journal').doc(id);
+    final snap = await ref.get();
+    final uid = snap.data()?['uid'] as String?;
+    final currentIsPublic =
+        snap.data()?['isPublic'] as bool? ?? isCurrentlyPublic;
+    final nextIsPublic = !currentIsPublic;
+    await ref.update({'isPublic': nextIsPublic});
+    if (uid != null && uid.isNotEmpty) {
+      if (!currentIsPublic && nextIsPublic) {
+        await recordPostCreated(uid);
+      } else if (currentIsPublic && !nextIsPublic) {
+        await recordPostRemoved(uid);
+      }
+    }
   }
 
   // returns true if now liked, false if unliked
@@ -642,12 +834,19 @@ class FirestoreService {
     );
   }
 
-  Future<void> createPost(Post post) {
-    return _db.collection('posts').add(post.toFirestore());
+  Future<void> createPost(Post post) async {
+    await _db.collection('posts').add(post.toFirestore());
+    await recordPostCreated(post.uid);
   }
 
-  Future<void> deletePost(String id) {
-    return _db.collection('posts').doc(id).delete();
+  Future<void> deletePost(String id) async {
+    final ref = _db.collection('posts').doc(id);
+    final snap = await ref.get();
+    final uid = snap.data()?['uid'] as String?;
+    await ref.delete();
+    if (uid != null && uid.isNotEmpty) {
+      await recordPostRemoved(uid);
+    }
   }
 
   // returns true if now liked, false if unliked

@@ -20,6 +20,7 @@ import '../services/analytics_service.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
+import '../widgets/user_level_avatar.dart';
 import 'stock_compare_screen.dart';
 import '../services/deep_link_service.dart';
 
@@ -2117,6 +2118,17 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         children: [
           Row(
             children: [
+              UserLevelAvatar(
+                uid: comment.uid,
+                radius: 12,
+                backgroundColor: cs.onSurface.withValues(alpha: 0.07),
+                textStyle: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.55),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 8),
               Text(
                 comment.nickname,
                 style: GoogleFonts.inter(

@@ -88,6 +88,12 @@ service cloud.firestore {
       }
     }
 
+    // ─── user_public: 닉네임/레벨 공개 프로필 ────────────────────────────
+    match /user_public/{uid} {
+      allow read: if true;
+      allow write: if isLoggedIn() && request.auth.uid == uid;
+    }
+
     // ─── reports: 로그인 유저 생성, 관리자 읽기/삭제 ──────────────────
     match /reports/{reportId} {
       allow create: if isLoggedIn() && request.resource.data.reporterUid == request.auth.uid;

@@ -10,6 +10,7 @@ import '../providers/auth_provider.dart';
 import '../services/analytics_service.dart';
 import '../services/firestore_service.dart';
 import '../utils/dialogs.dart';
+import '../widgets/user_level_avatar.dart';
 
 class PostDetailScreen extends StatefulWidget {
   final Post post;
@@ -356,20 +357,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           // 작성자 + 날짜
                           Row(
                             children: [
-                              CircleAvatar(
+                              UserLevelAvatar(
+                                uid: widget.post.uid,
                                 radius: 14,
                                 backgroundColor: const Color(
                                   0xFF10B981,
                                 ).withValues(alpha: 0.16),
-                                child: Text(
-                                  widget.post.nickname.isNotEmpty
-                                      ? widget.post.nickname[0].toUpperCase()
-                                      : '?',
-                                  style: GoogleFonts.inter(
-                                    color: const Color(0xFF10B981),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                                textStyle: GoogleFonts.inter(
+                                  color: const Color(0xFF10B981),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -706,18 +703,14 @@ class _CommentTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
+          UserLevelAvatar(
+            uid: comment.uid,
             radius: 15,
             backgroundColor: cs.onSurface.withValues(alpha: 0.07),
-            child: Text(
-              comment.nickname.isNotEmpty
-                  ? comment.nickname[0].toUpperCase()
-                  : '?',
-              style: GoogleFonts.inter(
-                color: cs.onSurface.withValues(alpha: 0.55),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
+            textStyle: GoogleFonts.inter(
+              color: cs.onSurface.withValues(alpha: 0.55),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(width: 10),
