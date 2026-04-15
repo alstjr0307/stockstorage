@@ -136,7 +136,7 @@ class AdService {
     if (!_adsEnabled || _shouldBlockByAdmin) return;
     _indicatorDetailOpenCount++;
     if (_indicatorDetailOpenCount == 1) return; // 첫 진입은 광고 스킵
-    if ((_indicatorDetailOpenCount - 1) % _interstitialEvery != 0) return;
+    if ((_indicatorDetailOpenCount - 2) % _interstitialEvery != 0) return;
     if (!_isIndicatorInterstitialReady || _indicatorInterstitialAd == null) {
       _pendingIndicatorInterstitial = true;
       _loadIndicatorInterstitial();

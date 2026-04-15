@@ -34224,3 +34224,22 @@
 [done] top10=삼성전자(227), SK하이닉스(184), NAVER(173), 현대자동차(55), 광전자(41), 대우건설(34), 우리로(27), 엔시트론(26), 삼성전기(22), LS(17)
 [done] aliasCandidatesTickers=39
 ===== 2026-04-15 11:00:02.28 ===== 
+[start] targetDate=2026.04.15 nowKst=2026.04.15 11:00
+[start] mode=today
+[alias] loaded=2724
+[page=1] targetRows=yes oldest=2026.04.15 totalMatched=20
+[page=2] targetRows=yes oldest=2026.04.15 totalMatched=40
+[page=3] targetRows=yes oldest=2026.04.15 totalMatched=60
+[page=4] targetRows=yes oldest=2026.04.15 totalMatched=80
+[page=5] targetRows=yes oldest=2026.04.15 totalMatched=100
+[page=6] targetRows=yes oldest=2026.04.15 totalMatched=120
+[page=7] targetRows=yes oldest=2026.04.15 totalMatched=140
+[page=8] targetRows=yes oldest=2026.04.15 totalMatched=160
+[page=9] targetRows=yes oldest=2026.04.15 totalMatched=180
+[page=10] targetRows=yes oldest=2026.04.15 totalMatched=200
+[page=11] targetRows=yes oldest=2026.04.15 totalMatched=220
+[page=12] targetRows=yes oldest=2026.04.15 totalMatched=240
+[page=13] targetRows=yes oldest=2026.04.15 totalMatched=260
+[page=14] targetRows=yes oldest=2026.04.15 totalMatched=280
+[page=15] targetRows=yes oldest=2026.04.15 totalMatched=300
+[page=16] targetRows=yes oldest=2026.04.15 totalMatched=320
