@@ -10,6 +10,7 @@ import '../models/trading_journal.dart';
 class FirestoreService {
   final _db = FirebaseFirestore.instance;
   static const int _postScore = 3;
+  static const int _commentScore = 1;
   static const int _attendanceScore = 1;
   static const List<int> _levelThresholds = [
     0, // Lv.1
@@ -37,10 +38,14 @@ class FirestoreService {
 
   int calculateUserLevel({
     required int postCount,
+    required int commentCount,
     required int attendanceCount,
   }) {
-    final score =
-        (postCount * _postScore) + (attendanceCount * _attendanceScore);
+    final score = calculateUserScore(
+      postCount: postCount,
+      commentCount: commentCount,
+      attendanceCount: attendanceCount,
+    );
     var level = 1;
     for (var i = 1; i < _levelThresholds.length; i++) {
       if (score >= _levelThresholds[i]) {
@@ -51,6 +56,59 @@ class FirestoreService {
     }
     final extraXp = score - _levelThresholds.last;
     return level + (extraXp ~/ _afterTableStep);
+  }
+
+  int calculateUserScore({
+    required int postCount,
+    required int commentCount,
+    required int attendanceCount,
+  }) {
+    return (postCount * _postScore) +
+        (commentCount * _commentScore) +
+        (attendanceCount * _attendanceScore);
+  }
+
+  Map<String, num> calculateLevelProgress({
+    required int postCount,
+    required int commentCount,
+    required int attendanceCount,
+  }) {
+    final score = calculateUserScore(
+      postCount: postCount,
+      commentCount: commentCount,
+      attendanceCount: attendanceCount,
+    );
+    final level = calculateUserLevel(
+      postCount: postCount,
+      commentCount: commentCount,
+      attendanceCount: attendanceCount,
+    );
+
+    final tableLevelCount = _levelThresholds.length;
+    final currentLevelStartXp = level <= tableLevelCount
+        ? _levelThresholds[level - 1]
+        : _levelThresholds.last + ((level - tableLevelCount) * _afterTableStep);
+    final nextLevelStartXp = level < tableLevelCount
+        ? _levelThresholds[level]
+        : _levelThresholds.last +
+              ((level - tableLevelCount + 1) * _afterTableStep);
+    final levelSpan = (nextLevelStartXp - currentLevelStartXp).clamp(
+      1,
+      1 << 30,
+    );
+    final currentXpInLevel = (score - currentLevelStartXp).clamp(0, levelSpan);
+    final progress = (currentXpInLevel / levelSpan).clamp(0, 1);
+
+    return {
+      'level': level,
+      'score': score,
+      'currentLevelStartXp': currentLevelStartXp,
+      'nextLevelStartXp': nextLevelStartXp,
+      'currentXpInLevel': currentXpInLevel,
+      'xpForNextLevel': levelSpan,
+      'remainingXp': (nextLevelStartXp - score).clamp(0, 1 << 30),
+      'progress': progress,
+    };
   }
 
   String _kstDayKey([DateTime? now]) {
@@ -65,16 +123,19 @@ class FirestoreService {
     return _db.collection('users').doc(uid).snapshots().map((doc) {
       final data = doc.data() ?? <String, dynamic>{};
       final postCount = (data['postCount'] as num?)?.toInt() ?? 0;
+      final commentCount = (data['commentCount'] as num?)?.toInt() ?? 0;
       final attendanceCount = (data['attendanceCount'] as num?)?.toInt() ?? 0;
       final level =
           (data['level'] as num?)?.toInt() ??
           calculateUserLevel(
             postCount: postCount,
+            commentCount: commentCount,
             attendanceCount: attendanceCount,
           );
       return {
         'level': level,
         'postCount': postCount,
+        'commentCount': commentCount,
         'attendanceCount': attendanceCount,
       };
     });
@@ -96,6 +157,7 @@ class FirestoreService {
       final snap = await tx.get(userRef);
       final data = snap.data() ?? <String, dynamic>{};
       final currentPostCount = (data['postCount'] as num?)?.toInt() ?? 0;
+      final currentCommentCount = (data['commentCount'] as num?)?.toInt() ?? 0;
       final currentAttendance = (data['attendanceCount'] as num?)?.toInt() ?? 0;
       final currentLevel = (data['level'] as num?)?.toInt() ?? 1;
       final lastAttendanceDate = data['lastAttendanceDate'] as String?;
@@ -103,12 +165,14 @@ class FirestoreService {
       if (lastAttendanceDate == todayKey) {
         final recomputed = calculateUserLevel(
           postCount: currentPostCount,
+          commentCount: currentCommentCount,
           attendanceCount: currentAttendance,
         );
         if (currentLevel != recomputed || !snap.exists) {
           tx.set(userRef, {
             'level': recomputed,
             'postCount': currentPostCount,
+            'commentCount': currentCommentCount,
             'attendanceCount': currentAttendance,
             'lastActiveAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
@@ -124,12 +188,14 @@ class FirestoreService {
       final nextAttendance = currentAttendance + 1;
       final nextLevel = calculateUserLevel(
         postCount: currentPostCount,
+        commentCount: currentCommentCount,
         attendanceCount: nextAttendance,
       );
 
       tx.set(userRef, {
         'attendanceCount': nextAttendance,
         'postCount': currentPostCount,
+        'commentCount': currentCommentCount,
         'level': nextLevel,
         'lastAttendanceDate': todayKey,
         'lastActiveAt': FieldValue.serverTimestamp(),
@@ -145,16 +211,19 @@ class FirestoreService {
       final snap = await tx.get(userRef);
       final data = snap.data() ?? <String, dynamic>{};
       final currentPostCount = (data['postCount'] as num?)?.toInt() ?? 0;
+      final currentCommentCount = (data['commentCount'] as num?)?.toInt() ?? 0;
       final currentAttendance = (data['attendanceCount'] as num?)?.toInt() ?? 0;
       final nextPostCount = (currentPostCount + delta) < 0
           ? 0
           : (currentPostCount + delta);
       final nextLevel = calculateUserLevel(
         postCount: nextPostCount,
+        commentCount: currentCommentCount,
         attendanceCount: currentAttendance,
       );
       tx.set(userRef, {
         'postCount': nextPostCount,
+        'commentCount': currentCommentCount,
         'attendanceCount': currentAttendance,
         'level': nextLevel,
         'lastActiveAt': FieldValue.serverTimestamp(),
@@ -169,6 +238,42 @@ class FirestoreService {
 
   Future<void> recordPostRemoved(String uid) {
     return _adjustPostCount(uid, -1);
+  }
+
+  Future<void> _adjustCommentCount(String uid, int delta) async {
+    final userRef = _db.collection('users').doc(uid);
+    final publicRef = _db.collection('user_public').doc(uid);
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(userRef);
+      final data = snap.data() ?? <String, dynamic>{};
+      final currentPostCount = (data['postCount'] as num?)?.toInt() ?? 0;
+      final currentCommentCount = (data['commentCount'] as num?)?.toInt() ?? 0;
+      final currentAttendance = (data['attendanceCount'] as num?)?.toInt() ?? 0;
+      final nextCommentCount = (currentCommentCount + delta) < 0
+          ? 0
+          : (currentCommentCount + delta);
+      final nextLevel = calculateUserLevel(
+        postCount: currentPostCount,
+        commentCount: nextCommentCount,
+        attendanceCount: currentAttendance,
+      );
+      tx.set(userRef, {
+        'postCount': currentPostCount,
+        'commentCount': nextCommentCount,
+        'attendanceCount': currentAttendance,
+        'level': nextLevel,
+        'lastActiveAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      tx.set(publicRef, {'level': nextLevel}, SetOptions(merge: true));
+    });
+  }
+
+  Future<void> recordCommentCreated(String uid) {
+    return _adjustCommentCount(uid, 1);
+  }
+
+  Future<void> recordCommentRemoved(String uid) {
+    return _adjustCommentCount(uid, -1);
   }
 
   Stream<List<StockPick>> getStockPicks({bool premiumOnly = false}) {
@@ -364,10 +469,25 @@ class FirestoreService {
         'createdAt': Timestamp.fromDate(comment.createdAt),
       },
     );
-    return batch.commit();
+    await batch.commit();
+    await recordCommentCreated(comment.uid);
   }
 
-  Future<void> deleteComment(String pickId, String commentId, {String? uid}) {
+  Future<void> deleteComment(
+    String pickId,
+    String commentId, {
+    String? uid,
+  }) async {
+    var commentUid = uid;
+    if (commentUid == null || commentUid.isEmpty) {
+      final commentSnap = await _db
+          .collection('stock_picks')
+          .doc(pickId)
+          .collection('comments')
+          .doc(commentId)
+          .get();
+      commentUid = commentSnap.data()?['uid'] as String?;
+    }
     final batch = _db.batch();
     batch.delete(
       _db
@@ -376,16 +496,19 @@ class FirestoreService {
           .collection('comments')
           .doc(commentId),
     );
-    if (uid != null) {
+    if (commentUid != null && commentUid.isNotEmpty) {
       batch.delete(
         _db
             .collection('users')
-            .doc(uid)
+            .doc(commentUid)
             .collection('myComments')
             .doc(commentId),
       );
     }
-    return batch.commit();
+    await batch.commit();
+    if (commentUid != null && commentUid.isNotEmpty) {
+      await recordCommentRemoved(commentUid);
+    }
   }
 
   Future<List<({String pickId, String text, DateTime createdAt})>>
@@ -526,35 +649,64 @@ class FirestoreService {
     return MarketAnalysis.fromFirestore(doc);
   }
 
-  // ── 관리자: 유저 목록 ─────────────────────────────────────────────────
-  Future<List<Map<String, dynamic>>> getAdminUserList() async {
-    final usersSnap = await _db.collection('users').get();
-    final results = await Future.wait(
-      usersSnap.docs.map((doc) async {
-        final data = doc.data();
-        final commentsSnap = await _db
-            .collection('users')
-            .doc(doc.id)
-            .collection('myComments')
-            .count()
-            .get();
-        return {
-          'uid': doc.id,
-          'nickname': data['nickname'] as String? ?? '',
-          'createdAt': data['createdAt'] as Timestamp?,
-          'commentCount': commentsSnap.count ?? 0,
-        };
-      }),
+  // ── 관리자: 유저 목록 (페이지네이션) ─────────────────────────────────────
+  Future<
+    ({
+      List<Map<String, dynamic>> users,
+      DocumentSnapshot? lastDoc,
+      bool hasMore,
+    })
+  >
+  getAdminUserListPaged({DocumentSnapshot? startAfter, int limit = 100}) async {
+    Query<Map<String, dynamic>> q = _db
+        .collection('users')
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+    if (startAfter != null) q = q.startAfterDocument(startAfter);
+
+    final snap = await q.get();
+    final users = snap.docs.map((doc) {
+      final data = doc.data();
+      final postCount = (data['postCount'] as num?)?.toInt() ?? 0;
+      final attendanceCount = (data['attendanceCount'] as num?)?.toInt() ?? 0;
+      final commentCount = (data['commentCount'] as num?)?.toInt() ?? 0;
+      final level =
+          (data['level'] as num?)?.toInt() ??
+          calculateUserLevel(
+            postCount: postCount,
+            commentCount: commentCount,
+            attendanceCount: attendanceCount,
+          );
+      return {
+        'uid': doc.id,
+        'nickname': data['nickname'] as String? ?? '',
+        'createdAt': data['createdAt'] as Timestamp?,
+        'level': level,
+        'postCount': postCount,
+        'commentCount': commentCount,
+      };
+    }).toList();
+
+    return (
+      users: users,
+      lastDoc: snap.docs.isNotEmpty ? snap.docs.last : startAfter,
+      hasMore: snap.docs.length == limit,
     );
-    results.sort((a, b) {
-      final ta = a['createdAt'] as Timestamp?;
-      final tb = b['createdAt'] as Timestamp?;
-      if (ta == null && tb == null) return 0;
-      if (ta == null) return 1;
-      if (tb == null) return -1;
-      return tb.compareTo(ta);
-    });
-    return results;
+  }
+
+  Future<({int totalUsers, int todayUsers})> getAdminUserListSummary() async {
+    final totalSnap = await _db.collection('users').count().get();
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day);
+    final end = start.add(const Duration(days: 1));
+    final todaySnap = await _db
+        .collection('users')
+        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(start))
+        .where('createdAt', isLessThan: Timestamp.fromDate(end))
+        .count()
+        .get();
+
+    return (totalUsers: totalSnap.count ?? 0, todayUsers: todaySnap.count ?? 0);
   }
 
   // ── 알림 큐 ───────────────────────────────────────────────────────────
@@ -907,7 +1059,7 @@ class FirestoreService {
     return snap.count ?? 0;
   }
 
-  Future<void> addPostComment(String postId, Comment comment) {
+  Future<void> addPostComment(String postId, Comment comment) async {
     final commentRef = _db
         .collection('posts')
         .doc(postId)
@@ -927,7 +1079,8 @@ class FirestoreService {
         'createdAt': Timestamp.fromDate(comment.createdAt),
       },
     );
-    return batch.commit();
+    await batch.commit();
+    await recordCommentCreated(comment.uid);
   }
 
   Future<void> deletePostComment(String postId, String commentId) async {
@@ -951,6 +1104,9 @@ class FirestoreService {
       );
     }
     await batch.commit();
+    if (commentUid != null && commentUid.isNotEmpty) {
+      await recordCommentRemoved(commentUid);
+    }
   }
 
   // ─── 매매일지 댓글 ────────────────────────────────────────────────────────
@@ -975,21 +1131,27 @@ class FirestoreService {
     return snap.count ?? 0;
   }
 
-  Future<void> addJournalComment(String journalId, Comment comment) {
-    return _db
+  Future<void> addJournalComment(String journalId, Comment comment) async {
+    await _db
         .collection('trading_journal')
         .doc(journalId)
         .collection('comments')
         .add(comment.toFirestore());
+    await recordCommentCreated(comment.uid);
   }
 
-  Future<void> deleteJournalComment(String journalId, String commentId) {
-    return _db
+  Future<void> deleteJournalComment(String journalId, String commentId) async {
+    final ref = _db
         .collection('trading_journal')
         .doc(journalId)
         .collection('comments')
-        .doc(commentId)
-        .delete();
+        .doc(commentId);
+    final snap = await ref.get();
+    final commentUid = snap.data()?['uid'] as String?;
+    await ref.delete();
+    if (commentUid != null && commentUid.isNotEmpty) {
+      await recordCommentRemoved(commentUid);
+    }
   }
 
   // ─── 신고 ─────────────────────────────────────────────────────────────────

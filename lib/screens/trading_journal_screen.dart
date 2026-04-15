@@ -25,6 +25,65 @@ class TradingJournalTab extends StatelessWidget {
   }
 }
 
+class _ExpandableNotePreview extends StatefulWidget {
+  final String content;
+  final TextStyle style;
+  final int maxLines;
+
+  const _ExpandableNotePreview({
+    required this.content,
+    required this.style,
+    this.maxLines = 3,
+  });
+
+  @override
+  State<_ExpandableNotePreview> createState() => _ExpandableNotePreviewState();
+}
+
+class _ExpandableNotePreviewState extends State<_ExpandableNotePreview> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tp = TextPainter(
+          text: TextSpan(text: widget.content, style: widget.style),
+          maxLines: widget.maxLines,
+          textDirection: Directionality.of(context),
+        )..layout(maxWidth: constraints.maxWidth);
+        final hasOverflow = tp.didExceedMaxLines;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.content,
+              style: widget.style,
+              maxLines: _expanded ? null : widget.maxLines,
+              overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+            ),
+            if (hasOverflow && !_expanded) ...[
+              const SizedBox(height: 4),
+              GestureDetector(
+                onTap: () => setState(() => _expanded = true),
+                child: Text(
+                  '더보기',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: const Color(0xFF10B981),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _NotLoggedIn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -832,14 +891,13 @@ class _JournalCardState extends State<_JournalCard> {
                     // ── 메모 스니펫
                     if (journal.note.isNotEmpty) ...[
                       const SizedBox(height: 8),
-                      Text(
-                        journal.note,
+                      _ExpandableNotePreview(
+                        content: journal.note,
+                        maxLines: 3,
                         style: GoogleFonts.inter(
-                            color: cs.onSurface.withValues(alpha: 0.5),
-                            fontSize: 12,
-                            height: 1.5),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                            color: cs.onSurface.withValues(alpha: 0.62),
+                            fontSize: 14,
+                            height: 1.6),
                       ),
                     ],
                     // ── 거래 정보 그리드

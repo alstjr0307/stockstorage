@@ -374,6 +374,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: cardColor,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -383,219 +384,323 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircleAvatar(
-                    backgroundColor: const Color(
-                      0xFF10B981,
-                    ).withValues(alpha: 0.15),
-                    radius: 28,
-                    child: const Icon(
-                      Icons.person,
-                      color: Color(0xFF10B981),
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  FutureBuilder<String?>(
-                    future: _firestoreService.getNickname(uid),
-                    builder: (ctx, snap) {
-                      final nickname = snap.data;
-                      return Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            nickname ?? '닉네임 없음',
-                            style: GoogleFonts.inter(
-                              color: nickname != null
-                                  ? (isDark ? Colors.white : Colors.black87)
-                                  : (isDark ? Colors.white38 : Colors.black38),
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          GestureDetector(
-                            onTap: () {
-                              Navigator.pop(context);
-                              _showNicknameDialog(auth, nickname);
-                            },
-                            child: Icon(
-                              Icons.edit_outlined,
-                              size: 16,
-                              color: isDark ? Colors.white38 : Colors.black38,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    auth.user?.email ?? '',
-                    style: GoogleFonts.inter(
-                      color: isDark ? Colors.white38 : Colors.black38,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  StreamBuilder<Map<String, int>>(
-                    stream: _firestoreService.watchUserLevelInfo(uid),
-                    builder: (ctx, snap) {
-                      final stats =
-                          snap.data ??
-                          const {
-                            'level': 1,
-                            'postCount': 0,
-                            'attendanceCount': 0,
-                          };
-                      final level = stats['level'] ?? 1;
-                      final postCount = stats['postCount'] ?? 0;
-                      final attendanceCount = stats['attendanceCount'] ?? 0;
-                      return Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        alignment: WrapAlignment.center,
-                        children: [
-                          _buildProfileStatChip(
-                            label: 'Lv.$level',
-                            icon: Icons.workspace_premium_outlined,
-                            isDark: isDark,
-                          ),
-                          _buildProfileStatChip(
-                            label: '글 $postCount',
-                            icon: Icons.edit_note_outlined,
-                            isDark: isDark,
-                          ),
-                          _buildProfileStatChip(
-                            label: '출석 $attendanceCount',
-                            icon: Icons.calendar_today_outlined,
-                            isDark: isDark,
-                          ),
-                        ],
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  // 내 댓글
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: isDark
-                            ? Colors.white70
-                            : Colors.black54,
-                        side: BorderSide(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.1)
-                              : Colors.black.withValues(alpha: 0.1),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: const Color(
+                        0xFF10B981,
+                      ).withValues(alpha: 0.15),
+                      radius: 28,
+                      child: const Icon(
+                        Icons.person,
+                        color: Color(0xFF10B981),
+                        size: 28,
                       ),
-                      icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                      label: Text(
-                        '내 댓글',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => MyCommentsScreen(uid: uid),
-                          ),
+                    ),
+                    const SizedBox(height: 10),
+                    FutureBuilder<String?>(
+                      future: _firestoreService.getNickname(uid),
+                      builder: (ctx, snap) {
+                        final nickname = snap.data;
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              nickname ?? '닉네임 없음',
+                              style: GoogleFonts.inter(
+                                color: nickname != null
+                                    ? (isDark ? Colors.white : Colors.black87)
+                                    : (isDark
+                                          ? Colors.white38
+                                          : Colors.black38),
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            GestureDetector(
+                              onTap: () {
+                                Navigator.pop(context);
+                                _showNicknameDialog(auth, nickname);
+                              },
+                              child: Icon(
+                                Icons.edit_outlined,
+                                size: 16,
+                                color: isDark ? Colors.white38 : Colors.black38,
+                              ),
+                            ),
+                          ],
                         );
                       },
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: isDark
-                            ? Colors.white70
-                            : Colors.black54,
-                        side: BorderSide(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.1)
-                              : Colors.black.withValues(alpha: 0.1),
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                    const SizedBox(height: 4),
+                    Text(
+                      auth.user?.email ?? '',
+                      style: GoogleFonts.inter(
+                        color: isDark ? Colors.white38 : Colors.black38,
+                        fontSize: 12,
                       ),
-                      icon: const Icon(Icons.article_outlined, size: 16),
-                      label: Text(
-                        '내 작성 글',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => MyPostsScreen(uid: uid),
-                          ),
+                    ),
+                    const SizedBox(height: 12),
+                    StreamBuilder<Map<String, int>>(
+                      stream: _firestoreService.watchUserLevelInfo(uid),
+                      builder: (ctx, snap) {
+                        final stats =
+                            snap.data ??
+                            const {
+                              'level': 1,
+                              'postCount': 0,
+                              'commentCount': 0,
+                              'attendanceCount': 0,
+                            };
+                        final level = stats['level'] ?? 1;
+                        final postCount = stats['postCount'] ?? 0;
+                        final commentCount = stats['commentCount'] ?? 0;
+                        final attendanceCount = stats['attendanceCount'] ?? 0;
+                        final progressInfo = _firestoreService
+                            .calculateLevelProgress(
+                              postCount: postCount,
+                              commentCount: commentCount,
+                              attendanceCount: attendanceCount,
+                            );
+                        final currentXp =
+                            (progressInfo['currentXpInLevel'] ?? 0).toInt();
+                        final needXp = (progressInfo['xpForNextLevel'] ?? 1)
+                            .toInt();
+                        final remainXp = (progressInfo['remainingXp'] ?? 0)
+                            .toInt();
+                        final progress = (progressInfo['progress'] ?? 0)
+                            .toDouble();
+
+                        return Column(
+                          children: [
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.fromLTRB(
+                                14,
+                                12,
+                                14,
+                                12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.06)
+                                    : Colors.black.withValues(alpha: 0.03),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.12)
+                                      : Colors.black.withValues(alpha: 0.08),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'Lv.$level',
+                                        style: GoogleFonts.inter(
+                                          color: const Color(0xFF10B981),
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Text(
+                                        '$currentXp / $needXp XP',
+                                        style: GoogleFonts.inter(
+                                          color: isDark
+                                              ? Colors.white60
+                                              : Colors.black54,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(999),
+                                    child: LinearProgressIndicator(
+                                      value: progress,
+                                      minHeight: 7,
+                                      backgroundColor: isDark
+                                          ? Colors.white.withValues(alpha: 0.1)
+                                          : Colors.black.withValues(
+                                              alpha: 0.08,
+                                            ),
+                                      valueColor: const AlwaysStoppedAnimation(
+                                        Color(0xFF10B981),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: Text(
+                                      '다음 레벨까지 $remainXp XP',
+                                      style: GoogleFonts.inter(
+                                        color: isDark
+                                            ? Colors.white38
+                                            : Colors.black45,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              alignment: WrapAlignment.center,
+                              children: [
+                                _buildProfileStatChip(
+                                  label: '글 $postCount',
+                                  icon: Icons.edit_note_outlined,
+                                  isDark: isDark,
+                                ),
+                                _buildProfileStatChip(
+                                  label: '댓글 $commentCount',
+                                  icon: Icons.chat_bubble_outline,
+                                  isDark: isDark,
+                                ),
+                                _buildProfileStatChip(
+                                  label: '출석 $attendanceCount',
+                                  icon: Icons.calendar_today_outlined,
+                                  isDark: isDark,
+                                ),
+                              ],
+                            ),
+                          ],
                         );
                       },
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent.withValues(
-                          alpha: 0.15,
+                    const SizedBox(height: 16),
+                    // 내 댓글
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: isDark
+                              ? Colors.white70
+                              : Colors.black54,
+                          side: BorderSide(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : Colors.black.withValues(alpha: 0.1),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        foregroundColor: Colors.redAccent,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                        icon: const Icon(Icons.article_outlined, size: 16),
+                        label: Text(
+                          '내가 쓴 글',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        auth.signOut();
-                      },
-                      child: Text(
-                        '로그아웃',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => MyPostsScreen(uid: uid),
+                            ),
+                          );
+                        },
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton(
-                      style: TextButton.styleFrom(
-                        foregroundColor: isDark
-                            ? Colors.white24
-                            : Colors.black26,
-                      ),
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _showDeleteAccountDialog(auth);
-                      },
-                      child: Text(
-                        '계정 삭제',
-                        style: GoogleFonts.inter(fontSize: 13),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: isDark
+                              ? Colors.white70
+                              : Colors.black54,
+                          side: BorderSide(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : Colors.black.withValues(alpha: 0.1),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                        label: Text(
+                          '내 댓글',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => MyCommentsScreen(uid: uid),
+                            ),
+                          );
+                        },
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.redAccent.withValues(
+                            alpha: 0.15,
+                          ),
+                          foregroundColor: Colors.redAccent,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          auth.signOut();
+                        },
+                        child: Text(
+                          '로그아웃',
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: isDark
+                              ? Colors.white24
+                              : Colors.black26,
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _showDeleteAccountDialog(auth);
+                        },
+                        child: Text(
+                          '계정 삭제',
+                          style: GoogleFonts.inter(fontSize: 13),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             // 다크모드 토글 — 오른쪽 상단

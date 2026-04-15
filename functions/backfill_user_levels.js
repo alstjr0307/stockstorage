@@ -22,6 +22,7 @@ const db = admin.firestore();
 const DRY_RUN = process.argv.includes('--dry-run');
 
 const POST_SCORE = 3;
+const COMMENT_SCORE = 1;
 const ATTENDANCE_SCORE = 1;
 const BATCH_SIZE = 400;
 const LEVEL_THRESHOLDS = [
@@ -48,8 +49,11 @@ const LEVEL_THRESHOLDS = [
 ];
 const AFTER_TABLE_STEP = 110;
 
-function calculateLevel(postCount, attendanceCount) {
-  const score = (postCount * POST_SCORE) + (attendanceCount * ATTENDANCE_SCORE);
+function calculateLevel(postCount, commentCount, attendanceCount) {
+  const score =
+    (postCount * POST_SCORE) +
+    (commentCount * COMMENT_SCORE) +
+    (attendanceCount * ATTENDANCE_SCORE);
   let level = 1;
   for (let i = 1; i < LEVEL_THRESHOLDS.length; i++) {
     if (score >= LEVEL_THRESHOLDS[i]) {
@@ -60,6 +64,21 @@ function calculateLevel(postCount, attendanceCount) {
   }
   const extraXp = score - LEVEL_THRESHOLDS[LEVEL_THRESHOLDS.length - 1];
   return level + Math.floor(extraXp / AFTER_TABLE_STEP);
+}
+
+async function accumulateCommentCountByUid(map) {
+  const allowedRoots = new Set(['stock_picks', 'posts', 'trading_journal']);
+  const snap = await db.collectionGroup('comments').select('uid').get();
+  let counted = 0;
+  for (const doc of snap.docs) {
+    const rootCollection = doc.ref.parent.parent?.parent?.id;
+    if (!rootCollection || !allowedRoots.has(rootCollection)) continue;
+    const uid = doc.get('uid');
+    if (!uid || typeof uid !== 'string') continue;
+    map.set(uid, (map.get(uid) || 0) + 1);
+    counted++;
+  }
+  return { scanned: snap.size, counted };
 }
 
 async function accumulateCountByUid(collectionName, map, options = {}) {
@@ -99,18 +118,28 @@ async function main() {
 
   console.log('\n[2/4] posts/trading_journal 작성 수 집계 중...');
   const postCountMap = new Map();
+  const commentCountMap = new Map();
   const postStats = await accumulateCountByUid('posts', postCountMap);
   const journalStats = await accumulateCountByUid('trading_journal', postCountMap, {
     publicOnly: true,
   });
+  const commentStats = await accumulateCommentCountByUid(commentCountMap);
   console.log(`- posts 문서 스캔: ${postStats.scanned}개 / 카운트 반영: ${postStats.counted}개`);
   console.log(
     `- trading_journal 문서 스캔: ${journalStats.scanned}개 / 카운트 반영(공유만): ${journalStats.counted}개`
   );
+  console.log(
+    `- comments 문서 스캔: ${commentStats.scanned}개 / 카운트 반영(추천주/자게/매매일지): ${commentStats.counted}개`
+  );
   console.log(`- 작성자 uid 수: ${postCountMap.size}명`);
+  console.log(`- 댓글 작성자 uid 수: ${commentCountMap.size}명`);
 
   console.log('\n[3/4] 업데이트 대상 계산 중...');
-  const targetUids = new Set([...userDataMap.keys(), ...postCountMap.keys()]);
+  const targetUids = new Set([
+    ...userDataMap.keys(),
+    ...postCountMap.keys(),
+    ...commentCountMap.keys(),
+  ]);
   console.log(`- 최종 대상 uid 수: ${targetUids.size}명`);
 
   console.log('\n[4/4] users 레벨 필드 반영 중...');
@@ -129,11 +158,14 @@ async function main() {
   for (const uid of targetUids) {
     const current = userDataMap.get(uid) || {};
     const postCount = postCountMap.get(uid) || 0;
+    const commentCount = commentCountMap.get(uid) || 0;
     const attendanceCount =
       typeof current.attendanceCount === 'number' ? current.attendanceCount : 0;
-    const level = calculateLevel(postCount, attendanceCount);
+    const level = calculateLevel(postCount, commentCount, attendanceCount);
     const existingLevel = typeof current.level === 'number' ? current.level : null;
     const existingPostCount = typeof current.postCount === 'number' ? current.postCount : null;
+    const existingCommentCount =
+      typeof current.commentCount === 'number' ? current.commentCount : null;
     const hasUserDoc = userDataMap.has(uid);
 
     // 불필요한 쓰기 최소화
@@ -154,6 +186,7 @@ async function main() {
       hasUserDoc &&
       existingLevel === level &&
       existingPostCount === postCount &&
+      existingCommentCount === commentCount &&
       typeof current.attendanceCount === 'number' &&
       publicUpToDate
     ) {
@@ -168,6 +201,7 @@ async function main() {
       ref,
       {
         postCount,
+        commentCount,
         attendanceCount,
         level,
         levelBackfilledAt: admin.firestore.FieldValue.serverTimestamp(),

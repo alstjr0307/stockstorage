@@ -54,6 +54,8 @@ scraper/service-account.json
 scraper/node_modules/
 android/key.properties
 android/app/upload-keystore.jks
+android/play-service-account.json
+android/play-account-*.json
 
 # Claude / build artifacts
 .claude/settings.local.json

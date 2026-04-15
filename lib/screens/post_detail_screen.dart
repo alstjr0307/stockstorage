@@ -563,7 +563,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                   8,
                                 ),
                                 child: Text(
-                                  '댓글 $commentCount',
+                                  '댓글($commentCount)',
                                   style: GoogleFonts.inter(
                                     color: cs.onSurface,
                                     fontSize: 15,
@@ -743,7 +743,7 @@ class _CommentTile extends StatelessWidget {
                   comment.content,
                   style: GoogleFonts.inter(
                     color: cs.onSurface.withValues(alpha: 0.85),
-                    fontSize: 14,
+                    fontSize: 15,
                     height: 1.55,
                   ),
                 ),

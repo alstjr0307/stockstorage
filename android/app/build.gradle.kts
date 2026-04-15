@@ -3,6 +3,7 @@ import java.io.FileInputStream
 
 plugins {
     id("com.android.application")
+    id("com.github.triplet.play")
     // START: FlutterFire Configuration
     id("com.google.gms.google-services")
     // END: FlutterFire Configuration
@@ -62,4 +63,22 @@ dependencies {
 
 flutter {
     source = "../.."
+}
+
+play {
+    // Prefer Gradle property, then env var, then local default file.
+    val serviceAccountPath = providers
+        .gradleProperty("PLAY_SERVICE_ACCOUNT_JSON")
+        .orElse(providers.environmentVariable("PLAY_SERVICE_ACCOUNT_JSON"))
+        .orElse("$rootDir/play-service-account.json")
+    serviceAccountCredentials.set(file(serviceAccountPath.get()))
+
+    track.set(
+        providers
+            .gradleProperty("PLAY_TRACK")
+            .orElse(providers.environmentVariable("PLAY_TRACK"))
+            .orElse("internal")
+            .get()
+    )
+    defaultToAppBundles.set(true)
 }

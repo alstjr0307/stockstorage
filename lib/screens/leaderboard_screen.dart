@@ -47,15 +47,41 @@ class LeaderboardScreen extends StatelessWidget {
   }
 }
 
-class _LeaderboardContent extends StatelessWidget {
+enum _CompletedPickSort { time, returnRate }
+
+class _LeaderboardContent extends StatefulWidget {
   final ColorScheme cs;
   final List<StockPick> completedPicks;
 
-  const _LeaderboardContent(
-      {required this.cs, required this.completedPicks});
+  const _LeaderboardContent({required this.cs, required this.completedPicks});
+
+  @override
+  State<_LeaderboardContent> createState() => _LeaderboardContentState();
+}
+
+class _LeaderboardContentState extends State<_LeaderboardContent> {
+  _CompletedPickSort _sort = _CompletedPickSort.time;
+
+  List<StockPick> _sortedPicks() {
+    final sorted = [...widget.completedPicks];
+    if (_sort == _CompletedPickSort.returnRate) {
+      sorted.sort((a, b) => b.actualReturnRate.compareTo(a.actualReturnRate));
+    } else {
+      sorted.sort((a, b) {
+        final bClosed = b.closedAt ?? DateTime(0);
+        final aClosed = a.closedAt ?? DateTime(0);
+        final closedCmp = bClosed.compareTo(aClosed);
+        if (closedCmp != 0) return closedCmp;
+        return b.createdAt.compareTo(a.createdAt);
+      });
+    }
+    return sorted;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final cs = widget.cs;
+    final completedPicks = widget.completedPicks;
     final total = completedPicks.length;
     final wins = completedPicks.where((p) => p.actualReturnRate > 0).length;
     final winRate = (wins / total) * 100;
@@ -65,25 +91,43 @@ class _LeaderboardContent extends StatelessWidget {
         total;
     final best = completedPicks.reduce(
         (a, b) => a.actualReturnRate > b.actualReturnRate ? a : b);
-    final sorted = [...completedPicks]
-      ..sort((a, b) => b.actualReturnRate.compareTo(a.actualReturnRate));
+    final sorted = _sortedPicks();
+    final sectionTitle = _sort == _CompletedPickSort.returnRate
+        ? '종료 종목 순위'
+        : '종료 종목 리스트';
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
       children: [
         _buildStatsCard(cs, total, wins, winRate, avgReturn, best),
         const SizedBox(height: 20),
-        Text(
-          '종료 종목 순위',
-          style: GoogleFonts.inter(
-              color: cs.onSurface.withValues(alpha: 0.5),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5),
+        Row(
+          children: [
+            Text(
+              sectionTitle,
+              style: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.5),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5),
+            ),
+            const Spacer(),
+            _SortChip(
+              label: '시간순',
+              selected: _sort == _CompletedPickSort.time,
+              onTap: () => setState(() => _sort = _CompletedPickSort.time),
+            ),
+            const SizedBox(width: 6),
+            _SortChip(
+              label: '수익률순',
+              selected: _sort == _CompletedPickSort.returnRate,
+              onTap: () => setState(() => _sort = _CompletedPickSort.returnRate),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
         ...sorted.asMap().entries
-            .map((e) => _buildRankCard(cs, e.key + 1, e.value)),
+            .map((e) => _buildRankCard(cs, e.key + 1, e.value, showRank: _sort == _CompletedPickSort.returnRate)),
       ],
     );
   }
@@ -203,7 +247,12 @@ class _LeaderboardContent extends StatelessWidget {
     );
   }
 
-  Widget _buildRankCard(ColorScheme cs, int rank, StockPick pick) {
+  Widget _buildRankCard(
+    ColorScheme cs,
+    int rank,
+    StockPick pick, {
+    required bool showRank,
+  }) {
     final ret = pick.actualReturnRate;
     final isPositive = ret > 0;
     final isKrw = pick.market != 'US';
@@ -228,22 +277,24 @@ class _LeaderboardContent extends StatelessWidget {
         color: cs.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: rank <= 3
+          color: showRank && rank <= 3
               ? rankColor.withValues(alpha: 0.35)
               : cs.onSurface.withValues(alpha: 0.08),
         ),
       ),
       child: Row(
         children: [
-          SizedBox(
-            width: 30,
-            child: Text('#$rank',
-                style: GoogleFonts.inter(
-                    color: rankColor,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 14)),
-          ),
-          const SizedBox(width: 10),
+          if (showRank) ...[
+            SizedBox(
+              width: 30,
+              child: Text('#$rank',
+                  style: GoogleFonts.inter(
+                      color: rankColor,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14)),
+            ),
+            const SizedBox(width: 10),
+          ],
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -288,17 +339,71 @@ class _LeaderboardContent extends StatelessWidget {
                 ),
               ),
               if (pick.closedAt != null) ...[
-                const SizedBox(height: 3),
-                Text(
-                  DateFormat('yyyy.MM.dd').format(pick.closedAt!),
-                  style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.25),
-                      fontSize: 10),
+                const SizedBox(height: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: cs.onSurface.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(9999),
+                  ),
+                  child: Text(
+                    DateFormat('yyyy.MM.dd').format(pick.closedAt!),
+                    style: GoogleFonts.robotoMono(
+                      color: cs.onSurface.withValues(alpha: 0.6),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ],
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SortChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SortChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFF10B981).withValues(alpha: 0.14)
+              : cs.onSurface.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(9999),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFF10B981).withValues(alpha: 0.35)
+                : Colors.transparent,
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.inter(
+            color: selected
+                ? const Color(0xFF10B981)
+                : cs.onSurface.withValues(alpha: 0.5),
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }

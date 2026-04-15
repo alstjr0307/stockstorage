@@ -23,6 +23,7 @@ class JournalChartScreen extends StatefulWidget {
   final FirestoreService firestoreService;
   final VoidCallback onEdit;
   final void Function(TradingJournal)? onEditSell;
+  final bool showEditButton;
 
   const JournalChartScreen({
     super.key,
@@ -31,6 +32,7 @@ class JournalChartScreen extends StatefulWidget {
     required this.firestoreService,
     required this.onEdit,
     this.onEditSell,
+    this.showEditButton = true,
   });
 
   @override
@@ -114,7 +116,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
   }
 
   static const _leftPad = 4.0;
-  static const _rightAxisW = 72.0;
+  static const _rightAxisW = 42.0;
 
   double _candleAreaW(double totalW) => totalW - _leftPad - _rightAxisW;
 
@@ -196,16 +198,18 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
               ),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.edit_outlined,
-                size: 20, color: cs.onSurface.withValues(alpha: 0.6)),
-            onPressed: () {
-              Navigator.pop(context);
-              widget.onEdit();
-            },
-          ),
-        ],
+        actions: widget.showEditButton
+            ? [
+                IconButton(
+                  icon: Icon(Icons.edit_outlined,
+                      size: 20, color: cs.onSurface.withValues(alpha: 0.6)),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    widget.onEdit();
+                  },
+                ),
+              ]
+            : null,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -503,8 +507,8 @@ class _JournalCandlePainter extends CustomPainter {
 
     const xLabelH = 18.0;
     const leftPad = 4.0;
-    const chartToAxisGap = 6.0;
-    const rightAxisW = 72.0; // pill(매수/매도) + 가격 텍스트 공간
+    const chartToAxisGap = 1.0;
+    const rightAxisW = 42.0; // 우측 가격/축 레이블 공간
     // Extra top padding for buy/sell marker triangles
     const markerH = 16.0;
     final chartH = size.height - xLabelH - markerH;
@@ -630,7 +634,7 @@ class _JournalCandlePainter extends CustomPainter {
         canvas.drawLine(Offset(x, py), Offset((x + dashW).clamp(0, lineEnd), py), dashPaint);
         x += dashW + gapW;
       }
-      // 우측: 스티커 (매수/매도 pill + 가격)
+      // 좌측: 액션 pill, 우측: 가격 텍스트
       final actionLabel = m.isBuy ? '매수' : '매도';
       final isKrw = m.price >= 100;
       final priceLabel = isKrw
@@ -643,7 +647,7 @@ class _JournalCandlePainter extends CustomPainter {
           text: actionLabel,
           style: const TextStyle(
               color: Colors.black,
-              fontSize: 8,
+              fontSize: 9,
               fontWeight: FontWeight.w800,
               fontFamily: 'Inter'),
         ),
@@ -655,30 +659,31 @@ class _JournalCandlePainter extends CustomPainter {
           text: priceLabel,
           style: TextStyle(
               color: color,
-              fontSize: 8,
-              fontWeight: FontWeight.w600,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
               fontFamily: 'RobotoMono'),
         ),
         textDirection: ui.TextDirection.ltr,
       )..layout();
 
-      const hPad = 4.0, vPad = 2.0;
+      const hPad = 5.0, vPad = 2.5;
       final pillW = pillTp.width + hPad * 2;
       final pillH = pillTp.height + vPad * 2;
-      final stickerX = leftPad + chartW + chartToAxisGap;
+      final leftStickerX = leftPad + 2;
+      final rightPriceX = leftPad + chartW + chartToAxisGap;
 
-      // pill 배경
+      // 좌측 pill 배경
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(stickerX, py - pillH / 2, pillW, pillH),
+          Rect.fromLTWH(leftStickerX, py - pillH / 2, pillW, pillH),
           const Radius.circular(4),
         ),
         Paint()..color = color,
       );
-      // pill 텍스트
-      pillTp.paint(canvas, Offset(stickerX + hPad, py - pillTp.height / 2));
-      // 가격 텍스트 (pill 오른쪽)
-      priceTp.paint(canvas, Offset(stickerX + pillW + 3, py - priceTp.height / 2));
+      // 좌측 pill 텍스트
+      pillTp.paint(canvas, Offset(leftStickerX + hPad, py - pillTp.height / 2));
+      // 우측 가격 텍스트
+      priceTp.paint(canvas, Offset(rightPriceX, py - priceTp.height / 2));
     }
 
     // ── 매수/매도 마커 ─────────────────────────────────────────────────────
@@ -716,8 +721,9 @@ class _JournalCandlePainter extends CustomPainter {
         text: TextSpan(
           text: _fmtVal(v),
           style: TextStyle(
-              color: labelColor.withValues(alpha: 0.35),
-              fontSize: 8,
+              color: labelColor.withValues(alpha: 0.65),
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
               fontFamily: 'RobotoMono'),
         ),
         textDirection: ui.TextDirection.ltr,
@@ -731,7 +737,7 @@ class _JournalCandlePainter extends CustomPainter {
     const labelCount = 4;
     final labelStyle = TextStyle(
         color: labelColor.withValues(alpha: 0.35),
-        fontSize: 8,
+        fontSize: 10,
         fontFamily: 'RobotoMono');
     for (int i = 0; i < labelCount; i++) {
       final idx = ((n - 1) * i / (labelCount - 1)).round().clamp(0, n - 1);

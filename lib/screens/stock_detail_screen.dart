@@ -125,10 +125,8 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         'stock_detail_${tabNames[_tabController.index]}',
       );
     });
-    if (Random().nextBool()) {
-      AdService.instance.showInterstitialIfReady();
-    }
     AdService.instance.loadInterstitial();
+    AdService.instance.showInterstitialIfReady();
     AnalyticsService.instance.logViewStock(
       ticker: widget.pick.ticker,
       name: widget.pick.name,
@@ -718,6 +716,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                 delayMs: 220,
                 child: TabBarView(
                   controller: _tabController,
+                  physics: const NeverScrollableScrollPhysics(),
                   children: [
                     // ① 개요 탭
                     Column(

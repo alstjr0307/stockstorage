@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -43,19 +43,31 @@ class _AdminScreenState extends State<AdminScreen>
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: Theme.of(context).colorScheme.onSurface, size: 18),
+          icon: Icon(
+            Icons.arrow_back_ios,
+            color: Theme.of(context).colorScheme.onSurface,
+            size: 18,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           '관리자 패널',
-          style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w600),
+          style: GoogleFonts.inter(
+            color: Theme.of(context).colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: const Color(0xFF10B981),
           labelColor: const Color(0xFF10B981),
-          unselectedLabelColor: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38),
-          labelStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14),
+          unselectedLabelColor: Theme.of(
+            context,
+          ).colorScheme.onSurface.withValues(alpha: 0.38),
+          labelStyle: GoogleFonts.inter(
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
           unselectedLabelStyle: GoogleFonts.inter(fontSize: 14),
           isScrollable: true,
           tabs: const [
@@ -81,7 +93,6 @@ class _AdminScreenState extends State<AdminScreen>
           _ReportsTab(),
         ],
       ),
-
     );
   }
 }
@@ -119,10 +130,12 @@ class _UploadTabState extends State<_UploadTab> {
     final p = widget.editPick;
     _tickerController = TextEditingController(text: p?.ticker ?? '');
     _nameController = TextEditingController(text: p?.name ?? '');
-    _buyPriceController =
-        TextEditingController(text: p != null ? p.buyPrice.toInt().toString() : '');
-    _targetPriceController =
-        TextEditingController(text: p != null ? p.targetPrice.toInt().toString() : '');
+    _buyPriceController = TextEditingController(
+      text: p != null ? p.buyPrice.toInt().toString() : '',
+    );
+    _targetPriceController = TextEditingController(
+      text: p != null ? p.targetPrice.toInt().toString() : '',
+    );
     _reasonController = TextEditingController(text: p?.reason ?? '');
     if (p != null) {
       _market = p.market;
@@ -160,12 +173,26 @@ class _UploadTabState extends State<_UploadTab> {
             },
           ),
           const SizedBox(height: 14),
-          _buildField('매수가', _buyPriceController, hint: '70000', isNumber: true),
+          _buildField(
+            '매수가',
+            _buyPriceController,
+            hint: '70000',
+            isNumber: true,
+          ),
           const SizedBox(height: 14),
-          _buildField('목표가', _targetPriceController, hint: '85000', isNumber: true),
+          _buildField(
+            '목표가',
+            _targetPriceController,
+            hint: '85000',
+            isNumber: true,
+          ),
           const SizedBox(height: 14),
-          _buildField('매수 근거', _reasonController,
-              hint: '매수 근거를 입력하세요...', maxLines: 5),
+          _buildField(
+            '매수 근거',
+            _reasonController,
+            hint: '매수 근거를 입력하세요...',
+            maxLines: 5,
+          ),
           const SizedBox(height: 14),
           _buildEarningsDatePicker(),
           const SizedBox(height: 20),
@@ -177,10 +204,23 @@ class _UploadTabState extends State<_UploadTab> {
             ),
             child: SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title:
-                  Text('로그인 후 열람 가능', style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7))),
-              subtitle: Text('로그인 사용자만 상세 열람 가능',
-                  style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38), fontSize: 12)),
+              title: Text(
+                '로그인 후 열람 가능',
+                style: GoogleFonts.inter(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
+              ),
+              subtitle: Text(
+                '로그인 사용자만 상세 열람 가능',
+                style: GoogleFonts.inter(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.38),
+                  fontSize: 12,
+                ),
+              ),
               value: _isPremium,
               activeThumbColor: const Color(0xFFFFD700),
               onChanged: (val) => setState(() => _isPremium = val),
@@ -195,7 +235,8 @@ class _UploadTabState extends State<_UploadTab> {
                 backgroundColor: const Color(0xFF10B981),
                 foregroundColor: Colors.black,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               onPressed: _isLoading ? null : _submit,
               child: _isLoading
@@ -203,7 +244,9 @@ class _UploadTabState extends State<_UploadTab> {
                   : Text(
                       _isEdit ? '수정하기' : '등록하기',
                       style: GoogleFonts.inter(
-                          fontWeight: FontWeight.w700, fontSize: 16),
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
                     ),
             ),
           ),
@@ -223,18 +266,26 @@ class _UploadTabState extends State<_UploadTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.54), fontSize: 12)),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            color: cs.onSurface.withValues(alpha: 0.54),
+            fontSize: 12,
+          ),
+        ),
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
           maxLines: maxLines,
-          keyboardType:
-              isNumber ? TextInputType.number : TextInputType.multiline,
+          keyboardType: isNumber
+              ? TextInputType.number
+              : TextInputType.multiline,
           style: GoogleFonts.inter(color: cs.onSurface),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.24)),
+            hintStyle: GoogleFonts.inter(
+              color: cs.onSurface.withValues(alpha: 0.24),
+            ),
             filled: true,
             fillColor: const Color(0xFF1A2035),
             border: OutlineInputBorder(
@@ -243,11 +294,15 @@ class _UploadTabState extends State<_UploadTab> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: Color(0xFF10B981), width: 1.5),
+              borderSide: const BorderSide(
+                color: Color(0xFF10B981),
+                width: 1.5,
+              ),
             ),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
           ),
           validator: (val) =>
               val == null || val.isEmpty ? '$label을 입력하세요' : null,
@@ -261,8 +316,13 @@ class _UploadTabState extends State<_UploadTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('실적 발표일',
-            style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.54), fontSize: 12)),
+        Text(
+          '실적 발표일',
+          style: GoogleFonts.inter(
+            color: cs.onSurface.withValues(alpha: 0.54),
+            fontSize: 12,
+          ),
+        ),
         const SizedBox(height: 8),
         GestureDetector(
           onTap: () async {
@@ -291,8 +351,11 @@ class _UploadTabState extends State<_UploadTab> {
             ),
             child: Row(
               children: [
-                Icon(Icons.calendar_today,
-                    color: cs.onSurface.withValues(alpha: 0.38), size: 16),
+                Icon(
+                  Icons.calendar_today,
+                  color: cs.onSurface.withValues(alpha: 0.38),
+                  size: 16,
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -310,8 +373,11 @@ class _UploadTabState extends State<_UploadTab> {
                 if (_earningsDate != null)
                   GestureDetector(
                     onTap: () => setState(() => _earningsDate = null),
-                    child: Icon(Icons.close,
-                        color: cs.onSurface.withValues(alpha: 0.38), size: 16),
+                    child: Icon(
+                      Icons.close,
+                      color: cs.onSurface.withValues(alpha: 0.38),
+                      size: 16,
+                    ),
                   ),
               ],
             ),
@@ -330,10 +396,10 @@ class _UploadTabState extends State<_UploadTab> {
         id: widget.editPick?.id ?? '',
         ticker: _tickerController.text.trim().toUpperCase(),
         name: _nameController.text.trim(),
-        buyPrice:
-            double.parse(_buyPriceController.text.replaceAll(',', '')),
-        targetPrice:
-            double.parse(_targetPriceController.text.replaceAll(',', '')),
+        buyPrice: double.parse(_buyPriceController.text.replaceAll(',', '')),
+        targetPrice: double.parse(
+          _targetPriceController.text.replaceAll(',', ''),
+        ),
         reason: _reasonController.text.trim(),
         category: '',
         market: _market,
@@ -380,8 +446,7 @@ class _UploadTabState extends State<_UploadTab> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('오류: $e'), backgroundColor: Colors.redAccent),
+          SnackBar(content: Text('오류: $e'), backgroundColor: Colors.redAccent),
         );
       }
     } finally {
@@ -409,7 +474,8 @@ class _ManageTab extends StatelessWidget {
             if (activeSnap.connectionState == ConnectionState.waiting ||
                 completedSnap.connectionState == ConnectionState.waiting) {
               return const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF10B981)));
+                child: CircularProgressIndicator(color: Color(0xFF10B981)),
+              );
             }
 
             final activePicks = activeSnap.data ?? [];
@@ -417,9 +483,12 @@ class _ManageTab extends StatelessWidget {
 
             if (activePicks.isEmpty && completedPicks.isEmpty) {
               return Center(
-                child: Text('등록된 종목이 없습니다',
-                    style: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.38))),
+                child: Text(
+                  '등록된 종목이 없습니다',
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.38),
+                  ),
+                ),
               );
             }
 
@@ -429,19 +498,23 @@ class _ManageTab extends StatelessWidget {
                 if (activePicks.isNotEmpty) ...[
                   _sectionLabel(cs, '진행 중 (${activePicks.length})'),
                   const SizedBox(height: 8),
-                  ...activePicks.map((pick) => _ManageCard(
-                        pick: pick,
-                        firestoreService: firestoreService,
-                      )),
+                  ...activePicks.map(
+                    (pick) => _ManageCard(
+                      pick: pick,
+                      firestoreService: firestoreService,
+                    ),
+                  ),
                 ],
                 if (completedPicks.isNotEmpty) ...[
                   const SizedBox(height: 20),
                   _sectionLabel(cs, '종료 종목 (${completedPicks.length})'),
                   const SizedBox(height: 8),
-                  ...completedPicks.map((pick) => _ManageCard(
-                        pick: pick,
-                        firestoreService: firestoreService,
-                      )),
+                  ...completedPicks.map(
+                    (pick) => _ManageCard(
+                      pick: pick,
+                      firestoreService: firestoreService,
+                    ),
+                  ),
                 ],
               ],
             );
@@ -455,10 +528,11 @@ class _ManageTab extends StatelessWidget {
     return Text(
       text,
       style: GoogleFonts.inter(
-          color: cs.onSurface.withValues(alpha: 0.45),
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5),
+        color: cs.onSurface.withValues(alpha: 0.45),
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.5,
+      ),
     );
   }
 }
@@ -494,27 +568,39 @@ class _ManageCard extends StatelessWidget {
                     Text(
                       pick.ticker,
                       style: GoogleFonts.robotoMono(
-                          color: Theme.of(context).colorScheme.onSurface,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14),
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
                     ),
                     if (pick.isPremium) ...[
                       const SizedBox(width: 4),
-                      const Icon(Icons.star,
-                          color: Color(0xFFFFD700), size: 13),
+                      const Icon(
+                        Icons.star,
+                        color: Color(0xFFFFD700),
+                        size: 13,
+                      ),
                     ],
                   ],
                 ),
                 const SizedBox(height: 2),
                 Text(
                   pick.name,
-                  style:
-                      GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54), fontSize: 12),
+                  style: GoogleFonts.inter(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.54),
+                    fontSize: 12,
+                  ),
                 ),
                 Text(
                   '매수 ${pick.buyPrice.toInt().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}원  →  목표 ${pick.targetPrice.toInt().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}원',
-                  style:
-                      GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38), fontSize: 11),
+                  style: GoogleFonts.inter(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.38),
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
@@ -522,27 +608,34 @@ class _ManageCard extends StatelessWidget {
           // 종료 버튼 (active 상태일 때만)
           if (!pick.isCompleted)
             IconButton(
-              icon: const Icon(Icons.check_circle_outline,
-                  color: Colors.orangeAccent, size: 20),
+              icon: const Icon(
+                Icons.check_circle_outline,
+                color: Colors.orangeAccent,
+                size: 20,
+              ),
               tooltip: '종료 처리',
               onPressed: () => _confirmClose(context),
             ),
           // 편집 버튼 (진행 중만)
           if (!pick.isCompleted)
             IconButton(
-              icon: const Icon(Icons.edit_outlined,
-                  color: Color(0xFF10B981), size: 20),
+              icon: const Icon(
+                Icons.edit_outlined,
+                color: Color(0xFF10B981),
+                size: 20,
+              ),
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => _EditScreen(pick: pick),
-                ),
+                MaterialPageRoute(builder: (_) => _EditScreen(pick: pick)),
               ),
             ),
           // 삭제 버튼
           IconButton(
-            icon: const Icon(Icons.delete_outline,
-                color: Colors.redAccent, size: 20),
+            icon: const Icon(
+              Icons.delete_outline,
+              color: Colors.redAccent,
+              size: 20,
+            ),
             onPressed: () => _confirmDelete(context),
           ),
         ],
@@ -565,31 +658,51 @@ class _ManageCard extends StatelessWidget {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF1A2035),
-        title: Text('종료 처리',
-            style: GoogleFonts.inter(
-                color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w600)),
+        title: Text(
+          '종료 처리',
+          style: GoogleFonts.inter(
+            color: Theme.of(context).colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${pick.name} (${pick.ticker})\n실제 종료가를 입력하세요.',
-                style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7))),
+            Text(
+              '${pick.name} (${pick.ticker})\n실제 종료가를 입력하세요.',
+              style: GoogleFonts.inter(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.7),
+              ),
+            ),
             const SizedBox(height: 12),
             TextField(
               controller: controller,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              style: GoogleFonts.inter(
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
               decoration: InputDecoration(
                 hintText: '종료가',
-                hintStyle: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24)),
+                hintStyle: GoogleFonts.inter(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.24),
+                ),
                 filled: true,
                 fillColor: const Color(0xFF0A0E1A),
                 border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none),
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
                 contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 10),
+                  horizontal: 12,
+                  vertical: 10,
+                ),
               ),
             ),
           ],
@@ -597,19 +710,29 @@ class _ManageCard extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('취소',
-                style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38))),
+            child: Text(
+              '취소',
+              style: GoogleFonts.inter(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.38),
+              ),
+            ),
           ),
           TextButton(
             onPressed: () {
-              final price =
-                  double.tryParse(controller.text.replaceAll(',', ''));
+              final price = double.tryParse(
+                controller.text.replaceAll(',', ''),
+              );
               Navigator.pop(context, price);
             },
-            child: Text('종료',
-                style: GoogleFonts.inter(
-                    color: Colors.orangeAccent,
-                    fontWeight: FontWeight.w600)),
+            child: Text(
+              '종료',
+              style: GoogleFonts.inter(
+                color: Colors.orangeAccent,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -619,17 +742,21 @@ class _ManageCard extends StatelessWidget {
       try {
         await firestoreService.closeStockPick(pick.id, closedPrice);
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content:
-                Text('${pick.name} 종료 처리됨', style: GoogleFonts.inter()),
-            backgroundColor: Colors.orangeAccent,
-          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('${pick.name} 종료 처리됨', style: GoogleFonts.inter()),
+              backgroundColor: Colors.orangeAccent,
+            ),
+          );
         }
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
               content: Text('오류: $e'),
-              backgroundColor: Colors.redAccent));
+              backgroundColor: Colors.redAccent,
+            ),
+          );
         }
       }
     }
@@ -640,21 +767,42 @@ class _ManageCard extends StatelessWidget {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF1A2035),
-        title: Text('삭제 확인',
-            style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w600)),
+        title: Text(
+          '삭제 확인',
+          style: GoogleFonts.inter(
+            color: Theme.of(context).colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         content: Text(
           '${pick.name}(${pick.ticker})을 삭제하시겠습니까?',
-          style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7)),
+          style: GoogleFonts.inter(
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.7),
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: Text('취소', style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38))),
+            child: Text(
+              '취소',
+              style: GoogleFonts.inter(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.38),
+              ),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text('삭제',
-                style: GoogleFonts.inter(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+            child: Text(
+              '삭제',
+              style: GoogleFonts.inter(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -675,7 +823,9 @@ class _ManageCard extends StatelessWidget {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text('오류: $e'), backgroundColor: Colors.redAccent),
+              content: Text('오류: $e'),
+              backgroundColor: Colors.redAccent,
+            ),
           );
         }
       }
@@ -697,14 +847,19 @@ class _EditScreen extends StatelessWidget {
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon:
-              Icon(Icons.arrow_back_ios, color: Theme.of(context).colorScheme.onSurface, size: 18),
+          icon: Icon(
+            Icons.arrow_back_ios,
+            color: Theme.of(context).colorScheme.onSurface,
+            size: 18,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           '종목 수정',
           style: GoogleFonts.inter(
-              color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w600),
+            color: Theme.of(context).colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ),
       body: _UploadTab(editPick: pick),
@@ -776,17 +931,22 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
         await _fs.addAnnouncement(a);
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(_editing != null ? '공지 수정 완료' : '공지 등록 완료',
-              style: GoogleFonts.inter()),
-          backgroundColor: const Color(0xFF10B981),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _editing != null ? '공지 수정 완료' : '공지 등록 완료',
+              style: GoogleFonts.inter(),
+            ),
+            backgroundColor: const Color(0xFF10B981),
+          ),
+        );
         _cancelEdit();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('오류: $e'), backgroundColor: Colors.redAccent));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('오류: $e'), backgroundColor: Colors.redAccent),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -798,19 +958,43 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF1A2035),
-        title: Text('삭제 확인',
-            style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w600)),
-        content: Text('공지 "${a.title}"를 삭제하시겠습니까?',
-            style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7))),
+        title: Text(
+          '삭제 확인',
+          style: GoogleFonts.inter(
+            color: Theme.of(context).colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: Text(
+          '공지 "${a.title}"를 삭제하시겠습니까?',
+          style: GoogleFonts.inter(
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.7),
+          ),
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text('취소', style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)))),
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              '취소',
+              style: GoogleFonts.inter(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.38),
+              ),
+            ),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text('삭제',
-                  style: GoogleFonts.inter(
-                      color: Colors.redAccent, fontWeight: FontWeight.w600))),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              '삭제',
+              style: GoogleFonts.inter(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -826,25 +1010,42 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: const Color(0xFF1A2035),
-            border: Border(bottom: BorderSide(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12))),
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.12),
+              ),
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(_editing != null ? '공지 수정' : '공지 등록',
-                  style: GoogleFonts.inter(
-                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54), fontSize: 12, fontWeight: FontWeight.w600)),
+              Text(
+                _editing != null ? '공지 수정' : '공지 등록',
+                style: GoogleFonts.inter(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.54),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(height: 10),
               TextField(
                 controller: _titleCtrl,
-                style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface),
+                style: GoogleFonts.inter(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
                 decoration: _inputDeco(context, '제목'),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: _bodyCtrl,
                 maxLines: 4,
-                style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface),
+                style: GoogleFonts.inter(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
                 decoration: _inputDeco(context, '본문'),
               ),
               const SizedBox(height: 8),
@@ -855,14 +1056,27 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
                     activeThumbColor: const Color(0xFF10B981),
                     onChanged: (v) => setState(() => _isPinned = v),
                   ),
-                  Text('상단 고정',
-                      style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7), fontSize: 13)),
+                  Text(
+                    '상단 고정',
+                    style: GoogleFonts.inter(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.7),
+                      fontSize: 13,
+                    ),
+                  ),
                   const Spacer(),
                   if (_editing != null)
                     TextButton(
                       onPressed: _cancelEdit,
-                      child: Text('취소',
-                          style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38))),
+                      child: Text(
+                        '취소',
+                        style: GoogleFonts.inter(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.38),
+                        ),
+                      ),
                     ),
                   const SizedBox(width: 8),
                   ElevatedButton(
@@ -870,18 +1084,29 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
                       backgroundColor: const Color(0xFF10B981),
                       foregroundColor: Colors.black,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 10),
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
                     ),
                     onPressed: _isLoading ? null : _submit,
                     child: _isLoading
                         ? const SizedBox(
-                            width: 16, height: 16,
+                            width: 16,
+                            height: 16,
                             child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.black))
-                        : Text(_editing != null ? '수정' : '등록',
-                            style: GoogleFonts.inter(fontWeight: FontWeight.w700)),
+                              strokeWidth: 2,
+                              color: Colors.black,
+                            ),
+                          )
+                        : Text(
+                            _editing != null ? '수정' : '등록',
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                   ),
                 ],
               ),
@@ -895,13 +1120,21 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF10B981)));
+                  child: CircularProgressIndicator(color: Color(0xFF10B981)),
+                );
               }
               final list = snapshot.data ?? [];
               if (list.isEmpty) {
                 return Center(
-                    child: Text('등록된 공지가 없습니다',
-                        style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38))));
+                  child: Text(
+                    '등록된 공지가 없습니다',
+                    style: GoogleFonts.inter(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.38),
+                    ),
+                  ),
+                );
               }
               return ListView.builder(
                 padding: const EdgeInsets.all(12),
@@ -917,7 +1150,9 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
                       border: Border.all(
                         color: a.isPinned
                             ? const Color(0xFF10B981).withValues(alpha: 0.4)
-                            : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.05),
+                            : Theme.of(
+                                context,
+                              ).colorScheme.onSurface.withValues(alpha: 0.05),
                       ),
                     ),
                     child: Row(
@@ -925,34 +1160,53 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
                         if (a.isPinned)
                           const Padding(
                             padding: EdgeInsets.only(right: 6),
-                            child: Icon(Icons.push_pin,
-                                color: Color(0xFF10B981), size: 14),
+                            child: Icon(
+                              Icons.push_pin,
+                              color: Color(0xFF10B981),
+                              size: 14,
+                            ),
                           ),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(a.title,
-                                  style: GoogleFonts.inter(
-                                      color: Theme.of(context).colorScheme.onSurface,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13)),
-                              Text(a.body,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.inter(
-                                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38), fontSize: 11)),
+                              Text(
+                                a.title,
+                                style: GoogleFonts.inter(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              Text(
+                                a.body,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(
+                                  color: Theme.of(context).colorScheme.onSurface
+                                      .withValues(alpha: 0.38),
+                                  fontSize: 11,
+                                ),
+                              ),
                             ],
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.edit_outlined,
-                              color: Color(0xFF10B981), size: 18),
+                          icon: const Icon(
+                            Icons.edit_outlined,
+                            color: Color(0xFF10B981),
+                            size: 18,
+                          ),
                           onPressed: () => _startEdit(a),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete_outline,
-                              color: Colors.redAccent, size: 18),
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.redAccent,
+                            size: 18,
+                          ),
                           onPressed: () => _delete(a),
                         ),
                       ],
@@ -970,20 +1224,20 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
   InputDecoration _inputDeco(BuildContext context, String hint) {
     final cs = Theme.of(context).colorScheme;
     return InputDecoration(
-        hintText: hint,
-        hintStyle: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.24)),
-        filled: true,
-        fillColor: const Color(0xFF0A0E1A),
-        border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide.none),
-        focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide:
-                const BorderSide(color: Color(0xFF10B981), width: 1.5)),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      );
+      hintText: hint,
+      hintStyle: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.24)),
+      filled: true,
+      fillColor: const Color(0xFF0A0E1A),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    );
   }
 }
 
@@ -1015,22 +1269,43 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF1A2035),
-        title: Text('삭제 확인',
-            style: GoogleFonts.inter(
-                color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w600)),
-        content: Text('"${a.title}"를 삭제하시겠습니까?',
-            style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7))),
+        title: Text(
+          '삭제 확인',
+          style: GoogleFonts.inter(
+            color: Theme.of(context).colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: Text(
+          '"${a.title}"를 삭제하시겠습니까?',
+          style: GoogleFonts.inter(
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.7),
+          ),
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text('취소',
-                  style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)))),
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(
+              '취소',
+              style: GoogleFonts.inter(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.38),
+              ),
+            ),
+          ),
           TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text('삭제',
-                  style: GoogleFonts.inter(
-                      color: Colors.redAccent,
-                      fontWeight: FontWeight.w600))),
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              '삭제',
+              style: GoogleFonts.inter(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1047,9 +1322,12 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
           decoration: BoxDecoration(
             color: const Color(0xFF1A2035),
             border: Border(
-                bottom: BorderSide(
-                    color:
-                        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12))),
+              bottom: BorderSide(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.12),
+              ),
+            ),
           ),
           child: SizedBox(
             width: double.infinity,
@@ -1058,12 +1336,19 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF10B981),
                 foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               onPressed: () => _openWrite(),
               icon: const Icon(Icons.add, size: 20),
-              label: Text('새 시황 분석 작성',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 14)),
+              label: Text(
+                '새 시황 분석 작성',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14,
+                ),
+              ),
             ),
           ),
         ),
@@ -1074,17 +1359,21 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF10B981)));
+                  child: CircularProgressIndicator(color: Color(0xFF10B981)),
+                );
               }
               final list = snapshot.data ?? [];
               if (list.isEmpty) {
                 return Center(
-                    child: Text('등록된 시황 분석이 없습니다',
-                        style: GoogleFonts.inter(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurface
-                                .withValues(alpha: 0.38))));
+                  child: Text(
+                    '등록된 시황 분석이 없습니다',
+                    style: GoogleFonts.inter(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.38),
+                    ),
+                  ),
+                );
               }
               return ListView.builder(
                 padding: const EdgeInsets.all(12),
@@ -1098,10 +1387,10 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
                       color: const Color(0xFF1A2035),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withValues(alpha: 0.05)),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.05),
+                      ),
                     ),
                     child: Row(
                       children: [
@@ -1109,32 +1398,43 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(a.title,
-                                  style: GoogleFonts.inter(
-                                      color:
-                                          Theme.of(context).colorScheme.onSurface,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 13)),
-                              Text(a.body,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.inter(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurface
-                                          .withValues(alpha: 0.38),
-                                      fontSize: 11)),
+                              Text(
+                                a.title,
+                                style: GoogleFonts.inter(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              Text(
+                                a.body,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.inter(
+                                  color: Theme.of(context).colorScheme.onSurface
+                                      .withValues(alpha: 0.38),
+                                  fontSize: 11,
+                                ),
+                              ),
                             ],
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.edit_outlined,
-                              color: Color(0xFF10B981), size: 18),
+                          icon: const Icon(
+                            Icons.edit_outlined,
+                            color: Color(0xFF10B981),
+                            size: 18,
+                          ),
                           onPressed: () => _openWrite(a),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete_outline,
-                              color: Colors.redAccent, size: 18),
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.redAccent,
+                            size: 18,
+                          ),
                           onPressed: () => _delete(a),
                         ),
                       ],
@@ -1205,25 +1505,51 @@ class _PushNotificationTabState extends State<_PushNotificationTab> {
         children: [
           Text(
             '전체 유저에게 푸시 알림을 보냅니다',
-            style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 13),
+            style: GoogleFonts.inter(
+              color: cs.onSurface.withValues(alpha: 0.5),
+              fontSize: 13,
+            ),
           ),
           const SizedBox(height: 24),
-          Text('제목', style: GoogleFonts.inter(color: cs.onSurface, fontWeight: FontWeight.w600, fontSize: 14)),
+          Text(
+            '제목',
+            style: GoogleFonts.inter(
+              color: cs.onSurface,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
           const SizedBox(height: 8),
           TextField(
             controller: _titleController,
             style: GoogleFonts.inter(color: cs.onSurface, fontSize: 14),
             decoration: InputDecoration(
               hintText: '예) 📈 새 추천주 등록!',
-              hintStyle: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.3), fontSize: 14),
+              hintStyle: GoogleFonts.inter(
+                color: cs.onSurface.withValues(alpha: 0.3),
+                fontSize: 14,
+              ),
               filled: true,
               fillColor: cs.surface,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
             ),
           ),
           const SizedBox(height: 16),
-          Text('내용', style: GoogleFonts.inter(color: cs.onSurface, fontWeight: FontWeight.w600, fontSize: 14)),
+          Text(
+            '내용',
+            style: GoogleFonts.inter(
+              color: cs.onSurface,
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
           const SizedBox(height: 8),
           TextField(
             controller: _bodyController,
@@ -1231,11 +1557,20 @@ class _PushNotificationTabState extends State<_PushNotificationTab> {
             maxLines: 4,
             decoration: InputDecoration(
               hintText: '예) 지금 바로 확인해보세요!',
-              hintStyle: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.3), fontSize: 14),
+              hintStyle: GoogleFonts.inter(
+                color: cs.onSurface.withValues(alpha: 0.3),
+                fontSize: 14,
+              ),
               filled: true,
               fillColor: cs.surface,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -1247,15 +1582,29 @@ class _PushNotificationTabState extends State<_PushNotificationTab> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF10B981),
                 foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                disabledBackgroundColor: const Color(0xFF10B981).withValues(alpha: 0.4),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                disabledBackgroundColor: const Color(
+                  0xFF10B981,
+                ).withValues(alpha: 0.4),
               ),
               icon: _sending
-                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.black,
+                      ),
+                    )
                   : const Icon(Icons.send_rounded, size: 18),
               label: Text(
                 _sending ? '발송 중...' : '전체 발송',
-                style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 15),
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                ),
               ),
             ),
           ),
@@ -1264,8 +1613,14 @@ class _PushNotificationTabState extends State<_PushNotificationTab> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: cs.surface, borderRadius: BorderRadius.circular(10)),
-              child: Text(_lastResult!, style: GoogleFonts.inter(color: cs.onSurface, fontSize: 13)),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                _lastResult!,
+                style: GoogleFonts.inter(color: cs.onSurface, fontSize: 13),
+              ),
             ),
           ],
         ],
@@ -1284,82 +1639,119 @@ class _UsersTab extends StatefulWidget {
 }
 
 class _UsersTabState extends State<_UsersTab> {
-  late Future<List<Map<String, dynamic>>> _future;
+  final _firestoreService = FirestoreService();
+  final _scrollController = ScrollController();
+  final List<Map<String, dynamic>> _users = [];
+  DocumentSnapshot? _lastDoc;
+  bool _loading = false;
+  bool _initialLoading = true;
+  bool _hasMore = true;
+  String? _error;
+  int _totalUsers = 0;
+  int _todayUsers = 0;
+
+  static const _pageSize = 100;
 
   @override
   void initState() {
     super.initState();
-    _future = FirestoreService().getAdminUserList();
+    _loadSummary();
+    _loadMore();
+    _scrollController.addListener(() {
+      final pos = _scrollController.position;
+      if (pos.maxScrollExtent > 0 && pos.pixels >= pos.maxScrollExtent - 200) {
+        _loadMore();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadSummary() async {
+    try {
+      final summary = await _firestoreService.getAdminUserListSummary();
+      if (!mounted) return;
+      setState(() {
+        _totalUsers = summary.totalUsers;
+        _todayUsers = summary.todayUsers;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _loadMore() async {
+    if (_loading || !_hasMore) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final page = await _firestoreService.getAdminUserListPaged(
+        startAfter: _lastDoc,
+        limit: _pageSize,
+      );
+      if (!mounted) return;
+      setState(() {
+        _users.addAll(page.users);
+        _lastDoc = page.lastDoc;
+        _hasMore = page.hasMore;
+        _loading = false;
+        _initialLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _initialLoading = false;
+        _error = '$e';
+      });
+    }
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _users.clear();
+      _lastDoc = null;
+      _hasMore = true;
+      _initialLoading = true;
+      _error = null;
+    });
+    await _loadSummary();
+    await _loadMore();
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _future,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: Color(0xFF10B981)));
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text('오류: ${snapshot.error}', style: GoogleFonts.inter(color: cs.onSurface)));
-        }
-        final users = snapshot.data ?? [];
-        final today = DateTime.now();
-        final todayCount = users.where((u) {
-          final ts = u['createdAt'] as Timestamp?;
-          if (ts == null) return false;
-          final d = ts.toDate();
-          return d.year == today.year && d.month == today.month && d.day == today.day;
-        }).length;
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: users.length + 1,
-          itemBuilder: (context, i) {
-            if (i == 0) {
-              return Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        children: [
-                          Text('전체 가입자', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 12)),
-                          const SizedBox(height: 4),
-                          Text('${users.length}명', style: GoogleFonts.inter(color: cs.onSurface, fontWeight: FontWeight.w700, fontSize: 22)),
-                        ],
-                      ),
-                    ),
-                    Container(width: 1, height: 40, color: cs.onSurface.withValues(alpha: 0.1)),
-                    Expanded(
-                      child: Column(
-                        children: [
-                          Text('오늘 가입', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.5), fontSize: 12)),
-                          const SizedBox(height: 4),
-                          Text('+$todayCount명', style: GoogleFonts.inter(color: const Color(0xFF10B981), fontWeight: FontWeight.w700, fontSize: 22)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-            final u = users[i - 1];
-            final uid = u['uid'] as String;
-            final nickname = u['nickname'] as String;
-            final commentCount = u['commentCount'] as int;
-            final createdAt = u['createdAt'] as Timestamp?;
-            final joinDate = createdAt != null
-                ? DateFormat('yyyy.MM.dd').format(createdAt.toDate())
-                : '-';
+    if (_initialLoading && _users.isEmpty) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF10B981)),
+      );
+    }
+    if (_error != null && _users.isEmpty) {
+      return Center(
+        child: Text(
+          '오류: $_error',
+          style: GoogleFonts.inter(color: cs.onSurface),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _refresh,
+      color: const Color(0xFF10B981),
+      child: ListView.builder(
+        controller: _scrollController,
+        padding: const EdgeInsets.all(16),
+        itemCount: _users.length + 1 + (_loading || _hasMore ? 1 : 0),
+        itemBuilder: (context, i) {
+          if (i == 0) {
             return Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
                 color: cs.surface,
                 borderRadius: BorderRadius.circular(12),
@@ -1368,56 +1760,149 @@ class _UsersTabState extends State<_UsersTab> {
                 children: [
                   Expanded(
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          nickname.isNotEmpty ? nickname : '(닉네임 없음)',
+                          '전체 가입자',
                           style: GoogleFonts.inter(
-                            color: cs.onSurface,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
+                            color: cs.onSurface.withValues(alpha: 0.5),
+                            fontSize: 12,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 4),
                         Text(
-                          uid,
+                          '$_totalUsers명',
                           style: GoogleFonts.inter(
-                            color: cs.onSurface.withValues(alpha: 0.4),
-                            fontSize: 11,
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 22,
                           ),
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '댓글 $commentCount',
-                        style: GoogleFonts.inter(
-                          color: const Color(0xFF10B981),
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
+                  Container(
+                    width: 1,
+                    height: 40,
+                    color: cs.onSurface.withValues(alpha: 0.1),
+                  ),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Text(
+                          '오늘 가입',
+                          style: GoogleFonts.inter(
+                            color: cs.onSurface.withValues(alpha: 0.5),
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        '가입 $joinDate',
-                        style: GoogleFonts.inter(
-                          color: cs.onSurface.withValues(alpha: 0.5),
-                          fontSize: 12,
+                        const SizedBox(height: 4),
+                        Text(
+                          '+$_todayUsers명',
+                          style: GoogleFonts.inter(
+                            color: const Color(0xFF10B981),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 22,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
             );
-          },
-        );
-      },
+          }
+
+          final index = i - 1;
+          if (index >= _users.length) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: _loading
+                    ? const CircularProgressIndicator(
+                        color: Color(0xFF10B981),
+                        strokeWidth: 2,
+                      )
+                    : Text(
+                        '아래로 스크롤하면 다음 100명을 불러옵니다',
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.45),
+                          fontSize: 12,
+                        ),
+                      ),
+              ),
+            );
+          }
+
+          final u = _users[index];
+          final uid = u['uid'] as String;
+          final nickname = u['nickname'] as String;
+          final level = (u['level'] as num?)?.toInt() ?? 1;
+          final postCount = (u['postCount'] as num?)?.toInt() ?? 0;
+          final commentCount = (u['commentCount'] as num?)?.toInt() ?? 0;
+          final createdAt = u['createdAt'] as Timestamp?;
+          final joinDate = createdAt != null
+              ? DateFormat('yyyy.MM.dd').format(createdAt.toDate())
+              : '-';
+          return Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        nickname.isNotEmpty ? nickname : '(닉네임 없음)',
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        uid,
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.4),
+                          fontSize: 11,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Lv.$level · 게시글 $postCount · 댓글 $commentCount',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF10B981),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '가입 $joinDate',
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.5),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -1445,20 +1930,33 @@ class _ReportsTabState extends State<_ReportsTab> {
   Future<void> _load() async {
     setState(() => _loading = true);
     final reports = await _firestoreService.getReports();
-    if (mounted) setState(() { _reports = reports; _loading = false; });
+    if (mounted)
+      setState(() {
+        _reports = reports;
+        _loading = false;
+      });
   }
 
   Future<void> _delete(String reportId) async {
     await _firestoreService.deleteReport(reportId);
-    if (mounted) setState(() => _reports.removeWhere((r) => r['id'] == reportId));
+    if (mounted)
+      setState(() => _reports.removeWhere((r) => r['id'] == reportId));
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    if (_loading) return const Center(child: CircularProgressIndicator(color: Color(0xFF10B981)));
+    if (_loading)
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF10B981)),
+      );
     if (_reports.isEmpty) {
-      return Center(child: Text('신고 내역이 없습니다', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4))));
+      return Center(
+        child: Text(
+          '신고 내역이 없습니다',
+          style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4)),
+        ),
+      );
     }
     return RefreshIndicator(
       onRefresh: _load,
@@ -1483,39 +1981,86 @@ class _ReportsTabState extends State<_ReportsTab> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
             ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: Colors.orangeAccent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.orangeAccent.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        typeLabel,
+                        style: GoogleFonts.inter(
+                          color: Colors.orangeAccent,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      r['reason'] as String? ?? '',
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => _delete(r['id'] as String),
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        size: 18,
+                        color: Colors.redAccent,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '신고자: ${r['reporterUid']}',
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.4),
+                    fontSize: 11,
                   ),
-                  child: Text(typeLabel, style: GoogleFonts.inter(color: Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.w700)),
                 ),
-                const SizedBox(width: 8),
-                Text(r['reason'] as String? ?? '', style: GoogleFonts.inter(color: cs.onSurface, fontSize: 13, fontWeight: FontWeight.w600)),
-                const Spacer(),
-                IconButton(
-                  onPressed: () => _delete(r['id'] as String),
-                  icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                Text(
+                  '대상: ${r['targetUid']}',
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.4),
+                    fontSize: 11,
+                  ),
                 ),
-              ]),
-              const SizedBox(height: 6),
-              Text('신고자: ${r['reporterUid']}', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4), fontSize: 11)),
-              Text('대상: ${r['targetUid']}', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4), fontSize: 11)),
-              Text('컨텐츠 ID: ${r['contentId']}', style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4), fontSize: 11)),
-              if (createdAt != null)
-                Text(DateFormat('yyyy.MM.dd HH:mm').format(createdAt),
-                    style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.3), fontSize: 11)),
-            ]),
+                Text(
+                  '컨텐츠 ID: ${r['contentId']}',
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.4),
+                    fontSize: 11,
+                  ),
+                ),
+                if (createdAt != null)
+                  Text(
+                    DateFormat('yyyy.MM.dd HH:mm').format(createdAt),
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.3),
+                      fontSize: 11,
+                    ),
+                  ),
+              ],
+            ),
           );
         },
       ),
     );
   }
 }
-
-

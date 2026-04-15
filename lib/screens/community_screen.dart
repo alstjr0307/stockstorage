@@ -115,8 +115,11 @@ class _JournalTabState extends State<_JournalTab> {
   DocumentSnapshot? _lastDoc;
   bool _loading = false;
   bool _hasMore = true;
+  bool _searchLoading = false;
+  int _searchTargetCount = 0;
 
   static const _pageSize = 15;
+  static const _searchChunkSize = 1000;
 
   @override
   void initState() {
@@ -203,6 +206,35 @@ class _JournalTabState extends State<_JournalTab> {
     }).toList();
   }
 
+  Future<void> _loadMoreForSearchIfNeeded() async {
+    if (_searchLoading) return;
+    if (_searchQuery.trim().isEmpty || !_hasMore) return;
+    if (_searchTargetCount <= _journals.length) {
+      _searchTargetCount = _journals.length + _searchChunkSize;
+    }
+
+    setState(() => _searchLoading = true);
+    try {
+      while (mounted) {
+        final currentQ = _searchQuery.trim().toLowerCase();
+        if (currentQ.isEmpty || !_hasMore) break;
+        if (_journals.length >= _searchTargetCount) break;
+
+        if (_loading) {
+          await Future<void>.delayed(const Duration(milliseconds: 60));
+          continue;
+        }
+
+        final beforeCursor = _lastDoc?.id;
+        await _loadMore();
+        final afterCursor = _lastDoc?.id;
+        if (beforeCursor == afterCursor) break;
+      }
+    } finally {
+      if (mounted) setState(() => _searchLoading = false);
+    }
+  }
+
   Future<void> _loadMore() async {
     if (_loading || !_hasMore) return;
     setState(() => _loading = true);
@@ -260,6 +292,7 @@ class _JournalTabState extends State<_JournalTab> {
       _lastDoc = null;
       _hasMore = true;
       _commentCountByJournalId.clear();
+      _searchTargetCount = 0;
     });
     await _loadMore();
   }
@@ -294,6 +327,18 @@ class _JournalTabState extends State<_JournalTab> {
     final cs = Theme.of(context).colorScheme;
     final filtered = _filteredJournals();
     final isSearching = _searchQuery.trim().isNotEmpty;
+    final showDefaultPagingLoader = _hasMore && !isSearching;
+    final canLoadMoreSearchResults =
+        isSearching &&
+        _hasMore &&
+        !_searchLoading &&
+        _journals.length >= _searchTargetCount &&
+        _searchTargetCount > 0;
+    final showSearchMoreButton = canLoadMoreSearchResults;
+    final tailCount =
+        (showDefaultPagingLoader ? 1 : 0) +
+        (_searchLoading ? 1 : 0) +
+        (showSearchMoreButton ? 1 : 0);
 
     if (_loading && _journals.isEmpty) {
       return const Center(
@@ -317,7 +362,7 @@ class _JournalTabState extends State<_JournalTab> {
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-        itemCount: 1 + filtered.length + (_hasMore && !isSearching ? 1 : 0),
+        itemCount: 1 + filtered.length + tailCount,
         itemBuilder: (ctx, i) {
           if (i == 0) {
             return Padding(
@@ -325,7 +370,18 @@ class _JournalTabState extends State<_JournalTab> {
               child: TextField(
                 controller: _searchController,
                 onTapOutside: (_) => FocusScope.of(context).unfocus(),
-                onChanged: (v) => setState(() => _searchQuery = v),
+                onChanged: (v) {
+                  final wasEmpty = _searchQuery.trim().isEmpty;
+                  setState(() {
+                    _searchQuery = v;
+                    if (v.trim().isEmpty) {
+                      _searchTargetCount = 0;
+                    } else if (wasEmpty) {
+                      _searchTargetCount = _journals.length + _searchChunkSize;
+                    }
+                  });
+                  _loadMoreForSearchIfNeeded();
+                },
                 style: GoogleFonts.inter(color: cs.onSurface, fontSize: 14),
                 decoration: InputDecoration(
                   hintText: '종목명/티커 검색',
@@ -343,7 +399,10 @@ class _JournalTabState extends State<_JournalTab> {
                       : GestureDetector(
                           onTap: () {
                             _searchController.clear();
-                            setState(() => _searchQuery = '');
+                            setState(() {
+                              _searchQuery = '';
+                              _searchTargetCount = 0;
+                            });
                           },
                           child: Icon(
                             Icons.close_rounded,
@@ -376,6 +435,17 @@ class _JournalTabState extends State<_JournalTab> {
           }
 
           if (filtered.isEmpty) {
+            if (_searchLoading) {
+              return const Padding(
+                padding: EdgeInsets.only(top: 36),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    color: Color(0xFF10B981),
+                    strokeWidth: 2,
+                  ),
+                ),
+              );
+            }
             return Padding(
               padding: const EdgeInsets.only(top: 48),
               child: Center(
@@ -390,7 +460,10 @@ class _JournalTabState extends State<_JournalTab> {
             );
           }
 
-          if (i == filtered.length + 1) {
+          final tailIndex = i - (1 + filtered.length);
+          var currentTail = 0;
+
+          if (showDefaultPagingLoader && tailIndex == currentTail) {
             return const Padding(
               padding: EdgeInsets.symmetric(vertical: 20),
               child: Center(
@@ -401,6 +474,50 @@ class _JournalTabState extends State<_JournalTab> {
               ),
             );
           }
+          if (showDefaultPagingLoader) currentTail++;
+
+          if (_searchLoading && tailIndex == currentTail) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(
+                child: CircularProgressIndicator(
+                  color: Color(0xFF10B981),
+                  strokeWidth: 2,
+                ),
+              ),
+            );
+          }
+          if (_searchLoading) currentTail++;
+
+          if (showSearchMoreButton && tailIndex == currentTail) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: OutlinedButton(
+                onPressed: () {
+                  setState(() {
+                    _searchTargetCount += _searchChunkSize;
+                  });
+                  _loadMoreForSearchIfNeeded();
+                },
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(44),
+                  side: BorderSide(color: cs.onSurface.withValues(alpha: 0.18)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: Text(
+                  '결과 더보기 (다음 1000개 검색)',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: cs.onSurface.withValues(alpha: 0.85),
+                  ),
+                ),
+              ),
+            );
+          }
+
           final journal = filtered[i - 1];
           final isOwn = auth.user?.uid == journal.uid;
           final linkedSells = _journals
@@ -1757,10 +1874,10 @@ class _PostCardState extends State<_PostCard> {
                         const SizedBox(width: 2),
                         Text(
                           '${widget.commentCount}',
-                          style: GoogleFonts.robotoMono(
+                          style: GoogleFonts.inter(
                             fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: cs.onSurface.withValues(alpha: 0.42),
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurface.withValues(alpha: 0.4),
                           ),
                         ),
                       ],
@@ -2369,296 +2486,309 @@ class _CommentSheetState extends State<_CommentSheet> {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color(0xFF0D1117) : Colors.white;
+    final sheetHeight = MediaQuery.of(context).size.height * 0.82;
     final bottomPad = MediaQuery.of(context).viewInsets.bottom;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      padding: EdgeInsets.fromLTRB(12, 12, 12, bottomPad + 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // 핸들
-          Center(
-            child: Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: cs.onSurface.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(2),
+    return SizedBox(
+      height: sheetHeight,
+      child: Container(
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: EdgeInsets.fromLTRB(12, 12, 12, bottomPad + 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            // 핸들
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: cs.onSurface.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          Text(
-            '댓글',
-            style: GoogleFonts.inter(
-              color: cs.onSurface,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+            Text(
+              '댓글',
+              style: GoogleFonts.inter(
+                color: cs.onSurface,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          // 댓글 목록
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 320),
-            child: StreamBuilder<List<Comment>>(
-              stream: _stream,
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Color(0xFF10B981),
-                      ),
-                    ),
-                  );
-                }
-                final comments = snap.data ?? [];
-                if (comments.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                      child: Text(
-                        '첫 댓글을 남겨보세요',
-                        style: GoogleFonts.inter(
-                          color: cs.onSurface.withValues(alpha: 0.3),
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  );
-                }
-                final visible = comments
-                    .where((c) => !_blockedUids.contains(c.uid))
-                    .toList();
-                if (visible.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                      child: Text(
-                        '첫 댓글을 남겨보세요',
-                        style: GoogleFonts.inter(
-                          color: cs.onSurface.withValues(alpha: 0.3),
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  );
-                }
-                return ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: visible.length,
-                  separatorBuilder: (context, i) => Divider(
-                    height: 16,
-                    thickness: 1,
-                    color: cs.onSurface.withValues(alpha: 0.08),
-                  ),
-                  itemBuilder: (_, i) {
-                    final c = visible[i];
-                    final isOwn = widget.auth.user?.uid == c.uid;
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          UserLevelAvatar(
-                            uid: c.uid,
-                            radius: 14,
-                            backgroundColor: cs.onSurface.withValues(
-                              alpha: 0.08,
-                            ),
-                            textStyle: GoogleFonts.inter(
-                              color: cs.onSurface.withValues(alpha: 0.6),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      c.nickname,
-                                      style: GoogleFonts.inter(
-                                        color: cs.onSurface.withValues(
-                                          alpha: 0.7,
-                                        ),
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      DateFormat(
-                                        'MM.dd HH:mm',
-                                      ).format(c.createdAt),
-                                      style: GoogleFonts.inter(
-                                        color: cs.onSurface.withValues(
-                                          alpha: 0.3,
-                                        ),
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  c.content,
-                                  style: GoogleFonts.inter(
-                                    color: cs.onSurface,
-                                    fontSize: 13,
-                                    height: 1.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (isOwn)
-                            GestureDetector(
-                              onTap: () => _delete(c.id),
-                              child: Padding(
-                                padding: const EdgeInsets.only(left: 8, top: 2),
-                                child: Icon(
-                                  Icons.close,
-                                  size: 14,
-                                  color: cs.onSurface.withValues(alpha: 0.25),
-                                ),
-                              ),
-                            )
-                          else if (widget.auth.isLoggedIn)
-                            PopupMenuButton<String>(
-                              icon: Icon(
-                                Icons.more_vert,
-                                size: 16,
-                                color: cs.onSurface.withValues(alpha: 0.25),
-                              ),
-                              padding: EdgeInsets.zero,
-                              color: cs.surface,
-                              onSelected: (v) {
-                                if (v == 'report') _handleReport(c);
-                                if (v == 'block') _handleBlock(c);
-                              },
-                              itemBuilder: (_) => [
-                                PopupMenuItem(
-                                  value: 'report',
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.flag_outlined,
-                                        size: 15,
-                                        color: Colors.orangeAccent,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        '신고하기',
-                                        style: GoogleFonts.inter(fontSize: 13),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                PopupMenuItem(
-                                  value: 'block',
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.block,
-                                        size: 15,
-                                        color: Colors.redAccent,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        '차단하기',
-                                        style: GoogleFonts.inter(fontSize: 13),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
-          Divider(height: 1, color: cs.onSurface.withValues(alpha: 0.08)),
-          const SizedBox(height: 10),
-          // 입력창
-          if (widget.auth.isLoggedIn)
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _ctrl,
-                    maxLines: 1,
-                    style: GoogleFonts.inter(color: cs.onSurface, fontSize: 13),
-                    decoration: InputDecoration(
-                      hintText: '댓글을 입력해주세요',
-                      hintStyle: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.3),
-                        fontSize: 13,
-                      ),
-                      filled: true,
-                      fillColor: cs.onSurface.withValues(alpha: 0.05),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _sending
-                    ? const SizedBox(
-                        width: 36,
-                        height: 36,
+            const SizedBox(height: 12),
+            // 댓글 목록
+            Expanded(
+              child: StreamBuilder<List<Comment>>(
+                stream: _stream,
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           color: Color(0xFF10B981),
                         ),
-                      )
-                    : GestureDetector(
-                        onTap: _submit,
-                        child: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF10B981),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.send,
-                            size: 16,
-                            color: Colors.black,
+                      ),
+                    );
+                  }
+                  final comments = snap.data ?? [];
+                  if (comments.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Text(
+                          '첫 댓글을 남겨보세요',
+                          style: GoogleFonts.inter(
+                            color: cs.onSurface.withValues(alpha: 0.3),
+                            fontSize: 13,
                           ),
                         ),
                       ),
-              ],
-            )
-          else
-            Text(
-              '댓글을 작성하려면 로그인이 필요합니다.',
-              style: GoogleFonts.inter(
-                color: cs.onSurface.withValues(alpha: 0.35),
-                fontSize: 12,
+                    );
+                  }
+                  final visible = comments
+                      .where((c) => !_blockedUids.contains(c.uid))
+                      .toList();
+                  if (visible.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Text(
+                          '첫 댓글을 남겨보세요',
+                          style: GoogleFonts.inter(
+                            color: cs.onSurface.withValues(alpha: 0.3),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: visible.length,
+                    separatorBuilder: (context, i) => Divider(
+                      height: 16,
+                      thickness: 1,
+                      color: cs.onSurface.withValues(alpha: 0.08),
+                    ),
+                    itemBuilder: (_, i) {
+                      final c = visible[i];
+                      final isOwn = widget.auth.user?.uid == c.uid;
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            UserLevelAvatar(
+                              uid: c.uid,
+                              radius: 14,
+                              backgroundColor: cs.onSurface.withValues(
+                                alpha: 0.08,
+                              ),
+                              textStyle: GoogleFonts.inter(
+                                color: cs.onSurface.withValues(alpha: 0.6),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        c.nickname,
+                                        style: GoogleFonts.inter(
+                                          color: cs.onSurface.withValues(
+                                            alpha: 0.7,
+                                          ),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        DateFormat(
+                                          'MM.dd HH:mm',
+                                        ).format(c.createdAt),
+                                        style: GoogleFonts.inter(
+                                          color: cs.onSurface.withValues(
+                                            alpha: 0.3,
+                                          ),
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    c.content,
+                                    style: GoogleFonts.inter(
+                                      color: cs.onSurface,
+                                      fontSize: 14,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isOwn)
+                              GestureDetector(
+                                onTap: () => _delete(c.id),
+                                child: Padding(
+                                  padding: const EdgeInsets.only(
+                                    left: 8,
+                                    top: 2,
+                                  ),
+                                  child: Icon(
+                                    Icons.close,
+                                    size: 14,
+                                    color: cs.onSurface.withValues(alpha: 0.25),
+                                  ),
+                                ),
+                              )
+                            else if (widget.auth.isLoggedIn)
+                              PopupMenuButton<String>(
+                                icon: Icon(
+                                  Icons.more_vert,
+                                  size: 16,
+                                  color: cs.onSurface.withValues(alpha: 0.25),
+                                ),
+                                padding: EdgeInsets.zero,
+                                color: cs.surface,
+                                onSelected: (v) {
+                                  if (v == 'report') _handleReport(c);
+                                  if (v == 'block') _handleBlock(c);
+                                },
+                                itemBuilder: (_) => [
+                                  PopupMenuItem(
+                                    value: 'report',
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.flag_outlined,
+                                          size: 15,
+                                          color: Colors.orangeAccent,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          '신고하기',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'block',
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.block,
+                                          size: 15,
+                                          color: Colors.redAccent,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          '차단하기',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
             ),
-        ],
+            const SizedBox(height: 12),
+            Divider(height: 1, color: cs.onSurface.withValues(alpha: 0.08)),
+            const SizedBox(height: 10),
+            // 입력창
+            if (widget.auth.isLoggedIn)
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _ctrl,
+                      maxLines: 1,
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface,
+                        fontSize: 13,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: '댓글을 입력해주세요',
+                        hintStyle: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.3),
+                          fontSize: 13,
+                        ),
+                        filled: true,
+                        fillColor: cs.onSurface.withValues(alpha: 0.05),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _sending
+                      ? const SizedBox(
+                          width: 36,
+                          height: 36,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF10B981),
+                          ),
+                        )
+                      : GestureDetector(
+                          onTap: _submit,
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF10B981),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.send,
+                              size: 16,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ),
+                ],
+              )
+            else
+              Text(
+                '댓글을 작성하려면 로그인이 필요합니다.',
+                style: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.35),
+                  fontSize: 12,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

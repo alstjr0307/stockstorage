@@ -118,7 +118,11 @@
       "Bash(node -e \"require\\('./fmkorea_scraper.js'\\)\")",
       "Bash(node -e ':*)",
       "Bash(/c/Users/alswp/flutter/bin/flutter build:*)",
-      "Bash(cmd.exe /c \"flutter --version\")"
+      "Bash(cmd.exe /c \"flutter --version\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\('oauth_client:', c.get\\('client_id'\\), '| type:', c.get\\('client_type'\\)\\) for client in d['client'] for c in client.get\\('oauth_client',[]\\)]\")",
+      "Bash(node -e \"const d=JSON.parse\\(require\\('fs'\\).readFileSync\\('/dev/stdin','utf8'\\)\\); d.client.forEach\\(c=>c.oauth_client?.forEach\\(o=>console.log\\('type:',o.client_type,'id:',o.client_id\\)\\)\\)\")",
+      "Bash(node functions/migrate_nicknames.js --dry-run)",
+      "Bash(node functions/migrate_nicknames.js)"
     ],
     "additionalDirectories": [
       "C:\\Users\\alswp\\Downloads",

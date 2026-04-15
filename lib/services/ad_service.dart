@@ -4,7 +4,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'analytics_service.dart';
 
 const bool _useTestAds = false;
-final bool _adsEnabled = !kDebugMode; // 디버그(테스트) 모드에서는 광고 비활성화
+final bool _adsEnabled = !kDebugMode;
 
 class AdService {
   AdService._();
@@ -13,6 +13,7 @@ class AdService {
   static bool _isAdmin = false;
   static bool get isAdmin => _isAdmin;
   static void setAdmin(bool value) => _isAdmin = value;
+  bool get _shouldBlockByAdmin => _isAdmin && !_useTestAds;
 
   // ── 광고 단위 ID ────────────────────────────────────────────────────────
   static String get _bannerAdUnitId {
@@ -33,8 +34,8 @@ class AdService {
           ? 'ca-app-pub-3940256099942544/1033173712'
           : 'ca-app-pub-3940256099942544/4411468910';
     }
-    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/7720689486';
-    return 'ca-app-pub-6925657557995580/2656065066';
+    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/5598098844';
+    return 'ca-app-pub-6925657557995580/5025289757';
   }
 
   // ── 배너 광고 ─────────────────────────────────────────────────────────
@@ -44,58 +45,95 @@ class AdService {
   // ── 전면 광고 ─────────────────────────────────────────────────────────
   InterstitialAd? _interstitialAd;
   bool _isInterstitialReady = false;
-  int _stockViewCount = 0;
+  bool _isInterstitialLoading = false;
+  bool _stockInterstitialConsumed = false;
+  bool _pendingStockInterstitial = false;
   int _indicatorDetailOpenCount = 0;
+  _InterstitialPurpose? _currentInterstitialPurpose;
   static const int _interstitialEvery = 3; // 3번 중 1번만 전면광고
 
   void loadInterstitial() {
     if (kIsWeb || !_adsEnabled) return;
+    if (_isInterstitialLoading) return;
+    if (_isInterstitialReady && _interstitialAd != null) return;
+    _isInterstitialLoading = true;
     InterstitialAd.load(
       adUnitId: _interstitialAdUnitId,
       request: const AdRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
+          _isInterstitialLoading = false;
+          _interstitialAd?.dispose();
           _interstitialAd = ad;
           _isInterstitialReady = true;
           ad.fullScreenContentCallback = FullScreenContentCallback(
+            onAdShowedFullScreenContent: (_) {
+              if (_currentInterstitialPurpose == _InterstitialPurpose.stock) {
+                _stockInterstitialConsumed = true;
+              }
+            },
             onAdDismissedFullScreenContent: (ad) {
               ad.dispose();
               _interstitialAd = null;
               _isInterstitialReady = false;
+              _currentInterstitialPurpose = null;
               loadInterstitial(); // 다음 광고 미리 로드
             },
             onAdFailedToShowFullScreenContent: (ad, error) {
               ad.dispose();
               _interstitialAd = null;
               _isInterstitialReady = false;
+              _currentInterstitialPurpose = null;
+              _isInterstitialLoading = false;
             },
           );
+          if (_pendingStockInterstitial &&
+              !_shouldBlockByAdmin &&
+              _adsEnabled &&
+              !_stockInterstitialConsumed) {
+            _pendingStockInterstitial = false;
+            _showLoadedInterstitial(_InterstitialPurpose.stock);
+          }
         },
         onAdFailedToLoad: (error) {
+          _isInterstitialLoading = false;
           _isInterstitialReady = false;
+          _pendingStockInterstitial = false;
         },
       ),
     );
   }
 
   void showInterstitialIfReady() {
-    if (!_adsEnabled || _isAdmin) return;
-    _stockViewCount++;
-    if (_stockViewCount % _interstitialEvery != 0) return;
-    if (_isInterstitialReady && _interstitialAd != null) {
-      _interstitialAd!.show();
-      AnalyticsService.instance.logAdInterstitialShown();
+    if (!_adsEnabled || _shouldBlockByAdmin) return;
+    if (_stockInterstitialConsumed) return; // 추천주 상세 첫 노출 1회만 허용
+    if (!_isInterstitialReady || _interstitialAd == null) {
+      _pendingStockInterstitial = true;
+      loadInterstitial();
+      return;
     }
+    _pendingStockInterstitial = false;
+    _showLoadedInterstitial(_InterstitialPurpose.stock);
   }
 
   void showIndicatorDetailInterstitialIfReady() {
-    if (!_adsEnabled || _isAdmin) return;
+    if (!_adsEnabled || _shouldBlockByAdmin) return;
+    if (!_isInterstitialReady || _interstitialAd == null) {
+      loadInterstitial();
+      return;
+    }
     _indicatorDetailOpenCount++;
     if (_indicatorDetailOpenCount == 1) return; // 첫 진입은 광고 스킵
     if ((_indicatorDetailOpenCount - 1) % _interstitialEvery != 0) return;
-    if (_isInterstitialReady && _interstitialAd != null) {
-      _interstitialAd!.show();
-      AnalyticsService.instance.logAdInterstitialShown();
-    }
+    _showLoadedInterstitial(_InterstitialPurpose.indicator);
+  }
+
+  void _showLoadedInterstitial(_InterstitialPurpose purpose) {
+    if (!_isInterstitialReady || _interstitialAd == null) return;
+    _currentInterstitialPurpose = purpose;
+    _interstitialAd!.show();
+    AnalyticsService.instance.logAdInterstitialShown();
   }
 }
+
+enum _InterstitialPurpose { stock, indicator }
