@@ -32,6 +32,9 @@ typedef _OHLC = ({
   double close,
 });
 
+const _kUpColor = Color(0xFFF04452);
+const _kDownColor = Color(0xFF1677FF);
+
 enum _Period {
   min1('1분', '1m', '1d'),
   min5('5분', '5m', '5d'),
@@ -806,25 +809,20 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                     ),
                                                 decoration: BoxDecoration(
                                                   color: isPositive
-                                                      ? const Color(
-                                                          0xFF10B981,
-                                                        ).withValues(
+                                                      ? _kUpColor.withValues(
                                                           alpha: 0.12,
                                                         )
-                                                      : Colors.redAccent
-                                                            .withValues(
-                                                              alpha: 0.12,
-                                                            ),
+                                                      : _kDownColor.withValues(
+                                                          alpha: 0.12,
+                                                        ),
                                                   borderRadius:
                                                       BorderRadius.circular(12),
                                                   border: Border.all(
                                                     color: isPositive
-                                                        ? const Color(
-                                                            0xFF10B981,
-                                                          ).withValues(
+                                                        ? _kUpColor.withValues(
                                                             alpha: 0.4,
                                                           )
-                                                        : Colors.redAccent
+                                                        : _kDownColor
                                                               .withValues(
                                                                 alpha: 0.4,
                                                               ),
@@ -834,10 +832,8 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                   '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
                                                   style: GoogleFonts.inter(
                                                     color: isPositive
-                                                        ? const Color(
-                                                            0xFF10B981,
-                                                          )
-                                                        : Colors.redAccent,
+                                                        ? _kUpColor
+                                                        : _kDownColor,
                                                     fontWeight: FontWeight.w800,
                                                     fontSize: 20,
                                                   ),
@@ -1136,8 +1132,8 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                         '$sign${changePct.toStringAsFixed(2)}%',
                         style: GoogleFonts.inter(
                           color: changePct >= 0
-                              ? const Color(0xFF10B981)
-                              : Colors.redAccent,
+                              ? _kUpColor
+                              : _kDownColor,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1252,19 +1248,19 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                             _ohlcLabel(
                               '고',
                               touched.high,
-                              color: const Color(0xFF10B981),
+                              color: _kUpColor,
                             ),
                             _ohlcLabel(
                               '저',
                               touched.low,
-                              color: Colors.redAccent,
+                              color: _kDownColor,
                             ),
                             _ohlcLabel(
                               '종',
                               touched.close,
                               color: touched.close >= touched.open
-                                  ? const Color(0xFF10B981)
-                                  : Colors.redAccent,
+                                  ? _kUpColor
+                                  : _kDownColor,
                             ),
                           ],
                         ),
@@ -1545,7 +1541,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     final cs = Theme.of(context).colorScheme;
     final total = targetPrice - buyPrice;
     final progress = ((currentPrice - buyPrice) / total).clamp(0.0, 1.0);
-    final accentColor = isPositive ? const Color(0xFF10B981) : Colors.redAccent;
+    final accentColor = isPositive ? _kUpColor : _kDownColor;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2483,8 +2479,8 @@ class _StockCandlePainter extends CustomPainter {
     final n = candles.length;
     for (int i = 0; i < n; i++) {
       final c = candles[i];
-      final isGreen = c.close >= c.open;
-      final baseColor = isGreen ? const Color(0xFF10B981) : Colors.redAccent;
+      final isUp = c.close >= c.open;
+      final baseColor = isUp ? _kUpColor : _kDownColor;
       final color = touchedIndex == i ? labelColor : baseColor;
 
       final totalCandleW = chartW / n;
@@ -2499,8 +2495,8 @@ class _StockCandlePainter extends CustomPainter {
           ..strokeWidth = 1,
       );
 
-      final top = toY(isGreen ? c.close : c.open);
-      final bottom = toY(isGreen ? c.open : c.close);
+      final top = toY(isUp ? c.close : c.open);
+      final bottom = toY(isUp ? c.open : c.close);
       final bodyH = (bottom - top).abs().clamp(1.0, double.infinity);
       canvas.drawRect(
         Rect.fromLTWH(cx - bodyW / 2, top, bodyW, bodyH),
@@ -2805,21 +2801,21 @@ class _FullscreenCandleChartPageState
                                   '고',
                                   touched.high,
                                   cs,
-                                  color: const Color(0xFF10B981),
+                                  color: _kUpColor,
                                 ),
                                 _ohlcLabel(
                                   '저',
                                   touched.low,
                                   cs,
-                                  color: Colors.redAccent,
+                                  color: _kDownColor,
                                 ),
                                 _ohlcLabel(
                                   '종',
                                   touched.close,
                                   cs,
                                   color: touched.close >= touched.open
-                                      ? const Color(0xFF10B981)
-                                      : Colors.redAccent,
+                                      ? _kUpColor
+                                      : _kDownColor,
                                 ),
                               ],
                             ),

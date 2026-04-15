@@ -1,4 +1,4 @@
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { auth } = require('firebase-functions/v1');
@@ -259,6 +259,22 @@ exports.sendJournalCommentNotification = onDocumentCreated(
     }
   }
 );
+// trading_journal ?? ??? publishedAt? ??? ?? ??
+exports.ensureJournalPublishedAt = onDocumentWritten(
+  { document: 'trading_journal/{journalId}', region: 'asia-northeast3' },
+  async (event) => {
+    const after = event.data?.after;
+    if (!after?.exists) return;
+
+    const data = after.data() || {};
+    if (data.isPublic !== true) return;
+    if (data.publishedAt != null) return;
+
+    const fallbackPublishedAt = data.createdAt ?? new Date();
+    await after.ref.update({ publishedAt: fallbackPublishedAt });
+  }
+);
+
 exports.crawlFemcoIndex = onSchedule(
   { schedule: 'every 30 minutes', region: 'asia-northeast3', timeoutSeconds: 60 },
   async () => {
@@ -573,7 +589,7 @@ function fetchViaWebSocket(approvalKey, symbol, timeoutMs = 25000) {
     const ws = new WebSocket('ws://ops.koreainvestment.com:21000');
 
     ws.on('open', () => {
-      console.log('[WS] ?°ê²°??);
+      console.log('[WS] connected');
       ws.send(JSON.stringify({
         header: { approval_key: approvalKey, custtype: 'P', tr_type: '1', 'content-type': 'utf-8' },
         body: { input: { tr_id: 'H0UPANC0', tr_key: symbol } },

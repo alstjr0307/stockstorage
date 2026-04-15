@@ -14,6 +14,7 @@ import '../models/market_analysis.dart';
 import '../services/ad_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
+import '../widgets/banner_ad_widget.dart';
 import 'index_detail_screen.dart';
 import 'market_analysis_detail_screen.dart';
 import 'market_sentiment_screen.dart';
@@ -187,6 +188,12 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             onceKey: 'major_indices_section_once_v4',
             delay: const Duration(milliseconds: 40),
             child: _buildIndicesPanel(context),
+          ),
+          const SizedBox(height: 12),
+          BannerAdWidget(
+            slotId: 'market_analysis_between_indices_hot',
+            adUnitId: AdService.marketAnalysisMidBannerAdUnitId,
+            fallbackAdUnitId: AdService.bannerAdUnitId,
           ),
           const SizedBox(height: 16),
           _buildSectionDivider(context),

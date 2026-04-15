@@ -7,6 +7,7 @@ import '../models/stock_pick.dart';
 import '../models/announcement.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
+import '../services/ad_service.dart';
 import '../services/analytics_service.dart';
 import '../services/firestore_service.dart';
 import '../widgets/banner_ad_widget.dart';
@@ -48,6 +49,11 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       initAds();
+      BannerAdWidget.prewarm(
+        slotId: 'market_analysis_between_indices_hot',
+        adUnitId: AdService.marketAnalysisMidBannerAdUnitId,
+        fallbackAdUnitId: AdService.bannerAdUnitId,
+      );
       await _showDisclaimerIfNeeded();
       await _checkNicknameIfNeeded();
     });

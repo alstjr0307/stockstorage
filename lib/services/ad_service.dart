@@ -3,8 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'analytics_service.dart';
 
-const bool _useTestAds = false;
-final bool _adsEnabled = !kDebugMode;
+const bool _useTestAds = kDebugMode;
+final bool _adsEnabled = true;
 
 class AdService {
   AdService._();
@@ -49,9 +49,22 @@ class AdService {
     return 'ca-app-pub-6925657557995580/2656065066';
   }
 
+  static String get _marketAnalysisMidBannerAdUnitId {
+    if (kIsWeb) return '';
+    if (_useTestAds) {
+      return Platform.isAndroid
+          ? 'ca-app-pub-3940256099942544/6300978111'
+          : 'ca-app-pub-3940256099942544/2934735716';
+    }
+    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/6398470153';
+    return 'ca-app-pub-6925657557995580/3939218968';
+  }
+
   // ── 배너 광고 ─────────────────────────────────────────────────────────
   static bool get adsEnabled => _adsEnabled;
   static String get bannerAdUnitId => _bannerAdUnitId;
+  static String get marketAnalysisMidBannerAdUnitId =>
+      _marketAnalysisMidBannerAdUnitId;
 
   // ── 전면 광고 ─────────────────────────────────────────────────────────
   InterstitialAd? _stockInterstitialAd;

@@ -15,6 +15,7 @@ class TradingJournal {
   final bool isPublic;
   final int likes;
   final DateTime createdAt;
+  final DateTime? publishedAt;
   final double buyPrice;   // 매도 시 연결된 매수가 (실현손익 계산용)
   final String linkedBuyId; // 매도 시 연결된 매수 일지 ID (잔량 계산용)
 
@@ -33,6 +34,7 @@ class TradingJournal {
     required this.isPublic,
     required this.likes,
     required this.createdAt,
+    this.publishedAt,
     this.buyPrice = 0,
     this.linkedBuyId = '',
   });
@@ -54,6 +56,7 @@ class TradingJournal {
       isPublic: d['isPublic'] as bool? ?? false,
       likes: (d['likes'] as int?) ?? 0,
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      publishedAt: (d['publishedAt'] as Timestamp?)?.toDate(),
       buyPrice: (d['buyPrice'] as num?)?.toDouble() ?? 0,
       linkedBuyId: d['linkedBuyId'] as String? ?? '',
     );
@@ -73,11 +76,17 @@ class TradingJournal {
         'isPublic': isPublic,
         'likes': likes,
         'createdAt': Timestamp.fromDate(createdAt),
+        if (publishedAt != null) 'publishedAt': Timestamp.fromDate(publishedAt!),
         if (buyPrice > 0) 'buyPrice': buyPrice,
         if (linkedBuyId.isNotEmpty) 'linkedBuyId': linkedBuyId,
       };
 
-  TradingJournal copyWith({bool? isPublic, double? buyPrice, String? linkedBuyId}) => TradingJournal(
+  TradingJournal copyWith({
+    bool? isPublic,
+    DateTime? publishedAt,
+    double? buyPrice,
+    String? linkedBuyId,
+  }) => TradingJournal(
         id: id,
         uid: uid,
         nickname: nickname,
@@ -92,6 +101,7 @@ class TradingJournal {
         isPublic: isPublic ?? this.isPublic,
         likes: likes,
         createdAt: createdAt,
+        publishedAt: publishedAt ?? this.publishedAt,
         buyPrice: buyPrice ?? this.buyPrice,
         linkedBuyId: linkedBuyId ?? this.linkedBuyId,
       );

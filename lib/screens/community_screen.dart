@@ -321,6 +321,18 @@ class _JournalTabState extends State<_JournalTab> {
     }
   }
 
+  void _openAuthorJournals(TradingJournal journal) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _AuthorJournalsScreen(
+          uid: journal.uid,
+          nickname: journal.nickname,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
@@ -558,6 +570,7 @@ class _JournalTabState extends State<_JournalTab> {
             onBlock: (!isOwn && auth.isLoggedIn)
                 ? () => _handleBlock(journal, auth.user!.uid)
                 : null,
+            onTapAuthor: () => _openAuthorJournals(journal),
           );
         },
       ),
@@ -994,6 +1007,7 @@ class _JournalCard extends StatefulWidget {
   final VoidCallback? onTogglePrivate;
   final VoidCallback? onReport;
   final VoidCallback? onBlock;
+  final VoidCallback? onTapAuthor;
 
   const _JournalCard({
     super.key,
@@ -1008,6 +1022,7 @@ class _JournalCard extends StatefulWidget {
     this.onTogglePrivate,
     this.onReport,
     this.onBlock,
+    this.onTapAuthor,
   });
 
   @override
@@ -1017,6 +1032,7 @@ class _JournalCard extends StatefulWidget {
 class _JournalCardState extends State<_JournalCard> {
   PriceResult? _price;
   final _firestoreService = FirestoreService();
+  static const Duration _newBadgeWindow = Duration(hours: 24);
 
   @override
   void initState() {
@@ -1058,6 +1074,14 @@ class _JournalCardState extends State<_JournalCard> {
         {'KS', 'KQ', 'US'}.contains(journal.market);
   }
 
+  DateTime _effectivePublishedAt(TradingJournal journal) =>
+      journal.publishedAt ?? journal.createdAt;
+
+  bool _isNewlyPublished(TradingJournal journal) {
+    final diff = DateTime.now().difference(_effectivePublishedAt(journal));
+    return !diff.isNegative && diff <= _newBadgeWindow;
+  }
+
   void _openChart(BuildContext context) {
     Navigator.push(
       context,
@@ -1077,6 +1101,7 @@ class _JournalCardState extends State<_JournalCard> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final journal = widget.journal;
+    final isNewlyPublished = _isNewlyPublished(journal);
     final isKrw = journal.market != 'US';
     final marketLabel = switch (journal.market) {
       'KS' => 'KOSPI',
@@ -1148,66 +1173,80 @@ class _JournalCardState extends State<_JournalCard> {
                 // 작성자 행
                 Row(
                   children: [
-                    UserLevelAvatar(
-                      uid: journal.uid,
-                      radius: 14,
-                      backgroundColor: const Color(
-                        0xFF10B981,
-                      ).withValues(alpha: 0.12),
-                      textStyle: GoogleFonts.inter(
-                        color: const Color(0xFF10B981),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                journal.nickname,
-                                style: GoogleFonts.inter(
-                                  color: cs.onSurface,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                      child: GestureDetector(
+                        onTap: widget.onTapAuthor,
+                        behavior: HitTestBehavior.opaque,
+                        child: Row(
+                          children: [
+                            UserLevelAvatar(
+                              uid: journal.uid,
+                              radius: 14,
+                              backgroundColor: const Color(
+                                0xFF10B981,
+                              ).withValues(alpha: 0.12),
+                              textStyle: GoogleFonts.inter(
+                                color: const Color(0xFF10B981),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
                               ),
-                              if (widget.isOwn) ...[
-                                const SizedBox(width: 5),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 1,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        journal.nickname,
+                                        style: GoogleFonts.inter(
+                                          color: cs.onSurface,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      if (widget.isOwn) ...[
+                                        const SizedBox(width: 5),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 1,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(
+                                              0xFF10B981,
+                                            ).withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(
+                                              9999,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            '나',
+                                            style: GoogleFonts.inter(
+                                              color: const Color(0xFF10B981),
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFF10B981,
-                                    ).withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(9999),
-                                  ),
-                                  child: Text(
-                                    '나',
+                                  Text(
+                                    '${DateFormat('yyyy.MM.dd').format(journal.tradeDate)} 매수',
                                     style: GoogleFonts.inter(
-                                      color: const Color(0xFF10B981),
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w700,
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.35,
+                                      ),
+                                      fontSize: 12,
                                     ),
                                   ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          Text(
-                            '${DateFormat('yyyy.MM.dd').format(journal.tradeDate)} 매수',
-                            style: GoogleFonts.inter(
-                              color: cs.onSurface.withValues(alpha: 0.35),
-                              fontSize: 11,
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                     // 마켓 배지
@@ -1240,14 +1279,43 @@ class _JournalCardState extends State<_JournalCard> {
                 ),
                 const SizedBox(height: 14),
                 // 종목명
-                Text(
-                  journal.stockName,
-                  style: GoogleFonts.inter(
-                    color: cs.onSurface,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.2,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        journal.stockName,
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface,
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (isNewlyPublished) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          borderRadius: BorderRadius.circular(9999),
+                        ),
+                        child: Text(
+                          'NEW',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 12),
                 // 거래 정보 그리드 (3행 2열)
@@ -1421,6 +1489,7 @@ class _JournalCardState extends State<_JournalCard> {
 
   Widget _buildEtcCard(ColorScheme cs) {
     final journal = widget.journal;
+    final isNewlyPublished = _isNewlyPublished(journal);
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -1448,66 +1517,82 @@ class _JournalCardState extends State<_JournalCard> {
                 // 작성자 행
                 Row(
                   children: [
-                    UserLevelAvatar(
-                      uid: journal.uid,
-                      radius: 14,
-                      backgroundColor: const Color(
-                        0xFF94A3B8,
-                      ).withValues(alpha: 0.12),
-                      textStyle: GoogleFonts.inter(
-                        color: const Color(0xFF94A3B8),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                journal.nickname,
-                                style: GoogleFonts.inter(
-                                  color: cs.onSurface,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                      child: GestureDetector(
+                        onTap: widget.onTapAuthor,
+                        behavior: HitTestBehavior.opaque,
+                        child: Row(
+                          children: [
+                            UserLevelAvatar(
+                              uid: journal.uid,
+                              radius: 14,
+                              backgroundColor: const Color(
+                                0xFF94A3B8,
+                              ).withValues(alpha: 0.12),
+                              textStyle: GoogleFonts.inter(
+                                color: const Color(0xFF94A3B8),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
                               ),
-                              if (widget.isOwn) ...[
-                                const SizedBox(width: 5),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 1,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        journal.nickname,
+                                        style: GoogleFonts.inter(
+                                          color: cs.onSurface,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      if (widget.isOwn) ...[
+                                        const SizedBox(width: 5),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 1,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(
+                                              0xFF10B981,
+                                            ).withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(
+                                              9999,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            '나',
+                                            style: GoogleFonts.inter(
+                                              color: const Color(0xFF10B981),
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFF10B981,
-                                    ).withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(9999),
-                                  ),
-                                  child: Text(
-                                    '나',
+                                  Text(
+                                    DateFormat(
+                                      'yyyy.MM.dd',
+                                    ).format(journal.tradeDate),
                                     style: GoogleFonts.inter(
-                                      color: const Color(0xFF10B981),
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w700,
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.35,
+                                      ),
+                                      fontSize: 11,
                                     ),
                                   ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          Text(
-                            DateFormat('yyyy.MM.dd').format(journal.tradeDate),
-                            style: GoogleFonts.inter(
-                              color: cs.onSurface.withValues(alpha: 0.35),
-                              fontSize: 11,
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                     Container(
@@ -1539,14 +1624,45 @@ class _JournalCardState extends State<_JournalCard> {
                 ),
                 const SizedBox(height: 14),
                 // 종목명
-                Text(
-                  journal.stockName.isNotEmpty ? journal.stockName : '기타 메모',
-                  style: GoogleFonts.inter(
-                    color: cs.onSurface,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.2,
-                  ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        journal.stockName.isNotEmpty
+                            ? journal.stockName
+                            : '기타 메모',
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface,
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (isNewlyPublished) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          borderRadius: BorderRadius.circular(9999),
+                        ),
+                        child: Text(
+                          'NEW',
+                          style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 // 메모
                 if (journal.note.isNotEmpty) ...[
@@ -2299,7 +2415,329 @@ class _CommentButton extends StatelessWidget {
   }
 }
 
-// ── 더보기 메뉴 (신고/차단) ───────────────────────────────────────────────────
+class _AuthorJournalsScreen extends StatefulWidget {
+  final String uid;
+  final String nickname;
+  const _AuthorJournalsScreen({required this.uid, required this.nickname});
+
+  @override
+  State<_AuthorJournalsScreen> createState() => _AuthorJournalsScreenState();
+}
+
+class _AuthorJournalsScreenState extends State<_AuthorJournalsScreen> {
+  final _firestoreService = FirestoreService();
+  final Map<String, int> _commentCountByJournalId = {};
+  final Set<String> _commentCountLoading = {};
+  final Set<String> _likedIds = {};
+  final Set<String> _likedLoading = {};
+  final Set<String> _likedLoaded = {};
+  final Map<String, int> _likeCountOverride = {};
+  double? _buyAvgReturnPct;
+  bool _buyAvgLoading = false;
+  String _buyAvgKey = '';
+
+  Future<void> _ensureCommentCounts(List<TradingJournal> journals) async {
+    final targets = journals
+        .where(
+          (j) =>
+              !_commentCountByJournalId.containsKey(j.id) &&
+              !_commentCountLoading.contains(j.id),
+        )
+        .toList();
+    if (targets.isEmpty) return;
+
+    for (final j in targets) {
+      _commentCountLoading.add(j.id);
+    }
+    final counts = await Future.wait(
+      targets.map((j) => _firestoreService.getJournalCommentCount(j.id)),
+    );
+    if (!mounted) return;
+    setState(() {
+      for (var i = 0; i < targets.length; i++) {
+        _commentCountByJournalId[targets[i].id] = counts[i];
+        _commentCountLoading.remove(targets[i].id);
+      }
+    });
+  }
+
+  Future<void> _ensureLikedState(List<TradingJournal> journals, String uid) async {
+    final targets = journals.where((j) => !_likedLoaded.contains(j.id)).toList();
+    if (targets.isEmpty) return;
+
+    final liked = await Future.wait(
+      targets.map((j) => _firestoreService.hasLikedJournal(j.id, uid)),
+    );
+    if (!mounted) return;
+    setState(() {
+      for (var i = 0; i < targets.length; i++) {
+        _likedLoaded.add(targets[i].id);
+        if (liked[i]) _likedIds.add(targets[i].id);
+      }
+    });
+  }
+
+  Future<void> _toggleLike(TradingJournal journal, String uid) async {
+    if (_likedLoading.contains(journal.id)) return;
+    setState(() => _likedLoading.add(journal.id));
+    try {
+      final nowLiked = await _firestoreService.likeJournal(journal.id, uid);
+      if (!mounted) return;
+      setState(() {
+        if (nowLiked) {
+          _likedIds.add(journal.id);
+          _likeCountOverride[journal.id] =
+              (_likeCountOverride[journal.id] ?? journal.likes) + 1;
+        } else {
+          _likedIds.remove(journal.id);
+          _likeCountOverride[journal.id] =
+              (_likeCountOverride[journal.id] ?? journal.likes) - 1;
+        }
+      });
+    } finally {
+      if (mounted) setState(() => _likedLoading.remove(journal.id));
+    }
+  }
+
+  Future<void> _ensureBuyAvgReturn(List<TradingJournal> buyJournals) async {
+    final candidates = buyJournals
+        .where(
+          (j) =>
+              j.price > 0 &&
+              j.ticker.isNotEmpty &&
+              {'KS', 'KQ', 'US'}.contains(j.market),
+        )
+        .toList();
+    if (candidates.isEmpty) {
+      if (_buyAvgReturnPct != null || _buyAvgKey.isNotEmpty) {
+        setState(() {
+          _buyAvgReturnPct = null;
+          _buyAvgKey = '';
+          _buyAvgLoading = false;
+        });
+      }
+      return;
+    }
+
+    final key = candidates
+        .map((j) => '${j.id}:${j.ticker}:${j.market}:${j.price}')
+        .join('|');
+    if (_buyAvgLoading || _buyAvgKey == key) return;
+
+    setState(() {
+      _buyAvgLoading = true;
+      _buyAvgKey = key;
+    });
+
+    try {
+      final prices = await Future.wait(
+        candidates.map((j) => StockPriceService.fetchPrice(j.ticker, j.market)),
+      );
+      if (!mounted) return;
+
+      double sumPct = 0;
+      var count = 0;
+      for (var i = 0; i < candidates.length; i++) {
+        final current = prices[i]?.price;
+        final buy = candidates[i];
+        if (current == null || current <= 0 || buy.price <= 0) continue;
+        sumPct += (current - buy.price) / buy.price * 100;
+        count++;
+      }
+      setState(() {
+        _buyAvgReturnPct = count > 0 ? sumPct / count : null;
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _buyAvgLoading = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final auth = context.watch<AuthProvider>();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          '${widget.nickname} \uB2D8\uC758 \uB9E4\uB9E4\uC77C\uC9C0',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w700, fontSize: 16),
+        ),
+      ),
+      body: StreamBuilder<List<TradingJournal>>(
+        stream: _firestoreService.getPublicJournalsByUid(widget.uid),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF10B981)),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text(
+                '\uBAA9\uB85D\uC744 \uBD88\uB7EC\uC624\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4',
+                style: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.45),
+                  fontSize: 14,
+                ),
+              ),
+            );
+          }
+
+          final allAuthorJournals = snapshot.data ?? [];
+          final visibleJournals = allAuthorJournals
+              .where((j) => j.action != '\uB9E4\uB3C4')
+              .toList();
+
+          if (visibleJournals.isEmpty) {
+            return Center(
+              child: Text(
+                '\uACF5\uC720\uD55C \uB9E4\uB9E4\uC77C\uC9C0\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4',
+                style: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.45),
+                  fontSize: 14,
+                ),
+              ),
+            );
+          }
+
+          _ensureCommentCounts(visibleJournals);
+          if (auth.isLoggedIn) {
+            _ensureLikedState(visibleJournals, auth.user!.uid);
+          }
+
+          final buyJournals = visibleJournals
+              .where((j) => j.action == '매수' && j.price > 0)
+              .toList();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _ensureBuyAvgReturn(buyJournals);
+          });
+
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+            itemCount: visibleJournals.length + 1,
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                final shownAvg = _buyAvgReturnPct;
+                final avgText = shownAvg == null
+                    ? (_buyAvgLoading ? '계산중...' : '-')
+                    : '${shownAvg >= 0 ? '+' : ''}${shownAvg.toStringAsFixed(2)}%';
+                const upColor = Color(0xFFF04452);
+                const downColor = Color(0xFF1677FF);
+                final avgColor = shownAvg == null
+                    ? cs.onSurface.withValues(alpha: 0.45)
+                    : (shownAvg >= 0
+                          ? upColor
+                          : downColor);
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                  decoration: BoxDecoration(
+                    color: cs.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: cs.onSurface.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _summaryCell(
+                          title: '평균 수익률',
+                          value: avgText,
+                          valueColor: avgColor,
+                          cs: cs,
+                        ),
+                      ),
+                      Container(
+                        width: 1,
+                        height: 30,
+                        color: cs.onSurface.withValues(alpha: 0.08),
+                      ),
+                      Expanded(
+                        child: _summaryCell(
+                          title: '공유 일지 수',
+                          value: '${visibleJournals.length}개',
+                          valueColor: cs.onSurface,
+                          cs: cs,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              final journal = visibleJournals[index - 1];
+              final isOwn = auth.user?.uid == journal.uid;
+              final linkedSells = allAuthorJournals
+                  .where(
+                    (j) =>
+                        j.action == '\uB9E4\uB3C4' && j.linkedBuyId == journal.id,
+                  )
+                  .toList();
+
+              return _JournalCard(
+                key: ValueKey('author_${journal.id}'),
+                journal: journal,
+                linkedSells: linkedSells,
+                isOwn: isOwn,
+                isLiked: _likedIds.contains(journal.id),
+                isLoadingLike: _likedLoading.contains(journal.id),
+                likeCount: _likeCountOverride[journal.id] ?? journal.likes,
+                commentCount: _commentCountByJournalId[journal.id] ?? 0,
+                onLike: auth.isLoggedIn
+                    ? () => _toggleLike(journal, auth.user!.uid)
+                    : null,
+                onTogglePrivate: isOwn
+                    ? () async {
+                        await _firestoreService.toggleJournalPublic(
+                          journal.id,
+                          true,
+                        );
+                      }
+                    : null,
+                onTapAuthor: null,
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _summaryCell({
+    required String title,
+    required String value,
+    required Color valueColor,
+    required ColorScheme cs,
+  }) {
+    return Column(
+      children: [
+        Text(
+          title,
+          style: GoogleFonts.inter(
+            color: cs.onSurface.withValues(alpha: 0.45),
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: GoogleFonts.inter(
+            color: valueColor,
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _MoreMenu extends StatelessWidget {
   final VoidCallback? onReport;

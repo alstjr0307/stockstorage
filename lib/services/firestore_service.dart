@@ -849,7 +849,19 @@ class FirestoreService {
     return _db
         .collection('trading_journal')
         .where('isPublic', isEqualTo: true)
-        .orderBy('createdAt', descending: true)
+        .orderBy('publishedAt', descending: true)
+        .snapshots()
+        .map(
+          (s) => s.docs.map((d) => TradingJournal.fromFirestore(d)).toList(),
+        );
+  }
+
+  Stream<List<TradingJournal>> getPublicJournalsByUid(String uid) {
+    return _db
+        .collection('trading_journal')
+        .where('uid', isEqualTo: uid)
+        .where('isPublic', isEqualTo: true)
+        .orderBy('publishedAt', descending: true)
         .snapshots()
         .map(
           (s) => s.docs.map((d) => TradingJournal.fromFirestore(d)).toList(),
@@ -863,7 +875,7 @@ class FirestoreService {
     var query = _db
         .collection('trading_journal')
         .where('isPublic', isEqualTo: true)
-        .orderBy('createdAt', descending: true)
+        .orderBy('publishedAt', descending: true)
         .limit(limit);
     if (startAfter != null) query = query.startAfterDocument(startAfter);
     final snap = await query.get();
@@ -875,7 +887,13 @@ class FirestoreService {
   }
 
   Future<void> addJournal(TradingJournal journal) async {
-    await _db.collection('trading_journal').add(journal.toFirestore());
+    final now = DateTime.now();
+    final payload = {
+      ...journal.toFirestore(),
+      if (journal.isPublic)
+        'publishedAt': Timestamp.fromDate(journal.publishedAt ?? now),
+    };
+    await _db.collection('trading_journal').add(payload);
     if (journal.isPublic) {
       await recordPostCreated(journal.uid);
     }
@@ -885,8 +903,16 @@ class FirestoreService {
     final ref = _db.collection('trading_journal').doc(journal.id);
     final before = await ref.get();
     final wasPublic = before.data()?['isPublic'] as bool? ?? false;
-    await ref.update(journal.toFirestore());
     final isPublic = journal.isPublic;
+    final now = DateTime.now();
+    final payload = <String, dynamic>{...journal.toFirestore()};
+    if (!wasPublic && isPublic) {
+      payload['publishedAt'] = Timestamp.fromDate(now);
+    } else if (wasPublic && isPublic) {
+      final prevPublishedAt = before.data()?['publishedAt'] as Timestamp?;
+      payload['publishedAt'] = prevPublishedAt ?? Timestamp.fromDate(now);
+    }
+    await ref.update(payload);
     if (!wasPublic && isPublic) {
       await recordPostCreated(journal.uid);
     } else if (wasPublic && !isPublic) {
@@ -913,7 +939,10 @@ class FirestoreService {
     final currentIsPublic =
         snap.data()?['isPublic'] as bool? ?? isCurrentlyPublic;
     final nextIsPublic = !currentIsPublic;
-    await ref.update({'isPublic': nextIsPublic});
+    await ref.update({
+      'isPublic': nextIsPublic,
+      if (nextIsPublic) 'publishedAt': Timestamp.fromDate(DateTime.now()),
+    });
     if (uid != null && uid.isNotEmpty) {
       if (!currentIsPublic && nextIsPublic) {
         await recordPostCreated(uid);

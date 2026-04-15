@@ -17,6 +17,9 @@ typedef _OHLC = ({
   double close,
 });
 
+const _kUpColor = Color(0xFFF04452);
+const _kDownColor = Color(0xFF1677FF);
+
 enum _Period {
   min1('1분', '1m', '1d'),
   min5('5분', '5m', '5d'),
@@ -427,21 +430,21 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                     context,
                     '고가',
                     touched.high,
-                    color: const Color(0xFF22C55E),
+                    color: _kUpColor,
                   ),
                   _ohlcLabel(
                     context,
                     '저가',
                     touched.low,
-                    color: const Color(0xFFEF4444),
+                    color: _kDownColor,
                   ),
                   _ohlcLabel(
                     context,
                     '종가',
                     touched.close,
                     color: touched.close >= touched.open
-                        ? const Color(0xFF22C55E)
-                        : const Color(0xFFEF4444),
+                        ? _kUpColor
+                        : _kDownColor,
                   ),
                 ],
               ),
@@ -976,21 +979,21 @@ class _IndexFullscreenChartPageState extends State<_IndexFullscreenChartPage> {
                                   '고',
                                   touched.high,
                                   cs,
-                                  color: const Color(0xFF22C55E),
+                                  color: _kUpColor,
                                 ),
                                 _ohlcLabel(
                                   '저',
                                   touched.low,
                                   cs,
-                                  color: const Color(0xFFEF4444),
+                                  color: _kDownColor,
                                 ),
                                 _ohlcLabel(
                                   '종',
                                   touched.close,
                                   cs,
                                   color: touched.close >= touched.open
-                                      ? const Color(0xFF22C55E)
-                                      : const Color(0xFFEF4444),
+                                      ? _kUpColor
+                                      : _kDownColor,
                                 ),
                               ],
                             ),
@@ -1163,9 +1166,7 @@ class _CandlePainter extends CustomPainter {
     for (int i = 0; i < n; i++) {
       final c = candles[i];
       final up = c.close >= c.open;
-      final candleColor = up
-          ? const Color(0xFF22C55E)
-          : const Color(0xFFEF4444);
+      final candleColor = up ? _kUpColor : _kDownColor;
       final color = touchedIndex == i ? labelColor : candleColor;
       final totalW = chartW / n;
       final bodyW = (totalW * 0.56).clamp(2.0, 10.0);

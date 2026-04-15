@@ -5,7 +5,9 @@
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
     "backfill:levels:dry": "node backfill_user_levels.js --dry-run",
-    "backfill:levels": "node backfill_user_levels.js"
+    "backfill:levels": "node backfill_user_levels.js",
+    "backfill:journal-published-at:dry": "node backfill_journal_published_at.js --dry-run",
+    "backfill:journal-published-at": "node backfill_journal_published_at.js"
   },
   "engines": {
     "node": "20"

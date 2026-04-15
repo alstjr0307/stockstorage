@@ -17,6 +17,9 @@ typedef _OHLC = ({
 
 typedef _Marker = ({int index, bool isBuy, double price});
 
+const _kUpColor = Color(0xFFF04452);
+const _kDownColor = Color(0xFF1677FF);
+
 class JournalChartScreen extends StatefulWidget {
   final TradingJournal buy;
   final List<TradingJournal> linkedSells;
@@ -348,7 +351,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
     final isKrw = widget.buy.market != 'US';
     String fmt(double v) =>
         isKrw ? NumberFormat('#,###').format(v.toInt()) : v.toStringAsFixed(2);
-    final isGreen = c.close >= c.open;
+    final isUp = c.close >= c.open;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
       color: cs.onSurface.withValues(alpha: 0.04),
@@ -367,7 +370,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
               Text(fmt(e.$2),
                   style: GoogleFonts.robotoMono(
                       fontSize: 10,
-                      color: isGreen ? const Color(0xFF10B981) : Colors.redAccent)),
+                      color: isUp ? _kUpColor : _kDownColor)),
             ]),
           ),
         ),
@@ -407,7 +410,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
                 '실현손익',
                 '${isPnlUp ? '+' : ''}${fmtP(totalPnl)}',
                 cs,
-                valueColor: isPnlUp ? const Color(0xFF10B981) : Colors.redAccent,
+                valueColor: isPnlUp ? _kUpColor : _kDownColor,
               ),
           ]),
           if (sells.isNotEmpty) ...[
@@ -465,7 +468,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
               style: GoogleFonts.robotoMono(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: isUp ? const Color(0xFF10B981) : Colors.redAccent)),
+                  color: isUp ? _kUpColor : _kDownColor)),
         if (widget.onEditSell != null)
           GestureDetector(
             onTap: () {
@@ -544,8 +547,8 @@ class _JournalCandlePainter extends CustomPainter {
 
     for (int i = 0; i < n; i++) {
       final c = candles[i];
-      final isGreen = c.close >= c.open;
-      final baseColor = isGreen ? const Color(0xFF10B981) : Colors.redAccent;
+      final isUp = c.close >= c.open;
+      final baseColor = isUp ? _kUpColor : _kDownColor;
       final color = touchedIndex == i ? labelColor : baseColor;
 
       final bodyW = (totalCandleW * 0.6).clamp(2.0, 10.0);
@@ -558,8 +561,8 @@ class _JournalCandlePainter extends CustomPainter {
           ..color = color
           ..strokeWidth = 1,
       );
-      final top = toY(isGreen ? c.close : c.open);
-      final bottom = toY(isGreen ? c.open : c.close);
+      final top = toY(isUp ? c.close : c.open);
+      final bottom = toY(isUp ? c.open : c.close);
       canvas.drawRect(
         Rect.fromLTWH(cx - bodyW / 2, top, bodyW, (bottom - top).abs().clamp(1.0, double.infinity)),
         Paint()..color = color,

@@ -396,15 +396,6 @@ class _PortfolioContentState extends State<_PortfolioContent> {
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        Text(
-          '추천주 $total개 · 실시간 기준',
-          style: GoogleFonts.inter(
-            color: cs.onSurface.withValues(alpha: 0.45),
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
         const SizedBox(height: 16),
         Row(
           children: [
@@ -654,7 +645,9 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
   Widget build(BuildContext context) {
     final isPositive = widget.avgReturn >= 0;
     final sign = isPositive ? '+' : '';
-    final color = isPositive ? const Color(0xFF10B981) : Colors.redAccent;
+    final color = isPositive
+        ? const Color(0xFFF04452)
+        : const Color(0xFF1677FF);
 
     return Container(
       decoration: const BoxDecoration(
@@ -759,12 +752,12 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
                       _shareStatItem(
                         '수익 중',
                         '${widget.positive}개',
-                        const Color(0xFF10B981),
+                        const Color(0xFFF04452),
                       ),
                       _shareStatItem(
                         '손실 중',
                         '${widget.withPrice - widget.positive}개',
-                        Colors.redAccent,
+                        const Color(0xFF1677FF),
                       ),
                     ],
                   ),
@@ -783,8 +776,8 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
                         : pick.returnRate;
                     final isPos = returnRate >= 0;
                     final retColor = isPos
-                        ? const Color(0xFF10B981)
-                        : Colors.redAccent;
+                        ? const Color(0xFFF04452)
+                        : const Color(0xFF1677FF);
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: Row(
