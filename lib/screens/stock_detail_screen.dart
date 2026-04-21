@@ -462,12 +462,15 @@ class _StockDetailScreenState extends State<StockDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    final pick = widget.pick;
+    final pick = _livePick ?? widget.pick;
     final formatter = NumberFormat('#,###');
     final cs = Theme.of(context).colorScheme;
 
     final livePrice = _livePrice?.price;
-    final returnRate = livePrice != null
+    final hasClosedPrice = pick.isCompleted && pick.closedPrice != null;
+    final returnRate = hasClosedPrice
+        ? ((pick.closedPrice! - pick.buyPrice) / pick.buyPrice) * 100
+        : livePrice != null
         ? ((livePrice - pick.buyPrice) / pick.buyPrice) * 100
         : pick.returnRate;
     final isPositive = returnRate >= 0;
@@ -635,7 +638,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Text(
-                                '매수가 대비',
+                                hasClosedPrice ? '종료 수익률' : '매수가 대비',
                                 style: GoogleFonts.inter(
                                   color: isPositive
                                       ? const Color(
@@ -876,13 +879,20 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                 Expanded(
                                                   child: _priceItem(
                                                     context,
-                                                    '현재가',
-                                                    _livePrice != null
-                                                        ? _livePrice!
-                                                              .formattedPrice
-                                                        : (_loadingPrice
-                                                              ? '로딩중'
-                                                              : '--'),
+                                                    hasClosedPrice
+                                                        ? '종료가'
+                                                        : '현재가',
+                                                    hasClosedPrice
+                                                        ? _formatPrice(
+                                                            pick.closedPrice!,
+                                                            pick.market,
+                                                          )
+                                                        : (_livePrice != null
+                                                              ? _livePrice!
+                                                                    .formattedPrice
+                                                              : (_loadingPrice
+                                                                    ? '로딩중'
+                                                                    : '--')),
                                                     isPositive
                                                         ? const Color(
                                                             0xFFF04452,
@@ -901,17 +911,48 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                 Expanded(
                                                   child: _priceItem(
                                                     context,
-                                                    '목표가',
-                                                    _formatPrice(
-                                                      pick.targetPrice,
-                                                      pick.market,
-                                                    ),
-                                                    const Color(0xFF10B981),
+                                                    hasClosedPrice
+                                                        ? '현재가'
+                                                        : '목표가',
+                                                    hasClosedPrice
+                                                        ? (_livePrice != null
+                                                              ? _livePrice!
+                                                                    .formattedPrice
+                                                              : (_loadingPrice
+                                                                    ? '로딩중'
+                                                                    : '--'))
+                                                        : _formatPrice(
+                                                            pick.targetPrice,
+                                                            pick.market,
+                                                          ),
+                                                    hasClosedPrice
+                                                        ? (_livePrice != null
+                                                              ? (((_livePrice!
+                                                                              .price -
+                                                                          pick.buyPrice) /
+                                                                      pick
+                                                                          .buyPrice) >=
+                                                                  0
+                                                                  ? const Color(
+                                                                      0xFFF04452,
+                                                                    )
+                                                                  : const Color(
+                                                                      0xFF1677FF,
+                                                                    ))
+                                                              : cs.onSurface
+                                                                    .withValues(
+                                                                      alpha:
+                                                                          0.45,
+                                                                    ))
+                                                        : const Color(
+                                                            0xFF10B981,
+                                                          ),
                                                   ),
                                                 ),
                                               ],
                                             ),
-                                            if (_livePrice != null &&
+                                            if (!hasClosedPrice &&
+                                                _livePrice != null &&
                                                 pick.targetPrice >
                                                     pick.buyPrice) ...[
                                               const SizedBox(height: 12),
@@ -1373,6 +1414,12 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   Widget _livePriceCard(StockPick pick, NumberFormat formatter) {
     final cs = Theme.of(context).colorScheme;
     final f = _fundamentals;
+    final hasClosedPrice = pick.isCompleted && pick.closedPrice != null;
+    final closedReturnRate = hasClosedPrice
+        ? ((pick.closedPrice! - pick.buyPrice) / pick.buyPrice) * 100
+        : 0.0;
+    final isClosedPositive = closedReturnRate >= 0;
+    final hasLivePrice = _livePrice != null;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -1388,7 +1435,40 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: _loadingPrice
+            child: hasClosedPrice
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        hasLivePrice
+                            ? _livePrice!.formattedPrice
+                            : _formatPrice(pick.closedPrice!, pick.market),
+                        style: GoogleFonts.robotoMono(
+                          color: cs.onSurface,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 18,
+                        ),
+                      ),
+                      Text(
+                        hasLivePrice
+                            ? _livePrice!.formattedChange
+                            : '${isClosedPositive ? '+' : ''}${closedReturnRate.toStringAsFixed(2)}%',
+                        style: GoogleFonts.robotoMono(
+                          color: hasLivePrice
+                              ? (_livePrice!.isUp
+                                    ? const Color(0xFFF04452)
+                                    : const Color(0xFF1677FF))
+                              : (isClosedPositive
+                                    ? const Color(0xFFF04452)
+                                    : const Color(0xFF1677FF)),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  )
+                : _loadingPrice
                 ? const SizedBox(
                     width: 16,
                     height: 16,

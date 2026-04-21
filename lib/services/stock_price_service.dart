@@ -149,10 +149,12 @@ class StockPriceService {
 
   static final _cache = <String, _CachedPrice>{};
   static const _cacheDuration = Duration(minutes: 3);
+  static const _ohlcCacheDuration = Duration(minutes: 3);
 
   static void invalidateCache(String symbol) {
     _cache.remove(symbol);
     _ohlcCache.removeWhere((k, _) => k.startsWith('$symbol:'));
+    _ohlcCacheFetchedAt.removeWhere((k, _) => k.startsWith('$symbol:'));
   }
 
   /// ticker + market으로 Yahoo Finance 심볼 생성
@@ -180,7 +182,10 @@ class StockPriceService {
     if (naverSym != null) {
       final result = await _fetchNaverIndexPrice(naverSym);
       if (result != null) {
-        _cache[symbol] = _CachedPrice(result: result, fetchedAt: DateTime.now());
+        _cache[symbol] = _CachedPrice(
+          result: result,
+          fetchedAt: DateTime.now(),
+        );
         return result;
       }
     }
@@ -219,9 +224,8 @@ class StockPriceService {
         if (prevClose != null && prevClose != 0) {
           changeRate = (change / prevClose) * 100;
         } else {
-          changeRate = (meta['regularMarketChangePercent'] as num?)
-                  ?.toDouble() ??
-              0.0;
+          changeRate =
+              (meta['regularMarketChangePercent'] as num?)?.toDouble() ?? 0.0;
         }
       } else {
         final prevClose =
@@ -279,6 +283,7 @@ class StockPriceService {
           ({DateTime date, double open, double high, double low, double close})
         >
       >{};
+  static final _ohlcCacheFetchedAt = <String, DateTime>{};
 
   static final _naverSymbols = {'^KS11': 'KOSPI', '^KQ11': 'KOSDAQ'};
 
@@ -301,10 +306,13 @@ class StockPriceService {
         'https://polling.finance.naver.com/api/realtime/domestic/index/$naverSymbol',
       );
       final response = await http
-          .get(uri, headers: {
-            'User-Agent': 'Mozilla/5.0',
-            'Referer': 'https://finance.naver.com',
-          })
+          .get(
+            uri,
+            headers: {
+              'User-Agent': 'Mozilla/5.0',
+              'Referer': 'https://finance.naver.com',
+            },
+          )
           .timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return null;
 
@@ -320,8 +328,11 @@ class StockPriceService {
       final price = parse(item['closePrice'] as String? ?? '');
       if (price == 0) return null;
 
-      final change = parse(item['compareToPreviousClosePrice'] as String? ?? '');
-      final changeRate = double.tryParse(
+      final change = parse(
+        item['compareToPreviousClosePrice'] as String? ?? '',
+      );
+      final changeRate =
+          double.tryParse(
             (item['fluctuationsRatio'] as String? ?? '').replaceAll(',', ''),
           ) ??
           0.0;
@@ -344,7 +355,11 @@ class StockPriceService {
   static Future<
     List<({DateTime date, double open, double high, double low, double close})>
   >
-  _fetchNaverDailyOHLC(String naverSymbol, String range) async {
+  _fetchNaverDailyOHLC(
+    String naverSymbol,
+    String range, {
+    bool isIndex = false,
+  }) async {
     final end = DateTime.now();
     final start = end.subtract(Duration(days: _rangeToDays(range)));
     String pad(int n) => n.toString().padLeft(2, '0');
@@ -355,17 +370,31 @@ class StockPriceService {
       '&startTime=${fmt(start)}&endTime=${fmt(end)}&timeframe=day',
     );
     try {
-      final response = await http.get(uri, headers: {
-        'User-Agent': 'Mozilla/5.0',
-        'Referer': 'https://finance.naver.com',
-      }).timeout(const Duration(seconds: 8));
+      final response = await http
+          .get(
+            uri,
+            headers: {
+              'User-Agent': 'Mozilla/5.0',
+              'Referer': 'https://finance.naver.com',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return [];
       final body = response.body;
       // format: ["YYYYMMDD", open, high, low, close, ...]
       final rowRegex = RegExp(
         r'\["(\d{8})",\s*([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)',
       );
-      final out = <({DateTime date, double open, double high, double low, double close})>[];
+      final out =
+          <
+            ({
+              DateTime date,
+              double open,
+              double high,
+              double low,
+              double close,
+            })
+          >[];
       for (final m in rowRegex.allMatches(body)) {
         final d = m.group(1)!;
         final year = int.parse(d.substring(0, 4));
@@ -375,23 +404,38 @@ class StockPriceService {
         final h = double.parse(m.group(3)!);
         final l = double.parse(m.group(4)!);
         final c = double.parse(m.group(5)!);
-        out.add((date: DateTime(year, month, day), open: o, high: h, low: l, close: c));
+        out.add((
+          date: DateTime(year, month, day),
+          open: o,
+          high: h,
+          low: l,
+          close: c,
+        ));
       }
 
-      // 오늘 캔들이 없으면 네이버 실시간 API로 보완 (장중 or 당일 종가 미반영 시)
-      if (out.isNotEmpty) {
+      // 지수: 오늘 캔들이 없으면 네이버 실시간 API로 보완 (장중/당일 종가 미반영)
+      if (isIndex && out.isNotEmpty) {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
-        final lastDate = DateTime(out.last.date.year, out.last.date.month, out.last.date.day);
+        final lastDate = DateTime(
+          out.last.date.year,
+          out.last.date.month,
+          out.last.date.day,
+        );
         if (lastDate.isBefore(todayDate)) {
           try {
             final rtUri = Uri.parse(
               'https://polling.finance.naver.com/api/realtime/domestic/index/$naverSymbol',
             );
-            final rtRes = await http.get(rtUri, headers: {
-              'User-Agent': 'Mozilla/5.0',
-              'Referer': 'https://finance.naver.com',
-            }).timeout(const Duration(seconds: 5));
+            final rtRes = await http
+                .get(
+                  rtUri,
+                  headers: {
+                    'User-Agent': 'Mozilla/5.0',
+                    'Referer': 'https://finance.naver.com',
+                  },
+                )
+                .timeout(const Duration(seconds: 5));
             if (rtRes.statusCode == 200) {
               final rtJson = jsonDecode(rtRes.body);
               final item = (rtJson['datas'] as List?)?.firstOrNull;
@@ -402,14 +446,22 @@ class StockPriceService {
                 final tradedDate = tradedAt == null
                     ? null
                     : DateTime(tradedAt.year, tradedAt.month, tradedAt.day);
-                if (tradedDate != null && tradedDate.isAtSameMomentAs(todayDate)) {
-                  double parse(String s) => double.tryParse(s.replaceAll(',', '')) ?? 0.0;
+                if (tradedDate != null &&
+                    tradedDate.isAtSameMomentAs(todayDate)) {
+                  double parse(String s) =>
+                      double.tryParse(s.replaceAll(',', '')) ?? 0.0;
                   final o = parse(item['openPrice'] as String? ?? '');
                   final h = parse(item['highPrice'] as String? ?? '');
                   final l = parse(item['lowPrice'] as String? ?? '');
                   final c = parse(item['closePriceRaw'] as String? ?? '');
                   if (o > 0 && h > 0 && l > 0 && c > 0) {
-                    out.add((date: todayDate, open: o, high: h, low: l, close: c));
+                    out.add((
+                      date: todayDate,
+                      open: o,
+                      high: h,
+                      low: l,
+                      close: c,
+                    ));
                   }
                 }
               }
@@ -436,19 +488,51 @@ class StockPriceService {
   }) async {
     final symbol = toSymbol(ticker, market);
 
+    // 한국 개별 종목 일봉은 네이버 우선 (Yahoo 일봉 1일 지연 대응)
+    if (interval == '1d' && {'KS', 'KQ'}.contains(market)) {
+      final cacheKey = '$ticker:naver_stock:$interval:$range';
+      final stockFetchedAt = _ohlcCacheFetchedAt[cacheKey];
+      if (_ohlcCache.containsKey(cacheKey) &&
+          stockFetchedAt != null &&
+          DateTime.now().difference(stockFetchedAt) < _ohlcCacheDuration) {
+        return _ohlcCache[cacheKey]!;
+      }
+      final naverData = await _fetchNaverDailyOHLC(ticker, range);
+      if (naverData.isNotEmpty) {
+        _ohlcCache[cacheKey] = naverData;
+        _ohlcCacheFetchedAt[cacheKey] = DateTime.now();
+        return naverData;
+      }
+    }
+
     // 코스피/코스닥 일봉은 네이버 파이낸스 우선 사용 (Yahoo Finance 누락 대응)
     if (interval == '1d' && _naverSymbols.containsKey(ticker)) {
       final naverSymbol = _naverSymbols[ticker]!;
       final cacheKey = '$ticker:naver:$interval:$range';
-      if (_ohlcCache.containsKey(cacheKey)) return _ohlcCache[cacheKey]!;
-      final naverData = await _fetchNaverDailyOHLC(naverSymbol, range);
+      final naverFetchedAt = _ohlcCacheFetchedAt[cacheKey];
+      if (_ohlcCache.containsKey(cacheKey) &&
+          naverFetchedAt != null &&
+          DateTime.now().difference(naverFetchedAt) < _ohlcCacheDuration) {
+        return _ohlcCache[cacheKey]!;
+      }
+      final naverData = await _fetchNaverDailyOHLC(
+        naverSymbol,
+        range,
+        isIndex: true,
+      );
       if (naverData.isNotEmpty) {
         _ohlcCache[cacheKey] = naverData;
+        _ohlcCacheFetchedAt[cacheKey] = DateTime.now();
         return naverData;
       }
     }
     final cacheKey = '$symbol:$interval:$range';
-    if (_ohlcCache.containsKey(cacheKey)) return _ohlcCache[cacheKey]!;
+    final fetchedAt = _ohlcCacheFetchedAt[cacheKey];
+    if (_ohlcCache.containsKey(cacheKey) &&
+        fetchedAt != null &&
+        DateTime.now().difference(fetchedAt) < _ohlcCacheDuration) {
+      return _ohlcCache[cacheKey]!;
+    }
     try {
       final uri = Uri.parse(
         'https://query1.finance.yahoo.com/v8/finance/chart/$symbol'
@@ -543,16 +627,15 @@ class StockPriceService {
               final supJson = jsonDecode(supRes.body);
               final supResult = supJson['chart']?['result']?[0];
               if (supResult != null) {
-                final supTs =
-                    (supResult['timestamp'] as List<dynamic>?)
-                        ?.whereType<num>()
-                        .map(
-                          (v) => DateTime.fromMillisecondsSinceEpoch(
-                            v.toInt() * 1000,
-                            isUtc: true,
-                          ).add(const Duration(hours: 9)),
-                        )
-                        .toList();
+                final supTs = (supResult['timestamp'] as List<dynamic>?)
+                    ?.whereType<num>()
+                    .map(
+                      (v) => DateTime.fromMillisecondsSinceEpoch(
+                        v.toInt() * 1000,
+                        isUtc: true,
+                      ).add(const Duration(hours: 9)),
+                    )
+                    .toList();
                 final supQ = supResult['indicators']?['quote']?[0];
                 final supO = (supQ?['open'] as List<dynamic>?)
                     ?.map((v) => v is num ? v.toDouble() : null)
@@ -607,7 +690,10 @@ class StockPriceService {
         }
       }
 
-      if (out.isNotEmpty) _ohlcCache[cacheKey] = out;
+      if (out.isNotEmpty) {
+        _ohlcCache[cacheKey] = out;
+        _ohlcCacheFetchedAt[cacheKey] = DateTime.now();
+      }
       return out;
     } catch (_) {
       return [];

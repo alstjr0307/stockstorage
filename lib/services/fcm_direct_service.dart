@@ -11,6 +11,15 @@ import 'package:http/http.dart' as http;
 class FcmDirectService {
   static const _projectId = 'stockstorage-13828';
 
+  static String _normalizePrivateKey(String rawKey) {
+    // Firestore에 따라 "\n", "\\n", "\r\n" 형태가 섞여 저장될 수 있어 정규화
+    return rawKey
+        .replaceAll(r'\\n', '\n')
+        .replaceAll(r'\n', '\n')
+        .replaceAll('\r\n', '\n')
+        .trim();
+  }
+
   static Future<void> sendTopicNotification({
     required String title,
     required String body,
@@ -29,21 +38,27 @@ class FcmDirectService {
 
       final data = doc.data()!;
       final clientEmail = data['client_email'] as String;
-      // Firestore에 저장된 \\n 을 실제 줄바꿈으로 변환
-      final privateKey = (data['private_key'] as String).replaceAll(r'\n', '\n');
+      final privateKey = _normalizePrivateKey(data['private_key'] as String);
 
       // 2. JWT 생성
-      final now = DateTime.now();
-      final jwt = JWT(
-        {
-          'iss': clientEmail,
-          'scope': 'https://www.googleapis.com/auth/firebase.messaging',
-          'aud': 'https://oauth2.googleapis.com/token',
-          'iat': now.millisecondsSinceEpoch ~/ 1000,
-          'exp': now.add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000,
-        },
+      final nowUtc = DateTime.now().toUtc();
+      // 클라이언트 시계 오차를 완화하기 위해 iat를 1분 과거로 설정
+      final iat =
+          nowUtc.subtract(const Duration(minutes: 1)).millisecondsSinceEpoch ~/
+          1000;
+      // Google OAuth JWT assertion은 최대 60분 이내 만료여야 함
+      final exp = iat + (59 * 60);
+      final jwt = JWT({
+        'iss': clientEmail,
+        'scope': 'https://www.googleapis.com/auth/firebase.messaging',
+        'aud': 'https://oauth2.googleapis.com/token',
+        'iat': iat,
+        'exp': exp,
+      });
+      final signedToken = jwt.sign(
+        RSAPrivateKey(privateKey),
+        algorithm: JWTAlgorithm.RS256,
       );
-      final signedToken = jwt.sign(RSAPrivateKey(privateKey), algorithm: JWTAlgorithm.RS256);
 
       // 3. JWT → OAuth2 액세스 토큰 교환
       final tokenResp = await http.post(
@@ -63,7 +78,9 @@ class FcmDirectService {
 
       // 4. FCM v1 API로 토픽 푸시 발송
       final fcmResp = await http.post(
-        Uri.parse('https://fcm.googleapis.com/v1/projects/$_projectId/messages:send'),
+        Uri.parse(
+          'https://fcm.googleapis.com/v1/projects/$_projectId/messages:send',
+        ),
         headers: {
           'Authorization': 'Bearer $accessToken',
           'Content-Type': 'application/json',

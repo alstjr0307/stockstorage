@@ -1881,7 +1881,7 @@ class _UsersTabState extends State<_UsersTab> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      'Lv.$level · 게시글 $postCount · 댓글 $commentCount',
+                      'Lv.$level · 글/일지 $postCount · 댓글 $commentCount',
                       style: GoogleFonts.inter(
                         color: const Color(0xFF10B981),
                         fontWeight: FontWeight.w600,

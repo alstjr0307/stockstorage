@@ -31,22 +31,36 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   final FirestoreService _firestoreService = FirestoreService();
+  late final AnimationController _rewardChipPulseController;
+  late final Animation<double> _rewardChipScale;
 
-  // 탭: 0=주식저장소, 1=내 종목, 2=커뮤니티, 3=종목비교, 4=시황분석
+  // 탭: 0=주식저장소, 1=매매일지, 2=커뮤니티, 3=종목비교, 4=시황분석
   int _currentPage = 0;
 
   // 검색
   bool _showSearch = false;
   final _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _rewardAdLoading = false;
 
-  static const _tabTitles = ['주식저장소', '내 종목', '커뮤니티', '종목 비교', '시황 분석'];
+  static const _tabTitles = ['주식저장소', '매매일지', '커뮤니티', '종목 비교', '시황 분석'];
 
   @override
   void initState() {
     super.initState();
+    _rewardChipPulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _rewardChipScale = Tween<double>(begin: 1.0, end: 1.06).animate(
+      CurvedAnimation(
+        parent: _rewardChipPulseController,
+        curve: Curves.easeInOut,
+      ),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       initAds();
       BannerAdWidget.prewarm(
@@ -55,6 +69,11 @@ class _HomeScreenState extends State<HomeScreen> {
         fallbackAdUnitId: AdService.bannerAdUnitId,
       );
       await _showDisclaimerIfNeeded();
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      if (auth.isLoggedIn) {
+        await _firestoreService.syncUserContributionStats(auth.user!.uid);
+      }
       await _checkNicknameIfNeeded();
     });
   }
@@ -208,8 +227,97 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _rewardChipPulseController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  Widget _buildRewardAdAppBarChip({
+    required AuthProvider auth,
+    required String uid,
+    required bool isDark,
+  }) {
+    return StreamBuilder<Map<String, int>>(
+      stream: _firestoreService.watchRewardAdStatus(uid),
+      builder: (context, snap) {
+        final status = snap.data;
+        final remaining = status?['remainingCount'] ?? 0;
+        final limit = status?['dailyLimit'] ?? 3;
+        if (remaining <= 0) return const SizedBox.shrink();
+
+        return GestureDetector(
+          onTap: () async {
+            final goWatch = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: Text(
+                  '리워드 광고 안내',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                ),
+                content: Text(
+                  '🎁 광고 시청을 완료하면 경험치 +5를 받을 수 있어요.\n'
+                  '보상은 시청 완료 후 지급됩니다.',
+                  style: GoogleFonts.inter(fontSize: 13, height: 1.5),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: Text('닫기', style: GoogleFonts.inter()),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: Text(
+                      '광고 보기',
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF10B981),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+            if (goWatch == true) {
+              await _watchRewardAdAndClaimXp(auth);
+            }
+          },
+          child: AnimatedBuilder(
+            animation: _rewardChipScale,
+            builder: (context, child) =>
+                Transform.scale(scale: _rewardChipScale.value, child: child),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: const Color(0xFF10B981).withValues(alpha: 0.35),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.ondemand_video,
+                    size: 12,
+                    color: Color(0xFF10B981),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '$remaining/$limit',
+                    style: GoogleFonts.inter(
+                      color: isDark ? Colors.white : const Color(0xFF065F46),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _closeSearch() {
@@ -218,6 +326,43 @@ class _HomeScreenState extends State<HomeScreen> {
       _searchQuery = '';
       _searchController.clear();
     });
+  }
+
+  void _showRootSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _watchRewardAdAndClaimXp(AuthProvider auth) async {
+    if (_rewardAdLoading) return;
+    final uid = auth.user?.uid;
+    if (uid == null || uid.isEmpty) return;
+
+    setState(() => _rewardAdLoading = true);
+    try {
+      final earnedReward = await AdService.instance
+          .showRewardedAdAndWaitReward();
+      if (!mounted) return;
+      if (!earnedReward) {
+        _showRootSnackBar('광고 시청이 완료되지 않아 XP가 지급되지 않았어요.');
+        return;
+      }
+
+      final granted = await _firestoreService.grantDailyRewardAdXp(uid);
+      if (!mounted) return;
+      if (granted) {
+        _showRootSnackBar('리워드 지급 완료! 경험치 +5');
+      } else {
+        _showRootSnackBar('오늘 리워드 광고 보상은 3회 모두 받았어요.');
+      }
+    } catch (_) {
+      if (!mounted) return;
+      _showRootSnackBar('리워드 광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요.');
+    } finally {
+      if (mounted) setState(() => _rewardAdLoading = false);
+    }
   }
 
   @override
@@ -263,6 +408,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
         actions: [
+          if (auth.isLoggedIn && !(_showSearch && _currentPage == 0))
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Center(
+                child: _buildRewardAdAppBarChip(
+                  auth: auth,
+                  uid: auth.user!.uid,
+                  isDark: isDark,
+                ),
+              ),
+            ),
           if (_currentPage == 0)
             IconButton(
               icon: Icon(
@@ -311,7 +467,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: (i) {
           if (i != 0) _closeSearch();
           setState(() => _currentPage = i);
-          const tabNames = ['추천주', '내종목', '커뮤니티', '종목비교', '시황분석'];
+          const tabNames = ['추천주', '매매일지', '커뮤니티', '종목비교', '시황분석'];
           AnalyticsService.instance.logTabChange(tabNames[i]);
         },
         backgroundColor: bgColor,
@@ -327,7 +483,7 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.show_chart), label: '추천주'),
           BottomNavigationBarItem(
             icon: Icon(Icons.account_balance_wallet_outlined),
-            label: '내 종목',
+            label: '매매일지',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.people_outline),
@@ -356,7 +512,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // ─── 내 종목 페이지 ───────────────────────────────────────────────────
+  // ─── 매매일지 페이지 ───────────────────────────────────────────────────
   Widget _buildMyStocksPage() {
     return const PortfolioScreen();
   }
@@ -460,16 +616,19 @@ class _HomeScreenState extends State<HomeScreen> {
                               'postCount': 0,
                               'commentCount': 0,
                               'attendanceCount': 0,
+                              'bonusXp': 0,
                             };
                         final level = stats['level'] ?? 1;
                         final postCount = stats['postCount'] ?? 0;
                         final commentCount = stats['commentCount'] ?? 0;
                         final attendanceCount = stats['attendanceCount'] ?? 0;
+                        final bonusXp = stats['bonusXp'] ?? 0;
                         final progressInfo = _firestoreService
                             .calculateLevelProgress(
                               postCount: postCount,
                               commentCount: commentCount,
                               attendanceCount: attendanceCount,
+                              bonusXp: bonusXp,
                             );
                         final currentXp =
                             (progressInfo['currentXpInLevel'] ?? 0).toInt();
@@ -557,6 +716,97 @@ class _HomeScreenState extends State<HomeScreen> {
                                       ),
                                     ),
                                   ),
+                                  const SizedBox(height: 10),
+                                  StreamBuilder<Map<String, int>>(
+                                    stream: _firestoreService
+                                        .watchRewardAdStatus(uid),
+                                    builder: (context, rewardSnap) {
+                                      final status = rewardSnap.data;
+                                      final canWatchToday =
+                                          (status?['canWatchToday'] ?? 1) == 1;
+                                      final remainingCount =
+                                          status?['remainingCount'] ?? 3;
+                                      final dailyLimit =
+                                          status?['dailyLimit'] ?? 3;
+                                      return Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          SizedBox(
+                                            width: double.infinity,
+                                            child: ElevatedButton.icon(
+                                              style: ElevatedButton.styleFrom(
+                                                elevation: 0,
+                                                backgroundColor: const Color(
+                                                  0xFF10B981,
+                                                ),
+                                                foregroundColor: const Color(
+                                                  0xFF07120E,
+                                                ),
+                                                disabledBackgroundColor:
+                                                    const Color(
+                                                      0xFF10B981,
+                                                    ).withValues(alpha: 0.4),
+                                                disabledForegroundColor:
+                                                    const Color(
+                                                      0xFF07120E,
+                                                    ).withValues(alpha: 0.6),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      vertical: 10,
+                                                    ),
+                                              ),
+                                              onPressed:
+                                                  canWatchToday &&
+                                                      !_rewardAdLoading
+                                                  ? () =>
+                                                        _watchRewardAdAndClaimXp(
+                                                          auth,
+                                                        )
+                                                  : null,
+                                              icon: _rewardAdLoading
+                                                  ? const SizedBox(
+                                                      width: 14,
+                                                      height: 14,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                            strokeWidth: 2,
+                                                          ),
+                                                    )
+                                                  : const Icon(
+                                                      Icons.ondemand_video,
+                                                      size: 16,
+                                                    ),
+                                              label: Text(
+                                                _rewardAdLoading
+                                                    ? '광고 준비 중...'
+                                                    : '리워드 광고 보고 +5 XP',
+                                                style: GoogleFonts.inter(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '오늘 보상 광고: ${remainingCount}/${dailyLimit}회 남음',
+                                            style: GoogleFonts.inter(
+                                              color: isDark
+                                                  ? Colors.white38
+                                                  : Colors.black45,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
                                 ],
                               ),
                             ),
@@ -567,7 +817,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               alignment: WrapAlignment.center,
                               children: [
                                 _buildProfileStatChip(
-                                  label: '글 $postCount',
+                                  label: '글/일지 $postCount',
                                   icon: Icons.edit_note_outlined,
                                   isDark: isDark,
                                 ),
@@ -620,6 +870,43 @@ class _HomeScreenState extends State<HomeScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (_) => MyPostsScreen(uid: uid),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: isDark
+                              ? Colors.white70
+                              : Colors.black54,
+                          side: BorderSide(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : Colors.black.withValues(alpha: 0.1),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        icon: const Icon(Icons.favorite_border, size: 16),
+                        label: Text(
+                          '관심 추천주',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const FavoritesPicksScreen(),
                             ),
                           );
                         },

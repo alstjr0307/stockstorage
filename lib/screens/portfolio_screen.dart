@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/stock_pick.dart';
+import '../models/trading_journal.dart';
 import '../providers/auth_provider.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
@@ -74,8 +75,8 @@ class _PortfolioScreenState extends State<PortfolioScreen>
                 fontWeight: FontWeight.w500,
               ),
               tabs: const [
-                Tab(text: '내 매매일지'),
-                Tab(text: '관심 추천주'),
+                Tab(text: '전체'),
+                Tab(text: '종목별'),
               ],
             ),
           ),
@@ -83,10 +84,172 @@ class _PortfolioScreenState extends State<PortfolioScreen>
         Expanded(
           child: TabBarView(
             controller: _tabController,
-            children: [const TradingJournalTab(), _FavoritesTab()],
+            children: const [TradingJournalTab(), _GroupedJournalTab()],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _GroupedJournalTab extends StatelessWidget {
+  const _GroupedJournalTab();
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    if (!auth.isLoggedIn) return _NotLoggedIn();
+
+    final fs = FirestoreService();
+    final cs = Theme.of(context).colorScheme;
+    final uid = auth.user!.uid;
+
+    return StreamBuilder<List<TradingJournal>>(
+      stream: fs.getMyJournals(uid),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFF10B981)),
+          );
+        }
+
+        final journals = snapshot.data ?? [];
+        final seen = <String>{};
+        final grouped = journals.where((j) {
+          final ticker = j.ticker.trim().toUpperCase();
+          if (ticker.isEmpty || seen.contains(ticker)) return false;
+          seen.add(ticker);
+          return true;
+        }).toList()
+          ..sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+
+        if (grouped.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.list_alt_rounded,
+                  color: cs.onSurface.withValues(alpha: 0.2),
+                  size: 56,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '종목별 매매일지가 없습니다',
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.4),
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.separated(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          itemCount: grouped.length,
+          separatorBuilder: (_, _) => Divider(
+            height: 1,
+            thickness: 1,
+            color: cs.onSurface.withValues(alpha: 0.07),
+          ),
+          itemBuilder: (context, i) {
+            final j = grouped[i];
+            final ticker = j.ticker.toUpperCase();
+            final stockName = j.stockName.trim().isEmpty ? ticker : j.stockName;
+            final count = journals.where((e) => e.ticker.toUpperCase() == ticker).length;
+
+            return InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TradingJournalTab(
+                    filterTicker: ticker,
+                    filterStockName: stockName,
+                    pageTitle: '$stockName 매매일지',
+                  ),
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: cs.onSurface.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(9999),
+                      ),
+                      child: Text(
+                        ticker,
+                        style: GoogleFonts.robotoMono(
+                          color: cs.onSurface.withValues(alpha: 0.82),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            stockName,
+                            style: GoogleFonts.inter(
+                              color: cs.onSurface,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '$count건의 매매일지',
+                            style: GoogleFonts.inter(
+                              color: cs.onSurface.withValues(alpha: 0.45),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: cs.onSurface.withValues(alpha: 0.35),
+                      size: 20,
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class FavoritesPicksScreen extends StatelessWidget {
+  const FavoritesPicksScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          '관심 추천주',
+          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+        ),
+      ),
+      body: Container(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: _FavoritesTab(),
+      ),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
     );
   }
 }
@@ -486,9 +649,10 @@ class _PortfolioContentState extends State<_PortfolioContent> {
       return '\$${p.toStringAsFixed(2)}';
     }
 
-    return GestureDetector(
+    return InkWell(
       onTap: () => Navigator.push(context, stockDetailRoute(pick)),
-      child: Container(
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
         padding: const EdgeInsets.fromLTRB(0, 14, 0, 14),
         child: Row(
           children: [
@@ -778,48 +942,59 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
                     final retColor = isPos
                         ? const Color(0xFFF04452)
                         : const Color(0xFF1677FF);
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              pick.ticker,
-                              style: GoogleFonts.robotoMono(
-                                color: Colors.white.withValues(alpha: 0.9),
-                                fontWeight: FontWeight.w700,
-                                fontSize: 11,
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () {
+                        final navigator = Navigator.of(
+                          context,
+                          rootNavigator: true,
+                        );
+                        Navigator.pop(context);
+                        navigator.push(stockDetailRoute(pick));
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                pick.ticker,
+                                style: GoogleFonts.robotoMono(
+                                  color: Colors.white.withValues(alpha: 0.9),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 11,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              pick.name,
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                pick.name,
+                                style: GoogleFonts.inter(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                  fontSize: 12,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Text(
+                              '${isPos ? '+' : ''}${returnRate.toStringAsFixed(1)}%',
                               style: GoogleFonts.inter(
-                                color: Colors.white.withValues(alpha: 0.7),
+                                color: retColor,
+                                fontWeight: FontWeight.w700,
                                 fontSize: 12,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          Text(
-                            '${isPos ? '+' : ''}${returnRate.toStringAsFixed(1)}%',
-                            style: GoogleFonts.inter(
-                              color: retColor,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     );
                   }),

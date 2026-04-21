@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -58,6 +59,17 @@ class AdService {
     }
     if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/6398470153';
     return 'ca-app-pub-6925657557995580/3939218968';
+  }
+
+  static String get _rewardedAdUnitId {
+    if (kIsWeb) return '';
+    if (_useTestAds) {
+      return Platform.isAndroid
+          ? 'ca-app-pub-3940256099942544/5224354917'
+          : 'ca-app-pub-3940256099942544/1712485313';
+    }
+    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/4898140479';
+    return 'ca-app-pub-6925657557995580/2080405446';
   }
 
   // ── 배너 광고 ─────────────────────────────────────────────────────────
@@ -217,5 +229,41 @@ class AdService {
     }
     _indicatorInterstitialAd!.show();
     AnalyticsService.instance.logAdInterstitialShown();
+  }
+
+  Future<bool> showRewardedAdAndWaitReward() async {
+    if (kIsWeb || !_adsEnabled || _shouldBlockByAdmin) return false;
+
+    final completer = Completer<bool>();
+    var earnedReward = false;
+
+    RewardedAd.load(
+      adUnitId: _rewardedAdUnitId,
+      request: const AdRequest(),
+      rewardedAdLoadCallback: RewardedAdLoadCallback(
+        onAdLoaded: (ad) {
+          ad.fullScreenContentCallback = FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (ad) {
+              ad.dispose();
+              if (!completer.isCompleted) completer.complete(earnedReward);
+            },
+            onAdFailedToShowFullScreenContent: (ad, error) {
+              ad.dispose();
+              if (!completer.isCompleted) completer.complete(false);
+            },
+          );
+          ad.show(
+            onUserEarnedReward: (_, rewardItem) {
+              earnedReward = rewardItem.amount >= 0;
+            },
+          );
+        },
+        onAdFailedToLoad: (_) {
+          if (!completer.isCompleted) completer.complete(false);
+        },
+      ),
+    );
+
+    return completer.future;
   }
 }

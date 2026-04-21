@@ -1,4 +1,4 @@
-﻿import 'dart:ui' as ui;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -23,6 +23,9 @@ const _kDownColor = Color(0xFF1677FF);
 class JournalChartScreen extends StatefulWidget {
   final TradingJournal buy;
   final List<TradingJournal> linkedSells;
+  final List<TradingJournal> relatedBuys;
+  final List<TradingJournal> relatedSells;
+  final bool showBuyMarker;
   final FirestoreService firestoreService;
   final VoidCallback onEdit;
   final void Function(TradingJournal)? onEditSell;
@@ -32,6 +35,9 @@ class JournalChartScreen extends StatefulWidget {
     super.key,
     required this.buy,
     this.linkedSells = const [],
+    this.relatedBuys = const [],
+    this.relatedSells = const [],
+    this.showBuyMarker = true,
     required this.firestoreService,
     required this.onEdit,
     this.onEditSell,
@@ -55,6 +61,38 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
   // 전체 candles 기준 마커 인덱스
   List<_Marker> _allMarkers = [];
 
+  List<TradingJournal> get _allBuys {
+    final out = <TradingJournal>[];
+    final seen = <String>{};
+    void add(TradingJournal j) {
+      if (j.action != '매수') return;
+      if (seen.add(j.id)) out.add(j);
+    }
+
+    add(widget.buy);
+    for (final j in widget.relatedBuys) {
+      add(j);
+    }
+    return out;
+  }
+
+  List<TradingJournal> get _allSells {
+    final out = <TradingJournal>[];
+    final seen = <String>{};
+    void add(TradingJournal j) {
+      if (j.action != '매도') return;
+      if (seen.add(j.id)) out.add(j);
+    }
+
+    for (final j in widget.linkedSells) {
+      add(j);
+    }
+    for (final j in widget.relatedSells) {
+      add(j);
+    }
+    return out;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -76,15 +114,24 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
     }
 
     final data = await StockPriceService.fetchOHLC(
-      ticker, market, interval: '1d', range: _range,
+      ticker,
+      market,
+      interval: '1d',
+      range: _range,
     );
     if (!mounted) return;
 
     final markers = <_Marker>[];
-    final buyIdx = _closestIndex(data, widget.buy.tradeDate);
-    if (buyIdx >= 0) markers.add((index: buyIdx, isBuy: true, price: widget.buy.price));
+    if (widget.showBuyMarker) {
+      for (final buy in _allBuys) {
+        final buyIdx = _closestIndex(data, buy.tradeDate);
+        if (buyIdx >= 0) {
+          markers.add((index: buyIdx, isBuy: true, price: buy.price));
+        }
+      }
+    }
 
-    for (final sell in widget.linkedSells) {
+    for (final sell in _allSells) {
       final idx = _closestIndex(data, sell.tradeDate);
       if (idx >= 0) markers.add((index: idx, isBuy: false, price: sell.price));
     }
@@ -149,20 +196,33 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
   }
 
   void _onScaleUpdate(ScaleUpdateDetails d, double chartW) {
-    if (_rangeAtScaleStart == null || _focalPointAtScaleStart == null || _candles.isEmpty) return;
+    if (_rangeAtScaleStart == null ||
+        _focalPointAtScaleStart == null ||
+        _candles.isEmpty)
+      return;
     final candleAreaW = _candleAreaW(chartW);
 
-    final newWidth = (_rangeAtScaleStart!.width / d.scale)
-        .clamp(5.0, _candles.length.toDouble());
+    final newWidth = (_rangeAtScaleStart!.width / d.scale).clamp(
+      5.0,
+      _candles.length.toDouble(),
+    );
     final focalFraction =
-        ((_focalPointAtScaleStart!.dx - _leftPad) / candleAreaW).clamp(0.0, 1.0);
+        ((_focalPointAtScaleStart!.dx - _leftPad) / candleAreaW).clamp(
+          0.0,
+          1.0,
+        );
     final anchorCandle =
         _rangeAtScaleStart!.start + focalFraction * _rangeAtScaleStart!.width;
     final panDeltaCandles =
-        (d.localFocalPoint.dx - _focalPointAtScaleStart!.dx) / candleAreaW * newWidth;
+        (d.localFocalPoint.dx - _focalPointAtScaleStart!.dx) /
+        candleAreaW *
+        newWidth;
 
     var newStart = anchorCandle - focalFraction * newWidth - panDeltaCandles;
-    newStart = newStart.clamp(0.0, (_candles.length - newWidth).clamp(0.0, double.infinity));
+    newStart = newStart.clamp(
+      0.0,
+      (_candles.length - newWidth).clamp(0.0, double.infinity),
+    );
     final newEnd = newStart + newWidth;
 
     setState(() {
@@ -176,8 +236,9 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
     final cs = Theme.of(context).colorScheme;
     final buy = widget.buy;
     final isKrw = buy.market != 'US';
-    String fmtP(double p) =>
-        isKrw ? '₩${NumberFormat('#,###').format(p.toInt())}' : '\$${p.toStringAsFixed(2)}';
+    String fmtP(double p) => isKrw
+        ? '₩${NumberFormat('#,###').format(p.toInt())}'
+        : '\$${p.toStringAsFixed(2)}';
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -195,24 +256,29 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
             Text(
               buy.stockName,
               style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                  color: cs.onSurface),
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+                color: cs.onSurface,
+              ),
             ),
             if (buy.ticker.isNotEmpty)
               Text(
                 '${buy.ticker} · ${buy.market}',
                 style: GoogleFonts.robotoMono(
-                    fontSize: 11,
-                    color: cs.onSurface.withValues(alpha: 0.4)),
+                  fontSize: 11,
+                  color: cs.onSurface.withValues(alpha: 0.4),
+                ),
               ),
           ],
         ),
         actions: widget.showEditButton
             ? [
                 IconButton(
-                  icon: Icon(Icons.edit_outlined,
-                      size: 20, color: cs.onSurface.withValues(alpha: 0.6)),
+                  icon: Icon(
+                    Icons.edit_outlined,
+                    size: 20,
+                    color: cs.onSurface.withValues(alpha: 0.6),
+                  ),
                   onPressed: () {
                     Navigator.pop(context);
                     widget.onEdit();
@@ -224,24 +290,33 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _candles.isEmpty
-              ? Center(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.show_chart,
-                        size: 48, color: cs.onSurface.withValues(alpha: 0.2)),
-                    const SizedBox(height: 12),
-                    Text('차트 데이터를 불러올 수 없습니다',
-                        style: GoogleFonts.inter(
-                            color: cs.onSurface.withValues(alpha: 0.4))),
-                  ]),
-                )
-              : Column(
-                  children: [
-                    _rangeSelector(cs),
-                    _legend(cs),
-                    Expanded(child: _buildChart(cs)),
-                    _tradeInfo(cs, fmtP),
-                  ],
-                ),
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.show_chart,
+                    size: 48,
+                    color: cs.onSurface.withValues(alpha: 0.2),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '차트 데이터를 불러올 수 없습니다',
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : Column(
+              children: [
+                _rangeSelector(cs),
+                _legend(cs),
+                Expanded(child: _buildChart(cs)),
+                _tradeInfo(cs, fmtP),
+              ],
+            ),
     );
   }
 
@@ -267,13 +342,16 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
                     : cs.onSurface.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Text(opt.$1,
-                  style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: selected
-                          ? Colors.black
-                          : cs.onSurface.withValues(alpha: 0.6))),
+              child: Text(
+                opt.$1,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: selected
+                      ? Colors.black
+                      : cs.onSurface.withValues(alpha: 0.6),
+                ),
+              ),
             ),
           );
         }).toList(),
@@ -282,27 +360,38 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
   }
 
   Widget _legend(ColorScheme cs) {
+    final hasSell = _allMarkers.any((m) => !m.isBuy);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Row(children: [
-        _legendDot(const Color(0xFF10B981), '매수', cs),
-        const SizedBox(width: 12),
-        _legendDot(Colors.redAccent, '매도', cs),
-      ]),
+      child: Row(
+        children: [
+          if (widget.showBuyMarker)
+            _legendDot(const Color(0xFF10B981), '매수', cs),
+          if (widget.showBuyMarker && hasSell) const SizedBox(width: 12),
+          if (hasSell) _legendDot(Colors.redAccent, '매도', cs),
+        ],
+      ),
     );
   }
 
   Widget _legendDot(Color color, String label, ColorScheme cs) {
-    return Row(children: [
-      Container(
-        width: 8, height: 8,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      ),
-      const SizedBox(width: 4),
-      Text(label,
+    return Row(
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
           style: GoogleFonts.inter(
-              fontSize: 11, color: cs.onSurface.withValues(alpha: 0.5))),
-    ]);
+            fontSize: 11,
+            color: cs.onSurface.withValues(alpha: 0.5),
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildChart(ColorScheme cs) {
@@ -318,7 +407,10 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
       }
     }
 
-    final touched = (_touchedIndex != null && _touchedIndex! >= 0 && _touchedIndex! < dc.length)
+    final touched =
+        (_touchedIndex != null &&
+            _touchedIndex! >= 0 &&
+            _touchedIndex! < dc.length)
         ? dc[_touchedIndex!]
         : null;
 
@@ -331,7 +423,8 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
               final chartW = constraints.maxWidth;
               return GestureDetector(
                 onLongPressStart: (d) => _onTouch(d.localPosition.dx, chartW),
-                onLongPressMoveUpdate: (d) => _onTouch(d.localPosition.dx, chartW),
+                onLongPressMoveUpdate: (d) =>
+                    _onTouch(d.localPosition.dx, chartW),
                 onLongPressEnd: (_) => setState(() => _touchedIndex = null),
                 onScaleStart: _onScaleStart,
                 onScaleUpdate: (d) => _onScaleUpdate(d, chartW),
@@ -362,133 +455,244 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
       color: cs.onSurface.withValues(alpha: 0.04),
-      child: Row(children: [
-        Text(DateFormat('yyyy.MM.dd').format(c.date),
-            style: GoogleFonts.robotoMono(
-                fontSize: 11, color: cs.onSurface.withValues(alpha: 0.4))),
-        const SizedBox(width: 10),
-        ...[ ('O', c.open), ('H', c.high), ('L', c.low), ('C', c.close) ].map(
-          (e) => Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Row(children: [
-              Text('${e.$1} ',
-                  style: GoogleFonts.robotoMono(
-                      fontSize: 10, color: cs.onSurface.withValues(alpha: 0.35))),
-              Text(fmt(e.$2),
-                  style: GoogleFonts.robotoMono(
-                      fontSize: 10,
-                      color: isUp ? _kUpColor : _kDownColor)),
-            ]),
-          ),
-        ),
-      ]),
-    );
-  }
-
-  Widget _tradeInfo(ColorScheme cs, String Function(double) fmtP) {
-    final buy = widget.buy;
-    final sells = widget.linkedSells;
-    double totalPnl = 0;
-    bool hasPnl = false;
-    for (final s in sells) {
-      if (s.buyPrice > 0) {
-        totalPnl += (s.price - s.buyPrice) * s.quantity;
-        hasPnl = true;
-      }
-    }
-    final isPnlUp = totalPnl >= 0;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        border: Border(top: BorderSide(color: cs.onSurface.withValues(alpha: 0.08))),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(children: [
-            _infoCell('매수일', DateFormat('yy.MM.dd').format(buy.tradeDate), cs),
-            _infoCell('매수가', fmtP(buy.price), cs),
-            _infoCell('수량',
-                '${buy.quantity % 1 == 0 ? buy.quantity.toInt() : buy.quantity}주', cs),
-            if (hasPnl)
-              _infoCell(
-                '실현손익',
-                '${isPnlUp ? '+' : ''}${fmtP(totalPnl)}',
-                cs,
-                valueColor: isPnlUp ? _kUpColor : _kDownColor,
+          Text(
+            DateFormat('yyyy.MM.dd').format(c.date),
+            style: GoogleFonts.robotoMono(
+              fontSize: 11,
+              color: cs.onSurface.withValues(alpha: 0.4),
+            ),
+          ),
+          const SizedBox(width: 10),
+          ...[('O', c.open), ('H', c.high), ('L', c.low), ('C', c.close)].map(
+            (e) => Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Row(
+                children: [
+                  Text(
+                    '${e.$1} ',
+                    style: GoogleFonts.robotoMono(
+                      fontSize: 10,
+                      color: cs.onSurface.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  Text(
+                    fmt(e.$2),
+                    style: GoogleFonts.robotoMono(
+                      fontSize: 10,
+                      color: isUp ? _kUpColor : _kDownColor,
+                    ),
+                  ),
+                ],
               ),
-          ]),
-          if (sells.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            const Divider(height: 1),
-            const SizedBox(height: 8),
-            ...sells.map((s) => _sellRow(s, cs, fmtP)),
-          ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _infoCell(String label, String value, ColorScheme cs, {Color? valueColor}) {
-    return Expanded(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label,
-            style: GoogleFonts.inter(
-                fontSize: 10, color: cs.onSurface.withValues(alpha: 0.4))),
-        const SizedBox(height: 2),
-        Text(value,
-            style: GoogleFonts.robotoMono(
+  Widget _tradeInfo(ColorScheme cs, String Function(double) fmtP) {
+    final sells = _allSells;
+    final events = <({TradingJournal journal, bool isBuy})>[
+      if (widget.showBuyMarker)
+        ..._allBuys.map((b) => (journal: b, isBuy: true)),
+      ...sells.map((s) => (journal: s, isBuy: false)),
+    ]..sort((a, b) => b.journal.tradeDate.compareTo(a.journal.tradeDate));
+    final showSharedOwnerLabel =
+        !widget.showEditButton && widget.buy.nickname.trim().isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        border: Border(
+          top: BorderSide(color: cs.onSurface.withValues(alpha: 0.08)),
+        ),
+      ),
+      child: events.isEmpty
+          ? Text(
+              '거래 기록이 없습니다',
+              style: GoogleFonts.inter(
                 fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: valueColor ?? cs.onSurface)),
-      ]),
+                color: cs.onSurface.withValues(alpha: 0.45),
+              ),
+            )
+          : Column(
+              children: [
+                if (showSharedOwnerLabel) ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '${widget.buy.nickname}님의 매매 기록',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: cs.onSurface.withValues(alpha: 0.62),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Container(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+                  decoration: BoxDecoration(
+                    color: cs.onSurface.withValues(alpha: 0.03),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: events.length <= 4
+                      ? Column(
+                          children: [
+                            ...events.asMap().entries.map((entry) {
+                              final i = entry.key;
+                              final e = entry.value;
+                              return _tradeRow(
+                                journal: e.journal,
+                                isBuy: e.isBuy,
+                                cs: cs,
+                                fmtP: fmtP,
+                                isLast: i == events.length - 1,
+                              );
+                            }),
+                          ],
+                        )
+                      : SizedBox(
+                          height: 220,
+                          child: Scrollbar(
+                            thumbVisibility: true,
+                            child: ListView.builder(
+                              itemCount: events.length,
+                              itemBuilder: (context, i) {
+                                final e = events[i];
+                                return _tradeRow(
+                                  journal: e.journal,
+                                  isBuy: e.isBuy,
+                                  cs: cs,
+                                  fmtP: fmtP,
+                                  isLast: i == events.length - 1,
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                ),
+              ],
+            ),
     );
   }
 
-  Widget _sellRow(TradingJournal sell, ColorScheme cs, String Function(double) fmtP) {
-    final pnlPct = sell.buyPrice > 0
-        ? (sell.price - sell.buyPrice) / sell.buyPrice * 100
+  Widget _tradeRow({
+    required TradingJournal journal,
+    required bool isBuy,
+    required ColorScheme cs,
+    required String Function(double) fmtP,
+    required bool isLast,
+  }) {
+    final qty = journal.quantity % 1 == 0
+        ? journal.quantity.toInt()
+        : journal.quantity;
+    final dotColor = isBuy ? const Color(0xFF10B981) : const Color(0xFFF04452);
+    final realizedPnl =
+        !isBuy &&
+            journal.buyPrice > 0 &&
+            journal.price > 0 &&
+            journal.quantity > 0
+        ? (journal.price - journal.buyPrice) * journal.quantity
         : null;
-    final isUp = pnlPct != null && pnlPct >= 0;
-    final qty = sell.quantity % 1 == 0 ? sell.quantity.toInt() : sell.quantity;
+    final isPnlUp = realizedPnl == null || realizedPnl >= 0;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 5),
-      child: Row(children: [
-        Container(
-          width: 6, height: 6,
-          margin: const EdgeInsets.only(right: 8),
-          decoration: const BoxDecoration(
-              color: Colors.redAccent, shape: BoxShape.circle),
-        ),
-        Text(DateFormat('yy.MM.dd').format(sell.tradeDate),
-            style: GoogleFonts.robotoMono(
-                fontSize: 11, color: cs.onSurface.withValues(alpha: 0.45))),
-        const SizedBox(width: 8),
-        Text('매도 ${fmtP(sell.price)} × $qty주',
-            style: GoogleFonts.robotoMono(
-                fontSize: 11, color: cs.onSurface.withValues(alpha: 0.8))),
-        const Spacer(),
-        if (pnlPct != null)
-          Text('${isUp ? '+' : ''}${pnlPct.toStringAsFixed(1)}%',
-              style: GoogleFonts.robotoMono(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: isUp ? _kUpColor : _kDownColor)),
-        if (widget.onEditSell != null)
-          GestureDetector(
-            onTap: () {
-              Navigator.pop(context);
-              widget.onEditSell!(sell);
-            },
-            child: Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: Icon(Icons.edit_outlined,
-                  size: 14, color: cs.onSurface.withValues(alpha: 0.35)),
+      padding: const EdgeInsets.fromLTRB(0, 2, 0, 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 18,
+            child: Column(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  margin: const EdgeInsets.only(top: 8),
+                  decoration: BoxDecoration(
+                    color: dotColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                if (!isLast)
+                  Container(
+                    width: 2,
+                    height: 44,
+                    color: cs.onSurface.withValues(alpha: 0.12),
+                  ),
+              ],
             ),
           ),
-      ]),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          DateFormat('yy.MM.dd').format(journal.tradeDate),
+                          style: GoogleFonts.robotoMono(
+                            fontSize: 10,
+                            color: cs.onSurface.withValues(alpha: 0.42),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${fmtP(journal.price)} · $qty주',
+                          style: GoogleFonts.robotoMono(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurface.withValues(alpha: 0.82),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (realizedPnl != null) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      '${isPnlUp ? '+' : ''}${fmtP(realizedPnl)}',
+                      style: GoogleFonts.robotoMono(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: isPnlUp ? _kUpColor : _kDownColor,
+                      ),
+                    ),
+                  ],
+                  if (!isBuy && widget.onEditSell != null)
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.pop(context);
+                        widget.onEditSell!(journal);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: Icon(
+                          Icons.edit_outlined,
+                          size: 14,
+                          color: cs.onSurface.withValues(alpha: 0.35),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -546,7 +750,11 @@ class _JournalCandlePainter extends CustomPainter {
       ..strokeWidth = 1;
     for (int i = 1; i <= 3; i++) {
       final y = markerH + chartH * i / 4;
-      canvas.drawLine(Offset(leftPad, y), Offset(leftPad + chartW, y), gridPaint);
+      canvas.drawLine(
+        Offset(leftPad, y),
+        Offset(leftPad + chartW, y),
+        gridPaint,
+      );
     }
 
     final n = candles.length;
@@ -571,7 +779,12 @@ class _JournalCandlePainter extends CustomPainter {
       final top = toY(isUp ? c.close : c.open);
       final bottom = toY(isUp ? c.open : c.close);
       canvas.drawRect(
-        Rect.fromLTWH(cx - bodyW / 2, top, bodyW, (bottom - top).abs().clamp(1.0, double.infinity)),
+        Rect.fromLTWH(
+          cx - bodyW / 2,
+          top,
+          bodyW,
+          (bottom - top).abs().clamp(1.0, double.infinity),
+        ),
         Paint()..color = color,
       );
     }
@@ -590,7 +803,9 @@ class _JournalCandlePainter extends CustomPainter {
           final g = visibleStart + i;
           if (g < period - 1) continue;
           double sum = 0;
-          for (int k = g - period + 1; k <= g; k++) { sum += allCandles![k].close; }
+          for (int k = g - period + 1; k <= g; k++) {
+            sum += allCandles![k].close;
+          }
           final ma = sum / period;
           final cx = toX(i, n);
           final cy = toY(ma);
@@ -641,7 +856,11 @@ class _JournalCandlePainter extends CustomPainter {
       const dashW = 5.0, gapW = 4.0;
       final lineEnd = leftPad + chartW;
       while (x < lineEnd) {
-        canvas.drawLine(Offset(x, py), Offset((x + dashW).clamp(0, lineEnd), py), dashPaint);
+        canvas.drawLine(
+          Offset(x, py),
+          Offset((x + dashW).clamp(0, lineEnd), py),
+          dashPaint,
+        );
         x += dashW + gapW;
       }
       // 좌측: 액션 pill, 우측: 가격 텍스트
@@ -656,10 +875,11 @@ class _JournalCandlePainter extends CustomPainter {
         text: TextSpan(
           text: actionLabel,
           style: const TextStyle(
-              color: Colors.black,
-              fontSize: 9,
-              fontWeight: FontWeight.w800,
-              fontFamily: 'Inter'),
+            color: Colors.black,
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+            fontFamily: 'Inter',
+          ),
         ),
         textDirection: ui.TextDirection.ltr,
       )..layout();
@@ -668,10 +888,11 @@ class _JournalCandlePainter extends CustomPainter {
         text: TextSpan(
           text: priceLabel,
           style: TextStyle(
-              color: color,
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              fontFamily: 'RobotoMono'),
+            color: color,
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            fontFamily: 'RobotoMono',
+          ),
         ),
         textDirection: ui.TextDirection.ltr,
       )..layout();
@@ -701,7 +922,7 @@ class _JournalCandlePainter extends CustomPainter {
       if (m.index < 0 || m.index >= n) continue;
       final cx = toX(m.index, n);
       final candleY = m.isBuy
-          ? toY(candles[m.index].low)  // 매수: 캔들 아래 (위쪽 삼각형)
+          ? toY(candles[m.index].low) // 매수: 캔들 아래 (위쪽 삼각형)
           : toY(candles[m.index].high); // 매도: 캔들 위 (아래쪽 삼각형)
 
       final color = m.isBuy ? const Color(0xFF10B981) : Colors.redAccent;
@@ -731,24 +952,28 @@ class _JournalCandlePainter extends CustomPainter {
         text: TextSpan(
           text: _fmtVal(v),
           style: TextStyle(
-              color: labelColor.withValues(alpha: 0.65),
-              fontSize: 9,
-              fontWeight: FontWeight.w600,
-              fontFamily: 'RobotoMono'),
+            color: labelColor.withValues(alpha: 0.65),
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+            fontFamily: 'RobotoMono',
+          ),
         ),
         textDirection: ui.TextDirection.ltr,
       )..layout();
-      final y = (markerH + chartH * i / 4 - tp.height / 2)
-          .clamp(0.0, size.height - tp.height);
+      final y = (markerH + chartH * i / 4 - tp.height / 2).clamp(
+        0.0,
+        size.height - tp.height,
+      );
       tp.paint(canvas, Offset(leftPad + chartW + chartToAxisGap, y));
     }
 
     // X축 레이블
     const labelCount = 4;
     final labelStyle = TextStyle(
-        color: labelColor.withValues(alpha: 0.35),
-        fontSize: 10,
-        fontFamily: 'RobotoMono');
+      color: labelColor.withValues(alpha: 0.35),
+      fontSize: 10,
+      fontFamily: 'RobotoMono',
+    );
     for (int i = 0; i < labelCount; i++) {
       final idx = ((n - 1) * i / (labelCount - 1)).round().clamp(0, n - 1);
       final cx = toX(idx, n);
@@ -776,5 +1001,3 @@ class _JournalCandlePainter extends CustomPainter {
       old.markers != markers ||
       old.visibleStart != visibleStart;
 }
-
-

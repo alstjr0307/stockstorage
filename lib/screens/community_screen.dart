@@ -244,9 +244,9 @@ class _JournalTabState extends State<_JournalTab> {
         startAfter: _lastDoc,
         limit: _pageSize,
       );
-      // 매수 + 기타만 (매도 제외) + 차단된 유저 제외
+      // 차단된 유저 제외 (매수/매도/기타 모두 공유)
       final filtered = items
-          .where((j) => j.action != '매도' && !_blockedUids.contains(j.uid))
+          .where((j) => !_blockedUids.contains(j.uid))
           .toList();
       // 댓글 수 조회
       final journalsNeedingCount = filtered
@@ -325,10 +325,8 @@ class _JournalTabState extends State<_JournalTab> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => _AuthorJournalsScreen(
-          uid: journal.uid,
-          nickname: journal.nickname,
-        ),
+        builder: (_) =>
+            _AuthorJournalsScreen(uid: journal.uid, nickname: journal.nickname),
       ),
     );
   }
@@ -362,7 +360,7 @@ class _JournalTabState extends State<_JournalTab> {
       return _EmptyState(
         icon: Icons.trending_up_rounded,
         title: '공유된 매매일지가 없습니다',
-        subtitle: '매매일지에서 매수 기록을 공유해보세요',
+        subtitle: '매매일지에서 매매 기록을 공유해보세요',
         onRefresh: _refresh,
       );
     }
@@ -532,18 +530,32 @@ class _JournalTabState extends State<_JournalTab> {
 
           final journal = filtered[i - 1];
           final isOwn = auth.user?.uid == journal.uid;
-          final linkedSells = _journals
-              .where(
-                (j) =>
-                    j.uid == journal.uid &&
-                    j.action == '매도' &&
-                    j.linkedBuyId == journal.id,
-              )
-              .toList();
+          final linkedSells = journal.action == '매수'
+              ? _journals
+                    .where(
+                      (j) =>
+                          j.uid == journal.uid &&
+                          j.action == '매도' &&
+                          j.linkedBuyId == journal.id,
+                    )
+                    .toList()
+              : const <TradingJournal>[];
+          final linkedBuy =
+              journal.action == '매도' && journal.linkedBuyId.isNotEmpty
+              ? _journals
+                    .where(
+                      (j) =>
+                          j.uid == journal.uid &&
+                          j.action == '매수' &&
+                          j.id == journal.linkedBuyId,
+                    )
+                    .firstOrNull
+              : null;
           return _JournalCard(
             key: ValueKey(journal.id),
             journal: journal,
             linkedSells: linkedSells,
+            linkedBuy: linkedBuy,
             isOwn: isOwn,
             isLiked: _likedIds.contains(journal.id),
             isLoadingLike: _loadingLikes.contains(journal.id),
@@ -998,6 +1010,7 @@ class _EmptyState extends StatelessWidget {
 class _JournalCard extends StatefulWidget {
   final TradingJournal journal;
   final List<TradingJournal> linkedSells;
+  final TradingJournal? linkedBuy;
   final bool isOwn;
   final bool isLiked;
   final bool isLoadingLike;
@@ -1013,6 +1026,7 @@ class _JournalCard extends StatefulWidget {
     super.key,
     required this.journal,
     this.linkedSells = const [],
+    this.linkedBuy,
     required this.isOwn,
     required this.isLiked,
     required this.isLoadingLike,
@@ -1029,15 +1043,57 @@ class _JournalCard extends StatefulWidget {
   State<_JournalCard> createState() => _JournalCardState();
 }
 
-class _JournalCardState extends State<_JournalCard> {
+class _JournalCardState extends State<_JournalCard>
+    with SingleTickerProviderStateMixin {
   PriceResult? _price;
   final _firestoreService = FirestoreService();
   static const Duration _newBadgeWindow = Duration(hours: 24);
+  bool _openingChart = false;
+  TradingJournal? _resolvedLinkedBuy;
+  late final AnimationController _newBadgeController;
+  late final Animation<double> _newBadgeOpacity;
+  late final Animation<double> _newBadgeScale;
 
   @override
   void initState() {
     super.initState();
+    _newBadgeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+    _newBadgeOpacity = Tween<double>(
+      begin: 0.58,
+      end: 0.9,
+    ).animate(
+      CurvedAnimation(parent: _newBadgeController, curve: Curves.easeInOut),
+    );
+    _newBadgeScale = Tween<double>(
+      begin: 0.96,
+      end: 1.0,
+    ).animate(
+      CurvedAnimation(parent: _newBadgeController, curve: Curves.easeOut),
+    );
+    _resolvedLinkedBuy = widget.linkedBuy;
     _fetchPrice();
+    _resolveLinkedBuy();
+  }
+
+  @override
+  void dispose() {
+    _newBadgeController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _JournalCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.linkedBuy?.id != widget.linkedBuy?.id) {
+      _resolvedLinkedBuy = widget.linkedBuy;
+    }
+    if (widget.journal.action == '매도' &&
+        oldWidget.journal.linkedBuyId != widget.journal.linkedBuyId) {
+      _resolveLinkedBuy();
+    }
   }
 
   Future<void> _openComments(BuildContext context) async {
@@ -1063,15 +1119,37 @@ class _JournalCardState extends State<_JournalCard> {
 
   Future<void> _fetchPrice() async {
     final j = widget.journal;
+    if (j.action != '매수') return;
     if (j.ticker.isEmpty || !{'KS', 'KQ', 'US'}.contains(j.market)) return;
     final result = await StockPriceService.fetchPrice(j.ticker, j.market);
     if (mounted) setState(() => _price = result);
   }
 
+  Future<void> _resolveLinkedBuy() async {
+    final j = widget.journal;
+    if (j.action != '매도') return;
+    if (_resolvedLinkedBuy != null) return;
+    if (j.linkedBuyId.isEmpty) return;
+    TradingJournal? linked;
+    try {
+      linked = await _firestoreService.getJournalById(j.linkedBuyId);
+    } catch (_) {
+      return;
+    }
+    if (!mounted || linked == null) return;
+    if (linked.action != '매수') return;
+    if (!linked.isPublic) return;
+    setState(() => _resolvedLinkedBuy = linked);
+  }
+
   bool _canOpenChart(TradingJournal journal) {
-    return journal.action == '매수' &&
+    if (journal.action == '매도') return true;
+    final isMarketSupported =
         journal.ticker.isNotEmpty &&
         {'KS', 'KQ', 'US'}.contains(journal.market);
+    if (!isMarketSupported) return false;
+    if (journal.action == '매수') return true;
+    return false;
   }
 
   DateTime _effectivePublishedAt(TradingJournal journal) =>
@@ -1082,19 +1160,163 @@ class _JournalCardState extends State<_JournalCard> {
     return !diff.isNegative && diff <= _newBadgeWindow;
   }
 
-  void _openChart(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => JournalChartScreen(
-          buy: widget.journal,
-          linkedSells: widget.linkedSells,
-          firestoreService: _firestoreService,
-          onEdit: () {},
-          showEditButton: false,
+  Widget _buildNewBadge() {
+    return FadeTransition(
+      opacity: _newBadgeOpacity,
+      child: ScaleTransition(
+        scale: _newBadgeScale,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF59E0B).withValues(alpha: 0.22),
+            borderRadius: BorderRadius.circular(9999),
+            border: Border.all(
+              color: const Color(0xFFF59E0B).withValues(alpha: 0.28),
+            ),
+          ),
+          child: Text(
+            'NEW',
+            style: GoogleFonts.inter(
+              color: const Color(0xFFFFC857),
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.2,
+            ),
+          ),
         ),
       ),
     );
+  }
+
+  Future<void> _openChart() async {
+    if (_openingChart) return;
+    setState(() => _openingChart = true);
+    try {
+      final journal = widget.journal;
+      TradingJournal? buy = journal.action == '매수' ? journal : null;
+      List<TradingJournal> linkedSells = widget.linkedSells;
+      var showBuyMarker = journal.action == '매수';
+      final publicByAuthor = await _firestoreService.getPublicJournalsByUidOnce(
+        journal.uid,
+      );
+      final relatedBuys = publicByAuthor
+          .where(
+            (j) =>
+                j.action == '매수' &&
+                j.ticker == journal.ticker &&
+                j.market == journal.market,
+          )
+          .toList();
+      final relatedSells = publicByAuthor
+          .where(
+            (j) =>
+                j.action == '매도' &&
+                j.ticker == journal.ticker &&
+                j.market == journal.market,
+          )
+          .toList();
+
+      if (journal.action == '매도') {
+        buy = publicByAuthor
+            .where((j) => j.id == journal.linkedBuyId && j.action == '매수')
+            .firstOrNull;
+
+        // linkedBuyId가 공개 목록에 없으면(비공개/예전 데이터) 단건 조회 시도
+        if (buy == null && journal.linkedBuyId.isNotEmpty) {
+          TradingJournal? linked;
+          try {
+            linked = await _firestoreService.getJournalById(
+              journal.linkedBuyId,
+            );
+          } catch (_) {
+            linked = null;
+          }
+          if (linked != null &&
+              linked.action == '매수' &&
+              linked.uid == journal.uid) {
+            buy = linked;
+            // linkedBuyId 단건 조회는 비공개 매수일 수 있으므로
+            // 매수 정보 노출(showBuyMarker)은 켜지지 않게 유지한다.
+          }
+        }
+
+        // 그래도 없으면 동일 종목의 최근 매수(매도일 이전)로 추정 연결
+        if (buy == null) {
+          final candidateBuys = publicByAuthor
+              .where(
+                (j) =>
+                    j.action == '매수' &&
+                    j.ticker == journal.ticker &&
+                    j.market == journal.market &&
+                    !j.tradeDate.isAfter(journal.tradeDate),
+              )
+              .toList();
+          candidateBuys.sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+          buy = candidateBuys.firstOrNull;
+        }
+
+        // 마지막 폴백: 임시 매수 포지션 생성 (차트 진입 보장)
+        buy ??= TradingJournal(
+          id: 'synthetic_buy_${journal.id}',
+          uid: journal.uid,
+          nickname: journal.nickname,
+          stockName: journal.stockName,
+          ticker: journal.ticker,
+          market: journal.market,
+          action: '매수',
+          price: journal.buyPrice > 0 ? journal.buyPrice : journal.price,
+          quantity: journal.quantity,
+          tradeDate: journal.tradeDate,
+          note: '',
+          isPublic: false,
+          likes: 0,
+          createdAt: journal.createdAt,
+        );
+
+        final buyId = buy.id;
+        linkedSells = publicByAuthor
+            .where(
+              (j) =>
+                  j.action == '매도' &&
+                  (j.linkedBuyId == buyId ||
+                      (journal.linkedBuyId.isNotEmpty &&
+                          j.linkedBuyId == journal.linkedBuyId)),
+            )
+            .toList();
+        if (!linkedSells.any((s) => s.id == journal.id)) {
+          linkedSells = [...linkedSells, journal];
+        }
+
+        // 매도 카드에서는 "연결된 매수 일지"가 아니라
+        // "같은 종목의 공개 매수 일지가 하나라도 있는지"를 기준으로 매수 표시를 결정.
+        showBuyMarker = relatedBuys.isNotEmpty;
+        if (showBuyMarker && !relatedBuys.any((b) => b.id == buy?.id)) {
+          // 현재 기준 buy가 비공개/합성일 수 있으므로
+          // 공개 매수 중 하나를 기준으로 바꿔서 비공개 매수가 노출되지 않게 한다.
+          buy = relatedBuys.first;
+        }
+      }
+
+      if (!mounted) return;
+
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => JournalChartScreen(
+            buy: buy!,
+            linkedSells: linkedSells,
+            relatedBuys: relatedBuys,
+            relatedSells: relatedSells,
+            showBuyMarker: showBuyMarker,
+            firestoreService: _firestoreService,
+            onEdit: () {},
+            showEditButton: false,
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _openingChart = false);
+    }
   }
 
   @override
@@ -1109,6 +1331,7 @@ class _JournalCardState extends State<_JournalCard> {
       'US' => 'NASDAQ',
       _ => journal.market,
     };
+    final tradeDateText = DateFormat('yyyy.MM.dd').format(journal.tradeDate);
 
     String fmtP(double p) => isKrw
         ? '₩${NumberFormat('#,###').format(p.toInt())}'
@@ -1142,6 +1365,12 @@ class _JournalCardState extends State<_JournalCard> {
         ? (_price!.isUp ? upColor : downColor)
         : cs.onSurface.withValues(alpha: 0.45);
 
+    if (journal.action == '매도') {
+      final sellCard = _buildSellCard(cs);
+      if (!_canOpenChart(journal)) return sellCard;
+      return GestureDetector(onTap: _openChart, child: sellCard);
+    }
+
     // '기타' 간소화 카드
     if (journal.action == '기타') return _buildEtcCard(cs);
 
@@ -1170,6 +1399,55 @@ class _JournalCardState extends State<_JournalCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Row(
+                  children: [
+                    Text(
+                      '거래일',
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.45),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      tradeDateText,
+                      style: GoogleFonts.robotoMono(
+                        color: cs.onSurface,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(9999),
+                      ),
+                      child: Text(
+                        '매수',
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFF10B981),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  height: 1,
+                  width: double.infinity,
+                  color: cs.onSurface.withValues(alpha: 0.1),
+                ),
+                const SizedBox(height: 10),
                 // 작성자 행
                 Row(
                   children: [
@@ -1233,15 +1511,6 @@ class _JournalCardState extends State<_JournalCard> {
                                       ],
                                     ],
                                   ),
-                                  Text(
-                                    '${DateFormat('yyyy.MM.dd').format(journal.tradeDate)} 매수',
-                                    style: GoogleFonts.inter(
-                                      color: cs.onSurface.withValues(
-                                        alpha: 0.35,
-                                      ),
-                                      fontSize: 12,
-                                    ),
-                                  ),
                                 ],
                               ),
                             ),
@@ -1249,25 +1518,10 @@ class _JournalCardState extends State<_JournalCard> {
                         ),
                       ),
                     ),
-                    // 마켓 배지
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: cs.onSurface.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(9999),
-                      ),
-                      child: Text(
-                        marketLabel,
-                        style: GoogleFonts.inter(
-                          color: cs.onSurface.withValues(alpha: 0.4),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
+                    if (isNewlyPublished) ...[
+                      const SizedBox(width: 8),
+                      _buildNewBadge(),
+                    ],
                     if (widget.onReport != null || widget.onBlock != null) ...[
                       const SizedBox(width: 4),
                       _MoreMenu(
@@ -1294,27 +1548,24 @@ class _JournalCardState extends State<_JournalCard> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (isNewlyPublished) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF10B981),
-                          borderRadius: BorderRadius.circular(9999),
-                        ),
-                        child: Text(
-                          'NEW',
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                          ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.onSurface.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(9999),
+                      ),
+                      child: Text(
+                        marketLabel,
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.4),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ],
+                    ),
                   ],
                 ),
                 const SizedBox(height: 12),
@@ -1484,7 +1735,400 @@ class _JournalCardState extends State<_JournalCard> {
       ),
     );
     if (!_canOpenChart(journal)) return card;
-    return GestureDetector(onTap: () => _openChart(context), child: card);
+    return GestureDetector(onTap: _openChart, child: card);
+  }
+
+  Widget _buildSellCard(ColorScheme cs) {
+    final journal = widget.journal;
+    final isNewlyPublished = _isNewlyPublished(journal);
+    final isKrw = journal.market != 'US';
+    final marketLabel = switch (journal.market) {
+      'KS' => 'KOSPI',
+      'KQ' => 'KOSDAQ',
+      'US' => 'NASDAQ',
+      _ => journal.market,
+    };
+    final tradeDateText = DateFormat('yyyy.MM.dd').format(journal.tradeDate);
+
+    String fmtP(double p) => isKrw
+        ? '₩${NumberFormat('#,###').format(p.toInt())}'
+        : '\$${p.toStringAsFixed(2)}';
+
+    final qtyStr = journal.quantity > 0
+        ? '${journal.quantity % 1 == 0 ? journal.quantity.toInt() : journal.quantity}주'
+        : '-';
+
+    double? realizedPnl;
+    double? realizedPct;
+    if (journal.buyPrice > 0 && journal.price > 0 && journal.quantity > 0) {
+      realizedPnl = (journal.price - journal.buyPrice) * journal.quantity;
+      realizedPct = (journal.price - journal.buyPrice) / journal.buyPrice * 100;
+    }
+    final isUp = realizedPnl == null || realizedPnl >= 0;
+    const upColor = Color(0xFFF04452);
+    const downColor = Color(0xFF1677FF);
+    final pnlColor = realizedPnl != null
+        ? (isUp ? upColor : downColor)
+        : cs.onSurface.withValues(alpha: 0.45);
+
+    final pnlText = realizedPnl != null
+        ? '${isUp ? '+' : ''}${fmtP(realizedPnl)}'
+        : '-';
+    final pctText = realizedPct != null
+        ? '${isUp ? '+' : ''}${realizedPct.toStringAsFixed(1)}%'
+        : '-';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 3,
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFFF97316), Color(0xFFEF4444)],
+              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '거래일',
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.45),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      tradeDateText,
+                      style: GoogleFonts.robotoMono(
+                        color: cs.onSurface,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF97316).withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(9999),
+                      ),
+                      child: Text(
+                        '매도',
+                        style: GoogleFonts.inter(
+                          color: const Color(0xFFF97316),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  height: 1,
+                  width: double.infinity,
+                  color: cs.onSurface.withValues(alpha: 0.1),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: widget.onTapAuthor,
+                        behavior: HitTestBehavior.opaque,
+                        child: Row(
+                          children: [
+                            UserLevelAvatar(
+                              uid: journal.uid,
+                              radius: 14,
+                              backgroundColor: const Color(
+                                0xFFF97316,
+                              ).withValues(alpha: 0.12),
+                              textStyle: GoogleFonts.inter(
+                                color: const Color(0xFFF97316),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        journal.nickname,
+                                        style: GoogleFonts.inter(
+                                          color: cs.onSurface,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      if (widget.isOwn) ...[
+                                        const SizedBox(width: 5),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 1,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: const Color(
+                                              0xFF10B981,
+                                            ).withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(
+                                              9999,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            '나',
+                                            style: GoogleFonts.inter(
+                                              color: const Color(0xFF10B981),
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (isNewlyPublished) ...[
+                      const SizedBox(width: 6),
+                      _buildNewBadge(),
+                    ],
+                    if (widget.onReport != null || widget.onBlock != null) ...[
+                      const SizedBox(width: 4),
+                      _MoreMenu(
+                        onReport: widget.onReport,
+                        onBlock: widget.onBlock,
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        journal.stockName,
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface,
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.onSurface.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(9999),
+                      ),
+                      child: Text(
+                        marketLabel,
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.4),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: cs.onSurface.withValues(alpha: 0.04),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Column(
+                    children: [
+                      IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: _gridCell(
+                                '매수가',
+                                journal.buyPrice > 0
+                                    ? fmtP(journal.buyPrice)
+                                    : '-',
+                                cs,
+                              ),
+                            ),
+                            VerticalDivider(
+                              width: 1,
+                              thickness: 1,
+                              color: cs.onSurface.withValues(alpha: 0.07),
+                            ),
+                            Expanded(
+                              child: _gridCell(
+                                '매도가',
+                                journal.price > 0 ? fmtP(journal.price) : '-',
+                                cs,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: cs.onSurface.withValues(alpha: 0.07),
+                      ),
+                      IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: _gridCell(
+                                '매수일',
+                                _resolvedLinkedBuy != null
+                                    ? DateFormat(
+                                        'yy.MM.dd',
+                                      ).format(_resolvedLinkedBuy!.tradeDate)
+                                    : '-',
+                                cs,
+                              ),
+                            ),
+                            VerticalDivider(
+                              width: 1,
+                              thickness: 1,
+                              color: cs.onSurface.withValues(alpha: 0.07),
+                            ),
+                            Expanded(child: _gridCell('수량', qtyStr, cs)),
+                          ],
+                        ),
+                      ),
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: cs.onSurface.withValues(alpha: 0.07),
+                      ),
+                      IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: _gridCell(
+                                '수익률',
+                                pctText,
+                                cs,
+                                valueColor: pnlColor,
+                              ),
+                            ),
+                            VerticalDivider(
+                              width: 1,
+                              thickness: 1,
+                              color: cs.onSurface.withValues(alpha: 0.07),
+                            ),
+                            Expanded(
+                              child: _gridCell(
+                                '실현손익',
+                                pnlText,
+                                cs,
+                                valueColor: pnlColor,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (journal.note.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _ExpandableNotePreview(
+                    content: journal.note,
+                    maxLines: 3,
+                    style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.55),
+                      fontSize: 14,
+                      height: 1.6,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Divider(height: 1, color: cs.onSurface.withValues(alpha: 0.06)),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+            child: Row(
+              children: [
+                _LikeButton(
+                  isLiked: widget.isLiked,
+                  isLoading: widget.isLoadingLike,
+                  count: widget.likeCount,
+                  onTap: widget.onLike,
+                ),
+                const SizedBox(width: 12),
+                _CommentButton(
+                  onTap: () => _openComments(context),
+                  count: widget.commentCount,
+                ),
+                const Spacer(),
+                if (widget.isOwn && widget.onTogglePrivate != null)
+                  GestureDetector(
+                    onTap: widget.onTogglePrivate,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.lock_outline,
+                          size: 14,
+                          color: cs.onSurface.withValues(alpha: 0.4),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '비공개로 전환',
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            color: cs.onSurface.withValues(alpha: 0.4),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildEtcCard(ColorScheme cs) {
@@ -1595,24 +2239,10 @@ class _JournalCardState extends State<_JournalCard> {
                         ),
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: cs.onSurface.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(9999),
-                      ),
-                      child: Text(
-                        '기타',
-                        style: GoogleFonts.inter(
-                          color: cs.onSurface.withValues(alpha: 0.4),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
+                    if (isNewlyPublished) ...[
+                      const SizedBox(width: 8),
+                      _buildNewBadge(),
+                    ],
                     if (widget.onReport != null || widget.onBlock != null) ...[
                       const SizedBox(width: 4),
                       _MoreMenu(
@@ -1641,27 +2271,24 @@ class _JournalCardState extends State<_JournalCard> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (isNewlyPublished) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF10B981),
-                          borderRadius: BorderRadius.circular(9999),
-                        ),
-                        child: Text(
-                          'NEW',
-                          style: GoogleFonts.inter(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                          ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.onSurface.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(9999),
+                      ),
+                      child: Text(
+                        '기타',
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface.withValues(alpha: 0.4),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ],
+                    ),
                   ],
                 ),
                 // 메모
@@ -2432,9 +3059,9 @@ class _AuthorJournalsScreenState extends State<_AuthorJournalsScreen> {
   final Set<String> _likedLoading = {};
   final Set<String> _likedLoaded = {};
   final Map<String, int> _likeCountOverride = {};
-  double? _buyAvgReturnPct;
-  bool _buyAvgLoading = false;
-  String _buyAvgKey = '';
+  String? _selectedStockKey;
+
+  String _stockKeyOf(TradingJournal j) => '${j.market}|${j.ticker}';
 
   Future<void> _ensureCommentCounts(List<TradingJournal> journals) async {
     final targets = journals
@@ -2461,8 +3088,13 @@ class _AuthorJournalsScreenState extends State<_AuthorJournalsScreen> {
     });
   }
 
-  Future<void> _ensureLikedState(List<TradingJournal> journals, String uid) async {
-    final targets = journals.where((j) => !_likedLoaded.contains(j.id)).toList();
+  Future<void> _ensureLikedState(
+    List<TradingJournal> journals,
+    String uid,
+  ) async {
+    final targets = journals
+        .where((j) => !_likedLoaded.contains(j.id))
+        .toList();
     if (targets.isEmpty) return;
 
     final liked = await Future.wait(
@@ -2496,61 +3128,6 @@ class _AuthorJournalsScreenState extends State<_AuthorJournalsScreen> {
       });
     } finally {
       if (mounted) setState(() => _likedLoading.remove(journal.id));
-    }
-  }
-
-  Future<void> _ensureBuyAvgReturn(List<TradingJournal> buyJournals) async {
-    final candidates = buyJournals
-        .where(
-          (j) =>
-              j.price > 0 &&
-              j.ticker.isNotEmpty &&
-              {'KS', 'KQ', 'US'}.contains(j.market),
-        )
-        .toList();
-    if (candidates.isEmpty) {
-      if (_buyAvgReturnPct != null || _buyAvgKey.isNotEmpty) {
-        setState(() {
-          _buyAvgReturnPct = null;
-          _buyAvgKey = '';
-          _buyAvgLoading = false;
-        });
-      }
-      return;
-    }
-
-    final key = candidates
-        .map((j) => '${j.id}:${j.ticker}:${j.market}:${j.price}')
-        .join('|');
-    if (_buyAvgLoading || _buyAvgKey == key) return;
-
-    setState(() {
-      _buyAvgLoading = true;
-      _buyAvgKey = key;
-    });
-
-    try {
-      final prices = await Future.wait(
-        candidates.map((j) => StockPriceService.fetchPrice(j.ticker, j.market)),
-      );
-      if (!mounted) return;
-
-      double sumPct = 0;
-      var count = 0;
-      for (var i = 0; i < candidates.length; i++) {
-        final current = prices[i]?.price;
-        final buy = candidates[i];
-        if (current == null || current <= 0 || buy.price <= 0) continue;
-        sumPct += (current - buy.price) / buy.price * 100;
-        count++;
-      }
-      setState(() {
-        _buyAvgReturnPct = count > 0 ? sumPct / count : null;
-      });
-    } finally {
-      if (mounted) {
-        setState(() => _buyAvgLoading = false);
-      }
     }
   }
 
@@ -2588,9 +3165,33 @@ class _AuthorJournalsScreenState extends State<_AuthorJournalsScreen> {
           }
 
           final allAuthorJournals = snapshot.data ?? [];
-          final visibleJournals = allAuthorJournals
-              .where((j) => j.action != '\uB9E4\uB3C4')
-              .toList();
+          final stockCounts = <String, int>{};
+          final stockLabels = <String, String>{};
+          for (final j in allAuthorJournals) {
+            if (j.ticker.isEmpty) continue;
+            final key = _stockKeyOf(j);
+            stockCounts[key] = (stockCounts[key] ?? 0) + 1;
+            stockLabels[key] = j.stockName.isNotEmpty ? j.stockName : j.ticker;
+          }
+
+          final availableStockKeys = stockCounts.keys.toSet();
+          final effectiveSelectedKey = _selectedStockKey != null &&
+                  availableStockKeys.contains(_selectedStockKey)
+              ? _selectedStockKey
+              : null;
+
+          if (_selectedStockKey != effectiveSelectedKey) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              setState(() => _selectedStockKey = effectiveSelectedKey);
+            });
+          }
+
+          final visibleJournals = effectiveSelectedKey == null
+              ? allAuthorJournals
+              : allAuthorJournals
+                    .where((j) => _stockKeyOf(j) == effectiveSelectedKey)
+                    .toList();
 
           if (visibleJournals.isEmpty) {
             return Center(
@@ -2609,63 +3210,129 @@ class _AuthorJournalsScreenState extends State<_AuthorJournalsScreen> {
             _ensureLikedState(visibleJournals, auth.user!.uid);
           }
 
-          final buyJournals = visibleJournals
-              .where((j) => j.action == '매수' && j.price > 0)
-              .toList();
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            _ensureBuyAvgReturn(buyJournals);
-          });
-
           return ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
             itemCount: visibleJournals.length + 1,
             itemBuilder: (context, index) {
               if (index == 0) {
-                final shownAvg = _buyAvgReturnPct;
-                final avgText = shownAvg == null
-                    ? (_buyAvgLoading ? '계산중...' : '-')
-                    : '${shownAvg >= 0 ? '+' : ''}${shownAvg.toStringAsFixed(2)}%';
-                const upColor = Color(0xFFF04452);
-                const downColor = Color(0xFF1677FF);
-                final avgColor = shownAvg == null
-                    ? cs.onSurface.withValues(alpha: 0.45)
-                    : (shownAvg >= 0
-                          ? upColor
-                          : downColor);
+                final stockEntries = stockCounts.entries.toList()
+                  ..sort((a, b) {
+                    final countCmp = b.value.compareTo(a.value);
+                    if (countCmp != 0) return countCmp;
+                    final labelA = stockLabels[a.key] ?? a.key;
+                    final labelB = stockLabels[b.key] ?? b.key;
+                    return labelA.compareTo(labelB);
+                  });
+                final topStockEntries = stockEntries.take(8).toList();
+                final summaryText = effectiveSelectedKey == null
+                    ? '거래종목 ${stockCounts.length}개'
+                    : '거래종목 1개';
+
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                   decoration: BoxDecoration(
                     color: cs.surface,
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: cs.onSurface.withValues(alpha: 0.08),
                     ),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: _summaryCell(
-                          title: '평균 수익률',
-                          value: avgText,
-                          valueColor: avgColor,
-                          cs: cs,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '거래 종목',
+                                  style: GoogleFonts.inter(
+                                    color: cs.onSurface,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  summaryText,
+                                  style: GoogleFonts.inter(
+                                    color: cs.onSurface.withValues(alpha: 0.52),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (effectiveSelectedKey != null)
+                            GestureDetector(
+                              onTap: () {
+                                setState(() => _selectedStockKey = null);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: cs.onSurface.withValues(alpha: 0.04),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: cs.onSurface.withValues(alpha: 0.1),
+                                  ),
+                                ),
+                                child: Text(
+                                  '전체 보기',
+                                  style: GoogleFonts.inter(
+                                    color: cs.onSurface.withValues(alpha: 0.72),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (topStockEntries.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          height: 1,
+                          width: double.infinity,
+                          color: cs.onSurface.withValues(alpha: 0.06),
                         ),
-                      ),
-                      Container(
-                        width: 1,
-                        height: 30,
-                        color: cs.onSurface.withValues(alpha: 0.08),
-                      ),
-                      Expanded(
-                        child: _summaryCell(
-                          title: '공유 일지 수',
-                          value: '${visibleJournals.length}개',
-                          valueColor: cs.onSurface,
-                          cs: cs,
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _buildStockFilterChip(
+                              label: '전체',
+                              trailing: '${allAuthorJournals.length}건',
+                              selected: effectiveSelectedKey == null,
+                              cs: cs,
+                              onTap: () {
+                                setState(() => _selectedStockKey = null);
+                              },
+                            ),
+                            ...topStockEntries.map((e) {
+                              final label = stockLabels[e.key] ?? e.key;
+                              return _buildStockFilterChip(
+                                label: label,
+                                trailing: '${e.value}건',
+                                selected: effectiveSelectedKey == e.key,
+                                cs: cs,
+                                onTap: () {
+                                  setState(() => _selectedStockKey = e.key);
+                                },
+                              );
+                            }),
+                          ],
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 );
@@ -2673,17 +3340,32 @@ class _AuthorJournalsScreenState extends State<_AuthorJournalsScreen> {
 
               final journal = visibleJournals[index - 1];
               final isOwn = auth.user?.uid == journal.uid;
-              final linkedSells = allAuthorJournals
-                  .where(
-                    (j) =>
-                        j.action == '\uB9E4\uB3C4' && j.linkedBuyId == journal.id,
-                  )
-                  .toList();
+              final linkedSells = journal.action == '매수'
+                  ? allAuthorJournals
+                        .where(
+                          (j) =>
+                              j.action == '\uB9E4\uB3C4' &&
+                              j.linkedBuyId == journal.id,
+                        )
+                        .toList()
+                  : const <TradingJournal>[];
+              final linkedBuy =
+                  journal.action == '매도' && journal.linkedBuyId.isNotEmpty
+                  ? allAuthorJournals
+                        .where(
+                          (j) =>
+                              j.uid == journal.uid &&
+                              j.action == '매수' &&
+                              j.id == journal.linkedBuyId,
+                        )
+                        .firstOrNull
+                  : null;
 
               return _JournalCard(
                 key: ValueKey('author_${journal.id}'),
                 journal: journal,
                 linkedSells: linkedSells,
+                linkedBuy: linkedBuy,
                 isOwn: isOwn,
                 isLiked: _likedIds.contains(journal.id),
                 isLoadingLike: _likedLoading.contains(journal.id),
@@ -2709,32 +3391,56 @@ class _AuthorJournalsScreenState extends State<_AuthorJournalsScreen> {
     );
   }
 
-  Widget _summaryCell({
-    required String title,
-    required String value,
-    required Color valueColor,
+  Widget _buildStockFilterChip({
+    required String label,
+    required String trailing,
+    required bool selected,
     required ColorScheme cs,
+    required VoidCallback onTap,
   }) {
-    return Column(
-      children: [
-        Text(
-          title,
-          style: GoogleFonts.inter(
-            color: cs.onSurface.withValues(alpha: 0.45),
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFF10B981).withValues(alpha: 0.12)
+              : cs.onSurface.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFF10B981).withValues(alpha: 0.26)
+                : cs.onSurface.withValues(alpha: 0.1),
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: GoogleFonts.inter(
-            color: valueColor,
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: selected
+                    ? const Color(0xFF047857)
+                    : cs.onSurface.withValues(alpha: 0.76),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              trailing,
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: selected
+                    ? const Color(0xFF059669).withValues(alpha: 0.88)
+                    : cs.onSurface.withValues(alpha: 0.45),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

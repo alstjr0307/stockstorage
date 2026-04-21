@@ -34,16 +34,16 @@ exports.runDailyInvestorFlowNow = onCall(
   }
 );
 
-// ?€?€ ? ê·œ ê°€?…ì ??ê´€ë¦¬ì?ê²Œ ?Œë¦¼ ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// ?ï¿½?ï¿½ ?ï¿½ê·œ ê°€?ï¿½ì ??ê´€ë¦¬ì?ï¿½ê²Œ ?ï¿½ë¦¼ ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
 exports.notifyAdminOnNewUser = auth.user().onCreate(async (user) => {
   const db = getFirestore();
 
-  // config/admin ë¬¸ì„œ?ì„œ ê´€ë¦¬ì UID ì¡°íšŒ
+  // config/admin ë¬¸ì„œ?ï¿½ì„œ ê´€ë¦¬ì UID ì¡°íšŒ
   const adminSnap = await db.collection('config').doc('admin').get();
   const adminUid = adminSnap.data()?.uid;
   if (!adminUid) return;
 
-  // ê´€ë¦¬ì FCM ? í° ì¡°íšŒ
+  // ê´€ë¦¬ì FCM ?ï¿½í° ì¡°íšŒ
   const tokensSnap = await db.collection('fcm_tokens')
     .where('uid', '==', adminUid).get();
   const tokens = tokensSnap.docs
@@ -51,12 +51,12 @@ exports.notifyAdminOnNewUser = auth.user().onCreate(async (user) => {
     .filter((t) => typeof t === 'string' && t.length > 0);
   if (tokens.length === 0) return;
 
-  const displayName = user.displayName || user.email || '?????†ìŒ';
+  const displayName = user.displayName || user.email || '?????ï¿½ìŒ';
   const provider = user.providerData?.[0]?.providerId ?? 'unknown';
 
   await getMessaging().sendEachForMulticast({
     notification: {
-      title: '?‘¤ ? ê·œ ê°€?…ì',
+      title: 'ğŸ‘¤ ì‹ ê·œ ê°€ì…ì',
       body: `${displayName} (${provider})`,
     },
     android: { notification: { sound: 'default', channelId: 'stockstorage_alerts' } },
@@ -65,22 +65,22 @@ exports.notifyAdminOnNewUser = auth.user().onCreate(async (user) => {
   });
 });
 
-// ?€?€ ?“ê? ?Œë¦¼ (???“ê? ??ê°™ì? ì¢…ëª© ?“ê? ?‘ì„±?ë“¤?ê²Œ ?¸ì‹œ) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// ?ï¿½?ï¿½ ?ï¿½ï¿½? ?ï¿½ë¦¼ (???ï¿½ï¿½? ??ê°™ï¿½? ì¢…ëª© ?ï¿½ï¿½? ?ï¿½ì„±?ï¿½ë“¤?ï¿½ê²Œ ?ï¿½ì‹œ) ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
 exports.sendCommentNotification = onDocumentCreated(
   { document: 'stock_picks/{pickId}/comments/{commentId}', region: 'asia-northeast3' },
   async (event) => {
     const data = event.data?.data();
     if (!data) return;
 
-    const { uid: commenterUid, nickname, text } = data;
+    const { uid: commenterUid, nickname, content: text } = data;
     const { pickId } = event.params;
     const db = getFirestore();
 
-    // ì¢…ëª© ?´ë¦„ ì¡°íšŒ
+    // ì¢…ëª© ?ï¿½ë¦„ ì¡°íšŒ
     const pickSnap = await db.collection('stock_picks').doc(pickId).get();
     const pickName = pickSnap.data()?.name ?? 'ì¢…ëª©';
 
-    // ê°™ì? ì¢…ëª©???“ê? ???¤ë¥¸ ? ì? uid ?˜ì§‘
+    // ê°™ï¿½? ì¢…ëª©???ï¿½ï¿½? ???ï¿½ë¥¸ ?ï¿½ï¿½? uid ?ï¿½ì§‘
     const commentsSnap = await db
       .collection('stock_picks').doc(pickId).collection('comments').get();
     const uids = new Set(
@@ -90,7 +90,7 @@ exports.sendCommentNotification = onDocumentCreated(
     );
     if (uids.size === 0) return;
 
-    // uid ??FCM ? í° ì¡°íšŒ
+    // uid ??FCM ?ï¿½í° ì¡°íšŒ
     const tokensSnap = await db.collection('fcm_tokens').get();
     const tokens = tokensSnap.docs
       .filter((d) => uids.has(d.data().uid))
@@ -98,7 +98,7 @@ exports.sendCommentNotification = onDocumentCreated(
       .filter((t) => typeof t === 'string' && t.length > 0);
     if (tokens.length === 0) return;
 
-    const senderName = nickname || '?„êµ°ê°€';
+    const senderName = nickname || '?ï¿½êµ°ê°€';
     const preview = text?.length > 30 ? text.slice(0, 30) + '...' : text;
 
     // FCM ë°œì†¡
@@ -108,7 +108,7 @@ exports.sendCommentNotification = onDocumentCreated(
       const chunk = tokens.slice(i, i + chunkSize);
       const response = await getMessaging().sendEachForMulticast({
         notification: {
-          title: `?’¬ ${pickName} ???“ê?`,
+          title: `ğŸ’¬ ${pickName} ìƒˆ ëŒ“ê¸€`,
           body: `${senderName}: ${preview}`,
         },
         android: { notification: { sound: 'default', channelId: 'stockstorage_alerts' } },
@@ -124,7 +124,7 @@ exports.sendCommentNotification = onDocumentCreated(
       });
     }
 
-    // ë§Œë£Œ ? í° ?•ë¦¬
+    // ë§Œë£Œ ?ï¿½í° ?ï¿½ë¦¬
     if (invalidTokens.length > 0) {
       await Promise.all(
         invalidTokens.map((t) => db.collection('fcm_tokens').doc(t).delete())
@@ -133,7 +133,7 @@ exports.sendCommentNotification = onDocumentCreated(
   }
 );
 
-// ?€?€ ?ìœ ê²Œì‹œ???“ê? ?Œë¦¼ (???“ê? ??ê²Œì‹œê¸€ ?‘ì„±?ì—ê²??¸ì‹œ) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// ?ï¿½?ï¿½ ?ï¿½ìœ ê²Œì‹œ???ï¿½ï¿½? ?ï¿½ë¦¼ (???ï¿½ï¿½? ??ê²Œì‹œê¸€ ?ï¿½ì„±?ï¿½ì—ï¿½??ï¿½ì‹œ) ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
 exports.sendPostCommentNotification = onDocumentCreated(
   { document: 'posts/{postId}/comments/{commentId}', region: 'asia-northeast3' },
   async (event) => {
@@ -144,17 +144,17 @@ exports.sendPostCommentNotification = onDocumentCreated(
     const { postId } = event.params;
     const db = getFirestore();
 
-    // ê²Œì‹œê¸€ ì¡°íšŒ ???‘ì„±??UID ?•ì¸
+    // ê²Œì‹œê¸€ ì¡°íšŒ ???ï¿½ì„±??UID ?ï¿½ì¸
     const postSnap = await db.collection('posts').doc(postId).get();
     if (!postSnap.exists) return;
 
     const postData = postSnap.data();
     const authorUid = postData?.uid;
 
-    // ?ê¸° ê¸€???ê¸°ê°€ ?“ê? ???Œë¦¼ ?†ìŒ
+    // ?ï¿½ê¸° ê¸€???ï¿½ê¸°ê°€ ?ï¿½ï¿½? ???ï¿½ë¦¼ ?ï¿½ìŒ
     if (!authorUid || authorUid === commenterUid) return;
 
-    // ?‘ì„±??FCM ? í° ì¡°íšŒ
+    // ?ï¿½ì„±??FCM ?ï¿½í° ì¡°íšŒ
     const tokensSnap = await db.collection('fcm_tokens')
       .where('uid', '==', authorUid).get();
     const tokens = tokensSnap.docs
@@ -162,7 +162,7 @@ exports.sendPostCommentNotification = onDocumentCreated(
       .filter((t) => typeof t === 'string' && t.length > 0);
     if (tokens.length === 0) return;
 
-    const senderName = nickname || '?„êµ°ê°€';
+    const senderName = nickname || '?ï¿½êµ°ê°€';
     const preview = content?.length > 30 ? content.slice(0, 30) + '...' : content;
 
     const invalidTokens = [];
@@ -171,7 +171,7 @@ exports.sendPostCommentNotification = onDocumentCreated(
       const chunk = tokens.slice(i, i + chunkSize);
       const response = await getMessaging().sendEachForMulticast({
         notification: {
-          title: `?’¬ ??ê¸€???“ê????¬ë ¸?´ìš”`,
+          title: `ğŸ’¬ ë‚´ ê¸€ì— ëŒ“ê¸€ì´ ë‹¬ë ¸ì–´ìš”`,
           body: `${senderName}: ${preview}`,
         },
         data: { postId },
@@ -196,8 +196,8 @@ exports.sendPostCommentNotification = onDocumentCreated(
   }
 );
 
-// ?€?€ ?¨ì½”ì§€?? 30ë¶„ë§ˆ???í¨ì½”ë¦¬??ì£¼ì‹ê²Œì‹œ??ê¸€ ???˜ì§‘ ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
-// ¦¡¦¡ ¸Å¸ÅÀÏÁö ´ñ±Û ¾Ë¸² (»õ ´ñ±Û ¡æ ¸Å¸ÅÀÏÁö ÀÛ¼ºÀÚ¿¡°Ô Çª½Ã) ¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡¦¡
+// ?ï¿½?ï¿½ ?ï¿½ì½”ì§€?? 30ë¶„ë§ˆ???ï¿½í¨ì½”ë¦¬??ì£¼ì‹ê²Œì‹œ??ê¸€ ???ï¿½ì§‘ ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
+// ï¿½ï¿½ï¿½ï¿½ ï¿½Å¸ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½Ë¸ï¿½ (ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½Å¸ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Û¼ï¿½ï¿½Ú¿ï¿½ï¿½ï¿½ Çªï¿½ï¿½) ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 exports.sendJournalCommentNotification = onDocumentCreated(
   { document: 'trading_journal/{journalId}/comments/{commentId}', region: 'asia-northeast3' },
   async (event) => {
@@ -208,17 +208,17 @@ exports.sendJournalCommentNotification = onDocumentCreated(
     const { journalId } = event.params;
     const db = getFirestore();
 
-    // ¸Å¸ÅÀÏÁö Á¶È¸ ¹× ÀÛ¼ºÀÚ UID È®ÀÎ
+    // ï¿½Å¸ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½È¸ ï¿½ï¿½ ï¿½Û¼ï¿½ï¿½ï¿½ UID È®ï¿½ï¿½
     const journalSnap = await db.collection('trading_journal').doc(journalId).get();
     if (!journalSnap.exists) return;
 
     const journalData = journalSnap.data();
     const authorUid = journalData?.uid;
 
-    // ÀÚ±â ±Û¿¡ ÀÚ±â ´ñ±ÛÀº ¾Ë¸² Á¦¿Ü
+    // ï¿½Ú±ï¿½ ï¿½Û¿ï¿½ ï¿½Ú±ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ë¸ï¿½ ï¿½ï¿½ï¿½ï¿½
     if (!authorUid || authorUid === commenterUid) return;
 
-    // ÀÛ¼ºÀÚ FCM ÅäÅ« Á¶È¸
+    // ï¿½Û¼ï¿½ï¿½ï¿½ FCM ï¿½ï¿½Å« ï¿½ï¿½È¸
     const tokensSnap = await db.collection('fcm_tokens')
       .where('uid', '==', authorUid).get();
     const tokens = tokensSnap.docs
@@ -226,8 +226,8 @@ exports.sendJournalCommentNotification = onDocumentCreated(
       .filter((t) => typeof t === 'string' && t.length > 0);
     if (tokens.length === 0) return;
 
-    const senderName = nickname || 'ÀÍ¸í';
-    const preview = content?.length > 30 ? content.slice(0, 30) + '¡¦' : content;
+    const senderName = nickname || 'ï¿½Í¸ï¿½';
+    const preview = content?.length > 30 ? content.slice(0, 30) + 'ï¿½ï¿½' : content;
 
     const invalidTokens = [];
     const chunkSize = 500;
@@ -235,7 +235,7 @@ exports.sendJournalCommentNotification = onDocumentCreated(
       const chunk = tokens.slice(i, i + chunkSize);
       const response = await getMessaging().sendEachForMulticast({
         notification: {
-          title: '?? ¸Å¸ÅÀÏÁö ´ñ±ÛÀÌ ´Ş·È¾î¿ä',
+          title: 'ğŸ“ ë§¤ë§¤ì¼ì§€ì— ëŒ“ê¸€ì´ ë‹¬ë ¸ì–´ìš”',
           body: `${senderName}: ${preview}`,
         },
         data: { journalId },
@@ -280,7 +280,7 @@ exports.crawlFemcoIndex = onSchedule(
   async () => {
     const db = getFirestore();
     const now = new Date();
-    const cutoff = new Date(now.getTime() - 30 * 60 * 1000); // 30ë¶???
+    const cutoff = new Date(now.getTime() - 30 * 60 * 1000); // 30ï¿½???
 
     try {
       const headers = {
@@ -289,7 +289,7 @@ exports.crawlFemcoIndex = onSchedule(
         'Referer': 'https://www.fmkorea.com/',
       };
 
-      // ?í¨ì½”ë¦¬??ì£¼ì‹ ê²Œì‹œ??1~3?˜ì´ì§€ ?˜ì§‘
+      // ?ï¿½í¨ì½”ë¦¬??ì£¼ì‹ ê²Œì‹œ??1~3?ï¿½ì´ì§€ ?ï¿½ì§‘
       let count = 0;
       for (let page = 1; page <= 3; page++) {
         const { data } = await axios.get(
@@ -301,7 +301,7 @@ exports.crawlFemcoIndex = onSchedule(
         let hitCutoff = false;
         $('ul.list_body li.li').each((_, el) => {
           const timeText = $(el).find('.time, .regdate, span[class*="date"]').text().trim();
-          // ?œê°„ ?Œì‹±: "HH:MM" ?•ì‹?´ë©´ ?¤ëŠ˜ ? ì§œë¡? "MM.DD" ?´ë©´ ê³¼ê±°
+          // ?ï¿½ê°„ ?ï¿½ì‹±: "HH:MM" ?ï¿½ì‹?ï¿½ë©´ ?ï¿½ëŠ˜ ?ï¿½ì§œï¿½? "MM.DD" ?ï¿½ë©´ ê³¼ê±°
           if (!timeText) return;
 
           let postDate = null;
@@ -310,7 +310,7 @@ exports.crawlFemcoIndex = onSchedule(
             postDate = new Date(now);
             postDate.setHours(h, m, 0, 0);
           } else {
-            // MM.DD ?•ì‹?´ë©´ ?¤ëŠ˜ë³´ë‹¤ ê³¼ê±°
+            // MM.DD ?ï¿½ì‹?ï¿½ë©´ ?ï¿½ëŠ˜ë³´ë‹¤ ê³¼ê±°
             hitCutoff = true;
             return false;
           }
@@ -326,7 +326,7 @@ exports.crawlFemcoIndex = onSchedule(
         if (hitCutoff) break;
       }
 
-      // Firestore ?€??
+      // Firestore ?ï¿½??
       const slotKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}:${now.getMinutes() < 30 ? '00' : '30'}`;
 
       await db.collection('board_index').doc('femco')
@@ -336,7 +336,7 @@ exports.crawlFemcoIndex = onSchedule(
           slot: slotKey,
         });
 
-      // ìµœì‹ ê°?ê°±ì‹ 
+      // ìµœì‹ ï¿½?ê°±ì‹ 
       await db.collection('board_index').doc('femco').set({
         count,
         updatedAt: now,
@@ -348,16 +348,16 @@ exports.crawlFemcoIndex = onSchedule(
   }
 );
 
-// ?€?€ ì¹´ì¹´???¸ì¦ì½”ë“œ ??Firebase ì»¤ìŠ¤?€ ? í° (??admin?? ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// ?ï¿½?ï¿½ ì¹´ì¹´???ï¿½ì¦ì½”ë“œ ??Firebase ì»¤ìŠ¤?ï¿½ ?ï¿½í° (??admin?? ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
 exports.kakaoAuthCode = onCall(
   { region: 'asia-northeast3' },
   async (request) => {
     const { code, redirectUri } = request.data;
     if (!code || !redirectUri) {
-      throw new HttpsError('invalid-argument', 'code?€ redirectUriê°€ ?„ìš”?©ë‹ˆ??');
+      throw new HttpsError('invalid-argument', 'code?ï¿½ redirectUriê°€ ?ï¿½ìš”?ï¿½ë‹ˆ??');
     }
 
-    // ?¸ì¦ì½”ë“œ ???¡ì„¸??? í°
+    // ?ï¿½ì¦ì½”ë“œ ???ï¿½ì„¸???ï¿½í°
     const tokenRes = await axios.post(
       'https://kauth.kakao.com/oauth/token',
       new URLSearchParams({
@@ -370,7 +370,7 @@ exports.kakaoAuthCode = onCall(
     );
     const accessToken = tokenRes.data.access_token;
 
-    // ?¡ì„¸??? í° ??? ì? ?•ë³´
+    // ?ï¿½ì„¸???ï¿½í° ???ï¿½ï¿½? ?ï¿½ë³´
     const userRes = await axios.get('https://kapi.kakao.com/v2/user/me', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -385,17 +385,17 @@ exports.kakaoAuthCode = onCall(
   }
 );
 
-// ?€?€ ì¹´ì¹´??ì»¤ìŠ¤?€ ? í° ë°œê¸‰ ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
-// ?´ë¼?´ì–¸?¸ì—??ì¹´ì¹´???¡ì„¸??? í°??ë³´ë‚´ë©??œë²„?ì„œ ê²€ì¦???Firebase ì»¤ìŠ¤?€ ? í° ë°˜í™˜
+// ?ï¿½?ï¿½ ì¹´ì¹´??ì»¤ìŠ¤?ï¿½ ?ï¿½í° ë°œê¸‰ ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
+// ?ï¿½ë¼?ï¿½ì–¸?ï¿½ì—??ì¹´ì¹´???ï¿½ì„¸???ï¿½í°??ë³´ë‚´ï¿½??ï¿½ë²„?ï¿½ì„œ ê²€ï¿½???Firebase ì»¤ìŠ¤?ï¿½ ?ï¿½í° ë°˜í™˜
 exports.createKakaoCustomToken = onCall(
   { region: 'asia-northeast3' },
   async (request) => {
     const { accessToken } = request.data;
     if (!accessToken) {
-      throw new HttpsError('invalid-argument', 'accessToken???„ìš”?©ë‹ˆ??');
+      throw new HttpsError('invalid-argument', 'accessToken???ï¿½ìš”?ï¿½ë‹ˆ??');
     }
 
-    // ì¹´ì¹´??APIë¡??¡ì„¸??? í° ê²€ì¦?
+    // ì¹´ì¹´??APIï¿½??ï¿½ì„¸???ï¿½í° ê²€ï¿½?
     const kakaoUser = await new Promise((resolve, reject) => {
       const options = {
         hostname: 'kapi.kakao.com',
@@ -408,7 +408,7 @@ exports.createKakaoCustomToken = onCall(
         res.on('data', (chunk) => (body += chunk));
         res.on('end', () => {
           if (res.statusCode !== 200) {
-            reject(new HttpsError('unauthenticated', '? íš¨?˜ì? ?Šì? ì¹´ì¹´??? í°?…ë‹ˆ??'));
+            reject(new HttpsError('unauthenticated', '?ï¿½íš¨?ï¿½ï¿½? ?ï¿½ï¿½? ì¹´ì¹´???ï¿½í°?ï¿½ë‹ˆ??'));
           } else {
             resolve(JSON.parse(body));
           }
@@ -421,7 +421,7 @@ exports.createKakaoCustomToken = onCall(
     const kakaoId = String(kakaoUser.id);
     const uid = `kakao:${kakaoId}`;
 
-    // Firebase ì»¤ìŠ¤?€ ? í° ?ì„±
+    // Firebase ì»¤ìŠ¤?ï¿½ ?ï¿½í° ?ï¿½ì„±
     const customToken = await getAuth().createCustomToken(uid, {
       provider: 'kakao',
       kakaoId,
@@ -431,7 +431,7 @@ exports.createKakaoCustomToken = onCall(
   }
 );
 
-// ?€?€ FCM ?¸ì‹œ ?Œë¦¼ ë°œì†¡ (notification_queue ?¸ë¦¬ê±? ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// ?ï¿½?ï¿½ FCM ?ï¿½ì‹œ ?ï¿½ë¦¼ ë°œì†¡ (notification_queue ?ï¿½ë¦¬ï¿½? ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
 exports.sendPushOnNotificationQueue = onDocumentCreated(
   { document: 'notification_queue/{docId}', region: 'asia-northeast3' },
   async (event) => {
@@ -443,7 +443,7 @@ exports.sendPushOnNotificationQueue = onDocumentCreated(
 
     const db = getFirestore();
 
-    // fcm_tokens ì»¬ë ‰?˜ì—??ëª¨ë“  ? í° ?˜ì§‘
+    // fcm_tokens ì»¬ë ‰?ï¿½ì—??ëª¨ë“  ?ï¿½í° ?ï¿½ì§‘
     const tokensSnap = await db.collection('fcm_tokens').get();
     const tokens = tokensSnap.docs
       .map((d) => d.data().token)
@@ -454,7 +454,7 @@ exports.sendPushOnNotificationQueue = onDocumentCreated(
       return;
     }
 
-    // FCM ë©€?°ìº?¤íŠ¸ ë°œì†¡ (??ë²ˆì— ìµœë? 500ê°?
+    // FCM ë©€?ï¿½ìº?ï¿½íŠ¸ ë°œì†¡ (??ë²ˆì— ìµœï¿½? 500ï¿½?
     const chunkSize = 500;
     const invalidTokens = [];
 
@@ -485,19 +485,19 @@ exports.sendPushOnNotificationQueue = onDocumentCreated(
       });
     }
 
-    // ë§Œë£Œ??? í° ?•ë¦¬
+    // ë§Œë£Œ???ï¿½í° ?ï¿½ë¦¬
     if (invalidTokens.length > 0) {
       await Promise.all(
         invalidTokens.map((t) => db.collection('fcm_tokens').doc(t).delete())
       );
     }
 
-    // ì²˜ë¦¬ ?„ë£Œ????ë¬¸ì„œ ?? œ
+    // ì²˜ë¦¬ ?ï¿½ë£Œ????ë¬¸ì„œ ??ï¿½ï¿½
     await event.data.ref.delete();
   }
 );
 
-// ?€?€ KOSPI 200 ?¼ê°„? ë¬¼ ?„ì¬ê°€ (KIS API) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// ?ï¿½?ï¿½ KOSPI 200 ?ï¿½ê°„?ï¿½ë¬¼ ?ï¿½ì¬ê°€ (KIS API) ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
 let _kisToken = null;
 let _kisTokenExpiry = null;
 
@@ -512,20 +512,20 @@ async function getKisToken(appKey, appSecret) {
     appsecret: appSecret,
   });
   _kisToken = res.data.access_token;
-  _kisTokenExpiry = now + (res.data.expires_in - 300) * 1000; // 5ë¶??¬ìœ 
+  _kisTokenExpiry = now + (res.data.expires_in - 300) * 1000; // 5ï¿½??ï¿½ìœ 
   return _kisToken;
 }
 
-// ?´ë‹¹ ???”ì˜ ??ë²ˆì§¸ ëª©ìš”??? ë¬¼ ìµœì¢…ê±°ë˜?? ? ì§œ ë°˜í™˜
+// ?ï¿½ë‹¹ ???ï¿½ì˜ ??ë²ˆì§¸ ëª©ìš”???ï¿½ë¬¼ ìµœì¢…ê±°ë˜?? ?ï¿½ì§œ ë°˜í™˜
 function getSecondThursday(year, month) {
   const firstDay = new Date(Date.UTC(year, month - 1, 1));
-  const dow = firstDay.getUTCDay(); // 0=?? 4=ëª?
+  const dow = firstDay.getUTCDay(); // 0=?? 4=ï¿½?
   const firstThursday = 1 + (4 - dow + 7) % 7;
   return firstThursday + 7;
 }
 
-// KOSPI200 ?¼ê°„? ë¬¼ ?¨ì¶•ì½”ë“œ: A0 + (year-2010 2?ë¦¬) + ??2?ë¦¬
-// ìµœì¢…ê±°ë˜??ë¶„ê¸° ??ë²ˆì§¸ ëª©ìš”?? ?´í›„ë©??¤ìŒ ë¶„ê¸°ë¬¼ë¡œ ?„í™˜
+// KOSPI200 ?ï¿½ê°„?ï¿½ë¬¼ ?ï¿½ì¶•ì½”ë“œ: A0 + (year-2010 2?ï¿½ë¦¬) + ??2?ï¿½ë¦¬
+// ìµœì¢…ê±°ë˜??ë¶„ê¸° ??ë²ˆì§¸ ëª©ìš”?? ?ï¿½í›„ï¿½??ï¿½ìŒ ë¶„ê¸°ë¬¼ë¡œ ?ï¿½í™˜
 function getNightFuturesSymbol() {
   const kst = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
   const year = kst.getUTCFullYear();
@@ -537,7 +537,7 @@ function getNightFuturesSymbol() {
   let expiryYear = year;
   if (!expiryMonth) { expiryMonth = 3; expiryYear = year + 1; }
 
-  // ?„ì¬ ë¶„ê¸°?”ì´ê³? ìµœì¢…ê±°ë˜???´í›„ë©??¤ìŒ ë¶„ê¸°ë¬??¬ìš©
+  // ?ï¿½ì¬ ë¶„ê¸°?ï¿½ì´ï¿½? ìµœì¢…ê±°ë˜???ï¿½í›„ï¿½??ï¿½ìŒ ë¶„ê¸°ï¿½??ï¿½ìš©
   if (expiryMonth === month && expiryYear === year) {
     const lastTradingDay = getSecondThursday(year, month);
     if (day > lastTradingDay) {
@@ -554,7 +554,7 @@ function getNightFuturesSymbol() {
   return `A0${String(expiryYear - 2010).padStart(2, '0')}${String(expiryMonth).padStart(2, '0')}`;
 }
 
-// KIS WebSocket ?¹ì¸??ë°œê¸‰
+// KIS WebSocket ?ï¿½ì¸??ë°œê¸‰
 async function getKisApprovalKey(appKey, appSecret) {
   const res = await axios.post(
     'https://openapi.koreainvestment.com:9443/oauth2/Approval',
@@ -576,7 +576,7 @@ function aesDecrypt(encData, key, iv) {
   return dec;
 }
 
-// KIS WebSocket?¼ë¡œ ?¼ê°„? ë¬¼ ?¤ì‹œê°?ì²´ê²°ê°€ 1???˜ì‹  (?¬ì‹œ???¬í•¨)
+// KIS WebSocket?ï¿½ë¡œ ?ï¿½ê°„?ï¿½ë¬¼ ?ï¿½ì‹œï¿½?ì²´ê²°ê°€ 1???ï¿½ì‹  (?ï¿½ì‹œ???ï¿½í•¨)
 function fetchViaWebSocket(approvalKey, symbol, timeoutMs = 25000) {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -605,67 +605,67 @@ function fetchViaWebSocket(approvalKey, symbol, timeoutMs = 25000) {
           if (json.body?.rt_cd === '9' && json.body?.msg_cd === 'OPSP8996') {
             done(reject, new Error('ALREADY_IN_USE')); return;
           }
-          // SUBSCRIBE SUCCESS ??AES ???€??
+          // SUBSCRIBE SUCCESS ??AES ???ï¿½??
           if (json.body?.msg1 === 'SUBSCRIBE SUCCESS') {
             aesKey = json.body?.output?.key;
             aesIv  = json.body?.output?.iv;
-            console.log('[WS] êµ¬ë… ?±ê³µ, ?”í˜¸?”í‚¤ ?˜ì‹ :', !!aesKey);
+            console.log('[WS] êµ¬ë… ?ï¿½ê³µ, ?ï¿½í˜¸?ï¿½í‚¤ ?ï¿½ì‹ :', !!aesKey);
           }
         } catch (_) {}
         return;
       }
 
       const parts = msg.split('|');
-      console.log('[WS] ?Œì´?„ë©”?œì?:', parts[0], parts[1], parts[2], parts[3]?.slice(0, 60));
+      console.log('[WS] ?ï¿½ì´?ï¿½ë©”?ï¿½ï¿½?:', parts[0], parts[1], parts[2], parts[3]?.slice(0, 60));
       if (parts.length < 4 || parts[1] !== 'H0UPANC0') return;
 
       let dataStr = parts[3];
 
-      // ?”í˜¸?”ëœ ê²½ìš° ë³µí˜¸??
+      // ?ï¿½í˜¸?ï¿½ëœ ê²½ìš° ë³µí˜¸??
       if (parts[0] === '1') {
         if (!aesKey || !aesIv) {
-          console.warn('[WS] ?”í˜¸???°ì´?°ì¸?????†ìŒ');
+          console.warn('[WS] ?ï¿½í˜¸???ï¿½ì´?ï¿½ì¸?????ï¿½ìŒ');
           return;
         }
         try {
           dataStr = aesDecrypt(dataStr, aesKey, aesIv);
         } catch (e) {
-          console.error('[WS] ë³µí˜¸???¤íŒ¨:', e.message);
+          console.error('[WS] ë³µí˜¸???ï¿½íŒ¨:', e.message);
           return;
         }
       }
 
-      // ?°ì´??ê±´ìˆ˜(parts[2])ë§Œí¼ ?ˆì½”?œê? ?ˆì„ ???ˆìŒ ??ì²?ë²ˆì§¸ë§??¬ìš©
+      // ?ï¿½ì´??ê±´ìˆ˜(parts[2])ë§Œí¼ ?ï¿½ì½”?ï¿½ï¿½? ?ï¿½ì„ ???ï¿½ìŒ ??ï¿½?ë²ˆì§¸ï¿½??ï¿½ìš©
       const firstRecord = dataStr.split('^' + symbol).shift() || dataStr;
       const fields = firstRecord.split('^');
       console.log('[WS] fields[0..9]:', fields.slice(0, 10).join(', '));
 
-      // H0UPANC0 ?„ë“œ: 0:?¨ì¶•ì½”ë“œ 1:?ì—…?¼ì 2:ì²´ê²°?œê° 3:?„ì¬ê°€ 4:?„ì¼?€ë¹?5:?±ë½ë¥?
+      // H0UPANC0 ?ï¿½ë“œ: 0:?ï¿½ì¶•ì½”ë“œ 1:?ï¿½ì—…?ï¿½ì 2:ì²´ê²°?ï¿½ê° 3:?ï¿½ì¬ê°€ 4:?ï¿½ì¼?ï¿½ï¿½?5:?ï¿½ë½ï¿½?
       const price = parseFloat(fields[3]);
       const change = parseFloat(fields[4]);
       const changeRate = parseFloat(fields[5]);
       if (!price || price <= 0) {
-        console.warn('[WS] ê°€ê²??Œì‹± ?¤íŒ¨, fields:', fields.slice(0, 8).join(', '));
+        console.warn('[WS] ê°€ï¿½??ï¿½ì‹± ?ï¿½íŒ¨, fields:', fields.slice(0, 8).join(', '));
         return;
       }
 
-      console.log('[WS] ì²´ê²°ê°€ ?˜ì‹ :', price, change, changeRate);
+      console.log('[WS] ì²´ê²°ê°€ ?ï¿½ì‹ :', price, change, changeRate);
       done(resolve, { price, change, changeRate });
     });
 
-    ws.on('error', (e) => { console.error('[WS] ?ëŸ¬:', e.message); done(reject, e); });
+    ws.on('error', (e) => { console.error('[WS] ?ï¿½ëŸ¬:', e.message); done(reject, e); });
   });
 }
 
-// approvalKey ?¬ë°œê¸????¬ì‹œ???¬í•¨ fetchViaWebSocket
+// approvalKey ?ï¿½ë°œï¿½????ï¿½ì‹œ???ï¿½í•¨ fetchViaWebSocket
 async function fetchWithRetry(appKey, appSecret, symbol) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const approvalKey = await getKisApprovalKey(appKey, appSecret);
-      const data = await fetchViaWebSocket(approvalKey, symbol, 20000); // 20ì´?
+      const data = await fetchViaWebSocket(approvalKey, symbol, 20000); // 20ï¿½?
       return data;
     } catch (e) {
-      console.error(`[WS] ?œë„ ${attempt} ?¤íŒ¨:`, e.message);
+      console.error(`[WS] ?ï¿½ë„ ${attempt} ?ï¿½íŒ¨:`, e.message);
       if (attempt < 2) {
         await new Promise(r => setTimeout(r, 1000));
       } else {
@@ -675,13 +675,13 @@ async function fetchWithRetry(appKey, appSecret, symbol) {
   }
 }
 
-// ?€?€ ?¼ê°„? ë¬¼ ê°€ê²?5ë¶„ë§ˆ??Firestore??ê¸°ë¡ (?ˆìŠ¤? ë¦¬ ì¶•ì ) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// ?ï¿½?ï¿½ ?ï¿½ê°„?ï¿½ë¬¼ ê°€ï¿½?5ë¶„ë§ˆ??Firestore??ê¸°ë¡ (?ï¿½ìŠ¤?ï¿½ë¦¬ ì¶•ì ) ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
 exports.recordNightFuturesPrice = onSchedule(
   { schedule: 'every 1 minutes', region: 'asia-northeast3', timeoutSeconds: 60 },
   async () => {
     const kst = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
     const kstHour = kst.getUTCHours();
-    if (kstHour >= 5 && kstHour < 18) return; // ???œê°„ ?¤í‚µ
+    if (kstHour >= 5 && kstHour < 18) return; // ???ï¿½ê°„ ?ï¿½í‚µ
 
     const db = getFirestore();
     const snap = await db.collection('_admin').doc('kis').get();
@@ -702,7 +702,7 @@ exports.recordNightFuturesPrice = onSchedule(
         symbol,
       });
 
-      // 7???´ìƒ ???°ì´???•ë¦¬ (ìµœë? 2000ê°?? ì?)
+      // 7???ï¿½ìƒ ???ï¿½ì´???ï¿½ë¦¬ (ìµœï¿½? 2000ï¿½??ï¿½ï¿½?)
       const old = await db.collection('night_futures_prices')
         .orderBy('timestamp', 'desc').offset(2000).limit(100).get();
       if (!old.empty) {
@@ -714,19 +714,19 @@ exports.recordNightFuturesPrice = onSchedule(
   }
 );
 
-// ?€?€ ?¼ê°„? ë¬¼ ?¤ì • ë°˜í™˜ (approval_key + symbol + ?ˆìŠ¤? ë¦¬) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// ?ï¿½?ï¿½ ?ï¿½ê°„?ï¿½ë¬¼ ?ï¿½ì • ë°˜í™˜ (approval_key + symbol + ?ï¿½ìŠ¤?ï¿½ë¦¬) ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
 exports.getKisNightFuturesConfig = onCall(
   { region: 'asia-northeast3', timeoutSeconds: 15 },
   async () => {
     const db = getFirestore();
     const snap = await db.collection('_admin').doc('kis').get();
-    if (!snap.exists) throw new HttpsError('not-found', 'KIS ?¤ì • ?†ìŒ');
+    if (!snap.exists) throw new HttpsError('not-found', 'KIS ?ï¿½ì • ?ï¿½ìŒ');
 
     const { appKey, appSecret } = snap.data();
     const symbol = getNightFuturesSymbol();
     const approvalKey = await getKisApprovalKey(appKey, appSecret);
 
-    // ìµœê·¼ 300ê°?(5ë¶„ë´‰ ê¸°ì? ??25?œê°„)
+    // ìµœê·¼ 300ï¿½?(5ë¶„ë´‰ ê¸°ï¿½? ??25?ï¿½ê°„)
     const histSnap = await db.collection('night_futures_prices')
       .orderBy('timestamp', 'desc').limit(300).get();
 
@@ -739,8 +739,8 @@ exports.getKisNightFuturesConfig = onCall(
   }
 );
 
-// getKospiNightFutures: WebSocket ?†ì´ Firestore ìµœì‹  ?°ì´?°ë§Œ ë°˜í™˜
-// (WebSocket?€ recordNightFuturesPrice ?¤ì?ì¤„ëŸ¬ë§??¬ìš© ??appkey ì¶©ëŒ ë°©ì?)
+// getKospiNightFutures: WebSocket ?ï¿½ì´ Firestore ìµœì‹  ?ï¿½ì´?ï¿½ë§Œ ë°˜í™˜
+// (WebSocket?ï¿½ recordNightFuturesPrice ?ï¿½ï¿½?ì¤„ëŸ¬ï¿½??ï¿½ìš© ??appkey ì¶©ëŒ ë°©ï¿½?)
 exports.getKospiNightFutures = onCall(
   { region: 'asia-northeast3', timeoutSeconds: 10 },
   async () => {
@@ -751,14 +751,14 @@ exports.getKospiNightFutures = onCall(
       .orderBy('timestamp', 'desc').limit(1).get();
 
     if (histSnap.empty) {
-      console.warn('[getKospiNightFutures] night_futures_prices ì»¬ë ‰??ë¹„ì–´ ?ˆìŒ');
+      console.warn('[getKospiNightFutures] night_futures_prices ì»¬ë ‰??ë¹„ì–´ ?ï¿½ìŒ');
       return { hasData: false };
     }
 
     const d = histSnap.docs[0].data();
     return {
       hasData: true,
-      name: `KOSPI200 ?¼ê°„? ë¬¼ (${symbol})`,
+      name: `KOSPI200 ?ï¿½ê°„?ï¿½ë¬¼ (${symbol})`,
       price: d.price,
       change: d.change,
       changeRate: d.changeRate,
@@ -771,7 +771,7 @@ exports.getKospiNightFutures = onCall(
 
 
 
-// ?€?€ ?¨ì½” ì£¼ê°¤ ?¬ë¡¤ë§?ê³µí†µ ë¡œì§ ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// ?ï¿½?ï¿½ ?ï¿½ì½” ì£¼ê°¤ ?ï¿½ë¡¤ï¿½?ê³µí†µ ë¡œì§ ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
 async function _scrapeFmkoreaIndex() {
   const db = getFirestore();
   const now = new Date();
@@ -841,13 +841,13 @@ async function _scrapeFmkoreaIndex() {
   return counts;
 }
 
-// ?€?€ ?¨ì½” ì£¼ê°¤ ?¼ìë³?ê²Œì‹œê¸€ ??ì§‘ê³„ (1?œê°„ë§ˆë‹¤) ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// ?ï¿½?ï¿½ ?ï¿½ì½” ì£¼ê°¤ ?ï¿½ìï¿½?ê²Œì‹œê¸€ ??ì§‘ê³„ (1?ï¿½ê°„ë§ˆë‹¤) ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
 exports.fetchFmkoreaIndex = onSchedule(
   { schedule: 'every 60 minutes', region: 'asia-northeast3', timeoutSeconds: 120 },
   async () => { await _scrapeFmkoreaIndex(); }
 );
 
-// ?€?€ ?¨ì½” ì£¼ê°¤ ?˜ë™ ?¸ë¦¬ê±?(ìµœì´ˆ 1???¤í–‰?? ?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€?€
+// ?ï¿½?ï¿½ ?ï¿½ì½” ì£¼ê°¤ ?ï¿½ë™ ?ï¿½ë¦¬ï¿½?(ìµœì´ˆ 1???ï¿½í–‰?? ?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½?ï¿½
 exports.fetchFmkoreaIndexNow = onRequest(
   { region: 'asia-northeast3', timeoutSeconds: 120 },
   async (req, res) => {
@@ -867,6 +867,283 @@ exports.fetchFmkoreaIndexNow = onRequest(
     } catch(e) {
       res.json({ error: e.message, code: e.response?.status });
     }
+  }
+);
+
+// â”€â”€ ì»¤ë®¤ë‹ˆí‹° ìë™ í¬ìŠ¤íŒ…(ì¼ìƒ ê¸€) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+const BOT_SCHEDULE_COLLECTION = 'bot_daily_post_schedules';
+const BOT_POSTS_PER_DAY = 20;
+const BOT_WINDOW_START_MINUTE = 9 * 60; // 09:00 KST
+const BOT_WINDOW_END_MINUTE = 22 * 60; // 22:00 KST (exclusive)
+const BOT_MAX_POSTS_PER_RUN = 1;
+const BOT_STOCK_RATIO = 0.7;
+const BOT_UID_PREFIX = 'bot_user_';
+
+const BOT_PERSONAS = [
+  { uid: `${BOT_UID_PREFIX}01`, nickname: 'ë™ë„¤ì§ì¥ì¸' },
+  { uid: `${BOT_UID_PREFIX}02`, nickname: 'ì•„ì¹¨ëŸ¬ë„ˆ' },
+  { uid: `${BOT_UID_PREFIX}03`, nickname: 'í‡´ê·¼í›„ë…ì„œ' },
+  { uid: `${BOT_UID_PREFIX}04`, nickname: 'ì»¤í”¼í•œì”' },
+  { uid: `${BOT_UID_PREFIX}05`, nickname: 'ì†Œì†Œí•œê¸°ë¡' },
+  { uid: `${BOT_UID_PREFIX}06`, nickname: 'ì§‘ë°¥ì—°êµ¬ì†Œ' },
+  { uid: `${BOT_UID_PREFIX}07`, nickname: 'ì£¼ë§ì‚°ì±…ëŸ¬' },
+  { uid: `${BOT_UID_PREFIX}08`, nickname: 'ì•¼ì‹ì°¸ëŠ”ì¤‘' },
+];
+
+const BOT_FALLBACK_STOCKS = [
+  { ticker: '005930', name: 'ì‚¼ì„±ì „ì', mentionCount: 0 },
+  { ticker: '000660', name: 'SKí•˜ì´ë‹‰ìŠ¤', mentionCount: 0 },
+  { ticker: '035420', name: 'NAVER', mentionCount: 0 },
+  { ticker: '068270', name: 'ì…€íŠ¸ë¦¬ì˜¨', mentionCount: 0 },
+  { ticker: '005380', name: 'í˜„ëŒ€ì°¨', mentionCount: 0 },
+  { ticker: '012450', name: 'í•œí™”ì—ì–´ë¡œìŠ¤í˜ì´ìŠ¤', mentionCount: 0 },
+];
+
+const BOT_STOCK_TITLE_TEMPLATES = [
+  '{name} ì˜¤ëŠ˜ ìë¦¬ ë³´ëŠ” ì‚¬ëŒ?',
+  '{name} ({ticker}) ëˆŒë¦¼ êµ¬ê°„ ì• ë§¤í•˜ë„¤',
+  '{name} ìˆ˜ê¸‰ ê³„ì† ë¶™ëŠ” ëŠë‚Œ',
+  '{name} ì˜¤ëŠ˜ ê±°ë˜ëŒ€ê¸ˆ ê½¤ ë„ë„¤',
+  '{name} ì§€ê¸ˆ ì¶”ê²© vs ê´€ë§',
+  '{name} ë‹¨ê¸° ìë¦¬ ì˜ê²¬ ê°ˆë¦¬ë„¤',
+];
+
+const BOT_STOCK_CONTENT_TEMPLATES = [
+  'í¨ì½” ì–¸ê¸‰ {mentions}íšŒ ì°í˜”ë„¤ìš”. ì €ëŠ” ì˜¤ëŠ˜ì€ ì¶”ê²©ë³´ë‹¤ ëˆŒë¦¼ ëŒ€ê¸° ì¤‘ì…ë‹ˆë‹¤.',
+  'ì²´ê°ìƒ {name} ì–˜ê¸°ê°€ ê³„ì† ë‚˜ì˜¤ë„¤ìš”. ë‹¨íƒ€ êµ¬ê°„ì´ë©´ ì†ì ˆ ë¼ì¸ ì§§ê²Œ ì¡ëŠ” ê²Œ ë§ì•„ ë³´ì…ë‹ˆë‹¤.',
+  '{name} ì˜¤ëŠ˜ ë³€ë™ ê½¤ í¬ë„¤ìš”. ì‹œì´ˆ ê°•í•˜ë©´ ë”°ë¼ê°€ê³  ì•„ë‹ˆë©´ ê´€ë§í•˜ë ¤ê³ ìš”.',
+  '{name} ê´€ì‹¬ë„ ì˜¬ë¼ì˜¨ ê±´ í™•ì‹¤í•œë°, ì¢…ê°€ ìœ„ì¹˜ ë³´ê³  ë‚´ì¼ ëŒ€ì‘í•  ìƒê°ì…ë‹ˆë‹¤.',
+  'ì˜¤ëŠ˜ì€ {name} ìˆ˜ê¸‰ ì²´í¬í•˜ëŠ” ë‚ ì¸ ë“¯ìš”. ê¸‰ë“± ìº”ë“¤ ë‚˜ì˜¤ë©´ ë¶„í• ë¡œë§Œ ì ‘ê·¼í•˜ë ¤ê³  í•©ë‹ˆë‹¤.',
+  '{name} ì»¤ë®¤ í™”ë ¥ ë¶™ì—ˆë„¤ìš”. ì €ëŠ” ëŒíŒŒ í™•ì¸ ì „ì—” ë¹„ì¤‘ í¬ê²Œ ì•ˆ ì‹£ëŠ” ìª½ì…ë‹ˆë‹¤.',
+  '{name} ì°¨íŠ¸ ì˜ˆì˜ê¸´ í•œë° ê³ ì  ë§¤ìˆ˜ëŠ” ë¶€ë‹´ë˜ë„¤ìš”. ëˆŒë¦´ ë•Œë§Œ ë³¼ê¹Œ í•©ë‹ˆë‹¤.',
+  '{name} ë‹¨ê¸° íƒ„ë ¥ì€ ì‚´ì•„ìˆëŠ” ë“¯í•©ë‹ˆë‹¤. ë‹¤ë§Œ ì¶”ê²©ì€ ë¦¬ìŠ¤í¬ ì»¤ì„œ ì§§ê²Œë§Œ ë³¼ê²Œìš”.',
+];
+
+const BOT_DAILY_TITLE_TEMPLATES = [
+  'ì˜¤ëŠ˜ ì¥ ë³´ê³  ë©˜íƒˆ ê´€ë¦¬ ì¤‘',
+  'ë‹¤ë“¤ ì˜¤ëŠ˜ ë§¤ë§¤ ì–´ë• ë‚˜ìš”',
+  'ì¥ ëë‚˜ê³  ë³µê¸°í•˜ëŠ” ì¤‘',
+  'ì†ì ˆ ì›ì¹™ ë‹¤ì‹œ ì ì–´ë´„',
+  'ì˜¤ëŠ˜ì€ ë§¤ë§¤ ì‰¬ëŠ” ê²Œ ë§ì•˜ë‚˜',
+  'ì‹œë“œ ê´€ë¦¬ê°€ ì œì¼ ì–´ë µë„¤ìš”',
+  'ìˆ˜ìµë³´ë‹¤ ìƒì§€ ì•ŠëŠ” ë‚ ë¡œ',
+  'ì¥ë§ˆê° í›„ ë§ˆìŒ ì •ë¦¬',
+];
+
+const BOT_DAILY_CONTENT_TEMPLATES = [
+  'ìˆ˜ìµë³´ë‹¤ ì›ì¹™ ì§€í‚¤ëŠ” ë‚ ë¡œ ë§ˆê°í–ˆìŠµë‹ˆë‹¤. ë‹¤ë“¤ ê³ ìƒí–ˆì–´ìš”.',
+  'ì˜¤ëŠ˜ì€ ë¬´ë¦¬ ì•ˆ í•˜ê³  ê´€ë§ ìœ„ì£¼ë¡œ ê°”ë„¤ìš”. ë©˜íƒˆ ì§€í‚¤ëŠ” ê²Œ ë” ì¤‘ìš”í•˜ë„¤ìš”.',
+  'ì§„ì…ë³´ë‹¤ ê¸°ë‹¤ë¦¼ì´ ë” ì–´ë ¤ìš´ ë‚ ì´ì—ˆë„¤ìš”. ë‚´ì¼ì€ ë” ì°¨ë¶„í•˜ê²Œ ê°€ë´…ë‹ˆë‹¤.',
+  'ì†ì ˆ í•œ ë²ˆ í–ˆì§€ë§Œ ê³„íšëŒ€ë¡œë¼ ê´œì°®ì•˜ìŠµë‹ˆë‹¤. ë³µê¸°í•˜ê³  ë§ˆë¬´ë¦¬í•©ë‹ˆë‹¤.',
+  'ê´œíˆ ì¡°ê¸‰í•˜ë©´ ì‹¤ìˆ˜ë§Œ ëŠ˜ë”ë¼ê³ ìš”. ì˜¤ëŠ˜ì€ ë§¤ë§¤ íšŸìˆ˜ ì¤„ì—¬ì„œ ë§ˆê°í–ˆìŠµë‹ˆë‹¤.',
+  'ìˆ˜ìµë³´ë‹¤ ë¦¬ìŠ¤í¬ ê´€ë¦¬ê°€ ë” ì²´ê°ë˜ëŠ” ë‚ ì´ë„¤ìš”. ë‹¤ë“¤ ì €ë… ë§›ìˆê²Œ ë“œì„¸ìš”.',
+  'ì¥ì¤‘ì— í”ë“¤ë ¸ëŠ”ë° ë¹„ì¤‘ ì¡°ì ˆ ë•ë¶„ì— í¬ê²Œ ì•ˆ ë‹¤ì³¤ìŠµë‹ˆë‹¤. ë‚´ì¼ ë‹¤ì‹œ ë´…ì‹œë‹¤.',
+  'ì˜¤ëŠ˜ì€ ì‰¬ì–´ê°€ëŠ” ë§¤ë§¤ì˜€ìŠµë‹ˆë‹¤. ì‹œì¥ì€ ë‚´ì¼ë„ ì—´ë¦¬ë‹ˆ ë¬´ë¦¬ ì•ˆ í•˜ë ¤ í•©ë‹ˆë‹¤.',
+];
+
+function getKstNow(base = new Date()) {
+  return new Date(base.getTime() + (9 * 60 * 60 * 1000));
+}
+
+function getKstDateKey(base = new Date()) {
+  const kst = getKstNow(base);
+  const y = kst.getUTCFullYear();
+  const m = String(kst.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(kst.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function parseDateKey(dateKey) {
+  const [yy, mm, dd] = dateKey.split('-').map((v) => parseInt(v, 10));
+  return { yy, mm, dd };
+}
+
+function getKstMinuteOfDay(base = new Date()) {
+  const kst = getKstNow(base);
+  return (kst.getUTCHours() * 60) + kst.getUTCMinutes();
+}
+
+function pickUniqueRandomMinutes(count, startMinute, endMinuteExclusive) {
+  const pool = [];
+  for (let m = startMinute; m < endMinuteExclusive; m++) pool.push(m);
+
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+
+  return pool.slice(0, count).sort((a, b) => a - b);
+}
+
+function hashString(input) {
+  let h = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0);
+}
+
+function pickBySeed(arr, seedText) {
+  const idx = hashString(seedText) % arr.length;
+  return arr[idx];
+}
+
+function pickByWeightedSeed(seedText, ratioA = 0.5) {
+  const normalized = Math.max(0, Math.min(1, ratioA));
+  const val = hashString(seedText) / 4294967295;
+  return val < normalized;
+}
+
+async function getHotMentionsForBot(db) {
+  try {
+    const snap = await db
+      .collection('fmkorea_stock_mentions_realtime')
+      .doc('today')
+      .get();
+    if (!snap.exists) return [];
+    const data = snap.data() || {};
+    const topMentions = Array.isArray(data.topMentions) ? data.topMentions : [];
+    return topMentions
+      .map((m) => ({
+        ticker: typeof m.ticker === 'string' ? m.ticker.trim() : '',
+        name: typeof m.name === 'string' ? m.name.trim() : '',
+        mentionCount: Number.isFinite(m.mentionCount) ? Number(m.mentionCount) : 0,
+      }))
+      .filter((m) => m.name || m.ticker)
+      .slice(0, 20);
+  } catch (_) {
+    return [];
+  }
+}
+
+async function ensureBotDailySchedule(db, dateKey) {
+  const ref = db.collection(BOT_SCHEDULE_COLLECTION).doc(dateKey);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists) return;
+
+    const minuteOffsets = pickUniqueRandomMinutes(
+      BOT_POSTS_PER_DAY,
+      BOT_WINDOW_START_MINUTE,
+      BOT_WINDOW_END_MINUTE,
+    );
+
+    tx.set(ref, {
+      dateKey,
+      targetCount: BOT_POSTS_PER_DAY,
+      minuteOffsets,
+      postedOffsets: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+  });
+}
+
+function resolveBotStock(seed, hotMentions) {
+  if (Array.isArray(hotMentions) && hotMentions.length > 0) {
+    return pickBySeed(hotMentions, `${seed}-hot-stock`);
+  }
+  return pickBySeed(BOT_FALLBACK_STOCKS, `${seed}-fallback-stock`);
+}
+
+function buildBotDraft(seed, stock) {
+  const rawTitle = pickBySeed(BOT_STOCK_TITLE_TEMPLATES, `${seed}-title`);
+  const rawContent = pickBySeed(BOT_STOCK_CONTENT_TEMPLATES, `${seed}-content`);
+  const name = stock.name || stock.ticker || 'ì´ ì¢…ëª©';
+  const ticker = stock.ticker || '';
+  const mentions = Math.max(0, Number(stock.mentionCount) || 0);
+  return {
+    title: rawTitle
+      .replaceAll('{name}', name)
+      .replaceAll('{ticker}', ticker),
+    content: rawContent
+      .replaceAll('{name}', name)
+      .replaceAll('{ticker}', ticker)
+      .replaceAll('{mentions}', String(mentions)),
+  };
+}
+
+function buildDailyDraft(seed) {
+  const title = pickBySeed(BOT_DAILY_TITLE_TEMPLATES, `${seed}-daily-title`);
+  const content = pickBySeed(BOT_DAILY_CONTENT_TEMPLATES, `${seed}-daily-content`);
+  return { title, content };
+}
+
+function buildBotPost(dateKey, minuteOffset, hotMentions) {
+  const seed = `${dateKey}-${minuteOffset}`;
+  const persona = pickBySeed(BOT_PERSONAS, `${seed}-persona`);
+  const useStockPost = pickByWeightedSeed(`${seed}-type`, BOT_STOCK_RATIO);
+  const stock = resolveBotStock(seed, hotMentions);
+  const draft = useStockPost ? buildBotDraft(seed, stock) : buildDailyDraft(seed);
+  const postType = useStockPost ? 'stock' : 'daily';
+  return {
+    uid: persona.uid,
+    nickname: persona.nickname,
+    title: draft.title,
+    content: draft.content,
+    likes: 0,
+    imageUrls: [],
+    isBot: true,
+    botProfileId: persona.uid,
+    botPostType: postType,
+    createdAt: new Date(),
+  };
+}
+
+exports.generateBotDailySchedule = onSchedule(
+  { schedule: 'every day 00:01', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 60 },
+  async () => {
+    const db = getFirestore();
+    const dateKey = getKstDateKey();
+    await ensureBotDailySchedule(db, dateKey);
+  }
+);
+
+exports.publishCommunityBotPosts = onSchedule(
+  { schedule: 'every 5 minutes', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 60 },
+  async () => {
+    const db = getFirestore();
+    const nowMinute = getKstMinuteOfDay();
+    const dateKey = getKstDateKey();
+    const hotMentions = await getHotMentionsForBot(db);
+
+    if (nowMinute < BOT_WINDOW_START_MINUTE || nowMinute >= BOT_WINDOW_END_MINUTE) {
+      return;
+    }
+
+    await ensureBotDailySchedule(db, dateKey);
+    const scheduleRef = db.collection(BOT_SCHEDULE_COLLECTION).doc(dateKey);
+
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(scheduleRef);
+      if (!snap.exists) return;
+
+      const data = snap.data() || {};
+      const minuteOffsets = Array.isArray(data.minuteOffsets) ? data.minuteOffsets : [];
+      const postedOffsets = Array.isArray(data.postedOffsets) ? data.postedOffsets : [];
+      const postedSet = new Set(postedOffsets);
+
+      const dueOffsets = minuteOffsets
+        .filter((m) => typeof m === 'number' && m <= nowMinute && !postedSet.has(m))
+        .sort((a, b) => a - b);
+
+      if (dueOffsets.length === 0) return;
+      const offsetsToPost = dueOffsets.slice(0, BOT_MAX_POSTS_PER_RUN);
+
+      for (const minuteOffset of offsetsToPost) {
+        const postRef = db.collection('posts').doc();
+        tx.set(postRef, buildBotPost(dateKey, minuteOffset, hotMentions));
+        postedSet.add(minuteOffset);
+      }
+
+      tx.set(scheduleRef, {
+        postedOffsets: Array.from(postedSet).sort((a, b) => a - b),
+        lastRunMinute: nowMinute,
+        updatedAt: new Date(),
+      }, { merge: true });
+    });
   }
 );
 

@@ -12,6 +12,8 @@ class FirestoreService {
   static const int _postScore = 3;
   static const int _commentScore = 1;
   static const int _attendanceScore = 1;
+  static const int _rewardAdDailyXp = 5;
+  static const int _rewardAdDailyLimit = 3;
   static const List<int> _levelThresholds = [
     0, // Lv.1
     10, // Lv.2
@@ -40,11 +42,13 @@ class FirestoreService {
     required int postCount,
     required int commentCount,
     required int attendanceCount,
+    int bonusXp = 0,
   }) {
     final score = calculateUserScore(
       postCount: postCount,
       commentCount: commentCount,
       attendanceCount: attendanceCount,
+      bonusXp: bonusXp,
     );
     var level = 1;
     for (var i = 1; i < _levelThresholds.length; i++) {
@@ -62,26 +66,31 @@ class FirestoreService {
     required int postCount,
     required int commentCount,
     required int attendanceCount,
+    int bonusXp = 0,
   }) {
     return (postCount * _postScore) +
         (commentCount * _commentScore) +
-        (attendanceCount * _attendanceScore);
+        (attendanceCount * _attendanceScore) +
+        bonusXp;
   }
 
   Map<String, num> calculateLevelProgress({
     required int postCount,
     required int commentCount,
     required int attendanceCount,
+    int bonusXp = 0,
   }) {
     final score = calculateUserScore(
       postCount: postCount,
       commentCount: commentCount,
       attendanceCount: attendanceCount,
+      bonusXp: bonusXp,
     );
     final level = calculateUserLevel(
       postCount: postCount,
       commentCount: commentCount,
       attendanceCount: attendanceCount,
+      bonusXp: bonusXp,
     );
 
     final tableLevelCount = _levelThresholds.length;
@@ -125,18 +134,21 @@ class FirestoreService {
       final postCount = (data['postCount'] as num?)?.toInt() ?? 0;
       final commentCount = (data['commentCount'] as num?)?.toInt() ?? 0;
       final attendanceCount = (data['attendanceCount'] as num?)?.toInt() ?? 0;
+      final bonusXp = (data['bonusXp'] as num?)?.toInt() ?? 0;
       final level =
           (data['level'] as num?)?.toInt() ??
           calculateUserLevel(
             postCount: postCount,
             commentCount: commentCount,
             attendanceCount: attendanceCount,
+            bonusXp: bonusXp,
           );
       return {
         'level': level,
         'postCount': postCount,
         'commentCount': commentCount,
         'attendanceCount': attendanceCount,
+        'bonusXp': bonusXp,
       };
     });
   }
@@ -146,6 +158,49 @@ class FirestoreService {
     return _db.collection('user_public').doc(uid).snapshots().map((doc) {
       final level = (doc.data()?['level'] as num?)?.toInt();
       return level ?? 1;
+    });
+  }
+
+  Future<void> syncUserContributionStats(String uid) async {
+    if (uid.isEmpty) return;
+
+    final postsSnap = await _db
+        .collection('posts')
+        .where('uid', isEqualTo: uid)
+        .get();
+    final publicJournalsSnap = await _db
+        .collection('trading_journal')
+        .where('uid', isEqualTo: uid)
+        .where('isPublic', isEqualTo: true)
+        .get();
+
+    final combinedPostCount =
+        postsSnap.docs.length + publicJournalsSnap.docs.length;
+    final userRef = _db.collection('users').doc(uid);
+    final publicRef = _db.collection('user_public').doc(uid);
+
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(userRef);
+      final data = snap.data() ?? <String, dynamic>{};
+      final commentCount = (data['commentCount'] as num?)?.toInt() ?? 0;
+      final attendanceCount = (data['attendanceCount'] as num?)?.toInt() ?? 0;
+      final bonusXp = (data['bonusXp'] as num?)?.toInt() ?? 0;
+      final nextLevel = calculateUserLevel(
+        postCount: combinedPostCount,
+        commentCount: commentCount,
+        attendanceCount: attendanceCount,
+        bonusXp: bonusXp,
+      );
+
+      tx.set(userRef, {
+        'postCount': combinedPostCount,
+        'commentCount': commentCount,
+        'attendanceCount': attendanceCount,
+        'bonusXp': bonusXp,
+        'level': nextLevel,
+        'lastActiveAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      tx.set(publicRef, {'level': nextLevel}, SetOptions(merge: true));
     });
   }
 
@@ -159,6 +214,7 @@ class FirestoreService {
       final currentPostCount = (data['postCount'] as num?)?.toInt() ?? 0;
       final currentCommentCount = (data['commentCount'] as num?)?.toInt() ?? 0;
       final currentAttendance = (data['attendanceCount'] as num?)?.toInt() ?? 0;
+      final currentBonusXp = (data['bonusXp'] as num?)?.toInt() ?? 0;
       final currentLevel = (data['level'] as num?)?.toInt() ?? 1;
       final lastAttendanceDate = data['lastAttendanceDate'] as String?;
 
@@ -167,6 +223,7 @@ class FirestoreService {
           postCount: currentPostCount,
           commentCount: currentCommentCount,
           attendanceCount: currentAttendance,
+          bonusXp: currentBonusXp,
         );
         if (currentLevel != recomputed || !snap.exists) {
           tx.set(userRef, {
@@ -174,6 +231,7 @@ class FirestoreService {
             'postCount': currentPostCount,
             'commentCount': currentCommentCount,
             'attendanceCount': currentAttendance,
+            'bonusXp': currentBonusXp,
             'lastActiveAt': FieldValue.serverTimestamp(),
           }, SetOptions(merge: true));
           tx.set(publicRef, {'level': recomputed}, SetOptions(merge: true));
@@ -190,12 +248,14 @@ class FirestoreService {
         postCount: currentPostCount,
         commentCount: currentCommentCount,
         attendanceCount: nextAttendance,
+        bonusXp: currentBonusXp,
       );
 
       tx.set(userRef, {
         'attendanceCount': nextAttendance,
         'postCount': currentPostCount,
         'commentCount': currentCommentCount,
+        'bonusXp': currentBonusXp,
         'level': nextLevel,
         'lastAttendanceDate': todayKey,
         'lastActiveAt': FieldValue.serverTimestamp(),
@@ -213,6 +273,7 @@ class FirestoreService {
       final currentPostCount = (data['postCount'] as num?)?.toInt() ?? 0;
       final currentCommentCount = (data['commentCount'] as num?)?.toInt() ?? 0;
       final currentAttendance = (data['attendanceCount'] as num?)?.toInt() ?? 0;
+      final currentBonusXp = (data['bonusXp'] as num?)?.toInt() ?? 0;
       final nextPostCount = (currentPostCount + delta) < 0
           ? 0
           : (currentPostCount + delta);
@@ -220,11 +281,13 @@ class FirestoreService {
         postCount: nextPostCount,
         commentCount: currentCommentCount,
         attendanceCount: currentAttendance,
+        bonusXp: currentBonusXp,
       );
       tx.set(userRef, {
         'postCount': nextPostCount,
         'commentCount': currentCommentCount,
         'attendanceCount': currentAttendance,
+        'bonusXp': currentBonusXp,
         'level': nextLevel,
         'lastActiveAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
@@ -249,6 +312,7 @@ class FirestoreService {
       final currentPostCount = (data['postCount'] as num?)?.toInt() ?? 0;
       final currentCommentCount = (data['commentCount'] as num?)?.toInt() ?? 0;
       final currentAttendance = (data['attendanceCount'] as num?)?.toInt() ?? 0;
+      final currentBonusXp = (data['bonusXp'] as num?)?.toInt() ?? 0;
       final nextCommentCount = (currentCommentCount + delta) < 0
           ? 0
           : (currentCommentCount + delta);
@@ -256,11 +320,13 @@ class FirestoreService {
         postCount: currentPostCount,
         commentCount: nextCommentCount,
         attendanceCount: currentAttendance,
+        bonusXp: currentBonusXp,
       );
       tx.set(userRef, {
         'postCount': currentPostCount,
         'commentCount': nextCommentCount,
         'attendanceCount': currentAttendance,
+        'bonusXp': currentBonusXp,
         'level': nextLevel,
         'lastActiveAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
@@ -670,12 +736,14 @@ class FirestoreService {
       final postCount = (data['postCount'] as num?)?.toInt() ?? 0;
       final attendanceCount = (data['attendanceCount'] as num?)?.toInt() ?? 0;
       final commentCount = (data['commentCount'] as num?)?.toInt() ?? 0;
+      final bonusXp = (data['bonusXp'] as num?)?.toInt() ?? 0;
       final level =
           (data['level'] as num?)?.toInt() ??
           calculateUserLevel(
             postCount: postCount,
             commentCount: commentCount,
             attendanceCount: attendanceCount,
+            bonusXp: bonusXp,
           );
       return {
         'uid': doc.id,
@@ -707,6 +775,87 @@ class FirestoreService {
         .get();
 
     return (totalUsers: totalSnap.count ?? 0, todayUsers: todaySnap.count ?? 0);
+  }
+
+  Stream<Map<String, int>> watchRewardAdStatus(String uid) {
+    if (uid.isEmpty) {
+      return Stream.value({
+        'canWatchToday': 1,
+        'remainingCount': _rewardAdDailyLimit,
+        'watchedCount': 0,
+        'dailyLimit': _rewardAdDailyLimit,
+      });
+    }
+    return _db.collection('users').doc(uid).snapshots().map((doc) {
+      final data = doc.data() ?? <String, dynamic>{};
+      final lastRewardAdDate = data['lastRewardAdDate'] as String?;
+      final sameDay = lastRewardAdDate == _kstDayKey();
+      final rawCount = (data['rewardAdCountToday'] as num?)?.toInt() ?? 0;
+      final watchedCount = sameDay
+          ? rawCount.clamp(0, _rewardAdDailyLimit).toInt()
+          : 0;
+      final remainingCount = (_rewardAdDailyLimit - watchedCount)
+          .clamp(0, _rewardAdDailyLimit)
+          .toInt();
+      return {
+        'canWatchToday': remainingCount > 0 ? 1 : 0,
+        'remainingCount': remainingCount,
+        'watchedCount': watchedCount,
+        'dailyLimit': _rewardAdDailyLimit,
+      };
+    });
+  }
+
+  Stream<bool> watchCanWatchRewardAdToday(String uid) {
+    return watchRewardAdStatus(
+      uid,
+    ).map((status) => status['canWatchToday'] == 1);
+  }
+
+  Future<bool> grantDailyRewardAdXp(
+    String uid, {
+    int xp = _rewardAdDailyXp,
+  }) async {
+    final todayKey = _kstDayKey();
+    final userRef = _db.collection('users').doc(uid);
+    final publicRef = _db.collection('user_public').doc(uid);
+
+    return _db.runTransaction((tx) async {
+      final snap = await tx.get(userRef);
+      final data = snap.data() ?? <String, dynamic>{};
+      final lastRewardAdDate = data['lastRewardAdDate'] as String?;
+      final rawCount = (data['rewardAdCountToday'] as num?)?.toInt() ?? 0;
+      final currentCount = lastRewardAdDate == todayKey
+          ? rawCount.clamp(0, _rewardAdDailyLimit).toInt()
+          : 0;
+      if (currentCount >= _rewardAdDailyLimit) return false;
+
+      final postCount = (data['postCount'] as num?)?.toInt() ?? 0;
+      final commentCount = (data['commentCount'] as num?)?.toInt() ?? 0;
+      final attendanceCount = (data['attendanceCount'] as num?)?.toInt() ?? 0;
+      final currentBonusXp = (data['bonusXp'] as num?)?.toInt() ?? 0;
+      final nextCount = currentCount + 1;
+      final nextBonusXp = currentBonusXp + xp;
+      final nextLevel = calculateUserLevel(
+        postCount: postCount,
+        commentCount: commentCount,
+        attendanceCount: attendanceCount,
+        bonusXp: nextBonusXp,
+      );
+
+      tx.set(userRef, {
+        'postCount': postCount,
+        'commentCount': commentCount,
+        'attendanceCount': attendanceCount,
+        'bonusXp': nextBonusXp,
+        'level': nextLevel,
+        'lastRewardAdDate': todayKey,
+        'rewardAdCountToday': nextCount,
+        'lastActiveAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      tx.set(publicRef, {'level': nextLevel}, SetOptions(merge: true));
+      return true;
+    });
   }
 
   // ── 알림 큐 ───────────────────────────────────────────────────────────
@@ -856,6 +1005,15 @@ class FirestoreService {
         );
   }
 
+  Future<List<TradingJournal>> getMyJournalsByUidOnce(String uid) async {
+    final snap = await _db
+        .collection('trading_journal')
+        .where('uid', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .get();
+    return snap.docs.map((d) => TradingJournal.fromFirestore(d)).toList();
+  }
+
   Stream<List<TradingJournal>> getPublicJournalsByUid(String uid) {
     return _db
         .collection('trading_journal')
@@ -866,6 +1024,16 @@ class FirestoreService {
         .map(
           (s) => s.docs.map((d) => TradingJournal.fromFirestore(d)).toList(),
         );
+  }
+
+  Future<List<TradingJournal>> getPublicJournalsByUidOnce(String uid) async {
+    final snap = await _db
+        .collection('trading_journal')
+        .where('uid', isEqualTo: uid)
+        .where('isPublic', isEqualTo: true)
+        .orderBy('publishedAt', descending: true)
+        .get();
+    return snap.docs.map((d) => TradingJournal.fromFirestore(d)).toList();
   }
 
   Future<(List<TradingJournal>, DocumentSnapshot?)> getPublicJournalsPaged({
@@ -884,6 +1052,17 @@ class FirestoreService {
         .toList();
     final lastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
     return (journals, lastDoc);
+  }
+
+  Future<TradingJournal?> getJournalById(String id) async {
+    try {
+      final snap = await _db.collection('trading_journal').doc(id).get();
+      if (!snap.exists) return null;
+      return TradingJournal.fromFirestore(snap);
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') return null;
+      rethrow;
+    }
   }
 
   Future<void> addJournal(TradingJournal journal) async {
