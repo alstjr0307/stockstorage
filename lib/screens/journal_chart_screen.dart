@@ -99,16 +99,23 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
 
   int _closestIndex(List<_OHLC> candles, DateTime date) {
     if (candles.isEmpty) return -1;
+    final targetDate = _dateOnlyLocal(date);
     int best = -1;
     int bestDiff = 999999;
     for (int i = 0; i < candles.length; i++) {
-      final diff = candles[i].date.difference(date).inDays.abs();
+      final candleDate = _dateOnlyLocal(candles[i].date);
+      final diff = candleDate.difference(targetDate).inDays.abs();
       if (diff < bestDiff) {
         bestDiff = diff;
         best = i;
       }
     }
     return bestDiff <= 5 ? best : -1;
+  }
+
+  DateTime _dateOnlyLocal(DateTime dt) {
+    final local = dt.toLocal();
+    return DateTime(local.year, local.month, local.day);
   }
 
   List<_OHLC> get _displayCandles {
