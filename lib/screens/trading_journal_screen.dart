@@ -100,6 +100,33 @@ class _ExpandableNotePreviewState extends State<_ExpandableNotePreview> {
   }
 }
 
+class _DateSectionHeader extends StatelessWidget {
+  final DateTime date;
+  const _DateSectionHeader({required this.date});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 14, 0, 10),
+      child: Row(children: [
+        Text(
+          '거래일 ${DateFormat('yyyy.MM.dd').format(date)}',
+          style: GoogleFonts.inter(
+            color: cs.onSurface.withValues(alpha: 0.55),
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Divider(height: 1, color: cs.onSurface.withValues(alpha: 0.08)),
+        ),
+      ]),
+    );
+  }
+}
+
 class _NotLoggedIn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -290,15 +317,34 @@ class _JournalContentState extends State<_JournalContent> {
             }
           }
 
+          // 날짜별 섹션 헤더를 위해 거래일 내림차순 정렬
+          topLevel.sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+
+          // DateTime(헤더) + TradingJournal(카드) 혼합 평탄 리스트
+          final flat = <Object>[];
+          String? lastDateStr;
+          for (final j in topLevel) {
+            final d = DateFormat('yyyy.MM.dd').format(j.tradeDate);
+            if (d != lastDateStr) {
+              flat.add(j.tradeDate);
+              lastDateStr = d;
+            }
+            flat.add(j);
+          }
+
           return Column(
             children: [
               _PortfolioSummarySection(holdings: holdings),
               Expanded(
                 child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-                  itemCount: topLevel.length,
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 100),
+                  itemCount: flat.length,
                   itemBuilder: (ctx, i) {
-                    final j = topLevel[i];
+                    final item = flat[i];
+                    if (item is DateTime) {
+                      return _DateSectionHeader(date: item);
+                    }
+                    final j = item as TradingJournal;
                     return _JournalCard(
                       key: ValueKey(j.id),
                       journal: j,

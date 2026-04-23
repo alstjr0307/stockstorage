@@ -5200,3 +5200,181 @@ TROUBLESHOOTING: https://pptr.dev/troubleshooting
 [result] counts={"2026.04.22":1020,"2026.04.21":13090}
 [save] Firestore upsert complete: 2 day docs
 [save] summary doc updated
+===== 2026-04-22 18:00:02.10 ===== 
+[run] now=2026-04-22T09:00:04.289Z daysBack=2 cutoff=2026.04.21
+[warmup] title=주식 - 에펨코리아
+[coarse] start step=1000, max=300000
+[coarse] page=1 parsed=20 oldest=2026.04.22 hitCutoff=false
+[coarse] page=1001 parsed=20 oldest=2026.04.21 hitCutoff=false
+[coarse] page=2001 parsed=20 oldest=2026.04.18 hitCutoff=true
+[binary] range 1001..2001
+[binary] page=1501 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1251 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1126 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1063 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1094 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1110 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1118 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1114 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1112 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1113 parsed=20 oldest=2026.04.21 move=right
+[run] detail scrape endPage=1114
+[daily] 2026.04.22 pageRange=1-463 count=9260
+[daily] 2026.04.21 pageRange=464-1113 count=12996
+[result] dates=2026.04.21, 2026.04.22
+[result] counts={"2026.04.22":9260,"2026.04.21":12996}
+[save] Firestore upsert complete: 2 day docs
+[save] summary doc updated
+===== 2026-04-22 19:00:02.10 ===== 
+[run] now=2026-04-22T10:00:03.037Z daysBack=2 cutoff=2026.04.21
+[warmup] title=주식 - 에펨코리아
+[coarse] start step=1000, max=300000
+[coarse] page=1 parsed=20 oldest=2026.04.22 hitCutoff=false
+[coarse] page=1001 parsed=20 oldest=2026.04.21 hitCutoff=false
+[coarse] page=2001 parsed=20 oldest=2026.04.18 hitCutoff=true
+[binary] range 1001..2001
+[binary] page=1501 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1251 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1126 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1188 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1157 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1141 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1133 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1137 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1139 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1138 parsed=20 oldest=2026.04.21 move=right
+[run] detail scrape endPage=1139
+[daily] 2026.04.22 pageRange=1-488 count=9760
+[daily] 2026.04.21 pageRange=489-1138 count=12982
+[result] dates=2026.04.21, 2026.04.22
+[result] counts={"2026.04.22":9760,"2026.04.21":12982}
+[save] Firestore upsert complete: 2 day docs
+[save] summary doc updated
+===== 2026-04-22 20:00:02.11 ===== 
+[run] now=2026-04-22T11:00:02.758Z daysBack=2 cutoff=2026.04.21
+[warmup] title=주식 - 에펨코리아
+[coarse] start step=1000, max=300000
+[coarse] page=1 parsed=20 oldest=2026.04.22 hitCutoff=false
+[coarse] page=1001 parsed=20 oldest=2026.04.21 hitCutoff=false
+[coarse] page=2001 parsed=20 oldest=2026.04.18 hitCutoff=true
+[binary] range 1001..2001
+[binary] page=1501 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1251 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1126 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1188 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1157 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1172 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1164 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1168 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1166 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1167 parsed=20 oldest=2026.04.20 move=left
+[run] detail scrape endPage=1167
+[daily] 2026.04.22 pageRange=1-517 count=10340
+[daily] 2026.04.21 pageRange=518-1166 count=12979
+[result] dates=2026.04.21, 2026.04.22
+[result] counts={"2026.04.22":10340,"2026.04.21":12979}
+[save] Firestore upsert complete: 2 day docs
+[save] summary doc updated
+===== 2026-04-22 21:00:02.14 ===== 
+[run] now=2026-04-22T12:00:03.917Z daysBack=2 cutoff=2026.04.21
+[warmup] title=주식 - 에펨코리아
+[coarse] start step=1000, max=300000
+[coarse] page=1 parsed=20 oldest=2026.04.22 hitCutoff=false
+[coarse] page=1001 parsed=20 oldest=2026.04.21 hitCutoff=false
+[coarse] page=2001 parsed=20 oldest=2026.04.18 hitCutoff=true
+[binary] range 1001..2001
+[binary] page=1501 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1251 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1126 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1188 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1219 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1203 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1195 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1191 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1189 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1190 parsed=20 oldest=2026.04.21 move=right
+[run] detail scrape endPage=1191
+[daily] 2026.04.22 pageRange=1-541 count=10820
+[daily] 2026.04.21 pageRange=542-1190 count=12970
+[result] dates=2026.04.21, 2026.04.22
+[result] counts={"2026.04.22":10820,"2026.04.21":12970}
+[save] Firestore upsert complete: 2 day docs
+[save] summary doc updated
+===== 2026-04-22 22:00:02.24 ===== 
+[run] now=2026-04-22T13:00:03.422Z daysBack=2 cutoff=2026.04.21
+[warmup] title=주식 - 에펨코리아
+[coarse] start step=1000, max=300000
+[coarse] page=1 parsed=20 oldest=2026.04.22 hitCutoff=false
+[coarse] page=1001 parsed=20 oldest=2026.04.21 hitCutoff=false
+^C===== 2026-04-22 23:00:02.22 ===== 
+[run] now=2026-04-22T14:00:03.997Z daysBack=2 cutoff=2026.04.21
+[warmup] title=주식 - 에펨코리아
+[coarse] start step=1000, max=300000
+[coarse] page=1 parsed=20 oldest=2026.04.22 hitCutoff=false
+[coarse] page=1001 parsed=20 oldest=2026.04.21 hitCutoff=false
+[coarse] page=2001 parsed=20 oldest=2026.04.19 hitCutoff=true
+[binary] range 1001..2001
+[binary] page=1501 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1251 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1376 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1313 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1282 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1266 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1258 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1262 parsed=20 oldest=2026.04.20 move=left
+[binary] page=1260 parsed=20 oldest=2026.04.21 move=right
+[binary] page=1261 parsed=20 oldest=2026.04.21 move=right
+[run] detail scrape endPage=1262
+[daily] 2026.04.22 pageRange=1-612 count=12240
+[daily] 2026.04.21 pageRange=613-1261 count=12962
+[result] dates=2026.04.21, 2026.04.22
+[result] counts={"2026.04.22":12240,"2026.04.21":12962}
+[save] Firestore upsert complete: 2 day docs
+[save] summary doc updated
+===== 2026-04-23  0:00:02.17 ===== 
+[run] now=2026-04-22T15:00:04.081Z daysBack=2 cutoff=2026.04.22
+[warmup] title=주식 - 에펨코리아
+[coarse] start step=1000, max=300000
+[coarse] page=1 parsed=20 oldest=2026.04.22 hitCutoff=false
+[coarse] page=1001 parsed=20 oldest=2026.04.21 hitCutoff=true
+[binary] range 1..1001
+[binary] page=501 parsed=20 oldest=2026.04.22 move=right
+[binary] page=751 parsed=20 oldest=2026.04.21 move=left
+[binary] page=626 parsed=20 oldest=2026.04.22 move=right
+[binary] page=688 parsed=20 oldest=2026.04.21 move=left
+[binary] page=657 parsed=20 oldest=2026.04.22 move=right
+[binary] page=672 parsed=20 oldest=2026.04.21 move=left
+[binary] page=664 parsed=20 oldest=2026.04.21 move=left
+[binary] page=660 parsed=20 oldest=2026.04.21 move=left
+[binary] page=658 parsed=20 oldest=2026.04.21 move=left
+[run] detail scrape endPage=658
+[daily] 2026.04.23 pageRange=1-0 count=7
+[daily] 2026.04.22 pageRange=1-657 count=13128
+[result] dates=2026.04.22, 2026.04.23
+[result] counts={"2026.04.23":7,"2026.04.22":13128}
+[save] Firestore upsert complete: 2 day docs
+[save] summary doc updated
+===== 2026-04-23  1:00:02.28 ===== 
+[run] now=2026-04-22T16:00:03.400Z daysBack=2 cutoff=2026.04.22
+[warmup] title=주식 - 에펨코리아
+[coarse] start step=1000, max=300000
+[coarse] page=1 parsed=20 oldest=2026.04.23 hitCutoff=false
+[coarse] page=1001 parsed=20 oldest=2026.04.21 hitCutoff=true
+[binary] range 1..1001
+[binary] page=501 parsed=20 oldest=2026.04.22 move=right
+[binary] page=751 parsed=20 oldest=2026.04.21 move=left
+[binary] page=626 parsed=20 oldest=2026.04.22 move=right
+[binary] page=688 parsed=20 oldest=2026.04.21 move=left
+[binary] page=657 parsed=20 oldest=2026.04.22 move=right
+[binary] page=672 parsed=20 oldest=2026.04.22 move=right
+[binary] page=680 parsed=20 oldest=2026.04.22 move=right
+[binary] page=684 parsed=20 oldest=2026.04.21 move=left
+[binary] page=682 parsed=20 oldest=2026.04.21 move=left
+[binary] page=681 parsed=20 oldest=2026.04.22 move=right
+[run] detail scrape endPage=682
+[daily] 2026.04.23 pageRange=1-24 count=480
+[daily] 2026.04.22 pageRange=25-681 count=13130
+[result] dates=2026.04.22, 2026.04.23
+[result] counts={"2026.04.23":480,"2026.04.22":13130}
+[save] Firestore upsert complete: 2 day docs
+[save] summary doc updated

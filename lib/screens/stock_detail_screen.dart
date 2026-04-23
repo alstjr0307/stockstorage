@@ -465,6 +465,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     final pick = _livePick ?? widget.pick;
     final formatter = NumberFormat('#,###');
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final livePrice = _livePrice?.price;
     final hasClosedPrice = pick.isCompleted && pick.closedPrice != null;
@@ -691,11 +692,11 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                   child: TabBar(
                     controller: _tabController,
                     dividerColor: Colors.transparent,
-                    labelColor: cs.onSurface,
-                    unselectedLabelColor: cs.onSurface.withValues(alpha: 0.45),
+                    labelColor: isDark ? const Color(0xFF0A0E1A) : cs.surface,
+                    unselectedLabelColor: cs.onSurface.withValues(alpha: 0.4),
                     indicatorSize: TabBarIndicatorSize.tab,
                     indicator: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surface,
+                      color: isDark ? Colors.white : cs.onSurface,
                       borderRadius: BorderRadius.circular(9999),
                     ),
                     labelStyle: GoogleFonts.inter(
@@ -1034,44 +1035,35 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                 ),
                                 // ── 캡처 영역 끝 ──
                                 const SizedBox(height: 10),
-                                SizedBox(
-                                  width: double.infinity,
-                                  child: OutlinedButton.icon(
-                                    onPressed: _capturing
-                                        ? null
-                                        : _captureAndShare,
+                                Center(
+                                  child: TextButton.icon(
+                                    onPressed: _capturing ? null : _captureAndShare,
                                     icon: _capturing
                                         ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
+                                            width: 14,
+                                            height: 14,
                                             child: CircularProgressIndicator(
                                               strokeWidth: 2,
                                               color: Color(0xFF10B981),
                                             ),
                                           )
-                                        : const Icon(
+                                        : Icon(
                                             Icons.camera_alt_outlined,
-                                            size: 18,
-                                            color: Color(0xFF10B981),
+                                            size: 16,
+                                            color: cs.onSurface.withValues(alpha: 0.4),
                                           ),
                                     label: Text(
                                       _capturing ? '캡처 중...' : '캡처해서 공유하기',
                                       style: GoogleFonts.inter(
-                                        color: const Color(0xFF10B981),
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
+                                        color: cs.onSurface.withValues(alpha: 0.4),
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 13,
                                       ),
                                     ),
-                                    style: OutlinedButton.styleFrom(
+                                    style: TextButton.styleFrom(
                                       padding: const EdgeInsets.symmetric(
-                                        vertical: 13,
-                                      ),
-                                      side: const BorderSide(
-                                        color: Color(0xFF10B981),
-                                        width: 1.2,
-                                      ),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
+                                        horizontal: 12,
+                                        vertical: 8,
                                       ),
                                     ),
                                   ),
@@ -1687,17 +1679,56 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     final pick = _livePick ?? widget.pick;
     final upCount = pick.upVotes;
     final downCount = pick.downVotes;
+    final total = upCount + downCount;
     final isUp = _userVote == 'up';
     final isDown = _userVote == 'down';
+    final upRatio = total > 0 ? upCount / total : 0.5;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('커뮤니티 의견'),
-        const SizedBox(height: 8),
+        Row(
+          children: [
+            _sectionLabel('커뮤니티 의견'),
+            const Spacer(),
+            if (total > 0)
+              Text(
+                '$total명 참여',
+                style: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.3),
+                  fontSize: 11,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (total > 0) ...[
+          ClipRRect(
+            borderRadius: BorderRadius.circular(9999),
+            child: SizedBox(
+              height: 5,
+              child: Row(
+                children: [
+                  Flexible(
+                    flex: (upRatio * 100).round(),
+                    child: Container(color: const Color(0xFF10B981)),
+                  ),
+                  Flexible(
+                    flex: ((1 - upRatio) * 100).round(),
+                    child: Container(
+                      color: const Color(0xFF1677FF).withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
         Row(
           children: [
             Expanded(
+              flex: total > 0 ? (upRatio * 10).round().clamp(3, 7) : 5,
               child: GestureDetector(
                 onTap: _currentUser == null
                     ? null
@@ -1723,16 +1754,16 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                         color: isUp
                             ? const Color(0xFF10B981)
                             : cs.onSurface.withValues(alpha: 0.38),
-                        size: 18,
+                        size: 16,
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 5),
                       Text(
-                        '상승 $upCount',
+                        '상승  $upCount',
                         style: GoogleFonts.inter(
                           color: isUp
                               ? const Color(0xFF10B981)
                               : cs.onSurface.withValues(alpha: 0.6),
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                           fontSize: 13,
                         ),
                       ),
@@ -1743,6 +1774,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
             ),
             const SizedBox(width: 10),
             Expanded(
+              flex: total > 0 ? ((1 - upRatio) * 10).round().clamp(3, 7) : 5,
               child: GestureDetector(
                 onTap: _currentUser == null
                     ? null
@@ -1751,12 +1783,12 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
                     color: isDown
-                        ? Colors.redAccent.withValues(alpha: 0.15)
+                        ? const Color(0xFF1677FF).withValues(alpha: 0.12)
                         : cs.surface,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: isDown
-                          ? Colors.redAccent.withValues(alpha: 0.5)
+                          ? const Color(0xFF1677FF).withValues(alpha: 0.4)
                           : cs.onSurface.withValues(alpha: 0.1),
                     ),
                   ),
@@ -1766,16 +1798,16 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                       Icon(
                         Icons.thumb_down_outlined,
                         color: isDown
-                            ? Colors.redAccent
+                            ? const Color(0xFF1677FF)
                             : cs.onSurface.withValues(alpha: 0.38),
-                        size: 18,
+                        size: 16,
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 5),
                       Text(
-                        '하락 $downCount',
+                        '하락  $downCount',
                         style: GoogleFonts.inter(
                           color: isDown
-                              ? Colors.redAccent
+                              ? const Color(0xFF1677FF)
                               : cs.onSurface.withValues(alpha: 0.6),
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
@@ -2181,137 +2213,155 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     final isOwn = _currentUser?.uid == comment.uid;
     final isAdmin = AuthService.adminUids.contains(_currentUser?.uid);
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              UserLevelAvatar(
-                uid: comment.uid,
-                radius: 12,
-                backgroundColor: cs.onSurface.withValues(alpha: 0.07),
-                textStyle: GoogleFonts.inter(
-                  color: cs.onSurface.withValues(alpha: 0.55),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                comment.nickname,
-                style: GoogleFonts.inter(
-                  color: cs.onSurface.withValues(alpha: 0.7),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                timeago.format(comment.createdAt, locale: 'ko'),
-                style: GoogleFonts.inter(
-                  color: cs.onSurface.withValues(alpha: 0.24),
-                  fontSize: 11,
-                ),
-              ),
-              const Spacer(),
-              if (isOwn || isAdmin)
-                GestureDetector(
-                  onTap: _deletingCommentIds.contains(comment.id)
-                      ? null
-                      : () async {
-                          if (_deletingCommentIds.contains(comment.id)) return;
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              backgroundColor: Theme.of(
-                                context,
-                              ).colorScheme.surface,
-                              title: Text(
-                                '댓글 삭제',
-                                style: GoogleFonts.inter(
-                                  color: cs.onSurface,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              content: Text(
-                                '이 댓글을 삭제하시겠습니까?',
-                                style: GoogleFonts.inter(
-                                  color: cs.onSurface.withValues(alpha: 0.7),
-                                ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, false),
-                                  child: Text(
-                                    '취소',
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  UserLevelAvatar(
+                    uid: comment.uid,
+                    radius: 18,
+                    backgroundColor: cs.onSurface.withValues(alpha: 0.07),
+                    textStyle: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.55),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          comment.nickname,
+                          style: GoogleFonts.inter(
+                            color: cs.onSurface,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          timeago.format(comment.createdAt, locale: 'ko'),
+                          style: GoogleFonts.inter(
+                            color: cs.onSurface.withValues(alpha: 0.3),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (isOwn || isAdmin)
+                    GestureDetector(
+                      onTap: _deletingCommentIds.contains(comment.id)
+                          ? null
+                          : () async {
+                              if (_deletingCommentIds.contains(comment.id)) {
+                                return;
+                              }
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  backgroundColor:
+                                      Theme.of(context).colorScheme.surface,
+                                  title: Text(
+                                    '댓글 삭제',
                                     style: GoogleFonts.inter(
-                                      color: cs.onSurface.withValues(
-                                        alpha: 0.54,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx, true),
-                                  child: Text(
-                                    '삭제',
-                                    style: GoogleFonts.inter(
-                                      color: Colors.redAccent,
+                                      color: cs.onSurface,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
+                                  content: Text(
+                                    '이 댓글을 삭제하시겠습니까?',
+                                    style: GoogleFonts.inter(
+                                      color: cs.onSurface.withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, false),
+                                      child: Text(
+                                        '취소',
+                                        style: GoogleFonts.inter(
+                                          color: cs.onSurface
+                                              .withValues(alpha: 0.54),
+                                        ),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(ctx, true),
+                                      child: Text(
+                                        '삭제',
+                                        style: GoogleFonts.inter(
+                                          color: Colors.redAccent,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              );
+                              if (confirm != true) return;
+                              setState(
+                                () => _deletingCommentIds.add(comment.id),
+                              );
+                              await _firestoreService.deleteComment(
+                                widget.pick.id,
+                                comment.id,
+                                uid: comment.uid,
+                              );
+                              if (mounted) {
+                                setState(
+                                  () =>
+                                      _deletingCommentIds.remove(comment.id),
+                                );
+                              }
+                            },
+                      child: _deletingCommentIds.contains(comment.id)
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.5,
+                                color: Color(0xFF10B981),
+                              ),
+                            )
+                          : Icon(
+                              Icons.close,
+                              color: cs.onSurface.withValues(alpha: 0.2),
+                              size: 16,
                             ),
-                          );
-                          if (confirm != true) return;
-                          setState(() => _deletingCommentIds.add(comment.id));
-                          await _firestoreService.deleteComment(
-                            widget.pick.id,
-                            comment.id,
-                            uid: comment.uid,
-                          );
-                          if (mounted) {
-                            setState(
-                              () => _deletingCommentIds.remove(comment.id),
-                            );
-                          }
-                        },
-                  child: _deletingCommentIds.contains(comment.id)
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 1.5,
-                            color: Color(0xFF10B981),
-                          ),
-                        )
-                      : Icon(
-                          Icons.close,
-                          color: cs.onSurface.withValues(alpha: 0.24),
-                          size: 16,
-                        ),
+                    ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.only(left: 46, top: 8),
+                child: Text(
+                  comment.content,
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.85),
+                    fontSize: 14,
+                    height: 1.55,
+                  ),
                 ),
+              ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            comment.content,
-            style: GoogleFonts.inter(
-              color: cs.onSurface,
-              fontSize: 13,
-              height: 1.5,
-            ),
-          ),
-        ],
-      ),
+        ),
+        Divider(
+          height: 1,
+          thickness: 1,
+          color: cs.onSurface.withValues(alpha: 0.05),
+        ),
+      ],
     );
   }
 

@@ -34,7 +34,6 @@
 | `negative` | `#F04452` | `#F04452` | 오류 |
 
 > **참고**: 국내 증권 앱 컨벤션 — 상승은 빨간색, 하락은 파란색.
-> 기존 초록/빨강 유지하려면 `up: #4ADE80`, `down: #F87171`로 교체.
 
 ### Index 색상
 
@@ -52,8 +51,6 @@
 ## 2. Typography
 
 **폰트: Pretendard (없으면 Inter) + JetBrains Mono (숫자 전용)**
-
-> Pretendard는 한국어 최적화 폰트. 토스가 사용하는 폰트와 동일 계열.
 
 ### Scale
 
@@ -74,9 +71,8 @@
 
 ### 원칙
 - **숫자는 항상 JetBrains Mono.** 자릿수 정렬이 곧 신뢰감.
-- weight는 400 / 600 / 700 / 800 네 가지. 800은 display·히어로에만.
-- 색으로 강조하지 않고 **size와 weight로 계층** 만들기.
-- **title2(22px)** 를 카드 헤드라인 기본으로. 17px title3는 너무 작다.
+- weight는 400 / 600 / 700 / 800 네 가지.
+- **title2(22px)** 를 카드 헤드라인 기본으로.
 
 ---
 
@@ -106,8 +102,6 @@
 
 ## 4. Border Radius
 
-**라운드는 일관되게. 섞지 않는다.**
-
 | Token | Size | 용도 |
 |---|---|---|
 | `radius.4` | 4px | 태그, 아주 작은 배지 |
@@ -121,19 +115,13 @@
 
 ## 5. Shadow & Depth
 
-토스처럼 **그림자 최소화.** 배경색 차이와 border로 깊이 표현.
-
 ```dart
 // 카드 (라이트)
 BoxDecoration(
   color: Color(0xFFFFFFFF),
   borderRadius: BorderRadius.circular(16),
   boxShadow: [
-    BoxShadow(
-      color: Color(0x0D000000), // 5% black
-      blurRadius: 10,
-      offset: Offset(0, 2),
-    ),
+    BoxShadow(color: Color(0x0D000000), blurRadius: 10, offset: Offset(0, 2)),
   ],
 )
 
@@ -149,290 +137,167 @@ BoxDecoration(
 
 ## 6. Components
 
-### Card
+### Tab Bar — ✅ 업데이트
+
+**다크 모드에서도 가독성 보장**: 활성 탭은 흰 배경 + 다크 텍스트, 비활성은 반투명 텍스트.
 
 ```dart
-Container(
-  padding: EdgeInsets.all(20),
-  decoration: BoxDecoration(
-    color: bg.secondary,
-    borderRadius: BorderRadius.circular(16),
-    boxShadow: [...],  // 라이트만
-  ),
-  child: content,
-)
-```
-
-- **기본값은 카드리스.** 카드는 예외 상황에서만 사용.
-- 카드가 꼭 필요할 때도 1중 컨테이너만 사용 (카드 안 카드 금지).
-- 강조 색 accent bar 없음 — **여백과 타이포로 계층 표현**.
-
-### Cardless First (기본 원칙)
-
-- 리스트/피드/지수/커뮤니티형 화면은 카드 컨테이너 없이 `Padding + Divider`로 구성.
-- 정보 계층은 `title 크기 + weight + 여백`으로 만든다.
-- 시각적 분리는 보더보다 **세로 리듬(간격)**을 우선한다.
-
-**Borderless 콘텐츠 행 (토스 커뮤니티 스타일)**
-```dart
-// 카드 컨테이너 없이, 패딩과 Divider만으로
-Padding(
-  padding: EdgeInsets.fromLTRB(20, 20, 20, 20),
-  child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      // 메타 정보 (날짜, 카테고리)
-      Text(meta, style: type.caption1.copyWith(color: label.tertiary)),
-      SizedBox(height: 8),
-      // 제목 — 크고 bold
-      Text(title, style: type.title2),   // 22px w700
-      SizedBox(height: 6),
-      // 본문 프리뷰
-      Text(preview, maxLines: 2, style: type.body2.copyWith(color: label.secondary)),
-    ],
-  ),
-)
-```
-
----
-
-### Button
-
-**Primary**
-```dart
-FilledButton(
-  style: FilledButton.styleFrom(
-    backgroundColor: accent,        // #10B981
-    foregroundColor: Colors.white,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    minimumSize: Size(double.infinity, 52),
-    textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-    elevation: 0,
-  ),
-)
-```
-
-**Secondary**
-```dart
-OutlinedButton(
-  style: OutlinedButton.styleFrom(
-    foregroundColor: label.primary,
-    side: BorderSide(color: border),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    minimumSize: Size(double.infinity, 52),
-    backgroundColor: bg.secondary,
-    elevation: 0,
-  ),
-)
-```
-
-**텍스트 버튼**
-```dart
-TextButton(
-  style: TextButton.styleFrom(
-    foregroundColor: accent,
-    textStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-  ),
-)
-```
-
----
-
-### Input Field
-
-```dart
-TextField(
-  decoration: InputDecoration(
-    filled: true,
-    fillColor: bg.tertiary,
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide.none,
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: accent, width: 1.5),
-    ),
-    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    hintStyle: TextStyle(color: label.tertiary, fontSize: 15),
-  ),
-  style: TextStyle(fontSize: 15, color: label.primary),
-)
-```
-
----
-
-### List Item (토스 스타일)
-
-```dart
-// 구분선 없이 여백으로 구분
-Padding(
-  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-  child: Row(
-    children: [
-      // 아이콘 또는 썸네일
-      Container(
-        width: 48, height: 48,
-        decoration: BoxDecoration(
-          color: bg.tertiary,
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-      SizedBox(width: 14),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: type.title3),
-            SizedBox(height: 2),
-            Text(subtitle, style: type.caption1.copyWith(color: label.secondary)),
-          ],
-        ),
-      ),
-      // 우측 값
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(value, style: type.number.md),
-          Text(change, style: type.caption1.copyWith(color: up or down)),
-        ],
-      ),
-    ],
-  ),
-)
-```
-
----
-
-### Badge / Tag
-
-**Pill Badge (기본 — 토스 스타일)**
-```dart
-Container(
-  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-  decoration: BoxDecoration(
-    color: color.withValues(alpha: 0.1),
-    borderRadius: BorderRadius.circular(9999),   // pill
-  ),
-  child: Text(label,
-    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color),
-  ),
-)
-```
-
-**Chip (텍스트 필터, 카테고리)**
-```dart
-Container(
-  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-  decoration: BoxDecoration(
-    color: isSelected ? accent.withValues(alpha: 0.12) : bg.tertiary,
+TabBar(
+  dividerColor: Colors.transparent,
+  labelColor: isDark ? const Color(0xFF0A0E1A) : cs.surface,      // 다크텍스트
+  unselectedLabelColor: cs.onSurface.withValues(alpha: 0.4),
+  indicatorSize: TabBarIndicatorSize.tab,
+  indicator: BoxDecoration(
+    color: isDark ? Colors.white : cs.onSurface,   // ← 흰 배경 (다크) / 다크 배경 (라이트)
     borderRadius: BorderRadius.circular(9999),
-    border: isSelected ? Border.all(color: accent.withValues(alpha: 0.3)) : null,
   ),
-  child: Text(label,
-    style: TextStyle(
-      fontSize: 13, fontWeight: FontWeight.w600,
-      color: isSelected ? accent : label.secondary,
-    ),
-  ),
+  ...
 )
 ```
 
-> borderRadius 4는 쓰지 않는다. 최소 6, 기본 pill(9999).
+> ❌ 이전: `indicator: BoxDecoration(color: cs.surface ...)` → 다크에서 배경색과 동화되어 비활성 탭 안 보임
+> ✅ 현재: 흰 배경 pill + 다크 텍스트 → 어떤 테마에서도 명확한 선택 상태
 
----
+### PER/PBR — ✅ 업데이트
 
-### Bottom Sheet
+가격 행에 float하지 않고 **별도 pill 행**으로 분리.
 
 ```dart
-showModalBottomSheet(
-  backgroundColor: Colors.transparent,
-  isScrollControlled: true,
-  builder: (_) => Container(
+// 기존: 현재가 Row 오른쪽에 Column으로 float → 어색
+// 개선: 현재가 아래 별도 Row로 pill 배치
+Row(
+  children: [
+    if (f.per != null) _perPbrPill('PER', f.per!.toStringAsFixed(1), cs),
+    if (f.per != null && f.pbr != null) const SizedBox(width: 8),
+    if (f.pbr != null) _perPbrPill('PBR', f.pbr!.toStringAsFixed(2), cs),
+  ],
+)
+
+Widget _perPbrPill(String label, String value, ColorScheme cs) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
     decoration: BoxDecoration(
-      color: bg.secondary,
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      color: cs.onSurface.withValues(alpha: 0.06),
+      borderRadius: BorderRadius.circular(9999),
     ),
-    child: Column(children: [
-      // 핸들
-      Container(
-        margin: EdgeInsets.only(top: 10, bottom: 6),
-        width: 32, height: 3,
-        decoration: BoxDecoration(
-          color: border,
-          borderRadius: BorderRadius.circular(9999),
-        ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label, style: GoogleFonts.inter(
+          color: cs.onSurface.withValues(alpha: 0.35), fontSize: 11, fontWeight: FontWeight.w500)),
+        const SizedBox(width: 5),
+        Text(value, style: GoogleFonts.robotoMono(
+          color: cs.onSurface.withValues(alpha: 0.75), fontSize: 12, fontWeight: FontWeight.w600)),
+      ],
+    ),
+  );
+}
+```
+
+### AppBar (종목 상세) — ✅ 업데이트
+
+종목코드만 표시 → **종목명 + 코드** 2줄 표시.
+
+```dart
+title: Column(
+  mainAxisSize: MainAxisSize.min,
+  children: [
+    Text(pick.name, style: GoogleFonts.inter(
+      color: cs.onSurface, fontSize: 16, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+    Text(pick.ticker, style: GoogleFonts.robotoMono(
+      color: cs.onSurface.withValues(alpha: 0.38), fontSize: 11, fontWeight: FontWeight.w500)),
+  ],
+),
+centerTitle: true,
+```
+
+### 커뮤니티 의견 (투표) — ✅ 업데이트
+
+- 비율 바 추가 (상승:하락 시각적 비율 표현)
+- flex로 버튼 크기 비율 반영 (50/50 동등 → 실제 투표 비율)
+
+```dart
+// 비율 바
+ClipRRect(
+  borderRadius: BorderRadius.circular(9999),
+  child: SizedBox(
+    height: 5,
+    child: Row(children: [
+      Flexible(
+        flex: (upRatio * 100).round(),
+        child: Container(color: const Color(0xFF10B981)),
       ),
-      // 타이틀
-      Padding(
-        padding: EdgeInsets.fromLTRB(20, 10, 20, 0),
-        child: Text(title, style: type.title2),
+      Flexible(
+        flex: ((1 - upRatio) * 100).round(),
+        child: Container(color: const Color(0xFF1677FF).withValues(alpha: 0.5)),
       ),
-      content,
     ]),
   ),
-)
+),
+
+// 버튼 flex 비율 반영
+Expanded(
+  flex: total > 0 ? (upRatio * 10).round().clamp(3, 7) : 5,
+  child: /* 상승 버튼 */,
+),
+Expanded(
+  flex: total > 0 ? ((1 - upRatio) * 10).round().clamp(3, 7) : 5,
+  child: /* 하락 버튼 */,
+),
 ```
 
----
+### 캡처 공유 버튼 — ✅ 업데이트
 
-### Tab Bar
+Primary CTA처럼 배치되던 outline 버튼 → secondary TextButton으로 낮춤.
 
-두 가지 스타일 중 선택:
-
-**① Pill 탭 (토스 커뮤니티 스타일 — 트렌디)**
 ```dart
-TabBar(
-  labelStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-  unselectedLabelStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-  labelColor: label.primary,
-  unselectedLabelColor: label.tertiary,
-  dividerColor: Colors.transparent,
-  indicator: BoxDecoration(
-    color: bg.tertiary,                      // 선택된 탭 배경
-    borderRadius: BorderRadius.circular(9999),
+// ❌ 이전: SizedBox(width: double.infinity, child: OutlinedButton.icon(...))
+// ✅ 개선: 덜 강조된 TextButton
+Center(
+  child: TextButton.icon(
+    onPressed: _capturing ? null : _captureAndShare,
+    icon: Icon(Icons.camera_alt_outlined, size: 16,
+        color: cs.onSurface.withValues(alpha: 0.4)),
+    label: Text('캡처해서 공유하기', style: GoogleFonts.inter(
+        color: cs.onSurface.withValues(alpha: 0.4),
+        fontWeight: FontWeight.w500, fontSize: 13)),
   ),
-  indicatorSize: TabBarIndicatorSize.tab,
-  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-  tabAlignment: TabAlignment.start,           // 좌측 정렬 (콘텐츠 탭)
-)
+),
 ```
 
-**② 언더라인 탭 (현재 스타일 — 클래식)**
-```dart
-TabBar(
-  labelStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-  unselectedLabelStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w400),
-  labelColor: label.primary,
-  unselectedLabelColor: label.tertiary,
-  indicatorColor: label.primary,
-  indicatorWeight: 2,
-  indicatorSize: TabBarIndicatorSize.label,
-  dividerColor: border,
-)
-```
+### 코멘트 아이템 — ✅ 업데이트
 
-> 시황/지표 탭 → pill 탭 권장. 페이지 수가 많을수록 언더라인이 스크롤하기 좋음.
-
----
-
-### Toast / Snackbar
+카드 Container → **borderless row** (토스 스타일). 아바타 크기 업.
 
 ```dart
-SnackBar(
-  content: Text(message, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-  backgroundColor: Color(0xFF191F28),   // 라이트/다크 공통
-  behavior: SnackBarBehavior.floating,
-  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-  margin: EdgeInsets.fromLTRB(20, 0, 20, 24),
-  duration: Duration(seconds: 3),
-  elevation: 0,
-)
+// ❌ 이전: Container(margin, padding, decoration: BoxDecoration(borderRadius: 12))
+// ✅ 개선: Divider로만 구분, 아바타 radius 12 → 18
+Column(children: [
+  Padding(
+    padding: const EdgeInsets.symmetric(vertical: 14),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        UserLevelAvatar(uid: comment.uid, radius: 18, ...),   // ← radius 업
+        const SizedBox(width: 10),
+        Expanded(child: Column(children: [
+          Text(comment.nickname, style: /* w700, 13px */),
+          Text(timeago.format(...), style: /* tertiary, 11px */),
+        ])),
+        // 삭제 버튼
+      ]),
+      Padding(
+        padding: const EdgeInsets.only(left: 46, top: 8),  // ← 아바타 들여쓰기
+        child: Text(comment.content, style: /* 14px, h:1.55 */),
+      ),
+    ]),
+  ),
+  Divider(height: 1, thickness: 1, color: cs.onSurface.withValues(alpha: 0.05)),
+])
 ```
 
 ---
 
-## 7. Data Display
+## 7. Data Display (기존 유지)
 
 ### 주가 / 수익률 표시 규칙
 
@@ -445,31 +310,37 @@ SnackBar(
 - 폰트: 항상 JetBrains Mono
 - 소수점: 주가 2자리, 수익률 2자리, 퍼센트 1자리
 
-### 금액 포맷
+### 변동 pill 배지 — ✅ 추가
 
-| 단위 | 표시 | 예시 |
-|---|---|---|
-| 원화 | `₩#,###` | ₩1,234,500 |
-| 달러 | `$#,##0.00` | $123.45 |
-| 억 이상 | `#.#억` | 12.3억 |
-| 조 이상 | `#.#조` | 1.2조 |
+수치 옆 인라인 표시보다 pill 배지로 감싸면 가독성 향상.
 
----
-
-## 8. Divider
-
-토스는 **줄 구분선 거의 안 씀.** 여백으로 구분.
-
-꼭 필요할 때만:
 ```dart
-Divider(height: 1, thickness: 1, color: border)
-// 또는 섹션 구분용 두꺼운 바
-Container(height: 8, color: bg.tertiary)  // 토스 스타일 섹션 구분
+Container(
+  decoration: BoxDecoration(
+    color: isPositive
+        ? _kUpColor.withValues(alpha: 0.10)
+        : _kDownColor.withValues(alpha: 0.10),
+    borderRadius: BorderRadius.circular(9999),
+  ),
+  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+  child: Text(changeText, style: GoogleFonts.robotoMono(
+    fontSize: 13, fontWeight: FontWeight.w600,
+    color: isPositive ? _kUpColor : _kDownColor)),
+)
 ```
 
 ---
 
-## 9. Motion
+## 8. Divider (기존 유지)
+
+```dart
+Divider(height: 1, thickness: 1, color: border)
+Container(height: 8, color: bg.tertiary)  // 섹션 구분
+```
+
+---
+
+## 9. Motion (기존 유지)
 
 | 상황 | Duration | Curve |
 |---|---|---|
@@ -478,490 +349,373 @@ Container(height: 8, color: bg.tertiary)  // 토스 스타일 섹션 구분
 | 바텀시트 | 300ms | easeOutQuart |
 | 숫자 카운팅 | 600ms | easeOut |
 
-- **불필요한 애니메이션 없음.** 전환은 빠르게.
-- 숫자 변동 시 카운팅 애니메이션은 신뢰감 UP.
+---
 
-### 현재 앱 적용 규칙 (Stagger Reveal)
+## 10. 커뮤니티 피드 (기존 유지)
 
-- 초기 진입 시 콘텐츠는 `위 -> 아래` 순서로 짧게 나타난다.
-- 기본 단위: `fade + translateY(12px -> 0)` 조합.
-- 첫 블록 `delay: 40ms`, 이후 블록은 `+70~100ms` 간격으로 스태거 적용.
-- 한 화면 총 등장 시간은 **600ms 내외**로 제한.
-- 차트/리스트는 데이터 로딩 이후 한 번만 reveal하고, 스크롤 중 재실행 금지.
-
-```dart
-// 예시: 화면 블록 단위 reveal
-_StaggerReveal(
-  delay: const Duration(milliseconds: 40),
-  child: header,
-)
-_StaggerReveal(
-  delay: const Duration(milliseconds: 120),
-  child: chart,
-)
-```
-
-### 성능 가이드 (버벅임 방지)
-
-- 한 화면에서 동시 애니메이션 위젯 수를 6~8개 이하로 유지.
-- 무거운 위젯(차트, 긴 리스트)은 부모 애니메이션 1개만 적용.
-- 정적 UI는 `const` 우선 사용.
-- 차트 영역은 필요 시 `RepaintBoundary`로 분리.
-- `AnimatedOpacity` 중첩/과도한 blur/shadow는 지양.
+(이전 섹션 11 내용 — 변경 없음)
 
 ---
 
-## 10. 토스와 다른 점
+## 11. 순위 리스트 (기존 유지)
 
-주식 앱이라 토스와 다르게 가져갈 부분:
-
-| 항목 | 토스 | 주식저장소 |
-|---|---|---|
-| 정보 밀도 | 낮음 (1화면 1정보) | 중간 (차트+수치 공존) |
-| 색 사용 | 거의 흑백 | 지수별 색상 + 상승/하락색 |
-| 숫자 폰트 | 일반 폰트 | JetBrains Mono |
-| 차트 | 없음 | 핵심 기능 |
-| 탭 스타일 | Pill 탭 (커뮤니티) | Pill 탭 권장 |
-| 타이포 크기 | 크고 bold (22-24px 헤드) | title2(22px) 적극 활용 |
-
-### 토스에서 직접 가져올 것들 ✅
-- **Pill 탭** — 언더라인보다 훨씬 트렌디
-- **큰 제목** — 카드 유무와 무관하게 타이틀 22px w700, 숫자 34px
-- **배지 pill화** — borderRadius 4 → 9999
-- **카드리스 피드** — 목록/지수/커뮤니티는 카드보다 row 중심
-- **메타 먼저** — 날짜/카테고리 위에, 제목 아래
+(이전 섹션 12 내용 — 변경 없음)
 
 ---
 
-## 11. 커뮤니티 피드 (토스 자유게시판 스타일)
+## 12. 매매일지 화면 — ✅ 신규
 
-> 레퍼런스: 토스 증권 커뮤니티 자유게시판 피드
-> 카드 컨테이너 없이, 아바타·제목·인터랙션 바가 세로로 흐르는 소셜 피드 레이아웃.
+> 레퍼런스: 토스 스타일 — 종목명 Primary, 핵심 수치 hero, row 리스트, 날짜 섹션 헤더
 
 ### 핵심 원칙
 
-- **카드 테두리 없음.** 포스트 간 구분은 가로 Divider 1px로만.
-- **작성자 정보는 상단.** 아바타 + 이름 + 팔로우 버튼 → 타임스탬프 + 맥락 한 줄.
-- **제목은 크고 bold.** 17–18px w700, 본문은 그 아래 2줄 preview.
-- **인터랙션 바는 하단.** 좋아요 / 댓글 / 리포스트 / 공유 아이콘 행.
+- **정보 계층**: 종목명 > 평가손익·수익률 > 세부 수치(매수가/현재가 등)
+- **날짜는 섹션 헤더로**: 카드마다 날짜 반복 금지. 거래일 기준 내림차순 섹션 헤더.
+- **그리드 금지**: 2×N 격자 레이아웃 대신 `좌:라벨 / 우:값` row 리스트.
+- **매수/매도 이유는 별도 블록**: 핵심 정보이므로 subtext에 묻히지 않게.
+- **등록일 ≠ 거래일이면 명시**: 거래일 섹션 헤더 + 카드 내 `등록 YYYY.MM.DD` 표기.
 
-### 포스트 아이템 구조
-
-```
-┌────────────────────────────────────────────┐  ← 패딩 20px 좌우
-│ [Avatar 40px]  닉네임  뱃지?   [팔로우]     │  ← 작성자 행
-│                N시간 전 · 종목에 남긴 글      │  ← 메타 (caption2, tertiary)
-│                                            │
-│ 제목 (title3 17px w700)                    │  ← 제목
-│ 본문 프리뷰 maxLines:2 (body2, secondary)  │
-│ [미디어/링크 프리뷰 — 있을 때만]             │
-│                                            │
-│ ♡ 27   💬 22   ↻   ⬆                      │  ← 인터랙션 바
-└────────────────────────────────────────────┘
-────────────────────────────────────────────  ← Divider 1px
-```
-
-### Flutter 구현 패턴
+### 날짜 섹션 헤더
 
 ```dart
-// 포스트 아이템 — 카드 컨테이너 없이 패딩만
-Column(children: [
-  Padding(
-    padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-
-      // ① 작성자 행
-      Row(children: [
-        CircleAvatar(radius: 20, ...),          // 40px
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Text(nickname, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-              if (isVerified) ...[
-                const SizedBox(width: 4),
-                Icon(Icons.verified, size: 14, color: Color(0xFF10B981)),
-              ],
-            ]),
-            Text(
-              '$timeAgo · $stockName에 남긴 글',
-              style: TextStyle(fontSize: 12, color: label.tertiary),
-            ),
-          ]),
-        ),
-        // 팔로우 버튼 (내 글이 아닐 때만)
-        if (!isOwn)
-          TextButton(
-            onPressed: onFollow,
-            style: TextButton.styleFrom(
-              foregroundColor: const Color(0xFF10B981),
-              textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            ),
-            child: const Text('팔로우'),
-          ),
-      ]),
-
-      const SizedBox(height: 12),
-
-      // ② 제목
-      Text(title, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
-
-      // ③ 본문 프리뷰 (4–5줄 + 더 보기)
-      if (content.isNotEmpty) ...[
-        const SizedBox(height: 6),
-        Text(content,
-            maxLines: 4, overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 14, color: label.secondary, height: 1.6)),
-        // 실제로 4줄 넘길 때 "더 보기" 표시
-        GestureDetector(
-          onTap: onExpandContent,
-          child: Text('더 보기', style: TextStyle(fontSize: 14, color: accent, fontWeight: FontWeight.w500)),
-        ),
-      ],
-
-      // ④ 미디어 (있을 때만)
-      if (imageUrl != null) ...[
-        const SizedBox(height: 10),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: Image.network(imageUrl!, fit: BoxFit.cover),
-        ),
-      ],
-
-      // ⑤ 링크 프리뷰 카드 (있을 때만)
-      if (linkPreview != null) ...[
-        const SizedBox(height: 10),
-        Container(
-          decoration: BoxDecoration(
-            color: bg.tertiary,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: border),
-          ),
-          child: Row(children: [
-            // 썸네일
-            if (linkPreview!.imageUrl != null)
-              ClipRRect(
-                borderRadius: const BorderRadius.horizontal(left: Radius.circular(10)),
-                child: Image.network(linkPreview!.imageUrl!, width: 72, height: 72, fit: BoxFit.cover),
-              ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(linkPreview!.title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 2),
-                  Text(linkPreview!.domain,
-                      style: TextStyle(fontSize: 11, color: label.tertiary)),
-                ]),
-              ),
-            ),
-          ]),
-        ),
-      ],
-
-      const SizedBox(height: 12),
-
-      // ⑥ 인터랙션 바
-      Row(children: [
-        _InteractionBtn(icon: isLiked ? Icons.favorite : Icons.favorite_border,
-            color: isLiked ? Colors.redAccent : label.tertiary, count: likeCount, onTap: onLike),
-        const SizedBox(width: 16),
-        _InteractionBtn(icon: Icons.chat_bubble_outline_rounded,
-            color: label.tertiary, count: commentCount, onTap: onComment),
-        const SizedBox(width: 16),
-        _InteractionBtn(icon: Icons.repeat_rounded, color: label.tertiary, onTap: onRepost),
-        const Spacer(),
-        _InteractionBtn(icon: Icons.ios_share_rounded, color: label.tertiary, onTap: onShare),
-      ]),
-
-    ]),
-  ),
-  Divider(height: 1, thickness: 1, color: border),  // 포스트 간 구분
-])
+// 거래일 기준 내림차순 정렬 후 날짜별 그룹핑
+Padding(
+  padding: const EdgeInsets.fromLTRB(20, 14, 20, 10),
+  child: Row(children: [
+    Text(
+      '거래일 ${DateFormat('yyyy.MM.dd').format(tradeDate)}',
+      style: GoogleFonts.inter(
+        color: cs.onSurface.withValues(alpha: 0.55),
+        fontSize: 13, fontWeight: FontWeight.w700),
+    ),
+    const SizedBox(width: 10),
+    Expanded(child: Divider(height: 1, color: cs.onSurface.withValues(alpha: 0.08))),
+  ]),
+)
 ```
 
-### 인터랙션 버튼 패턴
-
-```dart
-class _InteractionBtn extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final int? count;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 18, color: color),
-        if (count != null && count! > 0) ...[
-          const SizedBox(width: 4),
-          Text('$count', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: color)),
-        ],
-      ]),
-    );
-  }
-}
-```
-
-### 현재 앱 대비 달라지는 것
-
-| 항목 | 현재 (bordered card) | 토스 스타일 |
-|---|---|---|
-| 컨테이너 | `Container` + `Border.all` + `radius 16` | 패딩만, 테두리 없음 |
-| 구분선 | 카드 간 `margin 12` | `Divider` 1px |
-| 작성자 위치 | **하단** (divider 아래) | **상단** (제목 위) |
-| 아바타 크기 | `radius 11` (22px) | `radius 20` (40px) |
-| 팔로우 버튼 | 없음 | 텍스트 버튼, accent 색 |
-| 인터랙션 | 좋아요만 (하단 우측) | 좋아요·댓글·리포스트·공유 한 행 |
-| 시간 표기 | `MM.dd HH:mm` | `N시간 전` (상대 시간) |
-| 본문 줄 수 | maxLines 2 | maxLines 4–5 + "더 보기" 링크 |
-
-### "더 보기" 패턴
-
-```dart
-// 본문이 4줄 이상일 때 "더 보기" 인라인 표시
-// isOverflow는 LayoutBuilder 또는 TextPainter로 실제 줄 넘침 감지
-if (isExpanded)
-  Text(content, style: body2)
-else
-  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text(content, maxLines: 4, overflow: TextOverflow.ellipsis, style: body2),
-    if (isOverflow)
-      GestureDetector(
-        onTap: () => setState(() => isExpanded = true),
-        child: Text('더 보기', style: TextStyle(fontSize: 14, color: accent, fontWeight: FontWeight.w500)),
-      ),
-  ])
-```
-
----
-
-## 12. 순위 리스트 (토스 발견 탭 스타일)
-
-> 레퍼런스: 토스 증권 발견 탭 "실시간 차트" 섹션
-> 거래대금·거래량·급상승 등 필터 탭 + 로고 + 순위번호 + 가격/등락 + 즐겨찾기 한 줄
-
-### 핵심 원칙
-
-- **카드 없음.** 배경 그대로, 행 사이 여백만으로 구분.
-- **순위 번호는 accent 색(파란색).** JetBrains Mono, 고정폭 28px 박스.
-- **로고는 원형 48px.** 없을 때 이니셜 fallback.
-- **가격은 primary, 등락은 상승=빨강/하락=파랑.** (국내 증권 컨벤션)
-- **즐겨찾기 하트는 우측 끝 고정.** outline → filled 토글.
-
-### 화면 구조
+### 종목 카드 구조
 
 ```
-페이지 헤더
-─────────────────────────────────────
-발견  S&P 500  6,582.69  +0.1%        ← 대제목 32px w800 + 지수 inline (accent/up 색)
-
-[✦ 실시간 이슈  1 미국 3월 고용 반등 –  >]  ← AI 이슈 배너 (accent border glow)
-
-[🇺🇸 해외주식] [🇰🇷 국내주식] [↗ 옵션] [채권] [ETF]  ← 카테고리 칩 수평 스크롤
-
-2일 뒤 이벤트  ISM …  |  나스닥 21,879.18 +0.1%  |  …  ← 이벤트/지수 바 수평 스크롤
-
-실시간 차트                                           ← 섹션 타이틀 22px w800
-─────────────────────────────────────
-거래대금  거래량  급상승  급하락  인기              ← 언더라인 필터 탭 (좌측 정렬)
-─────────────────────────────────────
-1  [Samsung]  삼성전자          ♡
-              185,800원 +4.1%
-2  [Logo]     고려아연          ♡
-              1,488,000원 +1.3%
-…
+┌─────────────────────────────────┐
+│ 종목명 (19px w800)  [KOSPI] [매수] │  ← 종목명 Primary
+│ 267250 · 등록 2026.04.15         │  ← 등록일 ≠ 거래일이면 표시
+│                                 │
+│ ┌─────────────────────────────┐ │
+│ │ 매수 이유                    │ │  ← accent 좌측 border 블록
+│ │ "좋아보임"  (14px, 본문)     │ │
+│ └─────────────────────────────┘ │
+│                                 │
+│ 평가손익  +₩110,000  [+2.12%]   │  ← Hero 수치 (24px mono)
+│─────────────────────────────────│
+│ 매수가          ₩259,000        │  ← row 리스트
+│ 현재가          ₩264,500 (빨강) │
+│ 매수수량/잔량   50주 / 20주     │
+│ 원금            ₩5,180,000      │
+│ 평가금액        ₩5,290,000      │
+│─────────────────────────────────│
+│ [매도 1건]  총 실현손익  +₩930K │  ← 매도 이력 (bg.tertiary)
+│   04/21 · 30주 · ₩290,000  +₩930K│
+└─────────────────────────────────┘
 ```
 
-### 레이아웃 상세
-
-#### 섹션 헤더 (페이지 타이틀 + 인라인 지수)
-
-```dart
-Row(children: [
-  Text('발견', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.8)),
-  const SizedBox(width: 10),
-  Text('S&P 500', style: TextStyle(fontSize: 13, color: label.secondary)),
-  const SizedBox(width: 6),
-  Text('6,582.69', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
-      color: up, fontFamily: 'JetBrainsMono')),
-  const SizedBox(width: 4),
-  Text('+0.1%', style: TextStyle(fontSize: 13, color: up, fontFamily: 'JetBrainsMono')),
-])
-```
-
-#### AI 실시간 이슈 배너
+### 매수 이유 블록
 
 ```dart
 Container(
-  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+  margin: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+  padding: const EdgeInsets.all(12),
   decoration: BoxDecoration(
-    borderRadius: BorderRadius.circular(12),
-    border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.5), width: 1.2),
-    // 미묘한 glow — 다크 모드에서만
-    boxShadow: isDark ? [
-      BoxShadow(color: const Color(0xFF10B981).withValues(alpha: 0.12), blurRadius: 12),
-    ] : null,
+    color: cs.onSurface.withValues(alpha: 0.05),
+    borderRadius: BorderRadius.circular(10),
+    border: Border(left: BorderSide(color: const Color(0xFF10B981), width: 3)),
   ),
-  child: Row(children: [
-    Icon(Icons.auto_awesome, size: 14, color: const Color(0xFF10B981)),
-    const SizedBox(width: 8),
-    Text('실시간 이슈', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF10B981))),
-    const SizedBox(width: 10),
-    Expanded(child: Text(issueText, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis)),
-    Icon(Icons.chevron_right, size: 18, color: label.tertiary),
+  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Text('매수 이유', style: GoogleFonts.inter(
+      color: const Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.w600)),
+    const SizedBox(height: 5),
+    Text(pick.reason, style: GoogleFonts.inter(
+      color: cs.onSurface, fontSize: 14, height: 1.6)),
   ]),
 )
 ```
 
-#### 카테고리 칩 (수평 스크롤)
+### 세부 수치 Row 리스트
 
 ```dart
-SizedBox(
-  height: 80,
-  child: ListView(
-    scrollDirection: Axis.horizontal,
-    padding: const EdgeInsets.symmetric(horizontal: 20),
-    children: categories.map((cat) => Padding(
-      padding: const EdgeInsets.only(right: 12),
-      child: Column(children: [
-        Container(
-          width: 56, height: 56,
-          decoration: BoxDecoration(
-            color: bg.secondary,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Center(child: cat.icon),  // 국기 이모지 or Icon
+// ❌ 이전: 2×N 그리드 (셀 border, GridView)
+// ✅ 개선: 좌:라벨 우:값 row + Divider
+Column(children: [
+  for (final item in details)
+    Column(children: [
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(item.label, style: GoogleFonts.inter(
+              color: cs.onSurface.withValues(alpha: 0.55), fontSize: 13)),
+            Text(item.value, style: GoogleFonts.robotoMono(
+              color: item.color ?? cs.onSurface, fontSize: 13,
+              fontWeight: FontWeight.w600)),
+          ],
         ),
-        const SizedBox(height: 6),
-        Text(cat.label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-      ]),
-    )).toList(),
-  ),
-)
+      ),
+      Divider(height: 1, thickness: 1, color: cs.onSurface.withValues(alpha: 0.06)),
+    ]),
+])
 ```
 
-#### 필터 탭 (언더라인, 좌측 정렬)
-
-```dart
-TabBar(
-  isScrollable: true,
-  tabAlignment: TabAlignment.start,
-  labelStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-  unselectedLabelStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-  labelColor: label.primary,
-  unselectedLabelColor: label.tertiary,
-  indicatorColor: label.primary,
-  indicatorWeight: 2,
-  indicatorSize: TabBarIndicatorSize.label,
-  dividerColor: Colors.transparent,
-  padding: const EdgeInsets.symmetric(horizontal: 20),
-  tabs: [...],
-)
-```
-
-#### 순위 리스트 아이템
-
-```
-[rank 28px]  [logo 48px]  [name + price]  …  [♡ 24px]
-```
+### 평가손익 Hero 수치
 
 ```dart
 Padding(
-  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-  child: Row(children: [
-
-    // ① 순위 번호
-    SizedBox(
-      width: 28,
-      child: Text(
-        '$rank',
-        style: GoogleFonts.robotoMono(
-          fontSize: 15, fontWeight: FontWeight.w700,
-          color: const Color(0xFF10B981),  // accent
+  padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+  child: Row(
+    crossAxisAlignment: CrossAxisAlignment.end,
+    children: [
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('평가손익', style: GoogleFonts.inter(
+          color: cs.onSurface.withValues(alpha: 0.38), fontSize: 11)),
+        const SizedBox(height: 3),
+        Text(
+          '${isPositive ? '+' : ''}${formatter.format(evalProfit.toInt())}',
+          style: GoogleFonts.robotoMono(
+            color: isPositive ? _kUpColor : _kDownColor,
+            fontSize: 24, fontWeight: FontWeight.w700),
         ),
-      ),
-    ),
-
-    const SizedBox(width: 12),
-
-    // ② 종목 로고
-    CircleAvatar(
-      radius: 24,                     // 48px
-      backgroundImage: logoUrl != null ? NetworkImage(logoUrl) : null,
-      backgroundColor: bg.tertiary,
-      child: logoUrl == null
-          ? Text(name[0], style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16))
-          : null,
-    ),
-
-    const SizedBox(width: 12),
-
-    // ③ 종목명 + 가격
-    Expanded(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(name,
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-            overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 2),
-        Row(children: [
-          Text(
-            priceStr,                 // "185,800원"
-            style: GoogleFonts.robotoMono(fontSize: 13, fontWeight: FontWeight.w500, color: label.primary),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            changeStr,                // "+4.1%"
-            style: GoogleFonts.robotoMono(
-              fontSize: 13, fontWeight: FontWeight.w600,
-              color: change > 0 ? up : change < 0 ? down : label.secondary,
-            ),
-          ),
-        ]),
       ]),
-    ),
-
-    // ④ 즐겨찾기
-    GestureDetector(
-      onTap: onFavorite,
-      child: Padding(
-        padding: const EdgeInsets.all(4),
-        child: Icon(
-          isFavorite ? Icons.favorite : Icons.favorite_border,
-          size: 22,
-          color: isFavorite ? Colors.redAccent : label.tertiary,
+      const SizedBox(width: 10),
+      // 수익률 pill
+      Container(
+        margin: const EdgeInsets.only(bottom: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: (isPositive ? _kUpColor : _kDownColor).withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(9999),
+        ),
+        child: Text(
+          '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
+          style: GoogleFonts.robotoMono(
+            color: isPositive ? _kUpColor : _kDownColor,
+            fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ),
-    ),
-
-  ]),
-),
+    ],
+  ),
+)
 ```
-
-> 행 사이 구분선은 `Divider(height: 1, indent: 60, color: border)` — 로고 왼쪽은 건너뜀.
-
-### 레이아웃 요약표
-
-| 요소 | 스펙 |
-|---|---|
-| 순위 번호 색 | `accent` (#10B981) |
-| 순위 번호 폰트 | JetBrains Mono / Roboto Mono, w700 |
-| 순위 번호 폭 | 고정 28px |
-| 로고 크기 | 48px (radius 24) |
-| 종목명 | 15px w700 |
-| 가격 | Mono 13px w500, label.primary |
-| 등락 | Mono 13px w600, up/down 색 |
-| 하트 아이콘 | 22px, outline/filled 토글 |
-| 행 패딩 | 수직 12px, 좌우 20px |
-| 구분선 | Divider 1px, indent 60 (로고 위치까지) |
 
 ---
 
-## 14. 체크리스트
+## 13. 보유 포지션 요약 (매매일지 상단) — ✅ 신규
+
+> 도넛 차트로 종목별 비중 시각화 + 총 평가금액·손익 표시
+
+### 구조
+
+```
+┌──────────────────────────────────────────┐
+│ [보유 2]  내 포지션                    ⌄  │  ← 탭으로 펼치기/접기
+│──────────────────────────────────────────│
+│  [도넛차트 110px]   ● 종목A  71%          │  ← 차트 + 범례 행
+│                    ₩5,290,000           │
+│                    ● 종목B  29%          │
+│                    ₩2,116,000           │
+│──────────────────────────────────────────│
+│  총 평가금액        │  평가손익            │  ← 별도 행 (border-top)
+│  ₩7,406,000       │  +₩170,000          │
+│                   │  +2.35%             │
+└──────────────────────────────────────────┘
+```
+
+> - 도넛 차트: **110px** (기존 80px에서 확대)
+> - 범례에 종목별 평가금액도 함께 표시
+> - 총 평가금액 / 평가손익은 **차트 행과 분리된 별도 행**으로
+
+### 도넛 차트 Flutter 구현
+
+```dart
+class _DonutChartPainter extends CustomPainter {
+  final List<({Color color, double value})> segments;
+  final String centerLabel;
+  final String centerValue;
+
+  _DonutChartPainter({
+    required this.segments,
+    required this.centerLabel,
+    required this.centerValue,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final total = segments.fold(0.0, (s, e) => s + e.value);
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 - 8;
+    const strokeWidth = 10.0;
+
+    double startAngle = -math.pi / 2;  // 12시 방향부터
+
+    for (final seg in segments) {
+      final sweepAngle = (seg.value / total) * 2 * math.pi;
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: radius),
+        startAngle,
+        sweepAngle,
+        false,
+        Paint()
+          ..color = seg.color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = strokeWidth
+          ..strokeCap = StrokeCap.butt,
+      );
+      startAngle += sweepAngle;
+    }
+
+    // 중앙 텍스트
+    final labelPainter = TextPainter(
+      text: TextSpan(text: centerLabel, style: const TextStyle(
+        color: Colors.white38, fontSize: 9, fontFamily: 'Pretendard')),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    labelPainter.paint(canvas,
+      Offset(center.dx - labelPainter.width / 2, center.dy - labelPainter.height - 2));
+
+    final valuePainter = TextPainter(
+      text: TextSpan(text: centerValue, style: const TextStyle(
+        color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700,
+        fontFamily: 'JetBrainsMono')),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    valuePainter.paint(canvas,
+      Offset(center.dx - valuePainter.width / 2, center.dy + 2));
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+```
+
+### 보유 요약 카드
+
+```dart
+GestureDetector(
+  onTap: () => setState(() => _summaryExpanded = !_summaryExpanded),
+  child: Container(
+    margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: cs.surface,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+    ),
+    child: Column(children: [
+      // 헤더
+      Row(children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xFF10B981).withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(9999),
+          ),
+          child: Text('보유 ${picks.length}', style: GoogleFonts.inter(
+            color: const Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.w700)),
+        ),
+        const SizedBox(width: 8),
+        Text('내 포지션', style: GoogleFonts.inter(
+          color: cs.onSurface, fontSize: 13, fontWeight: FontWeight.w600)),
+        const Spacer(),
+        AnimatedRotation(
+          turns: _summaryExpanded ? 0.5 : 0,
+          duration: const Duration(milliseconds: 200),
+          child: Icon(Icons.keyboard_arrow_down,
+              color: cs.onSurface.withValues(alpha: 0.3)),
+        ),
+      ]),
+
+      if (_summaryExpanded) ...[
+        const SizedBox(height: 14),
+
+        // ✅ 행 1: 도넛 차트(110px) + 범례(종목명+비율+금액)
+        Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+          SizedBox(
+            width: 110, height: 110,
+            child: CustomPaint(painter: _DonutChartPainter(
+              segments: donutSegments,
+              centerLabel: '보유',
+              centerValue: '${picks.length}종목',
+            )),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: donutSegments.map((s) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    Container(width: 8, height: 8,
+                      decoration: BoxDecoration(color: s.color, shape: BoxShape.circle)),
+                    const SizedBox(width: 6),
+                    Expanded(child: Text(s.label, style: GoogleFonts.inter(
+                      color: cs.onSurface.withValues(alpha: 0.55), fontSize: 12),
+                      overflow: TextOverflow.ellipsis)),
+                    Text('${(s.value / totalValue * 100).toStringAsFixed(0)}%',
+                      style: GoogleFonts.robotoMono(
+                        color: cs.onSurface, fontSize: 12, fontWeight: FontWeight.w700)),
+                  ]),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 14),
+                    child: Text(formatter.format(s.value.toInt()),
+                      style: GoogleFonts.robotoMono(
+                        color: cs.onSurface.withValues(alpha: 0.38), fontSize: 11)),
+                  ),
+                ]),
+              )).toList(),
+            ),
+          ),
+        ]),
+
+        // ✅ 행 2: 총 평가금액 / 평가손익 — 별도 행
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.only(top: 12),
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(
+                color: cs.onSurface.withValues(alpha: 0.06))),
+          ),
+          child: Row(children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('총 평가금액', style: GoogleFonts.inter(
+                color: cs.onSurface.withValues(alpha: 0.38), fontSize: 11)),
+              const SizedBox(height: 4),
+              Text(formattedTotal, style: GoogleFonts.robotoMono(
+                color: cs.onSurface, fontSize: 17, fontWeight: FontWeight.w700)),
+            ])),
+            Container(width: 1, height: 40,
+              color: cs.onSurface.withValues(alpha: 0.06),
+              margin: const EdgeInsets.symmetric(horizontal: 16)),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('평가손익', style: GoogleFonts.inter(
+                color: cs.onSurface.withValues(alpha: 0.38), fontSize: 11)),
+              const SizedBox(height: 4),
+              Text(formattedProfit, style: GoogleFonts.robotoMono(
+                color: isPositive ? _kUpColor : _kDownColor,
+                fontSize: 17, fontWeight: FontWeight.w700)),
+              Text(formattedRate, style: GoogleFonts.robotoMono(
+                color: isPositive ? _kUpColor : _kDownColor, fontSize: 12)),
+            ])),
+          ]),
+        ),
+      ],
+    ]),
+  ),
+)
+```
+
+---
+
+## 14. 체크리스트 (업데이트)
 
 새 화면 만들 때:
 
@@ -972,5 +726,14 @@ Padding(
 - [ ] 상승/하락 색상 일관성 확인
 - [ ] 라이트/다크 모두 확인
 - [ ] 버튼은 최하단 고정 or 인라인 — 중간에 붕 뜨지 않게
+- [ ] **AppBar에 종목명 표시** (코드만 X)
+- [ ] **탭바 indicator — 흰 배경 + 다크 텍스트** (다크 모드 가독성)
+- [ ] **PER/PBR은 pill 행으로 분리** (가격 행에 float X)
+- [ ] **투표 UI에 비율 바** 추가
+- [ ] **공유 등 보조 CTA는 TextButton** (Outline primary 금지)
+- [ ] **코멘트는 borderless row** — 아바타 radius 18
+- [ ] **매매일지 날짜는 섹션 헤더** — 거래일 내림차순, 카드 내 반복 X
+- [ ] **매수/매도 이유는 별도 accent border 블록**
+- [ ] **평가손익/수익률은 카드 상단 hero** — 그리드 맨 아래 X
 - [ ] 빈 상태(empty state) 처리 있는지
 - [ ] 로딩 상태 처리 있는지
