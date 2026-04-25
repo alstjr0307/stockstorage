@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemChrome, DeviceOrientation;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../models/trading_journal.dart';
@@ -19,6 +20,7 @@ typedef _Marker = ({int index, bool isBuy, double price});
 
 const _kUpColor = Color(0xFFF04452);
 const _kDownColor = Color(0xFF1677FF);
+const _kQtyEpsilon = 1e-6;
 
 class JournalChartScreen extends StatefulWidget {
   final TradingJournal buy;
@@ -26,10 +28,8 @@ class JournalChartScreen extends StatefulWidget {
   final List<TradingJournal> relatedBuys;
   final List<TradingJournal> relatedSells;
   final bool showBuyMarker;
+  final bool fullscreenOnly;
   final FirestoreService firestoreService;
-  final VoidCallback onEdit;
-  final void Function(TradingJournal)? onEditSell;
-  final bool showEditButton;
 
   const JournalChartScreen({
     super.key,
@@ -38,10 +38,8 @@ class JournalChartScreen extends StatefulWidget {
     this.relatedBuys = const [],
     this.relatedSells = const [],
     this.showBuyMarker = true,
+    this.fullscreenOnly = false,
     required this.firestoreService,
-    required this.onEdit,
-    this.onEditSell,
-    this.showEditButton = true,
   });
 
   @override
@@ -60,6 +58,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
 
   // 전체 candles 기준 마커 인덱스
   List<_Marker> _allMarkers = [];
+  bool _didAutoOpenFullscreen = false;
 
   List<TradingJournal> get _allBuys {
     final out = <TradingJournal>[];
@@ -142,6 +141,23 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
       _allMarkers = markers;
       _visibleRange = ChartVisibleRange(0, data.length.toDouble());
     });
+
+    if (widget.fullscreenOnly && !_didAutoOpenFullscreen && data.isNotEmpty) {
+      _didAutoOpenFullscreen = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _ChartFullscreenPage(
+              candles: _candles,
+              markers: _allMarkers,
+              isKrw: widget.buy.market != 'US',
+            ),
+          ),
+        );
+      });
+    }
   }
 
   int _closestIndex(List<_OHLC> candles, DateTime date) {
@@ -198,8 +214,9 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
   void _onScaleUpdate(ScaleUpdateDetails d, double chartW) {
     if (_rangeAtScaleStart == null ||
         _focalPointAtScaleStart == null ||
-        _candles.isEmpty)
+        _candles.isEmpty) {
       return;
+    }
     final candleAreaW = _candleAreaW(chartW);
 
     final newWidth = (_rangeAtScaleStart!.width / d.scale).clamp(
@@ -233,21 +250,42 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final buy = widget.buy;
     final isKrw = buy.market != 'US';
+    final panel = const Color(0xFF131929);
+    final shell = const Color(0xFF0A0E1A);
     String fmtP(double p) => isKrw
         ? '₩${NumberFormat('#,###').format(p.toInt())}'
         : '\$${p.toStringAsFixed(2)}';
+    final isClosed =
+        _totalBuyQty > 0 && (_totalBuyQty - _totalSellQty) <= _kQtyEpsilon;
+    final baseForRate = _avgBuyPrice > 0 && _totalSellQty > 0
+        ? _avgBuyPrice * _totalSellQty
+        : 0.0;
+    final realizedPct = baseForRate > 0
+        ? (_totalRealizedPnl / baseForRate) * 100
+        : null;
+    final hasSell = _allSells.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      backgroundColor: shell,
       appBar: AppBar(
-        backgroundColor: cs.surface,
+        backgroundColor: shell,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Container(
+            height: 1,
+            color: Colors.white.withValues(alpha: 0.06),
+          ),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+          icon: Icon(
+            Icons.arrow_back_ios_new,
+            size: 18,
+            color: Colors.white.withValues(alpha: 0.65),
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Column(
@@ -258,7 +296,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
               style: GoogleFonts.inter(
                 fontWeight: FontWeight.w700,
                 fontSize: 16,
-                color: cs.onSurface,
+                color: Colors.white,
               ),
             ),
             if (buy.ticker.isNotEmpty)
@@ -266,29 +304,38 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
                 '${buy.ticker} · ${buy.market}',
                 style: GoogleFonts.robotoMono(
                   fontSize: 11,
-                  color: cs.onSurface.withValues(alpha: 0.4),
+                  color: Colors.white.withValues(alpha: 0.35),
                 ),
               ),
           ],
         ),
-        actions: widget.showEditButton
-            ? [
-                IconButton(
-                  icon: Icon(
-                    Icons.edit_outlined,
-                    size: 20,
-                    color: cs.onSurface.withValues(alpha: 0.6),
-                  ),
-                  onPressed: () {
-                    Navigator.pop(context);
-                    widget.onEdit();
-                  },
-                ),
-              ]
-            : null,
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: isClosed
+                  ? Colors.white.withValues(alpha: 0.07)
+                  : const Color(0xFF34D399).withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              isClosed ? '청산완료' : '보유중',
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: isClosed
+                    ? Colors.white.withValues(alpha: 0.35)
+                    : const Color(0xFF34D399),
+              ),
+            ),
+          ),
+        ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFF34D399)),
+            )
           : _candles.isEmpty
           ? Center(
               child: Column(
@@ -297,13 +344,13 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
                   Icon(
                     Icons.show_chart,
                     size: 48,
-                    color: cs.onSurface.withValues(alpha: 0.2),
+                    color: Colors.white.withValues(alpha: 0.2),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     '차트 데이터를 불러올 수 없습니다',
                     style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.4),
+                      color: Colors.white.withValues(alpha: 0.4),
                     ),
                   ),
                 ],
@@ -311,90 +358,269 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
             )
           : Column(
               children: [
-                _rangeSelector(cs),
-                _legend(cs),
-                Expanded(child: _buildChart(cs)),
-                _tradeInfo(cs, fmtP),
+                Container(
+                  color: panel,
+                  child: Row(
+                    children: [
+                      _summaryCell(
+                        label: '평균매수가',
+                        value: _avgBuyPrice > 0 ? fmtP(_avgBuyPrice) : '-',
+                        valueColor: Colors.white.withValues(alpha: 0.9),
+                      ),
+                      _summaryCell(
+                        label: '평균매도가',
+                        value: _avgSellPrice > 0 ? fmtP(_avgSellPrice) : '-',
+                        valueColor: hasSell
+                            ? (_avgSellPrice >= _avgBuyPrice
+                                  ? _kUpColor
+                                  : _kDownColor)
+                            : Colors.white.withValues(alpha: 0.65),
+                      ),
+                      _summaryCell(
+                        label: '총 실현손익',
+                        value:
+                            '${_totalRealizedPnl >= 0 ? '+' : ''}${fmtP(_totalRealizedPnl)}',
+                        valueColor: _totalRealizedPnl >= 0
+                            ? _kUpColor
+                            : _kDownColor,
+                        subValue: realizedPct != null
+                            ? '${_totalRealizedPnl >= 0 ? '+' : ''}${realizedPct.toStringAsFixed(2)}%'
+                            : null,
+                      ),
+                    ],
+                  ),
+                ),
+                _controlsRow(),
+                _ohlcBar(),
+                Expanded(child: _buildChart()),
+                _tradeInfo(fmtP),
               ],
             ),
     );
   }
 
-  Widget _rangeSelector(ColorScheme cs) {
-    const opts = [('1개월', '1mo'), ('3개월', '3mo'), ('6개월', '6mo'), ('1년', '1y')];
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Row(
-        children: opts.map((opt) {
-          final selected = _range == opt.$2;
-          return GestureDetector(
-            onTap: () {
-              if (_range == opt.$2) return;
-              setState(() => _range = opt.$2);
-              _fetchChart();
-            },
-            child: Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-              decoration: BoxDecoration(
-                color: selected
-                    ? const Color(0xFF10B981)
-                    : cs.onSurface.withValues(alpha: 0.07),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                opt.$1,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: selected
-                      ? Colors.black
-                      : cs.onSurface.withValues(alpha: 0.6),
-                ),
+  Widget _summaryCell({
+    required String label,
+    required String value,
+    required Color valueColor,
+    String? subValue,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 9),
+        decoration: BoxDecoration(
+          border: Border(
+            right: BorderSide(color: Colors.white.withValues(alpha: 0.06)),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withValues(alpha: 0.28),
+                letterSpacing: 0.3,
               ),
             ),
-          );
-        }).toList(),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: GoogleFonts.robotoMono(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: valueColor,
+              ),
+            ),
+            if (subValue != null)
+              Text(
+                subValue,
+                style: GoogleFonts.robotoMono(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: valueColor,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _legend(ColorScheme cs) {
+  Widget _controlsRow() {
+    const opts = [('1개월', '1mo'), ('3개월', '3mo'), ('6개월', '6mo'), ('1년', '1y')];
     final hasSell = _allMarkers.any((m) => !m.isBuy);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
       child: Row(
         children: [
-          if (widget.showBuyMarker)
-            _legendDot(const Color(0xFF10B981), '매수', cs),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: opts.map((opt) {
+                  final selected = _range == opt.$2;
+                  return GestureDetector(
+                    onTap: () {
+                      if (_range == opt.$2) return;
+                      setState(() => _range = opt.$2);
+                      _fetchChart();
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? const Color(0xFF34D399)
+                            : Colors.white.withValues(alpha: 0.07),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        opt.$1,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: selected
+                              ? Colors.black
+                              : Colors.white.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          if (widget.showBuyMarker) _legendDot(const Color(0xFF34D399), '매수'),
           if (widget.showBuyMarker && hasSell) const SizedBox(width: 12),
-          if (hasSell) _legendDot(Colors.redAccent, '매도', cs),
+          if (hasSell) _legendDot(const Color(0xFFF04452), '매도'),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: () {
+              if (_candles.isEmpty) return;
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => _ChartFullscreenPage(
+                    candles: _candles,
+                    markers: _allMarkers,
+                    isKrw: widget.buy.market != 'US',
+                  ),
+                ),
+              );
+            },
+            child: Icon(
+              Icons.fullscreen,
+              size: 20,
+              color: Colors.white.withValues(alpha: 0.4),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _legendDot(Color color, String label, ColorScheme cs) {
+  Widget _legendDot(Color color, String label) {
     return Row(
       children: [
         Container(
-          width: 8,
-          height: 8,
+          width: 6,
+          height: 6,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 4),
         Text(
           label,
           style: GoogleFonts.inter(
-            fontSize: 11,
-            color: cs.onSurface.withValues(alpha: 0.5),
+            fontSize: 10,
+            color: Colors.white.withValues(alpha: 0.38),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildChart(ColorScheme cs) {
+  Widget _ohlcBar() {
+    final dc = _displayCandles;
+    final touched =
+        (_touchedIndex != null &&
+            _touchedIndex! >= 0 &&
+            _touchedIndex! < dc.length)
+        ? dc[_touchedIndex!]
+        : null;
+    if (touched == null) {
+      return Container(
+        height: 22,
+        width: double.infinity,
+        color: Colors.white.withValues(alpha: 0.02),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        alignment: Alignment.centerLeft,
+        child: Text(
+          '롱프레스로 탐색',
+          style: GoogleFonts.inter(
+            fontSize: 10,
+            color: Colors.white.withValues(alpha: 0.3),
+          ),
+        ),
+      );
+    }
+    final isKrw = widget.buy.market != 'US';
+    String fmt(double v) =>
+        isKrw ? NumberFormat('#,###').format(v.toInt()) : v.toStringAsFixed(2);
+    final isUp = touched.close >= touched.open;
+    final valColor = isUp ? _kUpColor : _kDownColor;
+    return Container(
+      height: 22,
+      width: double.infinity,
+      color: Colors.white.withValues(alpha: 0.02),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Text(
+            DateFormat('yyyy.MM.dd').format(touched.date),
+            style: GoogleFonts.robotoMono(
+              fontSize: 10,
+              color: Colors.white.withValues(alpha: 0.38),
+            ),
+          ),
+          const SizedBox(width: 10),
+          ...[
+            ('O', touched.open),
+            ('H', touched.high),
+            ('L', touched.low),
+            ('C', touched.close),
+          ].map(
+            (e) => Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: Row(
+                children: [
+                  Text(
+                    '${e.$1} ',
+                    style: GoogleFonts.robotoMono(
+                      fontSize: 9,
+                      color: Colors.white.withValues(alpha: 0.28),
+                    ),
+                  ),
+                  Text(
+                    fmt(e.$2),
+                    style: GoogleFonts.robotoMono(fontSize: 9, color: valColor),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChart() {
     final dc = _displayCandles;
     if (dc.isEmpty) return const SizedBox();
 
@@ -407,291 +633,363 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
       }
     }
 
-    final touched =
-        (_touchedIndex != null &&
-            _touchedIndex! >= 0 &&
-            _touchedIndex! < dc.length)
-        ? dc[_touchedIndex!]
-        : null;
-
-    return Column(
-      children: [
-        if (touched != null) _touchedBar(touched, cs),
-        Expanded(
-          child: LayoutBuilder(
-            builder: (_, constraints) {
-              final chartW = constraints.maxWidth;
-              return GestureDetector(
-                onLongPressStart: (d) => _onTouch(d.localPosition.dx, chartW),
-                onLongPressMoveUpdate: (d) =>
-                    _onTouch(d.localPosition.dx, chartW),
-                onLongPressEnd: (_) => setState(() => _touchedIndex = null),
-                onScaleStart: _onScaleStart,
-                onScaleUpdate: (d) => _onScaleUpdate(d, chartW),
-                child: CustomPaint(
-                  size: Size(chartW, constraints.maxHeight),
-                  painter: _JournalCandlePainter(
-                    candles: dc,
-                    allCandles: _candles,
-                    visibleStart: dispStart,
-                    touchedIndex: _touchedIndex,
-                    labelColor: cs.onSurface,
-                    markers: dispMarkers,
-                  ),
-                ),
-              );
-            },
+    return LayoutBuilder(
+      builder: (_, constraints) {
+        final chartW = constraints.maxWidth;
+        return GestureDetector(
+          onLongPressStart: (d) => _onTouch(d.localPosition.dx, chartW),
+          onLongPressMoveUpdate: (d) => _onTouch(d.localPosition.dx, chartW),
+          onLongPressEnd: (_) => setState(() => _touchedIndex = null),
+          onScaleStart: _onScaleStart,
+          onScaleUpdate: (d) => _onScaleUpdate(d, chartW),
+          child: CustomPaint(
+            size: Size(chartW, constraints.maxHeight),
+            painter: _JournalCandlePainter(
+              candles: dc,
+              allCandles: _candles,
+              visibleStart: dispStart,
+              touchedIndex: _touchedIndex,
+              labelColor: Colors.white,
+              markers: dispMarkers,
+            ),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 
-  Widget _touchedBar(_OHLC c, ColorScheme cs) {
-    final isKrw = widget.buy.market != 'US';
-    String fmt(double v) =>
-        isKrw ? NumberFormat('#,###').format(v.toInt()) : v.toStringAsFixed(2);
-    final isUp = c.close >= c.open;
+  Widget _tradeInfo(String Function(double) fmtP) {
+    final events = <({TradingJournal journal, bool isBuy})>[
+      if (widget.showBuyMarker)
+        ..._allBuys.map((b) => (journal: b, isBuy: true)),
+      ..._allSells.map((s) => (journal: s, isBuy: false)),
+    ]..sort((a, b) => b.journal.tradeDate.compareTo(a.journal.tradeDate));
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
-      color: cs.onSurface.withValues(alpha: 0.04),
-      child: Row(
+      decoration: BoxDecoration(
+        color: const Color(0xFF131929),
+        border: Border(
+          top: BorderSide(color: Colors.white.withValues(alpha: 0.07)),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            DateFormat('yyyy.MM.dd').format(c.date),
-            style: GoogleFonts.robotoMono(
-              fontSize: 11,
-              color: cs.onSurface.withValues(alpha: 0.4),
-            ),
-          ),
-          const SizedBox(width: 10),
-          ...[('O', c.open), ('H', c.high), ('L', c.low), ('C', c.close)].map(
-            (e) => Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: Row(
-                children: [
-                  Text(
-                    '${e.$1} ',
-                    style: GoogleFonts.robotoMono(
-                      fontSize: 10,
-                      color: cs.onSurface.withValues(alpha: 0.35),
-                    ),
-                  ),
-                  Text(
-                    fmt(e.$2),
-                    style: GoogleFonts.robotoMono(
-                      fontSize: 10,
-                      color: isUp ? _kUpColor : _kDownColor,
-                    ),
-                  ),
-                ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Text(
+              '거래 내역',
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withValues(alpha: 0.35),
+                letterSpacing: 0.4,
               ),
             ),
+          ),
+          SizedBox(
+            height: 150,
+            child: events.isEmpty
+                ? Center(
+                    child: Text(
+                      '거래 기록이 없습니다',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.white.withValues(alpha: 0.3),
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    itemCount: events.length,
+                    separatorBuilder: (_, _) => Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: Colors.white.withValues(alpha: 0.05),
+                    ),
+                    itemBuilder: (context, i) {
+                      final e = events[i];
+                      return _tradeRow(
+                        journal: e.journal,
+                        isBuy: e.isBuy,
+                        fmtP: fmtP,
+                      );
+                    },
+                  ),
           ),
         ],
       ),
     );
   }
 
-  Widget _tradeInfo(ColorScheme cs, String Function(double) fmtP) {
-    final sells = _allSells;
-    final events = <({TradingJournal journal, bool isBuy})>[
-      if (widget.showBuyMarker)
-        ..._allBuys.map((b) => (journal: b, isBuy: true)),
-      ...sells.map((s) => (journal: s, isBuy: false)),
-    ]..sort((a, b) => b.journal.tradeDate.compareTo(a.journal.tradeDate));
-    final showSharedOwnerLabel =
-        !widget.showEditButton && widget.buy.nickname.trim().isNotEmpty;
+  double get _totalBuyQty => _allBuys.fold(0.0, (sum, b) => sum + b.quantity);
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        border: Border(
-          top: BorderSide(color: cs.onSurface.withValues(alpha: 0.08)),
-        ),
-      ),
-      child: events.isEmpty
-          ? Text(
-              '거래 기록이 없습니다',
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: cs.onSurface.withValues(alpha: 0.45),
-              ),
-            )
-          : Column(
-              children: [
-                if (showSharedOwnerLabel) ...[
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '${widget.buy.nickname}님의 매매 기록',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: cs.onSurface.withValues(alpha: 0.62),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                Container(
-                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
-                  decoration: BoxDecoration(
-                    color: cs.onSurface.withValues(alpha: 0.03),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: events.length <= 4
-                      ? Column(
-                          children: [
-                            ...events.asMap().entries.map((entry) {
-                              final i = entry.key;
-                              final e = entry.value;
-                              return _tradeRow(
-                                journal: e.journal,
-                                isBuy: e.isBuy,
-                                cs: cs,
-                                fmtP: fmtP,
-                                isLast: i == events.length - 1,
-                              );
-                            }),
-                          ],
-                        )
-                      : SizedBox(
-                          height: 220,
-                          child: Scrollbar(
-                            thumbVisibility: true,
-                            child: ListView.builder(
-                              itemCount: events.length,
-                              itemBuilder: (context, i) {
-                                final e = events[i];
-                                return _tradeRow(
-                                  journal: e.journal,
-                                  isBuy: e.isBuy,
-                                  cs: cs,
-                                  fmtP: fmtP,
-                                  isLast: i == events.length - 1,
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                ),
-              ],
-            ),
+  double get _totalSellQty => _allSells.fold(0.0, (sum, s) => sum + s.quantity);
+
+  double get _avgBuyPrice {
+    if (_allBuys.isEmpty || _totalBuyQty <= 0) return 0;
+    final total = _allBuys.fold<double>(
+      0,
+      (sum, b) => sum + (b.price * b.quantity),
     );
+    return total / _totalBuyQty;
+  }
+
+  double get _avgSellPrice {
+    if (_allSells.isEmpty || _totalSellQty <= 0) return 0;
+    final total = _allSells.fold<double>(
+      0,
+      (sum, s) => sum + (s.price * s.quantity),
+    );
+    return total / _totalSellQty;
+  }
+
+  double _avgBuyPriceAt(DateTime sellDate) {
+    double qty = 0, cost = 0;
+    for (final b in _allBuys) {
+      if (!b.tradeDate.isAfter(sellDate)) {
+        qty += b.quantity;
+        cost += b.price * b.quantity;
+      }
+    }
+    return qty > 0 ? cost / qty : 0;
+  }
+
+  double get _totalRealizedPnl {
+    return _allSells.fold<double>(0, (sum, s) {
+      if (s.price <= 0 || s.quantity <= 0) return sum;
+      final bp = s.buyPrice > 0 ? s.buyPrice : _avgBuyPriceAt(s.tradeDate);
+      if (bp <= 0) return sum;
+      return sum + (s.price - bp) * s.quantity;
+    });
   }
 
   Widget _tradeRow({
     required TradingJournal journal,
     required bool isBuy,
-    required ColorScheme cs,
     required String Function(double) fmtP,
-    required bool isLast,
   }) {
     final qty = journal.quantity % 1 == 0
-        ? journal.quantity.toInt()
-        : journal.quantity;
-    final dotColor = isBuy ? const Color(0xFF10B981) : const Color(0xFFF04452);
+        ? '${journal.quantity.toInt()}주'
+        : '${journal.quantity}주';
+    final actionColor = isBuy
+        ? const Color(0xFF34D399)
+        : const Color(0xFFF04452);
+    final effectiveBuyPrice = journal.buyPrice > 0
+        ? journal.buyPrice
+        : _avgBuyPriceAt(journal.tradeDate);
     final realizedPnl =
         !isBuy &&
-            journal.buyPrice > 0 &&
+            effectiveBuyPrice > 0 &&
             journal.price > 0 &&
             journal.quantity > 0
-        ? (journal.price - journal.buyPrice) * journal.quantity
+        ? (journal.price - effectiveBuyPrice) * journal.quantity
         : null;
     final isPnlUp = realizedPnl == null || realizedPnl >= 0;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 2, 0, 2),
+      padding: const EdgeInsets.symmetric(vertical: 9),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 18,
-            child: Column(
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  margin: const EdgeInsets.only(top: 8),
+            width: 28,
+            child: Text(
+              isBuy ? '매수' : '매도',
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: actionColor,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            DateFormat('yy.MM.dd').format(journal.tradeDate),
+            style: GoogleFonts.robotoMono(
+              fontSize: 11,
+              color: Colors.white.withValues(alpha: 0.28),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '${fmtP(journal.price)}  ·  $qty',
+              style: GoogleFonts.robotoMono(
+                fontSize: 11,
+                color: Colors.white.withValues(alpha: 0.7),
+              ),
+            ),
+          ),
+          if (realizedPnl != null)
+            Text(
+              '${isPnlUp ? '+' : ''}${fmtP(realizedPnl)}',
+              style: GoogleFonts.robotoMono(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: isPnlUp ? _kUpColor : _kDownColor,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── 가로 전체화면 차트 ──────────────────────────────────────────────────────
+class _ChartFullscreenPage extends StatefulWidget {
+  final List<_OHLC> candles;
+  final List<_Marker> markers;
+  final bool isKrw;
+
+  const _ChartFullscreenPage({
+    required this.candles,
+    required this.markers,
+    required this.isKrw,
+  });
+
+  @override
+  State<_ChartFullscreenPage> createState() => _ChartFullscreenPageState();
+}
+
+class _ChartFullscreenPageState extends State<_ChartFullscreenPage> {
+  late ChartVisibleRange _visibleRange;
+  ChartVisibleRange? _rangeAtScaleStart;
+  Offset? _focalPointAtScaleStart;
+  int? _touchedIndex;
+
+  static const _leftPad = 4.0;
+  static const _rightAxisW = 42.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _visibleRange = ChartVisibleRange(0, widget.candles.length.toDouble());
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    super.dispose();
+  }
+
+  double _candleAreaW(double w) => w - _leftPad - _rightAxisW;
+
+  List<_OHLC> get _displayCandles {
+    if (widget.candles.isEmpty || _visibleRange.width <= 0) return [];
+    final start = _visibleRange.start.floor().clamp(0, widget.candles.length);
+    final end = _visibleRange.end.ceil().clamp(start, widget.candles.length);
+    return widget.candles.sublist(start, end);
+  }
+
+  void _onTouch(double localX, double chartW) {
+    final cw = _candleAreaW(chartW);
+    final x = (localX - _leftPad).clamp(0.0, cw);
+    final frac = _visibleRange.start + (x / cw) * _visibleRange.width;
+    final idx = frac.floor().clamp(0, widget.candles.length - 1);
+    final disp = idx - _visibleRange.start.floor();
+    if (_touchedIndex != disp) setState(() => _touchedIndex = disp);
+  }
+
+  void _onScaleStart(ScaleStartDetails d) {
+    _rangeAtScaleStart = _visibleRange;
+    _focalPointAtScaleStart = d.localFocalPoint;
+  }
+
+  void _onScaleUpdate(ScaleUpdateDetails d, double chartW) {
+    if (_rangeAtScaleStart == null || _focalPointAtScaleStart == null) return;
+    final cw = _candleAreaW(chartW);
+    final newWidth = (_rangeAtScaleStart!.width / d.scale).clamp(
+      5.0,
+      widget.candles.length.toDouble(),
+    );
+    final focalFrac = ((_focalPointAtScaleStart!.dx - _leftPad) / cw).clamp(
+      0.0,
+      1.0,
+    );
+    final anchor =
+        _rangeAtScaleStart!.start + focalFrac * _rangeAtScaleStart!.width;
+    final panDelta =
+        (d.localFocalPoint.dx - _focalPointAtScaleStart!.dx) / cw * newWidth;
+    var newStart = (anchor - focalFrac * newWidth - panDelta).clamp(
+      0.0,
+      (widget.candles.length - newWidth).clamp(0.0, double.infinity),
+    );
+    setState(() {
+      _visibleRange = ChartVisibleRange(newStart, newStart + newWidth);
+      _touchedIndex = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0E1A),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            LayoutBuilder(
+              builder: (_, constraints) {
+                final chartW = constraints.maxWidth;
+                final dc = _displayCandles;
+                if (dc.isEmpty) return const SizedBox.expand();
+                final dispStart = _visibleRange.start.floor();
+                final dispMarkers = <_Marker>[];
+                for (final m in widget.markers) {
+                  final di = m.index - dispStart;
+                  if (di >= 0 && di < dc.length) {
+                    dispMarkers.add((
+                      index: di,
+                      isBuy: m.isBuy,
+                      price: m.price,
+                    ));
+                  }
+                }
+                return GestureDetector(
+                  onLongPressStart: (d) => _onTouch(d.localPosition.dx, chartW),
+                  onLongPressMoveUpdate: (d) =>
+                      _onTouch(d.localPosition.dx, chartW),
+                  onLongPressEnd: (_) => setState(() => _touchedIndex = null),
+                  onScaleStart: _onScaleStart,
+                  onScaleUpdate: (d) => _onScaleUpdate(d, chartW),
+                  child: CustomPaint(
+                    size: Size(chartW, constraints.maxHeight),
+                    painter: _JournalCandlePainter(
+                      candles: dc,
+                      allCandles: widget.candles,
+                      visibleStart: dispStart,
+                      touchedIndex: _touchedIndex,
+                      labelColor: Colors.white,
+                      markers: dispMarkers,
+                    ),
+                  ),
+                );
+              },
+            ),
+            Positioned(
+              top: 8,
+              left: 8,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: dotColor,
-                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.arrow_back_ios_new,
+                    size: 18,
+                    color: Colors.white.withValues(alpha: 0.55),
                   ),
                 ),
-                if (!isLast)
-                  Container(
-                    width: 2,
-                    height: 44,
-                    color: cs.onSurface.withValues(alpha: 0.12),
-                  ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-              decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          DateFormat('yy.MM.dd').format(journal.tradeDate),
-                          style: GoogleFonts.robotoMono(
-                            fontSize: 10,
-                            color: cs.onSurface.withValues(alpha: 0.42),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${fmtP(journal.price)} · $qty주',
-                          style: GoogleFonts.robotoMono(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: cs.onSurface.withValues(alpha: 0.82),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (realizedPnl != null) ...[
-                    const SizedBox(width: 8),
-                    Text(
-                      '${isPnlUp ? '+' : ''}${fmtP(realizedPnl)}',
-                      style: GoogleFonts.robotoMono(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: isPnlUp ? _kUpColor : _kDownColor,
-                      ),
-                    ),
-                  ],
-                  if (!isBuy && widget.onEditSell != null)
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pop(context);
-                        widget.onEditSell!(journal);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: Icon(
-                          Icons.edit_outlined,
-                          size: 14,
-                          color: cs.onSurface.withValues(alpha: 0.35),
-                        ),
-                      ),
-                    ),
-                ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

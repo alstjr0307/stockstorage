@@ -92,20 +92,82 @@ class _PortfolioScreenState extends State<PortfolioScreen>
   }
 }
 
-class _GroupedJournalTab extends StatelessWidget {
+class _GroupedJournalTab extends StatefulWidget {
   const _GroupedJournalTab();
+
+  @override
+  State<_GroupedJournalTab> createState() => _GroupedJournalTabState();
+}
+
+class _GroupedJournalTabState extends State<_GroupedJournalTab> {
+  final _fs = FirestoreService();
+  final Map<String, PriceResult?> _prices = {};
+  final Set<String> _loadingKeys = {};
+
+  String _keyOf(TradingJournal journal) =>
+      '${journal.market}:${journal.ticker.toUpperCase()}';
+
+  void _fetchPriceIfNeeded(_GroupedStockJournal stock) {
+    if (stock.ticker.isEmpty || !{'KS', 'KQ', 'US'}.contains(stock.market)) {
+      return;
+    }
+    final key = '${stock.market}:${stock.ticker}';
+    if (_prices.containsKey(key) || _loadingKeys.contains(key)) return;
+    _loadingKeys.add(key);
+    StockPriceService.fetchPrice(stock.ticker, stock.market).then((result) {
+      if (!mounted) return;
+      setState(() {
+        _prices[key] = result;
+        _loadingKeys.remove(key);
+      });
+    });
+  }
+
+  List<_GroupedStockJournal> _groupStocks(List<TradingJournal> journals) {
+    final byStock = <String, List<TradingJournal>>{};
+    for (final journal in journals) {
+      final ticker = journal.ticker.trim().toUpperCase();
+      if (ticker.isEmpty) continue;
+      byStock
+          .putIfAbsent(_keyOf(journal), () => <TradingJournal>[])
+          .add(journal);
+    }
+
+    final grouped = <_GroupedStockJournal>[];
+    for (final entry in byStock.entries) {
+      final items = [...entry.value]
+        ..sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+      final first = items.first;
+      final buys = items.where((j) => j.action == '매수').toList();
+      final sells = items.where((j) => j.action == '매도').toList();
+      grouped.add(
+        _GroupedStockJournal(
+          stockName: first.stockName.trim().isEmpty
+              ? first.ticker.toUpperCase()
+              : first.stockName,
+          ticker: first.ticker.toUpperCase(),
+          market: first.market,
+          latestTradeDate: items.first.tradeDate,
+          count: items.length,
+          buys: buys,
+          sells: sells,
+        ),
+      );
+    }
+    grouped.sort((a, b) => b.latestTradeDate.compareTo(a.latestTradeDate));
+    return grouped;
+  }
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     if (!auth.isLoggedIn) return _NotLoggedIn();
 
-    final fs = FirestoreService();
     final cs = Theme.of(context).colorScheme;
     final uid = auth.user!.uid;
 
     return StreamBuilder<List<TradingJournal>>(
-      stream: fs.getMyJournals(uid),
+      stream: _fs.getMyJournals(uid),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
@@ -114,14 +176,16 @@ class _GroupedJournalTab extends StatelessWidget {
         }
 
         final journals = snapshot.data ?? [];
-        final seen = <String>{};
-        final grouped = journals.where((j) {
-          final ticker = j.ticker.trim().toUpperCase();
-          if (ticker.isEmpty || seen.contains(ticker)) return false;
-          seen.add(ticker);
-          return true;
-        }).toList()
-          ..sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+        final grouped = _groupStocks(journals);
+        for (final stock in grouped) {
+          _fetchPriceIfNeeded(stock);
+        }
+        final holdingStocks = grouped
+            .where((s) => s.remainingQty > 1e-6)
+            .toList();
+        final completedStocks = grouped
+            .where((s) => s.remainingQty <= 1e-6)
+            .toList();
 
         if (grouped.isEmpty) {
           return Center(
@@ -146,89 +210,320 @@ class _GroupedJournalTab extends StatelessWidget {
           );
         }
 
-        return ListView.separated(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-          itemCount: grouped.length,
-          separatorBuilder: (_, _) => Divider(
-            height: 1,
-            thickness: 1,
-            color: cs.onSurface.withValues(alpha: 0.07),
-          ),
-          itemBuilder: (context, i) {
-            final j = grouped[i];
-            final ticker = j.ticker.toUpperCase();
-            final stockName = j.stockName.trim().isEmpty ? ticker : j.stockName;
-            final count = journals.where((e) => e.ticker.toUpperCase() == ticker).length;
-
-            return InkWell(
-              borderRadius: BorderRadius.circular(12),
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => TradingJournalTab(
-                    filterTicker: ticker,
-                    filterStockName: stockName,
-                    pageTitle: '$stockName 매매일지',
+        Widget sectionHeader(String title, int count, {bool dim = false}) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(0, 6, 0, 10),
+            child: Row(
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: dim ? 0.48 : 0.82),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: cs.onSurface.withValues(alpha: dim ? 0.05 : 0.08),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '$count',
+                    style: GoogleFonts.robotoMono(
+                      color: cs.onSurface.withValues(alpha: dim ? 0.45 : 0.72),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        Widget stockRow(_GroupedStockJournal stock) {
+          final price = _prices['${stock.market}:${stock.ticker}'];
+          return InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => TradingJournalTab(
+                  filterTicker: stock.ticker,
+                  filterStockName: stock.stockName,
+                  pageTitle: stock.stockName,
+                ),
               ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                child: Row(
+            ),
+            child: _GroupedStockRow(stock: stock, price: price),
+          );
+        }
+
+        final children = <Widget>[
+          if (holdingStocks.isNotEmpty) ...[
+            sectionHeader('보유중 종목', holdingStocks.length),
+            for (var i = 0; i < holdingStocks.length; i++) ...[
+              stockRow(holdingStocks[i]),
+              if (i < holdingStocks.length - 1)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: cs.onSurface.withValues(alpha: 0.07),
+                ),
+            ],
+          ],
+          if (holdingStocks.isNotEmpty && completedStocks.isNotEmpty)
+            const SizedBox(height: 14),
+          if (completedStocks.isNotEmpty) ...[
+            sectionHeader('완료 종목', completedStocks.length, dim: true),
+            for (var i = 0; i < completedStocks.length; i++) ...[
+              stockRow(completedStocks[i]),
+              if (i < completedStocks.length - 1)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: cs.onSurface.withValues(alpha: 0.06),
+                ),
+            ],
+          ],
+        ];
+
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+          children: children,
+        );
+      },
+    );
+  }
+}
+
+class _GroupedStockJournal {
+  final String stockName;
+  final String ticker;
+  final String market;
+  final DateTime latestTradeDate;
+  final int count;
+  final List<TradingJournal> buys;
+  final List<TradingJournal> sells;
+
+  const _GroupedStockJournal({
+    required this.stockName,
+    required this.ticker,
+    required this.market,
+    required this.latestTradeDate,
+    required this.count,
+    required this.buys,
+    required this.sells,
+  });
+
+  double get remainingQty {
+    final buyQty = buys.fold<double>(0, (sum, b) => sum + b.quantity);
+    final sellQty = sells.fold<double>(0, (sum, s) => sum + s.quantity);
+    return (buyQty - sellQty).clamp(0.0, buyQty);
+  }
+
+  double get avgRemainingPrice {
+    final buysAsc = [...buys]
+      ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+    var soldLeft = sells.fold<double>(0, (sum, s) => sum + s.quantity);
+    var qty = 0.0;
+    var cost = 0.0;
+    for (final buy in buysAsc) {
+      final consumed = soldLeft > buy.quantity ? buy.quantity : soldLeft;
+      final remain = (buy.quantity - consumed).clamp(0.0, buy.quantity);
+      qty += remain;
+      cost += remain * buy.price;
+      soldLeft = soldLeft > consumed ? soldLeft - consumed : 0.0;
+    }
+    if (qty <= 1e-6) return 0;
+    return cost / qty;
+  }
+
+  double realizedPnl() {
+    double avgBuyPriceAt(DateTime sellDate) {
+      var qty = 0.0;
+      var cost = 0.0;
+      for (final buy in buys) {
+        if (!buy.tradeDate.isAfter(sellDate)) {
+          qty += buy.quantity;
+          cost += buy.price * buy.quantity;
+        }
+      }
+      return qty > 0 ? cost / qty : 0;
+    }
+
+    return sells.fold<double>(0, (sum, sell) {
+      final bp = sell.buyPrice > 0
+          ? sell.buyPrice
+          : avgBuyPriceAt(sell.tradeDate);
+      if (bp <= 0 || sell.price <= 0 || sell.quantity <= 0) return sum;
+      return sum + (sell.price - bp) * sell.quantity;
+    });
+  }
+}
+
+class _GroupedStockRow extends StatelessWidget {
+  final _GroupedStockJournal stock;
+  final PriceResult? price;
+
+  const _GroupedStockRow({required this.stock, required this.price});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isKrw = stock.market != 'US';
+    final remainingQty = stock.remainingQty;
+    final avgPrice = stock.avgRemainingPrice;
+    final livePrice = price?.price;
+    final hasHolding = remainingQty > 1e-6;
+    final evalPnl = hasHolding && livePrice != null && avgPrice > 0
+        ? (livePrice - avgPrice) * remainingQty
+        : null;
+    final evalRate = evalPnl != null
+        ? (livePrice! - avgPrice) / avgPrice * 100
+        : null;
+    final realizedPnl = stock.realizedPnl();
+    final displayPnl = evalPnl ?? realizedPnl;
+    final isUp = displayPnl >= 0;
+    final color = isUp ? const Color(0xFFF04452) : const Color(0xFF1677FF);
+
+    String fmtP(double p) => isKrw
+        ? '₩${NumberFormat('#,###').format(p.toInt())}'
+        : '\$${p.toStringAsFixed(2)}';
+    String fmtQty(double q) => q % 1 == 0 ? '${q.toInt()}주' : '$q주';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: hasHolding
+                  ? const Color(0xFF10B981).withValues(alpha: 0.12)
+                  : cs.onSurface.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              stock.ticker.length > 4
+                  ? stock.ticker.substring(0, 4)
+                  : stock.ticker,
+              style: GoogleFonts.robotoMono(
+                color: hasHolding
+                    ? const Color(0xFF10B981)
+                    : cs.onSurface.withValues(alpha: 0.55),
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
+                    Expanded(
+                      child: Text(
+                        stock.stockName,
+                        style: GoogleFonts.inter(
+                          color: cs.onSurface,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
-                        color: cs.onSurface.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(9999),
+                        color: hasHolding
+                            ? const Color(0xFF10B981).withValues(alpha: 0.12)
+                            : cs.onSurface.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(
-                        ticker,
-                        style: GoogleFonts.robotoMono(
-                          color: cs.onSurface.withValues(alpha: 0.82),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                        hasHolding ? '보유중' : '완료',
+                        style: GoogleFonts.inter(
+                          color: hasHolding
+                              ? const Color(0xFF10B981)
+                              : cs.onSurface.withValues(alpha: 0.45),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            stockName,
-                            style: GoogleFonts.inter(
-                              color: cs.onSurface,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '$count건의 매매일지',
-                            style: GoogleFonts.inter(
-                              color: cs.onSurface.withValues(alpha: 0.45),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      Icons.chevron_right_rounded,
-                      color: cs.onSurface.withValues(alpha: 0.35),
-                      size: 20,
-                    ),
                   ],
                 ),
+                const SizedBox(height: 5),
+                Text(
+                  hasHolding
+                      ? '${fmtQty(remainingQty)} · 평균 ${fmtP(avgPrice)} · ${stock.count}건'
+                      : '매매기록 ${stock.count}건 · 실현손익 ${realizedPnl >= 0 ? '+' : ''}${fmtP(realizedPnl)}',
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.45),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                hasHolding ? '평가손익' : '실현손익',
+                style: GoogleFonts.inter(
+                  color: cs.onSurface.withValues(alpha: 0.35),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            );
-          },
-        );
-      },
+              const SizedBox(height: 4),
+              Text(
+                '${isUp ? '+' : ''}${fmtP(displayPnl)}',
+                style: GoogleFonts.robotoMono(
+                  color: color,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              if (evalRate != null)
+                Text(
+                  '${isUp ? '+' : ''}${evalRate.toStringAsFixed(1)}%',
+                  style: GoogleFonts.robotoMono(
+                    color: color.withValues(alpha: 0.75),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(width: 4),
+          Icon(
+            Icons.chevron_right_rounded,
+            color: cs.onSurface.withValues(alpha: 0.32),
+            size: 20,
+          ),
+        ],
+      ),
     );
   }
 }
