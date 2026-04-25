@@ -1,11 +1,11 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../models/trading_journal.dart';
-import '../services/stock_price_service.dart';
 
 // ─────────────────────────────────────────────────────────────
 // PositionSummaryCard
@@ -426,7 +426,7 @@ class _DonutChartPainter extends CustomPainter {
   void _paintText(Canvas canvas, String text, TextStyle style, Offset center) {
     final tp = TextPainter(
       text: TextSpan(text: text, style: style),
-      textDirection: TextDirection.ltr,
+      textDirection: ui.TextDirection.ltr,
     )..layout();
     tp.paint(canvas, center - Offset(tp.width / 2, tp.height / 2));
   }

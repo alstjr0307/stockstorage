@@ -1641,12 +1641,14 @@ class _UsersTab extends StatefulWidget {
 class _UsersTabState extends State<_UsersTab> {
   final _firestoreService = FirestoreService();
   final _scrollController = ScrollController();
+  final _searchController = TextEditingController();
   final List<Map<String, dynamic>> _users = [];
   DocumentSnapshot? _lastDoc;
   bool _loading = false;
   bool _initialLoading = true;
   bool _hasMore = true;
   String? _error;
+  String _query = '';
   int _totalUsers = 0;
   int _todayUsers = 0;
 
@@ -1668,6 +1670,7 @@ class _UsersTabState extends State<_UsersTab> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -1726,6 +1729,16 @@ class _UsersTabState extends State<_UsersTab> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final q = _query.trim().toLowerCase();
+    final filteredUsers = q.isEmpty
+        ? _users
+        : _users.where((u) {
+            final uid = (u['uid'] as String? ?? '').toLowerCase();
+            final nickname = (u['nickname'] as String? ?? '').toLowerCase();
+            return uid.contains(q) || nickname.contains(q);
+          }).toList();
+    final isSearching = q.isNotEmpty;
+    final showEmptySearch = isSearching && filteredUsers.isEmpty;
     if (_initialLoading && _users.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFF10B981)),
@@ -1746,7 +1759,11 @@ class _UsersTabState extends State<_UsersTab> {
       child: ListView.builder(
         controller: _scrollController,
         padding: const EdgeInsets.all(16),
-        itemCount: _users.length + 1 + (_loading || _hasMore ? 1 : 0),
+        itemCount:
+            filteredUsers.length +
+            2 +
+            (showEmptySearch ? 1 : 0) +
+            (!isSearching && (_loading || _hasMore) ? 1 : 0),
         itemBuilder: (context, i) {
           if (i == 0) {
             return Container(
@@ -1812,8 +1829,73 @@ class _UsersTabState extends State<_UsersTab> {
             );
           }
 
-          final index = i - 1;
-          if (index >= _users.length) {
+          if (i == 1) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (v) => setState(() => _query = v),
+                style: GoogleFonts.inter(color: cs.onSurface, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: '닉네임 또는 UID 검색',
+                  hintStyle: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.35),
+                    fontSize: 13,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    size: 18,
+                    color: cs.onSurface.withValues(alpha: 0.45),
+                  ),
+                  suffixIcon: _query.isEmpty
+                      ? null
+                      : IconButton(
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _query = '');
+                          },
+                          icon: Icon(
+                            Icons.close,
+                            size: 18,
+                            color: cs.onSurface.withValues(alpha: 0.45),
+                          ),
+                        ),
+                  filled: true,
+                  fillColor: cs.surface,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFF10B981)),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            );
+          }
+
+          if (showEmptySearch && i == 2) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 16),
+              child: Center(
+                child: Text(
+                  '검색 결과가 없습니다',
+                  style: GoogleFonts.inter(
+                    color: cs.onSurface.withValues(alpha: 0.45),
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            );
+          }
+
+          final index = i - 2 - (showEmptySearch ? 1 : 0);
+          if (index >= filteredUsers.length) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
@@ -1833,15 +1915,19 @@ class _UsersTabState extends State<_UsersTab> {
             );
           }
 
-          final u = _users[index];
+          final u = filteredUsers[index];
           final uid = u['uid'] as String;
           final nickname = u['nickname'] as String;
           final level = (u['level'] as num?)?.toInt() ?? 1;
           final postCount = (u['postCount'] as num?)?.toInt() ?? 0;
           final commentCount = (u['commentCount'] as num?)?.toInt() ?? 0;
           final createdAt = u['createdAt'] as Timestamp?;
+          final lastActiveAt = u['lastActiveAt'] as Timestamp?;
           final joinDate = createdAt != null
               ? DateFormat('yyyy.MM.dd').format(createdAt.toDate())
+              : '-';
+          final lastActiveText = lastActiveAt != null
+              ? DateFormat('yyyy.MM.dd HH:mm').format(lastActiveAt.toDate())
               : '-';
           return Container(
             margin: const EdgeInsets.only(bottom: 10),
@@ -1891,6 +1977,14 @@ class _UsersTabState extends State<_UsersTab> {
                     const SizedBox(height: 2),
                     Text(
                       '가입 $joinDate',
+                      style: GoogleFonts.inter(
+                        color: cs.onSurface.withValues(alpha: 0.5),
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '최근 접속 $lastActiveText',
                       style: GoogleFonts.inter(
                         color: cs.onSurface.withValues(alpha: 0.5),
                         fontSize: 12,

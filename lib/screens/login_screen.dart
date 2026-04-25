@@ -384,10 +384,11 @@ class _LoginScreenState extends State<LoginScreen> {
           style: GoogleFonts.inter(
               color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w700),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             Text(
               '댓글에 표시될 닉네임을 입력하세요.',
               style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54), fontSize: 13),
@@ -416,6 +417,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ],
+          ),
         ),
         actions: [
           TextButton(

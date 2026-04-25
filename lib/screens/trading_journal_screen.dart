@@ -291,97 +291,97 @@ class _JournalContentState extends State<_JournalContent> {
               ),
             );
           }
-          // 매도 항목을 linkedBuyId 기준으로 그룹핑
-          final linkedSellMap = <String, List<TradingJournal>>{};
-          final linkedSellIds = <String>{};
-          for (final j in journals) {
-            if (j.action == '매도' && j.linkedBuyId.isNotEmpty) {
-              linkedSellMap.putIfAbsent(j.linkedBuyId, () => []).add(j);
-              linkedSellIds.add(j.id);
+          final isStockDetail = filterTicker != null && filterTicker.isNotEmpty;
+
+          Future<void> onDeleteLinkedSell(TradingJournal sell) async {
+            final ok = await showDialog<bool>(
+              context: context,
+              builder: (_) => AlertDialog(
+                title: const Text('매도 내역 삭제'),
+                content: const Text('이 매도 내역을 삭제하시겠습니까?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('취소'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text(
+                      '삭제',
+                      style: TextStyle(color: Colors.redAccent),
+                    ),
+                  ),
+                ],
+              ),
+            );
+            if (ok == true) {
+              await _firestoreService.deleteJournal(sell.id);
             }
           }
-          // 상위 레벨 항목: 연결된 매도 제외
-          final topLevel = journals
-              .where((j) => !linkedSellIds.contains(j.id))
-              .toList();
 
-          // 보유 종목 계산 (잔량 > 0인 매수 포지션)
-          final holdings = <({TradingJournal buy, double remainingQty})>[];
-          for (final j in journals) {
-            if (j.action == '매수') {
-              final sells = linkedSellMap[j.id] ?? [];
-              final soldQty = sells.fold(0.0, (s, sell) => s + sell.quantity);
-              final remaining = (j.quantity - soldQty).clamp(0.0, j.quantity);
-              if (remaining > 0)
-                holdings.add((buy: j, remainingQty: remaining));
+          if (!isStockDetail) {
+            final timeline = [...journals]
+              ..sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+            final flat = <Object>[];
+            String? lastDateStr;
+            for (final j in timeline) {
+              final d = DateFormat('yyyy.MM.dd').format(j.tradeDate);
+              if (d != lastDateStr) {
+                flat.add(j.tradeDate);
+                lastDateStr = d;
+              }
+              flat.add(j);
             }
+
+            return ListView.builder(
+              padding: const EdgeInsets.fromLTRB(20, 4, 20, 100),
+              itemCount: flat.length,
+              itemBuilder: (ctx, i) {
+                final item = flat[i];
+                if (item is DateTime) return _DateSectionHeader(date: item);
+                final j = item as TradingJournal;
+                return _JournalCard(
+                  key: ValueKey(j.id),
+                  journal: j,
+                  showTradeDate: false,
+                  simpleTradeOnly: true,
+                  firestoreService: _firestoreService,
+                  onEdit: () => _openForm(existing: j),
+                  onEditLinkedSell: (sell) => _openForm(existing: sell),
+                  onDeleteLinkedSell: onDeleteLinkedSell,
+                );
+              },
+            );
           }
 
-          // 날짜별 섹션 헤더를 위해 거래일 내림차순 정렬
-          topLevel.sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+          final buys = journals.where((j) => j.action == '매수').toList()
+            ..sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+          final buyIds = buys.map((b) => b.id).toSet();
+          final linkedSells = journals
+              .where(
+                (j) => j.action == '매도' && buyIds.contains(j.linkedBuyId),
+              )
+              .toList()
+            ..sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+          final representative = buys.isNotEmpty
+              ? buys.first
+              : ([...journals]..sort((a, b) => b.tradeDate.compareTo(a.tradeDate)))
+                    .first;
 
-          // DateTime(헤더) + TradingJournal(카드) 혼합 평탄 리스트
-          final flat = <Object>[];
-          String? lastDateStr;
-          for (final j in topLevel) {
-            final d = DateFormat('yyyy.MM.dd').format(j.tradeDate);
-            if (d != lastDateStr) {
-              flat.add(j.tradeDate);
-              lastDateStr = d;
-            }
-            flat.add(j);
-          }
-
-          return Column(
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
             children: [
-              _PortfolioSummarySection(holdings: holdings),
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 100),
-                  itemCount: flat.length,
-                  itemBuilder: (ctx, i) {
-                    final item = flat[i];
-                    if (item is DateTime) {
-                      return _DateSectionHeader(date: item);
-                    }
-                    final j = item as TradingJournal;
-                    return _JournalCard(
-                      key: ValueKey(j.id),
-                      journal: j,
-                      linkedSells: linkedSellMap[j.id] ?? [],
-                      firestoreService: _firestoreService,
-                      onEdit: () => _openForm(existing: j),
-                      onEditLinkedSell: (sell) => _openForm(existing: sell),
-                      onSellQuick: (buy, remainingQty) =>
-                          _openForm(linkedBuy: buy, remainingQty: remainingQty),
-                      onDeleteLinkedSell: (sell) async {
-                        final ok = await showDialog<bool>(
-                          context: context,
-                          builder: (_) => AlertDialog(
-                            title: const Text('매도 내역 삭제'),
-                            content: const Text('이 매도 내역을 삭제하시겠습니까?'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: const Text('취소'),
-                              ),
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                child: const Text(
-                                  '삭제',
-                                  style: TextStyle(color: Colors.redAccent),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (ok == true) {
-                          await _firestoreService.deleteJournal(sell.id);
-                        }
-                      },
-                    );
-                  },
-                ),
+              _JournalCard(
+                key: ValueKey('stock_${representative.id}'),
+                journal: representative,
+                relatedBuys: buys,
+                linkedSells: linkedSells,
+                firestoreService: _firestoreService,
+                onEdit: () => _openForm(existing: representative),
+                onEditLinkedSell: (sell) => _openForm(existing: sell),
+                onSellQuick: (buy, remainingQty) =>
+                    _openForm(linkedBuy: buy, remainingQty: remainingQty),
+                onDeleteLinkedSell: onDeleteLinkedSell,
               ),
             ],
           );
@@ -727,7 +727,10 @@ class _HoldingRow extends StatelessWidget {
 
 class _JournalCard extends StatefulWidget {
   final TradingJournal journal;
+  final List<TradingJournal> relatedBuys;
   final List<TradingJournal> linkedSells;
+  final bool showTradeDate;
+  final bool simpleTradeOnly;
   final FirestoreService firestoreService;
   final VoidCallback onEdit;
   final void Function(TradingJournal)? onEditLinkedSell;
@@ -737,7 +740,10 @@ class _JournalCard extends StatefulWidget {
   const _JournalCard({
     super.key,
     required this.journal,
+    this.relatedBuys = const [],
     this.linkedSells = const [],
+    this.showTradeDate = true,
+    this.simpleTradeOnly = false,
     required this.firestoreService,
     required this.onEdit,
     this.onEditLinkedSell,
@@ -862,15 +868,41 @@ class _JournalCardState extends State<_JournalCard> {
         ? '₩${NumberFormat('#,###').format(p.toInt())}'
         : '\$${p.toStringAsFixed(2)}';
 
+    final groupedBuys = widget.relatedBuys.isNotEmpty
+        ? [...widget.relatedBuys]
+        : (journal.action == '매수' ? [journal] : <TradingJournal>[]);
+    groupedBuys.sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+
+    final remainingByBuyId = <String, double>{};
+    for (final buy in groupedBuys) {
+      final soldForBuy = widget.linkedSells
+          .where((s) => s.linkedBuyId == buy.id)
+          .fold(0.0, (sum, s) => sum + s.quantity);
+      final remaining = (buy.quantity - soldForBuy).clamp(0.0, buy.quantity);
+      remainingByBuyId[buy.id] = remaining;
+    }
+    final quickSellTarget = groupedBuys.firstWhere(
+      (b) => (remainingByBuyId[b.id] ?? 0) > 0,
+      orElse: () => journal,
+    );
+    final quickSellRemainingQty = remainingByBuyId[quickSellTarget.id] ?? 0.0;
+
     // 잔량 계산 (매수 카드)
-    final soldQty = widget.linkedSells.fold(0.0, (s, j) => s + j.quantity);
+    final baseQty = groupedBuys.fold<double>(0, (sum, b) => sum + b.quantity);
     final remainingQty = journal.action == '매수'
-        ? (journal.quantity - soldQty).clamp(0.0, journal.quantity)
+        ? remainingByBuyId.values.fold<double>(0, (sum, r) => sum + r)
         : 0.0;
     final isClosed =
         journal.action == '매수' &&
         remainingQty == 0 &&
         widget.linkedSells.isNotEmpty;
+    final avgBuyPrice = baseQty > 0
+        ? groupedBuys.fold<double>(
+                0,
+                (sum, b) => sum + (b.price * b.quantity),
+              ) /
+              baseQty
+        : journal.price;
 
     // 총 실현손익 (포지션 전체 종료 시)
     double? totalRealizedPnl;
@@ -912,9 +944,9 @@ class _JournalCardState extends State<_JournalCard> {
         !isClosed &&
         remainingQty > 0 &&
         _price != null &&
-        journal.price > 0) {
-      pnl = (_price!.price - journal.price) * remainingQty;
-      pnlPct = (_price!.price - journal.price) / journal.price * 100;
+        avgBuyPrice > 0) {
+      pnl = (_price!.price - avgBuyPrice) * remainingQty;
+      pnlPct = (_price!.price - avgBuyPrice) / avgBuyPrice * 100;
     }
     final isPnlUp = pnl != null && pnl >= 0;
 
@@ -925,7 +957,18 @@ class _JournalCardState extends State<_JournalCard> {
       'US' => 'NYSE/NASDAQ',
       _ => journal.market,
     };
-    final tradeDateText = DateFormat('yyyy.MM.dd').format(journal.tradeDate);
+    final latestActivityDate = [
+      journal.tradeDate,
+      ...groupedBuys.map((b) => b.tradeDate),
+      ...widget.linkedSells.map((s) => s.tradeDate),
+    ].reduce((a, b) => a.isAfter(b) ? a : b);
+    final tradeDateText = DateFormat('yyyy.MM.dd').format(latestActivityDate);
+    final showCombinedHistory = widget.relatedBuys.isNotEmpty;
+    final simpleTradeOnly = widget.simpleTradeOnly;
+    final historyEvents = <({TradingJournal journal, bool isBuy})>[
+      ...groupedBuys.map((b) => (journal: b, isBuy: true)),
+      ...widget.linkedSells.map((s) => (journal: s, isBuy: false)),
+    ]..sort((a, b) => b.journal.tradeDate.compareTo(a.journal.tradeDate));
 
     return GestureDetector(
       onTap: () =>
@@ -1001,56 +1044,84 @@ class _JournalCardState extends State<_JournalCard> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Text(
-                              '거래일',
-                              style: GoogleFonts.inter(
-                                color: tradeDateLabelColor,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              tradeDateText,
-                              style: GoogleFonts.robotoMono(
-                                color: tradeDateValueColor,
-                                fontSize: 24,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.6,
-                              ),
-                            ),
-                            const Spacer(),
-                            if (journal.action == '매수')
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
+                        if (widget.showTradeDate) ...[
+                          Row(
+                            children: [
+                              Text(
+                                '거래일',
+                                style: GoogleFonts.inter(
+                                  color: tradeDateLabelColor,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.3,
                                 ),
-                                decoration: BoxDecoration(
-                                  color: actionColor.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(999),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                tradeDateText,
+                                style: GoogleFonts.robotoMono(
+                                  color: tradeDateValueColor,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.6,
                                 ),
-                                child: Text(
-                                  '매수',
-                                  style: GoogleFonts.inter(
-                                    color: actionColor,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
+                              ),
+                              const Spacer(),
+                              if (journal.action == '매수')
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: actionColor.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    '매수',
+                                    style: GoogleFonts.inter(
+                                      color: actionColor,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ),
-                              ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          height: 1,
-                          width: double.infinity,
-                          color: tradeDateDividerColor,
-                        ),
-                        const SizedBox(height: 10),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            height: 1,
+                            width: double.infinity,
+                            color: tradeDateDividerColor,
+                          ),
+                          const SizedBox(height: 10),
+                        ] else ...[
+                          Row(
+                            children: [
+                              const Spacer(),
+                              if (journal.action == '매수')
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: actionColor.withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    '매수',
+                                    style: GoogleFonts.inter(
+                                      color: actionColor,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                        ],
                         // ── 헤더 행
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1299,9 +1370,12 @@ class _JournalCardState extends State<_JournalCard> {
                               final divCol = cs.onSurface.withValues(
                                 alpha: 0.07,
                               );
-                              final qtyStr = journal.quantity % 1 == 0
-                                  ? '${journal.quantity.toInt()}주'
-                                  : '${journal.quantity}주';
+                              final qtyBase = journal.action == '매수'
+                                  ? baseQty
+                                  : journal.quantity;
+                              final qtyStr = qtyBase % 1 == 0
+                                  ? '${qtyBase.toInt()}주'
+                                  : '${qtyBase}주';
 
                               Widget cell(
                                 String label,
@@ -1358,6 +1432,26 @@ class _JournalCardState extends State<_JournalCard> {
                               List<Widget> rows = [];
 
                               if (journal.action == '매수') {
+                                if (simpleTradeOnly) {
+                                  rows.add(
+                                    IntrinsicHeight(
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          cell(
+                                            '매수가',
+                                            avgBuyPrice > 0
+                                                ? fmtP(avgBuyPrice)
+                                                : '-',
+                                          ),
+                                          vd(),
+                                          cell('매수수량', qtyStr),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                } else
                                 if (!isClosed) {
                                   const upColor = Color(
                                     0xFFF04452,
@@ -1366,9 +1460,9 @@ class _JournalCardState extends State<_JournalCard> {
                                     0xFF1677FF,
                                   ); // DESIGN.md down
                                   final hasLive =
-                                      _price != null && journal.price > 0;
+                                      _price != null && avgBuyPrice > 0;
                                   final isUpLive = hasLive
-                                      ? _price!.price >= journal.price
+                                      ? _price!.price >= avgBuyPrice
                                       : false;
                                   final currentPrice =
                                       _price?.formattedPrice ?? '-';
@@ -1376,8 +1470,8 @@ class _JournalCardState extends State<_JournalCard> {
                                       ? '${remainingQty.toInt()}주'
                                       : '$remainingQty주';
                                   final buyAmount =
-                                      journal.price > 0 && remainingQty > 0
-                                      ? fmtP(journal.price * remainingQty)
+                                      avgBuyPrice > 0 && remainingQty > 0
+                                      ? fmtP(avgBuyPrice * remainingQty)
                                       : '-';
                                   final evalAmount =
                                       _price != null && remainingQty > 0
@@ -1389,6 +1483,19 @@ class _JournalCardState extends State<_JournalCard> {
                                   final evalPctText = pnlPct != null
                                       ? '${isPnlUp ? '+' : ''}${pnlPct.toStringAsFixed(2)}%'
                                       : '-';
+                                  final realizedPnlText = hasLinkedRealized
+                                      ? '${isLinkedTotalUp ? '+' : ''}${fmtP(linkedRealizedTotal)}'
+                                      : '-';
+                                  final totalPnl = (pnl ?? 0) +
+                                      (hasLinkedRealized
+                                          ? linkedRealizedTotal
+                                          : 0);
+                                  final hasTotalPnl =
+                                      pnl != null || hasLinkedRealized;
+                                  final isTotalPnlUp = totalPnl >= 0;
+                                  final totalPnlText = hasTotalPnl
+                                      ? '${isTotalPnlUp ? '+' : ''}${fmtP(totalPnl)}'
+                                      : '-';
 
                                   // 1행: 매수가 | 현재가
                                   rows.add(
@@ -1399,8 +1506,8 @@ class _JournalCardState extends State<_JournalCard> {
                                         children: [
                                           cell(
                                             '매수가',
-                                            journal.price > 0
-                                                ? fmtP(journal.price)
+                                            avgBuyPrice > 0
+                                                ? fmtP(avgBuyPrice)
                                                 : '-',
                                           ),
                                           vd(),
@@ -1489,6 +1596,38 @@ class _JournalCardState extends State<_JournalCard> {
                                       ),
                                     ),
                                   );
+
+                                  // 5행: 실현손익 | 총손익
+                                  rows.add(hd());
+                                  rows.add(
+                                    IntrinsicHeight(
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          cell(
+                                            '실현손익',
+                                            realizedPnlText,
+                                            valueColor: hasLinkedRealized
+                                                ? (isLinkedTotalUp
+                                                    ? upColor
+                                                    : downColor)
+                                                : null,
+                                          ),
+                                          vd(),
+                                          cell(
+                                            '총손익',
+                                            totalPnlText,
+                                            valueColor: hasTotalPnl
+                                                ? (isTotalPnlUp
+                                                    ? upColor
+                                                    : downColor)
+                                                : null,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
                                 } else {
                                   // 종료된 매수 포지션 요약: 3행 구조
                                   final totalSellQty = widget.linkedSells.fold(
@@ -1504,9 +1643,8 @@ class _JournalCardState extends State<_JournalCard> {
                                       ? totalSellAmount / totalSellQty
                                       : 0.0;
                                   final investedAmount =
-                                      (journal.price > 0 &&
-                                          journal.quantity > 0)
-                                      ? journal.price * journal.quantity
+                                      (avgBuyPrice > 0 && baseQty > 0)
+                                      ? avgBuyPrice * baseQty
                                       : 0.0;
                                   final totalPnlVal =
                                       totalRealizedPnl ??
@@ -1524,8 +1662,8 @@ class _JournalCardState extends State<_JournalCard> {
                                         children: [
                                           cell(
                                             '매수가',
-                                            journal.price > 0
-                                                ? fmtP(journal.price)
+                                            avgBuyPrice > 0
+                                                ? fmtP(avgBuyPrice)
                                                 : '-',
                                           ),
                                           vd(),
@@ -1535,7 +1673,7 @@ class _JournalCardState extends State<_JournalCard> {
                                                 ? fmtP(avgSellPrice)
                                                 : '-',
                                             valueColor: totalSellQty > 0
-                                                ? (avgSellPrice >= journal.price
+                                                ? (avgSellPrice >= avgBuyPrice
                                                       ? _upColor
                                                       : _downColor)
                                                 : null,
@@ -1654,7 +1792,7 @@ class _JournalCardState extends State<_JournalCard> {
                           ),
                         ],
                         // ── 실현손익 (매도)
-                        if (realizedPnl != null) ...[
+                        if (!simpleTradeOnly && realizedPnl != null) ...[
                           const SizedBox(height: 8),
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -1713,7 +1851,9 @@ class _JournalCardState extends State<_JournalCard> {
                           ),
                         ],
                         // ── 현재가 + 평가손익 (기타 액션 전용)
-                        if (journal.action == '기타' && !isClosed) ...[
+                        if (!simpleTradeOnly &&
+                            journal.action == '기타' &&
+                            !isClosed) ...[
                           if (_fetchingPrice)
                             Padding(
                               padding: const EdgeInsets.only(top: 10),
@@ -1848,15 +1988,15 @@ class _JournalCardState extends State<_JournalCard> {
                             ],
                           ],
                         ],
-                        // ── 매도 내역 (linked sells)
-                        if (widget.linkedSells.isNotEmpty) ...[
+                        // ── 종목 상세: 매수/매도 통합 시간순 기록
+                        if (showCombinedHistory && historyEvents.isNotEmpty) ...[
                           const SizedBox(height: 10),
                           Container(
                             decoration: BoxDecoration(
-                              color: _upColor.withValues(alpha: 0.04),
+                              color: cs.onSurface.withValues(alpha: 0.03),
                               borderRadius: BorderRadius.circular(10),
                               border: Border.all(
-                                color: _upColor.withValues(alpha: 0.12),
+                                color: cs.onSurface.withValues(alpha: 0.08),
                               ),
                             ),
                             child: Column(
@@ -1877,7 +2017,7 @@ class _JournalCardState extends State<_JournalCard> {
                                           vertical: 2,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: _upColor.withValues(
+                                          color: cs.onSurface.withValues(
                                             alpha: 0.14,
                                           ),
                                           borderRadius: BorderRadius.circular(
@@ -1885,9 +2025,11 @@ class _JournalCardState extends State<_JournalCard> {
                                           ),
                                         ),
                                         child: Text(
-                                          '매도',
+                                          '매매 기록',
                                           style: GoogleFonts.inter(
-                                            color: _upColor,
+                                            color: cs.onSurface.withValues(
+                                              alpha: 0.7,
+                                            ),
                                             fontSize: 11,
                                             fontWeight: FontWeight.w700,
                                           ),
@@ -1895,7 +2037,7 @@ class _JournalCardState extends State<_JournalCard> {
                                       ),
                                       const SizedBox(width: 6),
                                       Text(
-                                        '${widget.linkedSells.length}건',
+                                        '${historyEvents.length}건',
                                         style: GoogleFonts.inter(
                                           color: cs.onSurface.withValues(
                                             alpha: 0.45,
@@ -1907,43 +2049,60 @@ class _JournalCardState extends State<_JournalCard> {
                                     ],
                                   ),
                                 ),
-                                ...widget.linkedSells.map((sell) {
-                                  final sellDate = DateFormat(
+                                ...historyEvents.map((e) {
+                                  final t = e.journal;
+                                  final isBuy = e.isBuy;
+                                  final tradeDate = DateFormat(
                                     'MM/dd',
-                                  ).format(sell.tradeDate);
-                                  final qtyStr = sell.quantity % 1 == 0
-                                      ? '${sell.quantity.toInt()}주'
-                                      : '${sell.quantity}주';
-                                  final sellPriceStr = sell.price > 0
-                                      ? fmtP(sell.price)
+                                  ).format(t.tradeDate);
+                                  final qtyStr = t.quantity % 1 == 0
+                                      ? '${t.quantity.toInt()}주'
+                                      : '${t.quantity}주';
+                                  final priceStr = t.price > 0
+                                      ? fmtP(t.price)
                                       : '-';
-                                  double? spnl;
-                                  if (sell.buyPrice > 0 && sell.price > 0) {
-                                    spnl =
-                                        (sell.price - sell.buyPrice) *
-                                        sell.quantity;
+                                  double? tradePnl;
+                                  if (!isBuy &&
+                                      t.buyPrice > 0 &&
+                                      t.price > 0 &&
+                                      t.quantity > 0) {
+                                    tradePnl = (t.price - t.buyPrice) * t.quantity;
                                   }
-                                  final isSpnlUp = spnl != null && spnl >= 0;
+                                  final isTradePnlUp =
+                                      tradePnl != null && tradePnl >= 0;
                                   return Padding(
                                     padding: const EdgeInsets.fromLTRB(
                                       10,
                                       0,
                                       10,
-                                      0,
+                                      4,
                                     ),
                                     child: Row(
                                       children: [
                                         Container(
                                           width: 8,
                                           height: 8,
-                                          decoration: const BoxDecoration(
-                                            color: Color(0xFFF04452),
+                                          decoration: BoxDecoration(
+                                            color: isBuy
+                                                ? const Color(0xFF10B981)
+                                                : _upColor,
                                             shape: BoxShape.circle,
                                           ),
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          sellDate,
+                                          isBuy ? '매수' : '매도',
+                                          style: GoogleFonts.inter(
+                                            color: isBuy
+                                                ? const Color(0xFF10B981)
+                                                : _upColor,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          tradeDate,
                                           style: GoogleFonts.inter(
                                             color: cs.onSurface.withValues(
                                               alpha: 0.4,
@@ -1964,7 +2123,7 @@ class _JournalCardState extends State<_JournalCard> {
                                         ),
                                         const SizedBox(width: 6),
                                         Text(
-                                          sellPriceStr,
+                                          priceStr,
                                           style: GoogleFonts.robotoMono(
                                             color: cs.onSurface.withValues(
                                               alpha: 0.6,
@@ -1973,20 +2132,21 @@ class _JournalCardState extends State<_JournalCard> {
                                           ),
                                         ),
                                         const Spacer(),
-                                        if (spnl != null)
+                                        if (tradePnl != null)
                                           Text(
-                                            '${isSpnlUp ? '+' : ''}${fmtP(spnl)}',
+                                            '${isTradePnlUp ? '+' : ''}${fmtP(tradePnl)}',
                                             style: GoogleFonts.robotoMono(
-                                              color: isSpnlUp
+                                              color: isTradePnlUp
                                                   ? _upColor
                                                   : _downColor,
                                               fontSize: 12,
                                               fontWeight: FontWeight.w600,
                                             ),
                                           ),
-                                        if (widget.onEditLinkedSell != null ||
-                                            widget.onDeleteLinkedSell !=
-                                                null) ...[
+                                        if (!isBuy &&
+                                            (widget.onEditLinkedSell != null ||
+                                                widget.onDeleteLinkedSell !=
+                                                    null)) ...[
                                           const SizedBox(width: 4),
                                           PopupMenuButton<String>(
                                             tooltip: '매도내역 메뉴',
@@ -2005,12 +2165,12 @@ class _JournalCardState extends State<_JournalCard> {
                                               if (value == 'edit' &&
                                                   widget.onEditLinkedSell !=
                                                       null) {
-                                                widget.onEditLinkedSell!(sell);
+                                                widget.onEditLinkedSell!(t);
                                               } else if (value == 'delete' &&
                                                   widget.onDeleteLinkedSell !=
                                                       null) {
                                                 widget.onDeleteLinkedSell!(
-                                                  sell,
+                                                  t,
                                                 );
                                               }
                                             },
@@ -2093,13 +2253,17 @@ class _JournalCardState extends State<_JournalCard> {
                   // ── 빠른 매도 행
                   if (journal.action == '매수' &&
                       !isClosed &&
-                      widget.onSellQuick != null) ...[
+                      widget.onSellQuick != null &&
+                      quickSellRemainingQty > 0) ...[
                     Divider(
                       height: 1,
                       color: cs.onSurface.withValues(alpha: 0.07),
                     ),
                     GestureDetector(
-                      onTap: () => widget.onSellQuick!(journal, remainingQty),
+                      onTap: () => widget.onSellQuick!(
+                        quickSellTarget,
+                        quickSellRemainingQty,
+                      ),
                       child: Container(
                         width: double.infinity,
                         padding: const EdgeInsets.symmetric(vertical: 12),

@@ -44,7 +44,7 @@ void main() async {
     // 에뮬레이터 등 지원 안 되는 환경에서 무시
   }
 
-  // FCM 백그라운드 핸들러 등록 (Firebase 초기화 직후)
+  // FCM 백그운드 핸들러 등록 (Firebase 초기화 직후)
   NotificationService.registerBackgroundHandler();
 
   // 카카오 SDK 초기화
@@ -93,7 +93,9 @@ class StockStorageApp extends StatelessWidget {
           theme: ThemeData(
             brightness: Brightness.light,
             fontFamily: 'Pretendard',
-            textTheme: ThemeData.light().textTheme.apply(fontFamily: 'Pretendard'),
+            textTheme: ThemeData.light().textTheme.apply(
+              fontFamily: 'Pretendard',
+            ),
             scaffoldBackgroundColor: const Color(0xFFF0F4F8),
             colorScheme: ColorScheme.fromSeed(
               seedColor: const Color(0xFF10B981),
@@ -112,7 +114,9 @@ class StockStorageApp extends StatelessWidget {
           darkTheme: ThemeData(
             brightness: Brightness.dark,
             fontFamily: 'Pretendard',
-            textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'Pretendard'),
+            textTheme: ThemeData.dark().textTheme.apply(
+              fontFamily: 'Pretendard',
+            ),
             scaffoldBackgroundColor: const Color(0xFF0A0E1A),
             colorScheme: ColorScheme.fromSeed(
               seedColor: const Color(0xFF10B981),
@@ -133,5 +137,3 @@ class StockStorageApp extends StatelessWidget {
     );
   }
 }
-
-

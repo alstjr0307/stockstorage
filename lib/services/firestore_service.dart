@@ -749,6 +749,7 @@ class FirestoreService {
         'uid': doc.id,
         'nickname': data['nickname'] as String? ?? '',
         'createdAt': data['createdAt'] as Timestamp?,
+        'lastActiveAt': data['lastActiveAt'] as Timestamp?,
         'level': level,
         'postCount': postCount,
         'commentCount': commentCount,
