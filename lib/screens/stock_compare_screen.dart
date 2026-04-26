@@ -1,7 +1,6 @@
-﻿import 'dart:ui' as ui;
+import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import '../models/stock_pick.dart';
@@ -131,8 +130,12 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
   Future<void> _loadBase() async {
     final pick = widget.basePick!;
     final results = await Future.wait([
-      StockPriceService.fetchHistory(pick.ticker, pick.market,
-          range: _range, interval: _interval),
+      StockPriceService.fetchHistory(
+        pick.ticker,
+        pick.market,
+        range: _range,
+        interval: _interval,
+      ),
       StockPriceService.fetchPrice(pick.ticker, pick.market),
     ]);
     if (mounted) {
@@ -151,7 +154,11 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
     }
     setState(() => _searchingBase = true);
     final results = await StockPriceService.searchStocks(query);
-    if (mounted) setState(() { _baseSearchResults = results; _searchingBase = false; });
+    if (mounted)
+      setState(() {
+        _baseSearchResults = results;
+        _searchingBase = false;
+      });
   }
 
   Future<void> _selectBase(StockSearchResult stock) async {
@@ -162,8 +169,12 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
       _loadingBase = true;
     });
     final results = await Future.wait([
-      StockPriceService.fetchHistory(stock.ticker, stock.market,
-          range: _range, interval: _interval),
+      StockPriceService.fetchHistory(
+        stock.ticker,
+        stock.market,
+        range: _range,
+        interval: _interval,
+      ),
       StockPriceService.fetchPrice(stock.ticker, stock.market),
     ]);
     if (mounted) {
@@ -182,7 +193,11 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
     }
     setState(() => _compareSearching[idx] = true);
     final results = await StockPriceService.searchStocks(query);
-    if (mounted) setState(() { _compareResults[idx] = results; _compareSearching[idx] = false; });
+    if (mounted)
+      setState(() {
+        _compareResults[idx] = results;
+        _compareSearching[idx] = false;
+      });
   }
 
   Future<void> _selectCompare(int idx, StockSearchResult stock) async {
@@ -196,17 +211,28 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
     PriceResult? price;
     if (_customSelected) {
       final now = DateTime.now();
-      final start = now.subtract(Duration(days: _toDays(_customAmount, _customUnit)));
+      final start = now.subtract(
+        Duration(days: _toDays(_customAmount, _customUnit)),
+      );
       final r = await Future.wait([
-        StockPriceService.fetchHistoryByDates(stock.ticker, stock.market, start, now),
+        StockPriceService.fetchHistoryByDates(
+          stock.ticker,
+          stock.market,
+          start,
+          now,
+        ),
         StockPriceService.fetchPrice(stock.ticker, stock.market),
       ]);
       history = r[0] as List<double>;
       price = r[1] as PriceResult?;
     } else {
       final r = await Future.wait([
-        StockPriceService.fetchHistory(stock.ticker, stock.market,
-            range: _range, interval: _interval),
+        StockPriceService.fetchHistory(
+          stock.ticker,
+          stock.market,
+          range: _range,
+          interval: _interval,
+        ),
         StockPriceService.fetchPrice(stock.ticker, stock.market),
       ]);
       history = r[0] as List<double>;
@@ -223,16 +249,28 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
 
   Future<void> _changePeriod(int index) async {
     if (_periodIndex == index && !_customSelected) return;
-    setState(() { _periodIndex = index; _customSelected = false; });
+    setState(() {
+      _periodIndex = index;
+      _customSelected = false;
+    });
     final futures = <Future>[];
     final baseTicker = widget.basePick?.ticker ?? _baseStockResult?.ticker;
     final baseMarket = widget.basePick?.market ?? _baseStockResult?.market;
     if (baseTicker != null) {
       setState(() => _loadingBase = true);
       futures.add(
-        StockPriceService.fetchHistory(baseTicker, baseMarket!,
-                range: _range, interval: _interval)
-            .then((h) { if (mounted) setState(() { _baseHistory = h; _loadingBase = false; }); }),
+        StockPriceService.fetchHistory(
+          baseTicker,
+          baseMarket!,
+          range: _range,
+          interval: _interval,
+        ).then((h) {
+          if (mounted)
+            setState(() {
+              _baseHistory = h;
+              _loadingBase = false;
+            });
+        }),
       );
     }
     for (int i = 0; i < _slotCount; i++) {
@@ -241,9 +279,18 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
         setState(() => _compareLoading[i] = true);
         final ci = i;
         futures.add(
-          StockPriceService.fetchHistory(stock.ticker, stock.market,
-                  range: _range, interval: _interval)
-              .then((h) { if (mounted) setState(() { _compareHistory[ci] = h; _compareLoading[ci] = false; }); }),
+          StockPriceService.fetchHistory(
+            stock.ticker,
+            stock.market,
+            range: _range,
+            interval: _interval,
+          ).then((h) {
+            if (mounted)
+              setState(() {
+                _compareHistory[ci] = h;
+                _compareLoading[ci] = false;
+              });
+          }),
         );
       }
     }
@@ -252,21 +299,31 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
 
   int _toDays(int amount, String unit) {
     switch (unit) {
-      case '일': return amount;
-      case '주': return amount * 7;
-      case '개월': return amount * 30;
-      case '년': return amount * 365;
-      default: return amount * 30;
+      case '일':
+        return amount;
+      case '주':
+        return amount * 7;
+      case '개월':
+        return amount * 30;
+      case '년':
+        return amount * 365;
+      default:
+        return amount * 30;
     }
   }
 
   int _maxAmount(String unit) {
     switch (unit) {
-      case '일': return 365;
-      case '주': return 52;
-      case '개월': return 60;
-      case '년': return 20;
-      default: return 60;
+      case '일':
+        return 365;
+      case '주':
+        return 52;
+      case '개월':
+        return 60;
+      case '년':
+        return 20;
+      default:
+        return 60;
     }
   }
 
@@ -278,91 +335,124 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
       context: context,
       builder: (ctx) {
         final cs = Theme.of(ctx).colorScheme;
-        return StatefulBuilder(builder: (ctx, setLocal) {
-          return AlertDialog(
-            backgroundColor: cs.surface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Text('기간 직접 입력',
-                style: GoogleFonts.inter(
-                    color: cs.onSurface, fontWeight: FontWeight.w700, fontSize: 16)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _stepBtn(Icons.remove, () {
-                      if (tempAmount > 1) setLocal(() => tempAmount--);
-                    }, cs),
-                    const SizedBox(width: 12),
-                    SizedBox(
-                      width: 52,
-                      child: Text('$tempAmount',
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            return AlertDialog(
+              backgroundColor: cs.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Text(
+                '기간 직접 입력',
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _stepBtn(Icons.remove, () {
+                        if (tempAmount > 1) setLocal(() => tempAmount--);
+                      }, cs),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 52,
+                        child: Text(
+                          '$tempAmount',
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.inter(
-                              color: const Color(0xFF10B981),
-                              fontSize: 28,
-                              fontWeight: FontWeight.w700)),
-                    ),
-                    const SizedBox(width: 12),
-                    _stepBtn(Icons.add, () {
-                      if (tempAmount < _maxAmount(tempUnit)) setLocal(() => tempAmount++);
-                    }, cs),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: ['일', '주', '개월', '년'].map((u) {
-                    final sel = tempUnit == u;
-                    return GestureDetector(
-                      onTap: () => setLocal(() {
-                        tempUnit = u;
-                        final mx = _maxAmount(u);
-                        if (tempAmount > mx) tempAmount = mx;
-                      }),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 120),
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: sel
-                              ? const Color(0xFF10B981)
-                              : cs.onSurface.withValues(alpha: 0.07),
-                          borderRadius: BorderRadius.circular(8),
+                          style: TextStyle(
+                            color: const Color(0xFF10B981),
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                        child: Text(u,
-                            style: GoogleFonts.inter(
-                              color: sel ? Colors.black : cs.onSurface.withValues(alpha: 0.6),
-                              fontWeight: sel ? FontWeight.w700 : FontWeight.w400,
-                              fontSize: 13,
-                            )),
                       ),
-                    );
-                  }).toList(),
+                      const SizedBox(width: 12),
+                      _stepBtn(Icons.add, () {
+                        if (tempAmount < _maxAmount(tempUnit))
+                          setLocal(() => tempAmount++);
+                      }, cs),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: ['일', '주', '개월', '년'].map((u) {
+                      final sel = tempUnit == u;
+                      return GestureDetector(
+                        onTap: () => setLocal(() {
+                          tempUnit = u;
+                          final mx = _maxAmount(u);
+                          if (tempAmount > mx) tempAmount = mx;
+                        }),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 120),
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 7,
+                          ),
+                          decoration: BoxDecoration(
+                            color: sel
+                                ? const Color(0xFF10B981)
+                                : cs.onSurface.withValues(alpha: 0.07),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            u,
+                            style: TextStyle(
+                              color: sel
+                                  ? Colors.black
+                                  : cs.onSurface.withValues(alpha: 0.6),
+                              fontWeight: sel
+                                  ? FontWeight.w700
+                                  : FontWeight.w400,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '최근 $tempAmount$tempUnit 기준',
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.4),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: Text(
+                    '취소',
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.5),
+                    ),
+                  ),
                 ),
-                const SizedBox(height: 10),
-                Text('최근 $tempAmount$tempUnit 기준',
-                    style: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.4), fontSize: 12)),
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: Text(
+                    '적용',
+                    style: TextStyle(
+                      color: const Color(0xFF10B981),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
               ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text('취소',
-                    style: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.5))),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text('적용',
-                    style: GoogleFonts.inter(
-                        color: const Color(0xFF10B981), fontWeight: FontWeight.w700)),
-              ),
-            ],
-          );
-        });
+            );
+          },
+        );
       },
     );
 
@@ -381,8 +471,18 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
     if (baseTicker != null) {
       setState(() => _loadingBase = true);
       futures.add(
-        StockPriceService.fetchHistoryByDates(baseTicker, baseMarket!, start, now)
-            .then((h) { if (mounted) setState(() { _baseHistory = h; _loadingBase = false; }); }),
+        StockPriceService.fetchHistoryByDates(
+          baseTicker,
+          baseMarket!,
+          start,
+          now,
+        ).then((h) {
+          if (mounted)
+            setState(() {
+              _baseHistory = h;
+              _loadingBase = false;
+            });
+        }),
       );
     }
     for (int i = 0; i < _slotCount; i++) {
@@ -391,8 +491,18 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
         setState(() => _compareLoading[i] = true);
         final ci = i;
         futures.add(
-          StockPriceService.fetchHistoryByDates(stock.ticker, stock.market, start, now)
-              .then((h) { if (mounted) setState(() { _compareHistory[ci] = h; _compareLoading[ci] = false; }); }),
+          StockPriceService.fetchHistoryByDates(
+            stock.ticker,
+            stock.market,
+            start,
+            now,
+          ).then((h) {
+            if (mounted)
+              setState(() {
+                _compareHistory[ci] = h;
+                _compareLoading[ci] = false;
+              });
+          }),
         );
       }
     }
@@ -403,9 +513,12 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 36, height: 36,
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
-            color: cs.onSurface.withValues(alpha: 0.07), shape: BoxShape.circle),
+          color: cs.onSurface.withValues(alpha: 0.07),
+          shape: BoxShape.circle,
+        ),
         child: Icon(icon, color: cs.onSurface.withValues(alpha: 0.7), size: 18),
       ),
     );
@@ -418,8 +531,10 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
     return prices.map((p) => ((p - base) / base) * 100).toList();
   }
 
-  String get _baseName => widget.basePick?.name ?? _baseStockResult?.name ?? '—';
-  String get _baseTicker => widget.basePick?.ticker ?? _baseStockResult?.ticker ?? '—';
+  String get _baseName =>
+      widget.basePick?.name ?? _baseStockResult?.name ?? '—';
+  String get _baseTicker =>
+      widget.basePick?.ticker ?? _baseStockResult?.ticker ?? '—';
   bool get _isStandalone => widget.basePick == null;
 
   void _shareCompare() {
@@ -434,13 +549,17 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
       ..writeln('━━━━━━━━━━━━━━━━━━')
       ..writeln('기간: $period')
       ..writeln('━━━━━━━━━━━━━━━━━━')
-      ..writeln('$_baseName ($_baseTicker)  ${sign(basePct.last)}${basePct.last.toStringAsFixed(2)}%');
+      ..writeln(
+        '$_baseName ($_baseTicker)  ${sign(basePct.last)}${basePct.last.toStringAsFixed(2)}%',
+      );
     for (int i = 0; i < _slotCount; i++) {
       final stock = _compareStock[i];
       if (stock == null) continue;
       final pct = _toPercent(_compareHistory[i]);
       if (pct.isEmpty) continue;
-      buf.writeln('${stock.name} (${stock.ticker})  ${sign(pct.last)}${pct.last.toStringAsFixed(2)}%');
+      buf.writeln(
+        '${stock.name} (${stock.ticker})  ${sign(pct.last)}${pct.last.toStringAsFixed(2)}%',
+      );
     }
     buf
       ..writeln('━━━━━━━━━━━━━━━━━━')
@@ -452,10 +571,12 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final basePct = _toPercent(_baseHistory);
-    final comparePcts = List.generate(_slotCount, (i) =>
-        (_compareStock[i] != null && !_compareLoading[i])
-            ? _toPercent(_compareHistory[i])
-            : <double>[]);
+    final comparePcts = List.generate(
+      _slotCount,
+      (i) => (_compareStock[i] != null && !_compareLoading[i])
+          ? _toPercent(_compareHistory[i])
+          : <double>[],
+    );
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -468,9 +589,13 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
                 icon: Icon(Icons.arrow_back_ios, color: cs.onSurface, size: 18),
                 onPressed: () => Navigator.pop(context),
               ),
-              title: Text('종목 비교',
-                  style: GoogleFonts.inter(
-                      color: cs.onSurface, fontWeight: FontWeight.w700)),
+              title: Text(
+                '종목 비교',
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
       body: ListView(
         padding: EdgeInsets.fromLTRB(20, _isStandalone ? 20 : 0, 20, 100),
@@ -514,19 +639,22 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
                     color: cs.surface,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                        color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                      color: const Color(0xFF10B981).withValues(alpha: 0.4),
+                    ),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(Icons.add, color: Color(0xFF10B981), size: 16),
                       const SizedBox(width: 6),
-                      Text('종목 추가 (${_slotCount + 1}/4)',
-                          style: GoogleFonts.inter(
-                            color: const Color(0xFF10B981),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          )),
+                      Text(
+                        '종목 추가 (${_slotCount + 1}/4)',
+                        style: TextStyle(
+                          color: const Color(0xFF10B981),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -570,7 +698,8 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
                   side: const BorderSide(color: Color(0xFF10B981), width: 1),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
             ),
@@ -604,7 +733,10 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
         ),
         if (_compareResults[idx].isNotEmpty)
           _buildResultsList(
-              _compareResults[idx], (s) => _selectCompare(idx, s), cs),
+            _compareResults[idx],
+            (s) => _selectCompare(idx, s),
+            cs,
+          ),
         const SizedBox(height: 12),
       ],
     );
@@ -629,23 +761,33 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
           children: [
             if (accentColor != null) ...[
               Container(
-                  width: 8, height: 8,
-                  decoration: BoxDecoration(
-                      color: accentColor, shape: BoxShape.circle)),
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: accentColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
               const SizedBox(width: 6),
             ],
-            Text(label,
-                style: GoogleFonts.inter(
-                    color: cs.onSurface.withValues(alpha: 0.5),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5)),
+            Text(
+              label,
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.5),
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
             if (showRemove) ...[
               const Spacer(),
               GestureDetector(
                 onTap: onRemove,
-                child: Icon(Icons.close,
-                    size: 16, color: cs.onSurface.withValues(alpha: 0.35)),
+                child: Icon(
+                  Icons.close,
+                  size: 16,
+                  color: cs.onSurface.withValues(alpha: 0.35),
+                ),
               ),
             ],
           ],
@@ -653,44 +795,62 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
         const SizedBox(height: 8),
         TextField(
           controller: controller,
-          style: GoogleFonts.inter(color: cs.onSurface, fontSize: 14),
+          style: TextStyle(color: cs.onSurface, fontSize: 14),
           onChanged: onChanged,
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.inter(
-                color: cs.onSurface.withValues(alpha: 0.3), fontSize: 14),
+            hintStyle: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.3),
+              fontSize: 14,
+            ),
             filled: true,
             fillColor: cs.surface,
             prefixIcon: searching
                 ? const Padding(
                     padding: EdgeInsets.all(12),
                     child: SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Color(0xFF10B981))))
-                : Icon(Icons.search,
-                    color: cs.onSurface.withValues(alpha: 0.4), size: 20),
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF10B981),
+                      ),
+                    ),
+                  )
+                : Icon(
+                    Icons.search,
+                    color: cs.onSurface.withValues(alpha: 0.4),
+                    size: 20,
+                  ),
             suffixIcon: controller.text.isNotEmpty
                 ? IconButton(
-                    icon: Icon(Icons.clear,
-                        color: cs.onSurface.withValues(alpha: 0.4), size: 18),
-                    onPressed: onClear)
+                    icon: Icon(
+                      Icons.clear,
+                      color: cs.onSurface.withValues(alpha: 0.4),
+                      size: 18,
+                    ),
+                    onPressed: onClear,
+                  )
                 : null,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
             ),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 12,
+            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildResultsList(List<StockSearchResult> results,
-      void Function(StockSearchResult) onSelect, ColorScheme cs) {
+  Widget _buildResultsList(
+    List<StockSearchResult> results,
+    void Function(StockSearchResult) onSelect,
+    ColorScheme cs,
+  ) {
     return Container(
       margin: const EdgeInsets.only(top: 4),
       decoration: BoxDecoration(
@@ -702,11 +862,17 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
         children: results.take(5).map((r) {
           return ListTile(
             dense: true,
-            title: Text(r.name,
-                style: GoogleFonts.inter(color: cs.onSurface, fontSize: 13)),
-            subtitle: Text('${r.ticker} · ${r.exchange}',
-                style: GoogleFonts.inter(
-                    color: cs.onSurface.withValues(alpha: 0.4), fontSize: 11)),
+            title: Text(
+              r.name,
+              style: TextStyle(color: cs.onSurface, fontSize: 13),
+            ),
+            subtitle: Text(
+              '${r.ticker} · ${r.exchange}',
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.4),
+                fontSize: 11,
+              ),
+            ),
             onTap: () => onSelect(r),
           );
         }).toList(),
@@ -738,21 +904,24 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.date_range_rounded,
-                size: 14,
+            Icon(
+              Icons.date_range_rounded,
+              size: 14,
+              color: _customSelected
+                  ? const Color(0xFF10B981)
+                  : cs.onSurface.withValues(alpha: 0.5),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
                 color: _customSelected
                     ? const Color(0xFF10B981)
-                    : cs.onSurface.withValues(alpha: 0.5)),
-            const SizedBox(width: 6),
-            Text(label,
-                style: GoogleFonts.inter(
-                  color: _customSelected
-                      ? const Color(0xFF10B981)
-                      : cs.onSurface.withValues(alpha: 0.6),
-                  fontSize: 12,
-                  fontWeight:
-                      _customSelected ? FontWeight.w700 : FontWeight.w400,
-                )),
+                    : cs.onSurface.withValues(alpha: 0.6),
+                fontSize: 12,
+                fontWeight: _customSelected ? FontWeight.w700 : FontWeight.w400,
+              ),
+            ),
           ],
         ),
       ),
@@ -782,7 +951,7 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
               child: Text(
                 _comparePeriods[i].$1,
                 textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: selected
                       ? Colors.black
                       : cs.onSurface.withValues(alpha: 0.6),
@@ -798,44 +967,55 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
   }
 
   Widget _buildReturnSummary(
-      List<double> basePct, List<List<double>> comparePcts, ColorScheme cs) {
+    List<double> basePct,
+    List<List<double>> comparePcts,
+    ColorScheme cs,
+  ) {
     final hasBase = widget.basePick != null || _baseStockResult != null;
-    final hasAny =
-        hasBase || comparePcts.any((p) => p.isNotEmpty);
+    final hasAny = hasBase || comparePcts.any((p) => p.isNotEmpty);
     if (!hasAny) return const SizedBox.shrink();
 
-    Widget badge(
-        String label, List<double> pct, Color accent, bool loading) {
+    Widget badge(String label, List<double> pct, Color accent, bool loading) {
       if (loading) {
         return const SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-                strokeWidth: 1.5, color: Color(0xFF10B981)));
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(
+            strokeWidth: 1.5,
+            color: Color(0xFF10B981),
+          ),
+        );
       }
       if (pct.isEmpty) return const SizedBox.shrink();
       final ret = pct.last;
       final isUp = ret >= 0;
-      return Row(mainAxisSize: MainAxisSize.min, children: [
-        Container(
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
             width: 8,
             height: 8,
-            decoration:
-                BoxDecoration(color: accent, shape: BoxShape.circle)),
-        const SizedBox(width: 5),
-        Text(label,
-            style: GoogleFonts.inter(
-                color: cs.onSurface.withValues(alpha: 0.54),
-                fontSize: 12)),
-        const SizedBox(width: 6),
-        Text('${isUp ? '+' : ''}${ret.toStringAsFixed(2)}%',
-            style: GoogleFonts.inter(
-                color: isUp
-                    ? const Color(0xFF10B981)
-                    : Colors.redAccent,
-                fontSize: 13,
-                fontWeight: FontWeight.w700)),
-      ]);
+            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.54),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '${isUp ? '+' : ''}${ret.toStringAsFixed(2)}%',
+            style: TextStyle(
+              color: isUp ? const Color(0xFF10B981) : Colors.redAccent,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      );
     }
 
     final items = <Widget>[];
@@ -844,8 +1024,14 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
     }
     for (int i = 0; i < _slotCount; i++) {
       if (_compareStock[i] != null) {
-        items.add(badge(_compareStock[i]!.name, comparePcts[i],
-            _slotColors[i + 1], _compareLoading[i]));
+        items.add(
+          badge(
+            _compareStock[i]!.name,
+            comparePcts[i],
+            _slotColors[i + 1],
+            _compareLoading[i],
+          ),
+        );
       }
     }
     return Wrap(spacing: 12, runSpacing: 6, children: items);
@@ -855,8 +1041,14 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
     final hasBase = widget.basePick != null || _baseStockResult != null;
     final cards = <Widget>[
       hasBase
-          ? _buildPriceCard(cs, _baseName, _baseTicker, _basePrice,
-              _slotColors[0], _loadingBase)
+          ? _buildPriceCard(
+              cs,
+              _baseName,
+              _baseTicker,
+              _basePrice,
+              _slotColors[0],
+              _loadingBase,
+            )
           : _emptyCard(cs, '기준 종목\n선택하세요'),
       ...List.generate(
         _slotCount,
@@ -868,7 +1060,8 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
                 _compareStock[i]!.ticker,
                 _comparePrice[i],
                 _slotColors[i + 1],
-                _compareLoading[i]),
+                _compareLoading[i],
+              ),
       ),
     ];
 
@@ -876,13 +1069,17 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
     final rows = <Widget>[];
     for (int i = 0; i < cards.length; i += 2) {
       final pair = cards.sublist(i, (i + 2).clamp(0, cards.length));
-      rows.add(Row(children: [
-        Expanded(child: pair[0]),
-        if (pair.length > 1) ...[
-          const SizedBox(width: 10),
-          Expanded(child: pair[1]),
-        ],
-      ]));
+      rows.add(
+        Row(
+          children: [
+            Expanded(child: pair[0]),
+            if (pair.length > 1) ...[
+              const SizedBox(width: 10),
+              Expanded(child: pair[1]),
+            ],
+          ],
+        ),
+      );
       if (i + 2 < cards.length) rows.add(const SizedBox(height: 10));
     }
     return Column(children: rows);
@@ -897,17 +1094,26 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
         border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
       ),
       child: Center(
-        child: Text(text,
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-                color: cs.onSurface.withValues(alpha: 0.3),
-                fontSize: 12)),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.3),
+            fontSize: 12,
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildPriceCard(ColorScheme cs, String name, String ticker,
-      PriceResult? price, Color accentColor, bool loading) {
+  Widget _buildPriceCard(
+    ColorScheme cs,
+    String name,
+    String ticker,
+    PriceResult? price,
+    Color accentColor,
+    bool loading,
+  ) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -918,59 +1124,83 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(
+          Row(
+            children: [
+              Container(
                 width: 8,
                 height: 8,
                 decoration: BoxDecoration(
-                    color: accentColor, shape: BoxShape.circle)),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(ticker,
-                  style: GoogleFonts.robotoMono(
-                      color: accentColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700)),
-            ),
-          ]),
+                  color: accentColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  ticker,
+                  style: TextStyle(
+                    color: accentColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 4),
-          Text(name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(
-                  color: cs.onSurface.withValues(alpha: 0.7),
-                  fontSize: 11)),
+          Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.7),
+              fontSize: 11,
+            ),
+          ),
           const SizedBox(height: 8),
           if (loading)
             const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Color(0xFF10B981)))
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Color(0xFF10B981),
+              ),
+            )
           else if (price != null) ...[
-            Text(price.formattedPrice,
-                style: GoogleFonts.inter(
-                    color: cs.onSurface,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15)),
-            Text(price.formattedChange,
-                style: GoogleFonts.inter(
-                    color: price.isUp
-                        ? const Color(0xFF10B981)
-                        : Colors.redAccent,
-                    fontSize: 11)),
+            Text(
+              price.formattedPrice,
+              style: TextStyle(
+                color: cs.onSurface,
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+              ),
+            ),
+            Text(
+              price.formattedChange,
+              style: TextStyle(
+                color: price.isUp ? const Color(0xFF10B981) : Colors.redAccent,
+                fontSize: 11,
+              ),
+            ),
           ] else
-            Text('—',
-                style: GoogleFonts.inter(
-                    color: cs.onSurface.withValues(alpha: 0.3),
-                    fontSize: 14)),
+            Text(
+              '—',
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.3),
+                fontSize: 14,
+              ),
+            ),
         ],
       ),
     );
   }
 
   Widget _buildChart(
-      List<double> basePct, List<List<double>> comparePcts, ColorScheme cs) {
+    List<double> basePct,
+    List<List<double>> comparePcts,
+    ColorScheme cs,
+  ) {
     // 실제로 데이터 있는 compare만 추출 (색상 대응)
     final activeCompare = <(List<double>, Color)>[];
     for (int i = 0; i < _slotCount; i++) {
@@ -997,10 +1227,11 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
                   _customSelected
                       ? '최근 $_customAmount$_customUnit 수익률 비교 (%)'
                       : '${_comparePeriods[_periodIndex].$1} 수익률 비교 (%)',
-                  style: GoogleFonts.inter(
-                      color: cs.onSurface.withValues(alpha: 0.54),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.54),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const Spacer(),
                 GestureDetector(
@@ -1029,17 +1260,23 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
             const SizedBox(
               height: 200,
               child: Center(
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Color(0xFF10B981))),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFF10B981),
+                ),
+              ),
             )
           else if (basePct.isEmpty)
             SizedBox(
               height: 200,
               child: Center(
-                child: Text('기준 종목을 선택하세요',
-                    style: GoogleFonts.inter(
-                        color: cs.onSurface.withValues(alpha: 0.24),
-                        fontSize: 13)),
+                child: Text(
+                  '기준 종목을 선택하세요',
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.24),
+                    fontSize: 13,
+                  ),
+                ),
               ),
             )
           else
@@ -1070,24 +1307,31 @@ class _StockCompareScreenState extends State<StockCompareScreen> {
     if (hasBase) dots.add(_legendDot(_slotColors[0], _baseName, cs));
     for (int i = 0; i < _slotCount; i++) {
       if (_compareStock[i] != null) {
-        dots.add(
-            _legendDot(_slotColors[i + 1], _compareStock[i]!.name, cs));
+        dots.add(_legendDot(_slotColors[i + 1], _compareStock[i]!.name, cs));
       }
     }
     return Wrap(spacing: 12, runSpacing: 6, children: dots);
   }
 
   Widget _legendDot(Color color, String label, ColorScheme cs) {
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Container(
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
           width: 10,
           height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-      const SizedBox(width: 6),
-      Text(label,
-          style: GoogleFonts.inter(
-              color: cs.onSurface.withValues(alpha: 0.7), fontSize: 12)),
-    ]);
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.7),
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -1131,8 +1375,11 @@ class _CompareLinePainter extends CustomPainter {
       ..color = labelColor.withValues(alpha: 0.07)
       ..strokeWidth = 1;
     for (int i = 1; i <= 3; i++) {
-      canvas.drawLine(Offset(yAxisW, chartH * i / 4),
-          Offset(size.width, chartH * i / 4), gridPaint);
+      canvas.drawLine(
+        Offset(yAxisW, chartH * i / 4),
+        Offset(size.width, chartH * i / 4),
+        gridPaint,
+      );
     }
     // Zero line
     if (minY < 0 && maxY > 0) {
@@ -1160,13 +1407,14 @@ class _CompareLinePainter extends CustomPainter {
         }
       }
       canvas.drawPath(
-          path,
-          Paint()
-            ..color = color
-            ..strokeWidth = 2
-            ..style = PaintingStyle.stroke
-            ..strokeCap = StrokeCap.round
-            ..strokeJoin = StrokeJoin.round);
+        path,
+        Paint()
+          ..color = color
+          ..strokeWidth = 2
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
     }
 
     drawLine(basePct, const Color(0xFF10B981));
@@ -1188,8 +1436,7 @@ class _CompareLinePainter extends CustomPainter {
         text: TextSpan(text: '$sign${v.toStringAsFixed(1)}%', style: axisStyle),
         textDirection: ui.TextDirection.ltr,
       )..layout();
-      final y =
-          (chartH * i / 4 - tp.height / 2).clamp(0.0, chartH - tp.height);
+      final y = (chartH * i / 4 - tp.height / 2).clamp(0.0, chartH - tp.height);
       tp.paint(canvas, Offset(0, y));
     }
 
@@ -1197,19 +1444,21 @@ class _CompareLinePainter extends CustomPainter {
     final n = basePct.length;
     const labelCount = 4;
     for (int i = 0; i < labelCount; i++) {
-      final idx =
-          ((n - 1) * i / (labelCount - 1)).round().clamp(0, n - 1);
+      final idx = ((n - 1) * i / (labelCount - 1)).round().clamp(0, n - 1);
       final daysAgo = n - 1 - idx;
       final label = daysAgo == 0
           ? '오늘'
-          : DateFormat('MM/dd')
-              .format(DateTime.now().subtract(Duration(days: daysAgo)));
+          : DateFormat(
+              'MM/dd',
+            ).format(DateTime.now().subtract(Duration(days: daysAgo)));
       final tp = TextPainter(
         text: TextSpan(text: label, style: axisStyle),
         textDirection: ui.TextDirection.ltr,
       )..layout();
-      final x =
-          (toX(idx, n) - tp.width / 2).clamp(yAxisW, size.width - tp.width);
+      final x = (toX(idx, n) - tp.width / 2).clamp(
+        yAxisW,
+        size.width - tp.width,
+      );
       tp.paint(canvas, Offset(x, chartH + 4));
     }
   }
@@ -1281,8 +1530,10 @@ class _FullscreenCompareChartPageState
               top: 4,
               right: 4,
               child: IconButton(
-                icon: Icon(Icons.fullscreen_exit,
-                    color: cs.onSurface.withValues(alpha: 0.6)),
+                icon: Icon(
+                  Icons.fullscreen_exit,
+                  color: cs.onSurface.withValues(alpha: 0.6),
+                ),
                 onPressed: () => Navigator.pop(context),
               ),
             ),
@@ -1292,5 +1543,3 @@ class _FullscreenCompareChartPageState
     );
   }
 }
-
-

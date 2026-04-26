@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/stock_pick.dart';
@@ -93,7 +92,7 @@ class _HomeScreenState extends State<HomeScreen>
           return AlertDialog(
             title: Text(
               '닉네임 설정',
-              style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+              style: TextStyle(fontWeight: FontWeight.w700),
             ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -101,7 +100,7 @@ class _HomeScreenState extends State<HomeScreen>
               children: [
                 Text(
                   '댓글에 표시될 닉네임을 입력해주세요.',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.55),
                     fontSize: 13,
                   ),
@@ -110,10 +109,10 @@ class _HomeScreenState extends State<HomeScreen>
                 TextField(
                   controller: ctrl,
                   autofocus: true,
-                  style: GoogleFonts.inter(color: cs.onSurface),
+                  style: TextStyle(color: cs.onSurface),
                   decoration: InputDecoration(
                     hintText: '닉네임',
-                    hintStyle: GoogleFonts.inter(
+                    hintStyle: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.3),
                     ),
                     filled: true,
@@ -149,7 +148,7 @@ class _HomeScreenState extends State<HomeScreen>
                 },
                 child: Text(
                   '확인',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: const Color(0xFF10B981),
                     fontWeight: FontWeight.w700,
                   ),
@@ -190,7 +189,7 @@ class _HomeScreenState extends State<HomeScreen>
               const SizedBox(width: 8),
               Text(
                 '이용 안내',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 17,
                   fontWeight: FontWeight.w800,
@@ -201,7 +200,7 @@ class _HomeScreenState extends State<HomeScreen>
           content: Text(
             '본 앱은 투자 공부 중인 개인이 관심 종목을 기록·공유하는 공간입니다.\n\n'
             '제공되는 정보는 투자 권유나 조언이 아니며, 일대일 투자 자문은 절대 하지 않습니다. 투자 판단과 그 결과에 대한 책임은 전적으로 본인에게 있습니다.',
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.75),
               fontSize: 13,
               height: 1.65,
@@ -212,7 +211,7 @@ class _HomeScreenState extends State<HomeScreen>
               onPressed: () => Navigator.pop(ctx),
               child: Text(
                 '확인',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: const Color(0xFF10B981),
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
@@ -252,23 +251,23 @@ class _HomeScreenState extends State<HomeScreen>
               builder: (ctx) => AlertDialog(
                 title: Text(
                   '리워드 광고 안내',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w700),
+                  style: TextStyle(fontWeight: FontWeight.w700),
                 ),
                 content: Text(
                   '🎁 광고 시청을 완료하면 경험치 +5를 받을 수 있어요.\n'
                   '보상은 시청 완료 후 지급됩니다.',
-                  style: GoogleFonts.inter(fontSize: 13, height: 1.5),
+                  style: TextStyle(fontSize: 13, height: 1.5),
                 ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, false),
-                    child: Text('닫기', style: GoogleFonts.inter()),
+                    child: Text('닫기', style: TextStyle()),
                   ),
                   TextButton(
                     onPressed: () => Navigator.pop(ctx, true),
                     child: Text(
                       '광고 보기',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: const Color(0xFF10B981),
                         fontWeight: FontWeight.w700,
                       ),
@@ -305,7 +304,7 @@ class _HomeScreenState extends State<HomeScreen>
                   const SizedBox(width: 4),
                   Text(
                     '$remaining/$limit',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: isDark ? Colors.white : const Color(0xFF065F46),
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
@@ -380,13 +379,13 @@ class _HomeScreenState extends State<HomeScreen>
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: isDark ? Colors.white : Colors.black87,
                   fontSize: 15,
                 ),
                 decoration: InputDecoration(
                   hintText: '종목명 또는 티커 검색...',
-                  hintStyle: GoogleFonts.inter(
+                  hintStyle: TextStyle(
                     color: isDark ? Colors.white38 : Colors.black38,
                     fontSize: 15,
                   ),
@@ -401,7 +400,7 @@ class _HomeScreenState extends State<HomeScreen>
               )
             : Text(
                 _tabTitles[_currentPage],
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: isDark ? Colors.white : Colors.black87,
                   fontWeight: FontWeight.w700,
                   fontSize: 20,
@@ -474,11 +473,11 @@ class _HomeScreenState extends State<HomeScreen>
         selectedItemColor: const Color(0xFF10B981),
         unselectedItemColor: isDark ? Colors.white38 : Colors.black38,
         type: BottomNavigationBarType.fixed,
-        selectedLabelStyle: GoogleFonts.inter(
+        selectedLabelStyle: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.w600,
         ),
-        unselectedLabelStyle: GoogleFonts.inter(fontSize: 10),
+        unselectedLabelStyle: TextStyle(fontSize: 10),
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.show_chart), label: '추천주'),
           BottomNavigationBarItem(
@@ -571,7 +570,7 @@ class _HomeScreenState extends State<HomeScreen>
                           children: [
                             Text(
                               nickname ?? '닉네임 없음',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: nickname != null
                                     ? (isDark ? Colors.white : Colors.black87)
                                     : (isDark
@@ -600,7 +599,7 @@ class _HomeScreenState extends State<HomeScreen>
                     const SizedBox(height: 4),
                     Text(
                       auth.user?.email ?? '',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: isDark ? Colors.white38 : Colors.black38,
                         fontSize: 12,
                       ),
@@ -667,7 +666,7 @@ class _HomeScreenState extends State<HomeScreen>
                                     children: [
                                       Text(
                                         'Lv.$level',
-                                        style: GoogleFonts.inter(
+                                        style: TextStyle(
                                           color: const Color(0xFF10B981),
                                           fontSize: 15,
                                           fontWeight: FontWeight.w800,
@@ -676,7 +675,7 @@ class _HomeScreenState extends State<HomeScreen>
                                       const Spacer(),
                                       Text(
                                         '$currentXp / $needXp XP',
-                                        style: GoogleFonts.inter(
+                                        style: TextStyle(
                                           color: isDark
                                               ? Colors.white60
                                               : Colors.black54,
@@ -707,7 +706,7 @@ class _HomeScreenState extends State<HomeScreen>
                                     alignment: Alignment.centerRight,
                                     child: Text(
                                       '다음 레벨까지 $remainXp XP',
-                                      style: GoogleFonts.inter(
+                                      style: TextStyle(
                                         color: isDark
                                             ? Colors.white38
                                             : Colors.black45,
@@ -785,7 +784,7 @@ class _HomeScreenState extends State<HomeScreen>
                                                 _rewardAdLoading
                                                     ? '광고 준비 중...'
                                                     : '리워드 광고 보고 +5 XP',
-                                                style: GoogleFonts.inter(
+                                                style: TextStyle(
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w700,
                                                 ),
@@ -795,7 +794,7 @@ class _HomeScreenState extends State<HomeScreen>
                                           const SizedBox(height: 4),
                                           Text(
                                             '오늘 보상 광고: ${remainingCount}/${dailyLimit}회 남음',
-                                            style: GoogleFonts.inter(
+                                            style: TextStyle(
                                               color: isDark
                                                   ? Colors.white38
                                                   : Colors.black45,
@@ -856,47 +855,10 @@ class _HomeScreenState extends State<HomeScreen>
                           ),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        icon: const Icon(Icons.article_outlined, size: 16),
-                        label: Text(
-                          '내가 쓴 글',
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => MyPostsScreen(uid: uid),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: isDark
-                              ? Colors.white70
-                              : Colors.black54,
-                          side: BorderSide(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.1)
-                                : Colors.black.withValues(alpha: 0.1),
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
                         icon: const Icon(Icons.favorite_border, size: 16),
                         label: Text(
                           '관심 추천주',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                           ),
@@ -930,10 +892,47 @@ class _HomeScreenState extends State<HomeScreen>
                           ),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
+                        icon: const Icon(Icons.article_outlined, size: 16),
+                        label: Text(
+                          '내가 쓴 글',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => MyPostsScreen(uid: uid),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: isDark
+                              ? Colors.white70
+                              : Colors.black54,
+                          side: BorderSide(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : Colors.black.withValues(alpha: 0.1),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
                         icon: const Icon(Icons.chat_bubble_outline, size: 16),
                         label: Text(
                           '내 댓글',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                           ),
@@ -969,7 +968,7 @@ class _HomeScreenState extends State<HomeScreen>
                         },
                         child: Text(
                           '로그아웃',
-                          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                          style: TextStyle(fontWeight: FontWeight.w600),
                         ),
                       ),
                     ),
@@ -986,10 +985,7 @@ class _HomeScreenState extends State<HomeScreen>
                           Navigator.pop(context);
                           _showDeleteAccountDialog(auth);
                         },
-                        child: Text(
-                          '계정 삭제',
-                          style: GoogleFonts.inter(fontSize: 13),
-                        ),
+                        child: Text('계정 삭제', style: TextStyle(fontSize: 13)),
                       ),
                     ),
                   ],
@@ -1007,7 +1003,7 @@ class _HomeScreenState extends State<HomeScreen>
                   children: [
                     Text(
                       themeProvider.isDark ? '라이트 모드' : '다크 모드',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: isDark ? Colors.white38 : Colors.black38,
                         fontSize: 11,
                       ),
@@ -1055,7 +1051,7 @@ class _HomeScreenState extends State<HomeScreen>
           const SizedBox(width: 4),
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: isDark ? Colors.white70 : Colors.black87,
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -1075,14 +1071,14 @@ class _HomeScreenState extends State<HomeScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           '계정 삭제',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: isDark ? Colors.white : Colors.black87,
             fontWeight: FontWeight.w700,
           ),
         ),
         content: Text(
           '계정을 삭제하면 모든 데이터(관심 추천주, 메모, 댓글 등)가 영구적으로 삭제됩니다.\n\n정말 삭제하시겠습니까?',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: isDark ? Colors.white70 : Colors.black54,
             fontSize: 14,
           ),
@@ -1092,9 +1088,7 @@ class _HomeScreenState extends State<HomeScreen>
             onPressed: () => Navigator.pop(ctx),
             child: Text(
               '취소',
-              style: GoogleFonts.inter(
-                color: isDark ? Colors.white54 : Colors.black45,
-              ),
+              style: TextStyle(color: isDark ? Colors.white54 : Colors.black45),
             ),
           ),
           TextButton(
@@ -1112,7 +1106,7 @@ class _HomeScreenState extends State<HomeScreen>
             },
             child: Text(
               '삭제',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: Colors.redAccent,
                 fontWeight: FontWeight.w700,
               ),
@@ -1142,7 +1136,7 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             title: Text(
               '닉네임 설정',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: isDark ? Colors.white : Colors.black87,
                 fontWeight: FontWeight.w700,
                 fontSize: 16,
@@ -1154,12 +1148,12 @@ class _HomeScreenState extends State<HomeScreen>
               children: [
                 TextField(
                   controller: controller,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: isDark ? Colors.white : Colors.black87,
                   ),
                   decoration: InputDecoration(
                     hintText: '닉네임 입력 (2~12자)',
-                    hintStyle: GoogleFonts.inter(
+                    hintStyle: TextStyle(
                       color: isDark ? Colors.white38 : Colors.black38,
                       fontSize: 13,
                     ),
@@ -1186,7 +1180,7 @@ class _HomeScreenState extends State<HomeScreen>
                 onPressed: () => Navigator.pop(ctx),
                 child: Text(
                   '취소',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: isDark ? Colors.white54 : Colors.black45,
                   ),
                 ),
@@ -1232,10 +1226,7 @@ class _HomeScreenState extends State<HomeScreen>
                           color: Colors.black,
                         ),
                       )
-                    : Text(
-                        '저장',
-                        style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                      ),
+                    : Text('저장', style: TextStyle(fontWeight: FontWeight.w600)),
               ),
             ],
           );
@@ -1308,11 +1299,8 @@ class _StockStoragePageState extends State<_StockStoragePage>
               ),
               labelColor: tabSelected,
               unselectedLabelColor: tabUnselected,
-              labelStyle: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-              unselectedLabelStyle: GoogleFonts.inter(
+              labelStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              unselectedLabelStyle: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
@@ -1416,7 +1404,7 @@ class _StockListTabState extends State<_StockListTab>
               return Center(
                 child: Text(
                   '오류: ${snapshot.error}',
-                  style: GoogleFonts.inter(color: Colors.redAccent),
+                  style: TextStyle(color: Colors.redAccent),
                 ),
               );
             }
@@ -1439,7 +1427,7 @@ class _StockListTabState extends State<_StockListTab>
                   widget.searchQuery.isNotEmpty
                       ? "'${widget.searchQuery}' 검색 결과가 없습니다"
                       : '아직 등록된 종목이 없습니다',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: isDark ? Colors.white38 : Colors.black38,
                   ),
                 ),
@@ -1643,7 +1631,7 @@ class _DisclaimerBanner extends StatelessWidget {
             Expanded(
               child: Text(
                 '투자 공부 중인 개인이 관심 종목을 공유하는 공간입니다.\n투자 권유 및 일대일 투자 자문은 절대 하지 않으며, 투자 판단과 결과에 대한 책임은 본인에게 있습니다.',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: isDark ? Colors.white70 : const Color(0xFF6B7684),
                   fontSize: 12,
                   height: 1.5,
@@ -1698,9 +1686,7 @@ class _AnnouncementsTabState extends State<_AnnouncementsTab>
           return Center(
             child: Text(
               '등록된 공지사항이 없습니다',
-              style: GoogleFonts.inter(
-                color: isDark ? Colors.white38 : Colors.black38,
-              ),
+              style: TextStyle(color: isDark ? Colors.white38 : Colors.black38),
             ),
           );
         }
@@ -1757,7 +1743,7 @@ class _AnnouncementCard extends StatelessWidget {
                       const SizedBox(width: 4),
                       Text(
                         '고정 공지',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: const Color(0xFF10B981),
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -1769,7 +1755,7 @@ class _AnnouncementCard extends StatelessWidget {
                 ],
                 Text(
                   a.title,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface,
                     fontWeight: FontWeight.w700,
                     fontSize: 20,
@@ -1779,7 +1765,7 @@ class _AnnouncementCard extends StatelessWidget {
                 const SizedBox(height: 12),
                 Text(
                   a.body,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.72),
                     fontSize: 14,
                     height: 1.65,
@@ -1816,7 +1802,7 @@ class _AnnouncementCard extends StatelessWidget {
                 children: [
                   Text(
                     a.title,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -1829,7 +1815,7 @@ class _AnnouncementCard extends StatelessWidget {
                     const SizedBox(height: 5),
                     Text(
                       a.body.replaceAll('\n', ' '),
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.52),
                         fontSize: 13,
                       ),

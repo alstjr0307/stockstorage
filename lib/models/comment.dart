@@ -27,9 +27,9 @@ class Comment {
   }
 
   Map<String, dynamic> toFirestore() => {
-        'uid': uid,
-        'nickname': nickname,
-        'content': content,
-        'createdAt': Timestamp.fromDate(createdAt),
-      };
+    'uid': uid,
+    'nickname': nickname,
+    'content': content,
+    'createdAt': Timestamp.fromDate(createdAt),
+  };
 }

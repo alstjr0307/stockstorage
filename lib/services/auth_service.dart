@@ -20,7 +20,10 @@ class AuthService {
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   Future<UserCredential> signInWithEmail(String email, String password) async {
-    final result = await _auth.signInWithEmailAndPassword(email: email, password: password);
+    final result = await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
     AnalyticsService.instance.logLogin('email');
     AnalyticsService.instance.setUserId(result.user!.uid);
     return result;
@@ -144,10 +147,9 @@ class AuthService {
 
   /// 계정 삭제: Firestore 사용자 데이터 + Firebase Auth 계정 모두 삭제
   Future<void> _saveCreatedAt(String uid) {
-    return FirebaseFirestore.instance.collection('users').doc(uid).set(
-      {'createdAt': FieldValue.serverTimestamp()},
-      SetOptions(merge: true),
-    );
+    return FirebaseFirestore.instance.collection('users').doc(uid).set({
+      'createdAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> deleteAccount() async {
@@ -158,7 +160,11 @@ class AuthService {
     final uid = user.uid;
 
     // 1. Firestore 사용자 서브컬렉션 삭제 (memos)
-    final memos = await db.collection('users').doc(uid).collection('memos').get();
+    final memos = await db
+        .collection('users')
+        .doc(uid)
+        .collection('memos')
+        .get();
     for (final doc in memos.docs) {
       await doc.reference.delete();
     }

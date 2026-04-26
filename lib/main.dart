@@ -1,6 +1,7 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -44,7 +45,7 @@ void main() async {
     // 에뮬레이터 등 지원 안 되는 환경에서 무시
   }
 
-  // FCM 백그운드 핸들러 등록 (Firebase 초기화 직후)
+  // FCM 백그라운드 핸들러 등록 (Firebase 초기화 직후)
   NotificationService.registerBackgroundHandler();
 
   // 카카오 SDK 초기화
@@ -88,6 +89,13 @@ class StockStorageApp extends StatelessWidget {
           navigatorObservers: [AnalyticsService.instance.observer],
           title: '주식저장소',
           debugShowCheckedModeBanner: false,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('ko', 'KR'), Locale('en', 'US')],
+          locale: const Locale('ko', 'KR'),
           themeMode: themeProvider.themeMode,
           // 라이트 테마
           theme: ThemeData(

@@ -1,7 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/comment.dart';
@@ -253,7 +252,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           ),
           title: Text(
             '자유게시판',
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface,
               fontSize: 17,
               fontWeight: FontWeight.w700,
@@ -299,7 +298,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             color: Colors.orangeAccent,
                           ),
                           const SizedBox(width: 8),
-                          Text('신고하기', style: GoogleFonts.inter(fontSize: 14)),
+                          Text('신고하기', style: TextStyle(fontSize: 14)),
                         ],
                       ),
                     ),
@@ -314,7 +313,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             color: Colors.redAccent,
                           ),
                           const SizedBox(width: 8),
-                          Text('차단하기', style: GoogleFonts.inter(fontSize: 14)),
+                          Text('차단하기', style: TextStyle(fontSize: 14)),
                         ],
                       ),
                     ),
@@ -346,7 +345,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           // 제목
                           Text(
                             widget.post.title,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: cs.onSurface,
                               fontSize: 22,
                               fontWeight: FontWeight.w800,
@@ -363,7 +362,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 backgroundColor: const Color(
                                   0xFF10B981,
                                 ).withValues(alpha: 0.16),
-                                textStyle: GoogleFonts.inter(
+                                textStyle: TextStyle(
                                   color: const Color(0xFF10B981),
                                   fontSize: 12,
                                   fontWeight: FontWeight.w800,
@@ -372,7 +371,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               const SizedBox(width: 8),
                               Text(
                                 widget.post.nickname,
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   color: cs.onSurface.withValues(alpha: 0.75),
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
@@ -383,7 +382,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 DateFormat(
                                   'yyyy.MM.dd HH:mm',
                                 ).format(widget.post.createdAt),
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   color: cs.onSurface.withValues(alpha: 0.3),
                                   fontSize: 12,
                                 ),
@@ -434,30 +433,30 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 ),
                               ),
                               styleSheet: MarkdownStyleSheet(
-                                p: GoogleFonts.inter(
+                                p: TextStyle(
                                   color: cs.onSurface.withValues(alpha: 0.9),
                                   fontSize: 16,
                                   height: 1.8,
                                 ),
-                                strong: GoogleFonts.inter(
+                                strong: TextStyle(
                                   color: cs.onSurface,
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
                                   height: 1.8,
                                 ),
-                                em: GoogleFonts.inter(
+                                em: TextStyle(
                                   color: cs.onSurface.withValues(alpha: 0.9),
                                   fontSize: 16,
                                   fontStyle: FontStyle.italic,
                                   height: 1.8,
                                 ),
-                                del: GoogleFonts.inter(
+                                del: TextStyle(
                                   color: cs.onSurface.withValues(alpha: 0.5),
                                   fontSize: 16,
                                   decoration: TextDecoration.lineThrough,
                                   height: 1.8,
                                 ),
-                                listBullet: GoogleFonts.inter(
+                                listBullet: TextStyle(
                                   color: cs.onSurface.withValues(alpha: 0.9),
                                   fontSize: 16,
                                   height: 1.8,
@@ -564,7 +563,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 ),
                                 child: Text(
                                   '댓글($commentCount)',
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: cs.onSurface,
                                     fontSize: 15,
                                     fontWeight: FontWeight.w700,
@@ -581,7 +580,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                   child: Center(
                                     child: Text(
                                       '첫 댓글을 남겨보세요',
-                                      style: GoogleFonts.inter(
+                                      style: TextStyle(
                                         color: cs.onSurface.withValues(
                                           alpha: 0.3,
                                         ),
@@ -663,7 +662,7 @@ class _LikeRow extends StatelessWidget {
             const SizedBox(width: 5),
             Text(
               '$count',
-              style: GoogleFonts.robotoMono(
+              style: TextStyle(
                 color: isLiked
                     ? Colors.redAccent
                     : cs.onSurface.withValues(alpha: 0.4),
@@ -707,7 +706,7 @@ class _CommentTile extends StatelessWidget {
             uid: comment.uid,
             radius: 15,
             backgroundColor: cs.onSurface.withValues(alpha: 0.07),
-            textStyle: GoogleFonts.inter(
+            textStyle: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.55),
               fontSize: 12,
               fontWeight: FontWeight.w700,
@@ -722,7 +721,7 @@ class _CommentTile extends StatelessWidget {
                   children: [
                     Text(
                       comment.nickname,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.8),
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -731,7 +730,7 @@ class _CommentTile extends StatelessWidget {
                     const SizedBox(width: 6),
                     Text(
                       DateFormat('MM.dd HH:mm').format(comment.createdAt),
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.3),
                         fontSize: 12,
                       ),
@@ -741,7 +740,7 @@ class _CommentTile extends StatelessWidget {
                 const SizedBox(height: 5),
                 Text(
                   comment.content,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.85),
                     fontSize: 15,
                     height: 1.55,
@@ -787,7 +786,7 @@ class _CommentTile extends StatelessWidget {
                           color: Colors.orangeAccent,
                         ),
                         const SizedBox(width: 8),
-                        Text('신고하기', style: GoogleFonts.inter(fontSize: 14)),
+                        Text('신고하기', style: TextStyle(fontSize: 14)),
                       ],
                     ),
                   ),
@@ -802,7 +801,7 @@ class _CommentTile extends StatelessWidget {
                           color: Colors.redAccent,
                         ),
                         const SizedBox(width: 8),
-                        Text('차단하기', style: GoogleFonts.inter(fontSize: 14)),
+                        Text('차단하기', style: TextStyle(fontSize: 14)),
                       ],
                     ),
                   ),
@@ -858,10 +857,10 @@ class _CommentInput extends StatelessWidget {
                     maxLines: 4,
                     minLines: 1,
                     textInputAction: TextInputAction.newline,
-                    style: GoogleFonts.inter(color: cs.onSurface, fontSize: 15),
+                    style: TextStyle(color: cs.onSurface, fontSize: 15),
                     decoration: InputDecoration(
                       hintText: '댓글을 입력해주세요',
-                      hintStyle: GoogleFonts.inter(
+                      hintStyle: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.3),
                         fontSize: 15,
                       ),
@@ -914,7 +913,7 @@ class _CommentInput extends StatelessWidget {
               child: Text(
                 '댓글을 작성하려면 로그인이 필요합니다',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.3),
                   fontSize: 13,
                 ),

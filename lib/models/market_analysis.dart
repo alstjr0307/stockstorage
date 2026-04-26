@@ -27,9 +27,9 @@ class MarketAnalysis {
   }
 
   Map<String, dynamic> toFirestore() => {
-        'title': title,
-        'body': body,
-        'createdAt': Timestamp.fromDate(createdAt),
-        'imageUrls': imageUrls,
-      };
+    'title': title,
+    'body': body,
+    'createdAt': Timestamp.fromDate(createdAt),
+    'imageUrls': imageUrls,
+  };
 }

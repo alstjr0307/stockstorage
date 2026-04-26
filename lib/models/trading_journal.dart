@@ -16,7 +16,7 @@ class TradingJournal {
   final int likes;
   final DateTime createdAt;
   final DateTime? publishedAt;
-  final double buyPrice;   // 매도 시 연결된 매수가 (실현손익 계산용)
+  final double buyPrice; // 매도 시 연결된 매수가 (실현손익 계산용)
   final String linkedBuyId; // 매도 시 연결된 매수 일지 ID (잔량 계산용)
 
   TradingJournal({
@@ -63,23 +63,23 @@ class TradingJournal {
   }
 
   Map<String, dynamic> toFirestore() => {
-        'uid': uid,
-        'nickname': nickname,
-        'stockName': stockName,
-        'ticker': ticker,
-        'market': market,
-        'action': action,
-        'price': price,
-        'quantity': quantity,
-        'tradeDate': Timestamp.fromDate(tradeDate),
-        'note': note,
-        'isPublic': isPublic,
-        'likes': likes,
-        'createdAt': Timestamp.fromDate(createdAt),
-        if (publishedAt != null) 'publishedAt': Timestamp.fromDate(publishedAt!),
-        if (buyPrice > 0) 'buyPrice': buyPrice,
-        if (linkedBuyId.isNotEmpty) 'linkedBuyId': linkedBuyId,
-      };
+    'uid': uid,
+    'nickname': nickname,
+    'stockName': stockName,
+    'ticker': ticker,
+    'market': market,
+    'action': action,
+    'price': price,
+    'quantity': quantity,
+    'tradeDate': Timestamp.fromDate(tradeDate),
+    'note': note,
+    'isPublic': isPublic,
+    'likes': likes,
+    'createdAt': Timestamp.fromDate(createdAt),
+    if (publishedAt != null) 'publishedAt': Timestamp.fromDate(publishedAt!),
+    if (buyPrice > 0) 'buyPrice': buyPrice,
+    if (linkedBuyId.isNotEmpty) 'linkedBuyId': linkedBuyId,
+  };
 
   TradingJournal copyWith({
     bool? isPublic,
@@ -87,22 +87,22 @@ class TradingJournal {
     double? buyPrice,
     String? linkedBuyId,
   }) => TradingJournal(
-        id: id,
-        uid: uid,
-        nickname: nickname,
-        stockName: stockName,
-        ticker: ticker,
-        market: market,
-        action: action,
-        price: price,
-        quantity: quantity,
-        tradeDate: tradeDate,
-        note: note,
-        isPublic: isPublic ?? this.isPublic,
-        likes: likes,
-        createdAt: createdAt,
-        publishedAt: publishedAt ?? this.publishedAt,
-        buyPrice: buyPrice ?? this.buyPrice,
-        linkedBuyId: linkedBuyId ?? this.linkedBuyId,
-      );
+    id: id,
+    uid: uid,
+    nickname: nickname,
+    stockName: stockName,
+    ticker: ticker,
+    market: market,
+    action: action,
+    price: price,
+    quantity: quantity,
+    tradeDate: tradeDate,
+    note: note,
+    isPublic: isPublic ?? this.isPublic,
+    likes: likes,
+    createdAt: createdAt,
+    publishedAt: publishedAt ?? this.publishedAt,
+    buyPrice: buyPrice ?? this.buyPrice,
+    linkedBuyId: linkedBuyId ?? this.linkedBuyId,
+  );
 }

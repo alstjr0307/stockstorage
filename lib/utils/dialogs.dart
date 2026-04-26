@@ -7,10 +7,12 @@ Future<String?> showReportReasonDialog(BuildContext context) {
     builder: (_) => SimpleDialog(
       title: const Text('신고 사유를 선택해주세요'),
       children: reasons
-          .map((r) => SimpleDialogOption(
-                onPressed: () => Navigator.pop(context, r),
-                child: Text(r),
-              ))
+          .map(
+            (r) => SimpleDialogOption(
+              onPressed: () => Navigator.pop(context, r),
+              child: Text(r),
+            ),
+          )
           .toList(),
     ),
   );
@@ -23,7 +25,10 @@ Future<bool?> showBlockConfirmDialog(BuildContext context, String nickname) {
       title: const Text('차단'),
       content: Text('$nickname 님을 차단하시겠습니까?\n차단된 유저의 댓글은 보이지 않습니다.'),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('취소'),
+        ),
         TextButton(
           onPressed: () => Navigator.pop(context, true),
           child: const Text('차단', style: TextStyle(color: Colors.redAccent)),

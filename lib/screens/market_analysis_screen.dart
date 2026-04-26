@@ -5,7 +5,6 @@ import 'dart:ui' as ui;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -154,8 +153,8 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return TabBar(
-      labelStyle: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600),
-      unselectedLabelStyle: GoogleFonts.inter(
+      labelStyle: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: TextStyle(
         fontSize: 15,
         fontWeight: FontWeight.w500,
       ),
@@ -304,7 +303,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       children: [
         Text(
           '세부 지표',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface,
             fontSize: 22,
             fontWeight: FontWeight.w700,
@@ -345,7 +344,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
     Widget emptyMessage(String text) {
       return Text(
         text,
-        style: GoogleFonts.inter(
+        style: TextStyle(
           color: cs.onSurface.withValues(alpha: 0.45),
           fontSize: 12,
         ),
@@ -379,7 +378,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                     child: Text(
                       '\uC624\uB298 \uC2E4\uC2DC\uAC04',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: _fmkoreaHotTabIndex == 0
                             ? cs.onSurface
                             : cs.onSurface.withValues(alpha: 0.5),
@@ -408,7 +407,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                     child: Text(
                       '\uC804\uC77C HOT',
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: _fmkoreaHotTabIndex == 1
                             ? cs.onSurface
                             : cs.onSurface.withValues(alpha: 0.5),
@@ -528,7 +527,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                   ),
                   child: Text(
                     '${i + 1}',
-                    style: GoogleFonts.robotoMono(
+                    style: TextStyle(
                       color: const Color(0xFF10B981),
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
@@ -544,7 +543,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                         rows[i].name.isEmpty ? rows[i].ticker : rows[i].name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: cs.onSurface,
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
@@ -553,7 +552,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                       const SizedBox(height: 2),
                       Text(
                         rows[i].ticker,
-                        style: GoogleFonts.robotoMono(
+                        style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.45),
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -565,7 +564,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                 const SizedBox(width: 8),
                 Text(
                   '${rows[i].mentionCount}회',
-                  style: GoogleFonts.robotoMono(
+                  style: TextStyle(
                     color: const Color(0xFF10B981),
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
@@ -622,7 +621,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           updatedAt == null
               ? '업데이트 시간 정보 없음 · 커뮤니티 열기 기준'
               : '업데이트 $updatedAt · 게시글 ${data.totalPosts}개 집계',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.45),
             fontSize: 12,
           ),
@@ -662,7 +661,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
 
   Widget _buildHotTitle(String title, ColorScheme cs) {
     final hotIdx = title.indexOf('HOT');
-    final baseStyle = GoogleFonts.inter(
+    final baseStyle = TextStyle(
       color: cs.onSurface,
       fontSize: 22,
       fontWeight: FontWeight.w700,
@@ -711,7 +710,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                   children: [
                     Text(
                       '주요 지수',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface,
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
@@ -723,7 +722,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                       _indicesFetchedAt == null
                           ? '핵심 시장 지수를 빠르게 확인하세요'
                           : '기준 ${DateFormat('HH:mm').format(_indicesFetchedAt!)}',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.45),
                         fontSize: 13,
                         fontWeight: FontWeight.w400,
@@ -815,7 +814,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                     name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
@@ -827,7 +826,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                     _indexDescriptions[name] ?? '',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.45),
                       fontSize: 12,
                     ),
@@ -848,7 +847,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             else if (result == null)
               Text(
                 '--',
-                style: GoogleFonts.robotoMono(
+                style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.3),
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
@@ -860,7 +859,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                 children: [
                   Text(
                     _displayValue(name, result),
-                    style: GoogleFonts.robotoMono(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
@@ -869,7 +868,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                   const SizedBox(height: 2),
                   Text(
                     '${isUp ? '+' : ''}${result.changeRate.toStringAsFixed(2)}%',
-                    style: GoogleFonts.robotoMono(
+                    style: TextStyle(
                       color: moveColor,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -945,7 +944,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                       name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface,
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
@@ -965,7 +964,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                 _indexDescriptions[name] ?? '',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.45),
                   fontSize: 12,
                   fontWeight: FontWeight.w400,
@@ -984,7 +983,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
               else if (result == null)
                 Text(
                   '--',
-                  style: GoogleFonts.robotoMono(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.3),
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
@@ -995,7 +994,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                   _displayValue(name, result),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.robotoMono(
+                  style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
@@ -1030,7 +1029,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
           const SizedBox(width: 3),
           Text(
             '${isUp ? '+' : ''}${changeRate.toStringAsFixed(2)}%',
-            style: GoogleFonts.robotoMono(
+            style: TextStyle(
               color: color,
               fontSize: 12,
               fontWeight: FontWeight.w700,
@@ -1084,7 +1083,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                           latestDate == null
                               ? '등록된 분석이 없습니다'
                               : '최신 ${_analysisFmt.format(latestDate)} · 총 ${list.length}개',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.45),
                             fontSize: 13,
                             fontWeight: FontWeight.w400,
@@ -1113,7 +1112,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                         const SizedBox(height: 12),
                         Text(
                           '등록된 시황 분석이 없습니다.',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.38),
                             fontSize: 14,
                             fontWeight: FontWeight.w400,
@@ -1207,7 +1206,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                   children: [
                     Text(
                       name,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface,
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -1219,7 +1218,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                       _indexDescriptions[name] ?? '',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.45),
                         fontSize: 12,
                         fontWeight: FontWeight.w400,
@@ -1241,7 +1240,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
               else if (result == null)
                 Text(
                   '--',
-                  style: GoogleFonts.robotoMono(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.3),
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
@@ -1253,7 +1252,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                   children: [
                     Text(
                       _displayValue(name, result),
-                      style: GoogleFonts.robotoMono(
+                      style: TextStyle(
                         color: cs.onSurface,
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
@@ -1305,7 +1304,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                   ),
                   child: Text(
                     dateLabel,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.55),
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
@@ -1326,7 +1325,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
               analysis.title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface,
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
@@ -1340,7 +1339,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                 preview,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.5),
                   fontSize: 15,
                   height: 1.65,
@@ -1450,7 +1449,7 @@ class _InvestorFlowCard extends StatelessWidget {
                   children: [
                     Text(
                       '마감 수급 TOP5',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface,
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
@@ -1460,7 +1459,7 @@ class _InvestorFlowCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       '순매수 금액 기준 · 외인/기관 상위 5종목',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.45),
                         fontSize: 13,
                         fontWeight: FontWeight.w400,
@@ -1481,7 +1480,7 @@ class _InvestorFlowCard extends StatelessWidget {
                 ),
                 child: Text(
                   data.marketDate,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.72),
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
@@ -1528,7 +1527,7 @@ class _InvestorFlowCard extends StatelessWidget {
       child: Center(
         child: Text(
           text,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.42),
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -1638,7 +1637,7 @@ class _FmkoreaHotShareSheetState extends State<_FmkoreaHotShareSheet> {
                           const SizedBox(width: 6),
                           Text(
                             '주식저장소',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: const Color(0xFF10B981),
                               fontWeight: FontWeight.w700,
                               fontSize: 13,
@@ -1648,7 +1647,7 @@ class _FmkoreaHotShareSheetState extends State<_FmkoreaHotShareSheet> {
                       ),
                       Text(
                         DateFormat('yyyy.MM.dd HH:mm').format(stamp),
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.4),
                           fontSize: 12,
                         ),
@@ -1658,7 +1657,7 @@ class _FmkoreaHotShareSheetState extends State<_FmkoreaHotShareSheet> {
                   const SizedBox(height: 20),
                   Text(
                     '🔥 펨코 실시간 HOT 종목',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: Colors.white,
                       fontSize: 22,
                       fontWeight: FontWeight.w800,
@@ -1667,7 +1666,7 @@ class _FmkoreaHotShareSheetState extends State<_FmkoreaHotShareSheet> {
                   const SizedBox(height: 6),
                   Text(
                     '집계 게시글 ${widget.data.totalPosts}개',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.55),
                       fontSize: 12,
                     ),
@@ -1687,7 +1686,7 @@ class _FmkoreaHotShareSheetState extends State<_FmkoreaHotShareSheet> {
                             width: 18,
                             child: Text(
                               '${i + 1}',
-                              style: GoogleFonts.robotoMono(
+                              style: TextStyle(
                                 color: const Color(0xFF10B981),
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
@@ -1702,7 +1701,7 @@ class _FmkoreaHotShareSheetState extends State<_FmkoreaHotShareSheet> {
                                   : mentions[i].name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: Colors.white.withValues(alpha: 0.88),
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -1712,7 +1711,7 @@ class _FmkoreaHotShareSheetState extends State<_FmkoreaHotShareSheet> {
                           const SizedBox(width: 8),
                           Text(
                             '${mentions[i].mentionCount}회',
-                            style: GoogleFonts.robotoMono(
+                            style: TextStyle(
                               color: const Color(0xFF10B981),
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
@@ -1725,7 +1724,7 @@ class _FmkoreaHotShareSheetState extends State<_FmkoreaHotShareSheet> {
                   Center(
                     child: Text(
                       '주식저장소 앱에서 확인해보세요',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.25),
                         fontSize: 11,
                       ),
@@ -1763,10 +1762,7 @@ class _FmkoreaHotShareSheetState extends State<_FmkoreaHotShareSheet> {
                   : const Icon(Icons.ios_share_rounded, size: 18),
               label: Text(
                 _sharing ? '처리 중...' : '이미지로 공유',
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
               ),
             ),
           ),
@@ -1969,7 +1965,7 @@ class _IndicatorShortcutCard extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -1978,7 +1974,7 @@ class _IndicatorShortcutCard extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.45),
                       fontSize: 12,
                       fontWeight: FontWeight.w400,
@@ -2022,7 +2018,7 @@ class _IndicatorDetailScaffold extends StatelessWidget {
           children: [
             Text(
               title,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface,
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
@@ -2030,7 +2026,7 @@ class _IndicatorDetailScaffold extends StatelessWidget {
             ),
             Text(
               subtitle,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.54),
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -2169,7 +2165,7 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
           children: [
             Text(
               '마감수급',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface,
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
@@ -2178,7 +2174,7 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
             ),
             Text(
               '외국인과 기관이 가장 많이 순매수한 종목',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.5),
                 fontSize: 12,
                 fontWeight: FontWeight.w400,
@@ -2214,7 +2210,7 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
                         const SizedBox(height: 12),
                         Text(
                           '주식저장소 앱에서 확인하세요.',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.4),
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
@@ -2253,7 +2249,7 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
                       : const Icon(Icons.camera_alt_outlined),
                   label: Text(
                     _capturing ? '캡처 중...' : '캡처해서 공유하기',
-                    style: GoogleFonts.inter(fontWeight: FontWeight.w800),
+                    style: TextStyle(fontWeight: FontWeight.w800),
                   ),
                 ),
               ),
@@ -2336,7 +2332,7 @@ class _FmkoreaIndexDetailScreenState extends State<_FmkoreaIndexDetailScreen> {
           children: [
             Text(
               '펨코지수',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface,
                 fontSize: 20,
                 fontWeight: FontWeight.w800,
@@ -2345,7 +2341,7 @@ class _FmkoreaIndexDetailScreenState extends State<_FmkoreaIndexDetailScreen> {
             ),
             Text(
               '게시글 수와 KOSPI 흐름 비교',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.5),
                 fontSize: 12,
                 fontWeight: FontWeight.w400,
@@ -2372,7 +2368,7 @@ class _FmkoreaIndexDetailScreenState extends State<_FmkoreaIndexDetailScreen> {
                       const SizedBox(height: 12),
                       Text(
                         '주식저장소 앱에서 확인하세요.',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.4),
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -2408,7 +2404,7 @@ class _FmkoreaIndexDetailScreenState extends State<_FmkoreaIndexDetailScreen> {
                     : const Icon(Icons.camera_alt_outlined),
                 label: Text(
                   _capturing ? '캡처 중...' : '캡처해서 공유하기',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w800),
+                  style: TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),
             ),
@@ -2446,7 +2442,7 @@ class _InvestorFlowMarketBlock extends StatelessWidget {
               ),
               child: Text(
                 marketLabel,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 14,
                   fontWeight: FontWeight.w900,
@@ -2457,7 +2453,7 @@ class _InvestorFlowMarketBlock extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               'TOP5',
-              style: GoogleFonts.robotoMono(
+              style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.45),
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
@@ -2531,7 +2527,7 @@ class _InvestorFlowGroup extends StatelessWidget {
               Expanded(
                 child: Text(
                   title,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
@@ -2546,7 +2542,7 @@ class _InvestorFlowGroup extends StatelessWidget {
                 ),
                 child: Text(
                   'TOP5',
-                  style: GoogleFonts.robotoMono(
+                  style: TextStyle(
                     color: color,
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
@@ -2567,7 +2563,7 @@ class _InvestorFlowGroup extends StatelessWidget {
           if (items.isEmpty)
             Text(
               '데이터가 없습니다.',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.42),
                 fontSize: 12,
               ),
@@ -2591,7 +2587,7 @@ class _InvestorFlowGroup extends StatelessWidget {
                           ),
                           child: Text(
                             '${item.rank}',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: color,
                               fontSize: 11,
                               fontWeight: FontWeight.w800,
@@ -2604,7 +2600,7 @@ class _InvestorFlowGroup extends StatelessWidget {
                             item.name,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: cs.onSurface,
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
@@ -2623,7 +2619,7 @@ class _InvestorFlowGroup extends StatelessWidget {
                           ),
                           child: Text(
                             item.amountEokText,
-                            style: GoogleFonts.robotoMono(
+                            style: TextStyle(
                               color: cs.onSurface.withValues(alpha: 0.74),
                               fontSize: 12,
                               fontWeight: FontWeight.w800,
@@ -2808,7 +2804,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                       Expanded(
                         child: Text(
                           '펨코 지수',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface,
                             fontSize: 22,
                             fontWeight: FontWeight.w700,
@@ -2829,7 +2825,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                         ),
                         child: Text(
                           '일간 게시글',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: const Color(0xFF3182F6),
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
@@ -2901,7 +2897,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                           Expanded(
                             child: Text(
                               '현재 열기 ${effectiveInsight.heatLabel} · 평균 대비 ${effectiveInsight.diffRateText}',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: effectiveInsight.color,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w800,
@@ -2920,7 +2916,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                       children: [
                         Text(
                           '최근 20일 게시글 수 · KOSPI 변동률',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface,
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
@@ -2930,7 +2926,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           '막대는 게시글 수, 선은 KOSPI 변동률입니다.',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.5),
                             fontSize: 11,
                             height: 1.5,
@@ -2971,7 +2967,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                       children: [
                         Text(
                           '최근 날짜별 게시글 수 · KOSPI 변동률',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface,
                             fontSize: 14,
                             fontWeight: FontWeight.w700,
@@ -2981,7 +2977,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           '각 날짜 기준 KOSPI 변동률입니다.',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.5),
                             fontSize: 11,
                             height: 1.5,
@@ -3229,7 +3225,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
       child: Center(
         child: Text(
           text,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.38),
             fontSize: 13,
             fontWeight: FontWeight.w400,
@@ -3259,7 +3255,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
         children: [
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.52),
               fontSize: 11,
               fontWeight: FontWeight.w700,
@@ -3268,7 +3264,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             dateKey,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: accentColor,
               fontSize: 12,
               fontWeight: FontWeight.w800,
@@ -3283,7 +3279,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                   '$count',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.robotoMono(
+                  style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
@@ -3296,7 +3292,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Text(
                   '건',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.5),
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -3319,7 +3315,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                 children: [
                   Text(
                     '평균 대비',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.58),
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
@@ -3328,7 +3324,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     insight.diffRateText,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: insight.color,
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
@@ -3341,7 +3337,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             subtitle,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: subtitleColor ?? cs.onSurface.withValues(alpha: 0.52),
               fontSize: 11,
               fontWeight: subtitleColor == null
@@ -3354,7 +3350,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               '최종 집계 ${DateFormat('HH:mm').format(updatedAt.toLocal())}',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: accentColor,
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
@@ -3399,7 +3395,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                   children: [
                     Text(
                       entry.dateKey,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface,
                         fontSize: 12,
                         fontWeight: FontWeight.w800,
@@ -3420,7 +3416,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                         ),
                         child: Text(
                           '오늘',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: const Color(0xFF0284C7),
                             fontSize: 10,
                             fontWeight: FontWeight.w800,
@@ -3433,7 +3429,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   '게시글 ${entry.count}건',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.56),
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -3443,7 +3439,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                   const SizedBox(height: 3),
                   Text(
                     '기준 ${DateFormat('HH:mm').format(updatedAt.toLocal())}',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: const Color(0xFF0284C7),
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
@@ -3459,7 +3455,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
             children: [
               Text(
                 'KOSPI',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.42),
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
@@ -3472,7 +3468,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                     : kospiChange == null
                     ? '-'
                     : _formatSignedPercent(kospiChange),
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: isWeekend && kospiChange == null
                       ? const Color(0xFFF59E0B)
                       : changeColor,
@@ -3527,7 +3523,7 @@ class _FmkoreaTrendChartState extends State<_FmkoreaTrendChart> {
       return Center(
         child: Text(
           '차트 데이터가 없습니다.',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.42),
             fontSize: 12,
             fontWeight: FontWeight.w600,
@@ -3615,7 +3611,7 @@ class _FmkoreaTrendChartState extends State<_FmkoreaTrendChart> {
           Expanded(
             child: Text(
               point.dateKey,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface,
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
@@ -3624,7 +3620,7 @@ class _FmkoreaTrendChartState extends State<_FmkoreaTrendChart> {
           ),
           Text(
             '게시글 ${point.count}건',
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: const Color(0xFF3182F6),
               fontSize: 12,
               fontWeight: FontWeight.w800,
@@ -3633,7 +3629,7 @@ class _FmkoreaTrendChartState extends State<_FmkoreaTrendChart> {
           const SizedBox(width: 10),
           Text(
             'KOSPI $kospiText',
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: kospiColor,
               fontSize: 12,
               fontWeight: FontWeight.w800,
@@ -3678,7 +3674,7 @@ class _FmkoreaTrendChartState extends State<_FmkoreaTrendChart> {
         const SizedBox(width: 6),
         Text(
           label,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.56),
             fontSize: 11,
             fontWeight: FontWeight.w700,
@@ -3831,7 +3827,7 @@ class _FmkoreaTrendPainter extends CustomPainter {
         final tp = TextPainter(
           text: TextSpan(
             text: label,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: textColor,
               fontSize: 9,
               fontWeight: FontWeight.w600,
@@ -3866,7 +3862,7 @@ class _FmkoreaTrendPainter extends CustomPainter {
     final tp = TextPainter(
       text: TextSpan(
         text: text,
-        style: GoogleFonts.inter(
+        style: TextStyle(
           color: color ?? textColor,
           fontSize: 9,
           fontWeight: FontWeight.w600,
@@ -4078,7 +4074,7 @@ class _FmkoreaScatterPlot extends StatelessWidget {
         children: [
           Text(
             '가로축: 전일 게시글 수 · 세로축: 당일 KOSPI 변동률',
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.58),
               fontSize: 11,
               fontWeight: FontWeight.w700,
@@ -4096,7 +4092,7 @@ class _FmkoreaScatterPlot extends StatelessWidget {
                     children: [
                       Text(
                         '${maxY.toStringAsFixed(1)}%',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.42),
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -4104,7 +4100,7 @@ class _FmkoreaScatterPlot extends StatelessWidget {
                       ),
                       Text(
                         '${minY.toStringAsFixed(1)}%',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.42),
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
@@ -4133,7 +4129,7 @@ class _FmkoreaScatterPlot extends StatelessWidget {
                         children: [
                           Text(
                             minX.toStringAsFixed(0),
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: cs.onSurface.withValues(alpha: 0.42),
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
@@ -4141,7 +4137,7 @@ class _FmkoreaScatterPlot extends StatelessWidget {
                           ),
                           Text(
                             maxX.toStringAsFixed(0),
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: cs.onSurface.withValues(alpha: 0.42),
                               fontSize: 10,
                               fontWeight: FontWeight.w700,

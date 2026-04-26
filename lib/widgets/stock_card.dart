@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
@@ -184,7 +183,7 @@ class _StockCardState extends State<StockCard>
                                 ),
                                 child: Text(
                                   pick.ticker,
-                                  style: GoogleFonts.robotoMono(
+                                  style: TextStyle(
                                     color: textSecondary,
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
@@ -323,7 +322,7 @@ class _StockCardState extends State<StockCard>
         const SizedBox(height: 2),
         Text(
           value,
-          style: GoogleFonts.robotoMono(
+          style: TextStyle(
             color: valueColor,
             fontSize: 14,
             fontWeight: FontWeight.w600,
@@ -361,7 +360,7 @@ class _StockCardState extends State<StockCard>
         else if (_priceResult == null)
           Text(
             '--',
-            style: GoogleFonts.robotoMono(
+            style: TextStyle(
               color: labelColor,
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -370,7 +369,7 @@ class _StockCardState extends State<StockCard>
         else
           Text(
             _priceResult!.formattedPrice,
-            style: GoogleFonts.robotoMono(
+            style: TextStyle(
               color: valueColor,
               fontSize: 14,
               fontWeight: FontWeight.w700,
@@ -412,7 +411,7 @@ class _StockCardState extends State<StockCard>
       ),
       child: Text(
         '$sign${returnRate.toStringAsFixed(1)}%',
-        style: GoogleFonts.robotoMono(
+        style: TextStyle(
           color: color,
           fontSize: 13,
           fontWeight: FontWeight.w700,
@@ -440,7 +439,7 @@ class _StockCardState extends State<StockCard>
         ),
         child: Text(
           'NEW',
-          style: GoogleFonts.robotoMono(
+          style: TextStyle(
             color: const Color(0xFF7A4B00),
             fontSize: 10,
             fontWeight: FontWeight.w800,

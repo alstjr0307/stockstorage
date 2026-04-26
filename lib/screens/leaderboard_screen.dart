@@ -1,5 +1,4 @@
-﻿import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/stock_pick.dart';
 import '../services/firestore_service.dart';
@@ -40,7 +39,7 @@ class LeaderboardScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 Text(
                   '아직 완료된 추천 종목이 없습니다',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.4),
                     fontSize: 15,
                   ),
@@ -96,9 +95,10 @@ class _LeaderboardContentState extends State<_LeaderboardContent> {
     final winRate = (wins / total) * 100;
     final avgReturn =
         completedPicks.map((p) => p.actualReturnRate).reduce((a, b) => a + b) /
-            total;
-    final best = completedPicks
-        .reduce((a, b) => a.actualReturnRate > b.actualReturnRate ? a : b);
+        total;
+    final best = completedPicks.reduce(
+      (a, b) => a.actualReturnRate > b.actualReturnRate ? a : b,
+    );
     final sorted = _sortedPicks();
     final sectionTitle = _sort == _CompletedPickSort.returnRate
         ? '종료 종목 순위'
@@ -113,7 +113,7 @@ class _LeaderboardContentState extends State<_LeaderboardContent> {
           children: [
             Text(
               sectionTitle,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.52),
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
@@ -129,19 +129,20 @@ class _LeaderboardContentState extends State<_LeaderboardContent> {
             _SortChip(
               label: '수익률순',
               selected: _sort == _CompletedPickSort.returnRate,
-              onTap: () => setState(() => _sort = _CompletedPickSort.returnRate),
+              onTap: () =>
+                  setState(() => _sort = _CompletedPickSort.returnRate),
             ),
           ],
         ),
         const SizedBox(height: 12),
         ...sorted.asMap().entries.map(
-              (e) => _buildRankRow(
-                cs,
-                e.key + 1,
-                e.value,
-                showRank: _sort == _CompletedPickSort.returnRate,
-              ),
-            ),
+          (e) => _buildRankRow(
+            cs,
+            e.key + 1,
+            e.value,
+            showRank: _sort == _CompletedPickSort.returnRate,
+          ),
+        ),
       ],
     );
   }
@@ -167,11 +168,15 @@ class _LeaderboardContentState extends State<_LeaderboardContent> {
         children: [
           Row(
             children: [
-              const Icon(Icons.emoji_events, color: Color(0xFFFFD700), size: 20),
+              const Icon(
+                Icons.emoji_events,
+                color: Color(0xFFFFD700),
+                size: 20,
+              ),
               const SizedBox(width: 8),
               Text(
                 '종료 추천주 실적',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontWeight: FontWeight.w700,
                   fontSize: 18,
@@ -233,7 +238,7 @@ class _LeaderboardContentState extends State<_LeaderboardContent> {
                 const SizedBox(width: 8),
                 Text(
                   '최고 수익 ',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.5),
                     fontSize: 12,
                   ),
@@ -242,7 +247,7 @@ class _LeaderboardContentState extends State<_LeaderboardContent> {
                   child: Text(
                     best.name,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.82),
                       fontWeight: FontWeight.w600,
                       fontSize: 12,
@@ -251,7 +256,7 @@ class _LeaderboardContentState extends State<_LeaderboardContent> {
                 ),
                 Text(
                   '+${best.actualReturnRate.toStringAsFixed(2)}%',
-                  style: GoogleFonts.robotoMono(
+                  style: TextStyle(
                     color: _kUp,
                     fontWeight: FontWeight.w700,
                     fontSize: 13,
@@ -270,7 +275,7 @@ class _LeaderboardContentState extends State<_LeaderboardContent> {
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.45),
             fontSize: 12,
           ),
@@ -278,7 +283,7 @@ class _LeaderboardContentState extends State<_LeaderboardContent> {
         const SizedBox(height: 8),
         Text(
           value,
-          style: GoogleFonts.robotoMono(
+          style: TextStyle(
             color: color,
             fontWeight: FontWeight.w700,
             fontSize: 15,
@@ -329,15 +334,17 @@ class _LeaderboardContentState extends State<_LeaderboardContent> {
               children: [
                 if (showRank) ...[
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: rankColor.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(9999),
                     ),
                     child: Text(
                       rankLabel,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: rankColor,
                         fontWeight: FontWeight.w700,
                         fontSize: 11,
@@ -352,7 +359,7 @@ class _LeaderboardContentState extends State<_LeaderboardContent> {
                     children: [
                       Text(
                         pick.name,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: cs.onSurface,
                           fontWeight: FontWeight.w700,
                           fontSize: 18,
@@ -362,7 +369,7 @@ class _LeaderboardContentState extends State<_LeaderboardContent> {
                       const SizedBox(height: 4),
                       Text(
                         pick.ticker,
-                        style: GoogleFonts.robotoMono(
+                        style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.45),
                           fontWeight: FontWeight.w600,
                           fontSize: 12,
@@ -387,7 +394,7 @@ class _LeaderboardContentState extends State<_LeaderboardContent> {
                       ),
                       child: Text(
                         '${isPositive ? '+' : ''}${ret.toStringAsFixed(2)}%',
-                        style: GoogleFonts.robotoMono(
+                        style: TextStyle(
                           color: isPositive ? _kUp : _kDown,
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
@@ -398,7 +405,7 @@ class _LeaderboardContentState extends State<_LeaderboardContent> {
                       const SizedBox(height: 6),
                       Text(
                         DateFormat('yyyy.MM.dd').format(pick.closedAt!),
-                        style: GoogleFonts.robotoMono(
+                        style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.45),
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -415,7 +422,7 @@ class _LeaderboardContentState extends State<_LeaderboardContent> {
                 Expanded(
                   child: Text(
                     '매수가 ${formatPrice(pick.buyPrice)}',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.55),
                       fontSize: 12,
                     ),
@@ -426,7 +433,7 @@ class _LeaderboardContentState extends State<_LeaderboardContent> {
                   child: Text(
                     '종료가 ${formatPrice(pick.closedPrice ?? 0)}',
                     textAlign: TextAlign.right,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.55),
                       fontSize: 12,
                     ),
@@ -478,7 +485,7 @@ class _SortChip extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: selected ? _kAccent : cs.onSurface.withValues(alpha: 0.5),
             fontSize: 13,
             fontWeight: FontWeight.w600,

@@ -1,5 +1,4 @@
-﻿import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/post.dart';
@@ -93,7 +92,7 @@ class _MyCommentsScreenState extends State<MyCommentsScreen>
         ),
         title: Text(
           '내 댓글',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface,
             fontSize: 16,
             fontWeight: FontWeight.w700,
@@ -104,11 +103,8 @@ class _MyCommentsScreenState extends State<MyCommentsScreen>
           indicatorColor: const Color(0xFF10B981),
           labelColor: const Color(0xFF10B981),
           unselectedLabelColor: cs.onSurface.withValues(alpha: 0.4),
-          labelStyle: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
-          unselectedLabelStyle: GoogleFonts.inter(
+          labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          unselectedLabelStyle: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
           ),
@@ -121,7 +117,9 @@ class _MyCommentsScreenState extends State<MyCommentsScreen>
       body: TabBarView(
         controller: _tabController,
         children: [
-          FutureBuilder<List<({StockPick? pick, String text, DateTime createdAt})>>(
+          FutureBuilder<
+            List<({StockPick? pick, String text, DateTime createdAt})>
+          >(
             future: _stockCommentsFuture,
             builder: (context, snap) {
               if (snap.connectionState != ConnectionState.done) {
@@ -143,24 +141,26 @@ class _MyCommentsScreenState extends State<MyCommentsScreen>
                 );
               }
               return ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 itemCount: items.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 8),
                 itemBuilder: (context, i) {
                   final item = items[i];
                   final pick = item.pick;
                   return _CommentCard(
-                    title: pick != null ? '${pick.name}  ${pick.ticker}' : '삭제된 종목',
+                    title: pick != null
+                        ? '${pick.name}  ${pick.ticker}'
+                        : '삭제된 종목',
                     titleAccent: pick != null,
                     createdAt: item.createdAt,
                     text: item.text,
                     deletedLabel: pick == null,
                     onTap: pick == null
                         ? null
-                        : () => Navigator.push(
-                              context,
-                              stockDetailRoute(pick),
-                            ),
+                        : () => Navigator.push(context, stockDetailRoute(pick)),
                   );
                 },
               );
@@ -188,7 +188,10 @@ class _MyCommentsScreenState extends State<MyCommentsScreen>
                 );
               }
               return ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 itemCount: items.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 8),
                 itemBuilder: (context, i) {
@@ -203,19 +206,19 @@ class _MyCommentsScreenState extends State<MyCommentsScreen>
                     onTap: post == null
                         ? null
                         : () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => PostDetailScreen(
-                                  post: post,
-                                  isOwn: post.uid == widget.uid,
-                                  isLiked: false,
-                                  likeCount: post.likes,
-                                  onDelete: post.uid == widget.uid
-                                      ? () => _fs.deletePost(post.id)
-                                      : null,
-                                ),
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => PostDetailScreen(
+                                post: post,
+                                isOwn: post.uid == widget.uid,
+                                isLiked: false,
+                                likeCount: post.likes,
+                                onDelete: post.uid == widget.uid
+                                    ? () => _fs.deletePost(post.id)
+                                    : null,
                               ),
                             ),
+                          ),
                   );
                 },
               );
@@ -256,9 +259,7 @@ class _CommentCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: isDark ? const Color(0xFF1A2035) : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: cs.onSurface.withValues(alpha: 0.06),
-          ),
+          border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -279,12 +280,12 @@ class _CommentCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     title,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: deletedLabel
                           ? cs.onSurface.withValues(alpha: 0.35)
                           : titleAccent
-                              ? const Color(0xFF10B981)
-                              : cs.onSurface.withValues(alpha: 0.8),
+                          ? const Color(0xFF10B981)
+                          : cs.onSurface.withValues(alpha: 0.8),
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
@@ -293,7 +294,7 @@ class _CommentCard extends StatelessWidget {
                 ),
                 Text(
                   DateFormat('MM/dd HH:mm').format(createdAt),
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.35),
                     fontSize: 11,
                   ),
@@ -303,7 +304,7 @@ class _CommentCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               text,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.85),
                 fontSize: 13,
                 height: 1.45,
@@ -317,10 +318,7 @@ class _CommentCard extends StatelessWidget {
 }
 
 class _EmptyView extends StatelessWidget {
-  const _EmptyView({
-    required this.icon,
-    required this.text,
-  });
+  const _EmptyView({required this.icon, required this.text});
 
   final IconData icon;
   final String text;
@@ -332,15 +330,11 @@ class _EmptyView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 48,
-            color: cs.onSurface.withValues(alpha: 0.15),
-          ),
+          Icon(icon, size: 48, color: cs.onSurface.withValues(alpha: 0.15)),
           const SizedBox(height: 12),
           Text(
             text,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.35),
               fontSize: 14,
             ),
@@ -362,12 +356,10 @@ class _ErrorView extends StatelessWidget {
     return Center(
       child: Text(
         '불러오기 실패',
-        style: GoogleFonts.inter(
+        style: TextStyle(
           color: isDark ? Colors.white54 : cs.onSurface.withValues(alpha: 0.4),
         ),
       ),
     );
   }
 }
-
-

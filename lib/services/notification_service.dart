@@ -3,7 +3,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../utils/globals.dart';
 import 'firestore_service.dart';
 
@@ -29,11 +28,7 @@ class NotificationService {
     final messaging = FirebaseMessaging.instance;
 
     // iOS 권한 요청
-    await messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    await messaging.requestPermission(alert: true, badge: true, sound: true);
 
     // iOS 포그라운드 알림 배너 표시
     await messaging.setForegroundNotificationPresentationOptions(
@@ -43,9 +38,14 @@ class NotificationService {
     );
 
     // 로컬 알림 초기화
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidSettings = AndroidInitializationSettings(
+      '@mipmap/ic_launcher',
+    );
     const iosSettings = DarwinInitializationSettings();
-    const initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
+    const initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
     await _localNotifications.initialize(initSettings);
 
     // FCM 토큰 저장 — iOS는 APNS 토큰이 준비될 때까지 최대 5초 대기
@@ -54,7 +54,8 @@ class NotificationService {
         String? apnsToken;
         for (int i = 0; i < 5 && apnsToken == null; i++) {
           apnsToken = await messaging.getAPNSToken();
-          if (apnsToken == null) await Future.delayed(const Duration(seconds: 1));
+          if (apnsToken == null)
+            await Future.delayed(const Duration(seconds: 1));
         }
         final db = FirestoreService();
         if (apnsToken == null) {
@@ -94,7 +95,9 @@ class NotificationService {
       try {
         final token = await messaging.getToken();
         if (token != null) {
-          FirestoreService().saveFcmToken(token, uid: user.uid).catchError((_) {});
+          FirestoreService()
+              .saveFcmToken(token, uid: user.uid)
+              .catchError((_) {});
         }
       } catch (_) {}
     });
@@ -121,7 +124,10 @@ class NotificationService {
   }
 
   /// 포트폴리오 10% 구간 도달 로컬 알림
-  static Future<void> showPortfolioAlert(String stockName, double returnRate) async {
+  static Future<void> showPortfolioAlert(
+    String stockName,
+    double returnRate,
+  ) async {
     final isPositive = returnRate >= 0;
     final threshold = (returnRate / 10).truncate() * 10;
     final emoji = isPositive ? '📈' : '📉';
@@ -153,20 +159,14 @@ class NotificationService {
             if (title.isNotEmpty)
               Text(
                 title,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
                   fontSize: 13,
                 ),
               ),
             if (body.isNotEmpty)
-              Text(
-                body,
-                style: GoogleFonts.inter(
-                  color: Colors.white70,
-                  fontSize: 12,
-                ),
-              ),
+              Text(body, style: TextStyle(color: Colors.white70, fontSize: 12)),
           ],
         ),
         backgroundColor: const Color(0xFF1A2035),

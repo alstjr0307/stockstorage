@@ -1,5 +1,4 @@
-﻿import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/post.dart';
@@ -7,10 +6,7 @@ import '../services/firestore_service.dart';
 import 'post_detail_screen.dart';
 
 class MyPostsScreen extends StatelessWidget {
-  const MyPostsScreen({
-    super.key,
-    required this.uid,
-  });
+  const MyPostsScreen({super.key, required this.uid});
 
   final String uid;
 
@@ -25,7 +21,7 @@ class MyPostsScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text(
           '내 작성 글',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface,
             fontSize: 18,
             fontWeight: FontWeight.w800,
@@ -46,7 +42,7 @@ class MyPostsScreen extends StatelessWidget {
             return Center(
               child: Text(
                 '게시글을 불러오지 못했습니다.',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: isDark ? Colors.white54 : Colors.black45,
                 ),
               ),
@@ -58,7 +54,7 @@ class MyPostsScreen extends StatelessWidget {
             return Center(
               child: Text(
                 '작성한 게시글이 없습니다.',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: isDark ? Colors.white38 : Colors.black38,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -98,10 +94,7 @@ class MyPostsScreen extends StatelessWidget {
 }
 
 class _MyPostCard extends StatelessWidget {
-  const _MyPostCard({
-    required this.post,
-    required this.onTap,
-  });
+  const _MyPostCard({required this.post, required this.onTap});
 
   final Post post;
   final VoidCallback onTap;
@@ -148,7 +141,7 @@ class _MyPostCard extends StatelessWidget {
                       ),
                       child: Text(
                         DateFormat('yyyy.MM.dd HH:mm').format(post.createdAt),
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.6),
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -169,7 +162,7 @@ class _MyPostCard extends StatelessWidget {
                   post.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
@@ -182,7 +175,7 @@ class _MyPostCard extends StatelessWidget {
                     preview,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.56),
                       fontSize: 13,
                       height: 1.5,
@@ -194,7 +187,7 @@ class _MyPostCard extends StatelessWidget {
                   children: [
                     Text(
                       '좋아요 ${post.likes}',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.42),
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -203,7 +196,7 @@ class _MyPostCard extends StatelessWidget {
                     const Spacer(),
                     Text(
                       '자세히 보기',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.52),
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
@@ -225,5 +218,3 @@ class _MyPostCard extends StatelessWidget {
     );
   }
 }
-
-

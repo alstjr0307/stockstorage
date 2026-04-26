@@ -1,8 +1,7 @@
-﻿import 'dart:ui' as ui;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
 import '../services/analytics_service.dart';
@@ -200,7 +199,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
         ),
         title: Text(
           widget.name,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface,
             fontWeight: FontWeight.w800,
             fontSize: 19,
@@ -260,7 +259,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
               children: [
                 Text(
                   '실시간 스냅샷',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.62),
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -269,7 +268,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                 const SizedBox(height: 10),
                 Text(
                   _formatValue(price.price),
-                  style: GoogleFonts.robotoMono(
+                  style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 36,
                     fontWeight: FontWeight.w700,
@@ -297,7 +296,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                 if (price.marketTime != null)
                   Text(
                     '🕐 기준 ${DateFormat('MM.dd HH:mm').format(price.marketTime!)}',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.38),
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
@@ -334,7 +333,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
             children: [
               Text(
                 '차트',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 17,
                   fontWeight: FontWeight.w800,
@@ -344,7 +343,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
               if (hasData)
                 Text(
                   '${deltaPct >= 0 ? '+' : ''}${deltaPct.toStringAsFixed(2)}%',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: deltaColor,
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
@@ -420,24 +419,14 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                 children: [
                   Text(
                     _formatDate(touched.date),
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.55),
                       fontSize: 11,
                     ),
                   ),
                   _ohlcLabel(context, '시가', touched.open),
-                  _ohlcLabel(
-                    context,
-                    '고가',
-                    touched.high,
-                    color: _kUpColor,
-                  ),
-                  _ohlcLabel(
-                    context,
-                    '저가',
-                    touched.low,
-                    color: _kDownColor,
-                  ),
+                  _ohlcLabel(context, '고가', touched.high, color: _kUpColor),
+                  _ohlcLabel(context, '저가', touched.low, color: _kDownColor),
                   _ohlcLabel(
                     context,
                     '종가',
@@ -465,7 +454,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
               child: Center(
                 child: Text(
                   '차트 데이터를 불러오지 못했습니다.',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.4),
                     fontSize: 13,
                   ),
@@ -502,9 +491,10 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
                       },
                       labelColor: cs.onSurface,
                       allCandles: _candles,
-                      visibleStart: _visibleRange.start
-                          .floor()
-                          .clamp(0, _candles.length),
+                      visibleStart: _visibleRange.start.floor().clamp(
+                        0,
+                        _candles.length,
+                      ),
                     ),
                   ),
                 );
@@ -597,7 +587,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
         ),
         child: Text(
           label,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: active
                 ? const Color(0xFF10B981)
                 : Theme.of(
@@ -627,7 +617,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
           children: [
             TextSpan(
               text: '$label  ',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: color.withValues(alpha: 0.9),
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -635,7 +625,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
             ),
             TextSpan(
               text: value,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: color,
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
@@ -665,7 +655,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
         children: [
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.45),
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -674,7 +664,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
           const SizedBox(height: 6),
           Text(
             value,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface,
               fontSize: 15,
               fontWeight: FontWeight.w800,
@@ -697,14 +687,14 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
         children: [
           TextSpan(
             text: '$label ',
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.42),
               fontSize: 11,
             ),
           ),
           TextSpan(
             text: _formatValue(value),
-            style: GoogleFonts.robotoMono(
+            style: TextStyle(
               color: color ?? cs.onSurface,
               fontSize: 11,
               fontWeight: FontWeight.w700,
@@ -877,7 +867,7 @@ class _IndexFullscreenChartPageState extends State<_IndexFullscreenChartPage> {
         ),
         child: Text(
           label,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: active
                 ? const Color(0xFF10B981)
                 : cs.onSurface.withValues(alpha: 0.6),
@@ -902,14 +892,14 @@ class _IndexFullscreenChartPageState extends State<_IndexFullscreenChartPage> {
           children: [
             TextSpan(
               text: '$label ',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.38),
                 fontSize: 10,
               ),
             ),
             TextSpan(
               text: widget.formatValue(value),
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: color ?? cs.onSurface.withValues(alpha: 0.87),
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
@@ -968,7 +958,7 @@ class _IndexFullscreenChartPageState extends State<_IndexFullscreenChartPage> {
                               children: [
                                 Text(
                                   _formatDate(touched.date),
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: cs.onSurface.withValues(alpha: 0.54),
                                     fontSize: 11,
                                   ),
@@ -1004,7 +994,7 @@ class _IndexFullscreenChartPageState extends State<_IndexFullscreenChartPage> {
                 Expanded(
                   child: _loading
                       ? const Center(
-                  child: CircularProgressIndicator(
+                          child: CircularProgressIndicator(
                             strokeWidth: 2,
                             color: Color(0xFF10B981),
                           ),
@@ -1057,16 +1047,21 @@ class _IndexFullscreenChartPageState extends State<_IndexFullscreenChartPage> {
                                 padding: const EdgeInsets.only(bottom: 6),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [_Period.min1, _Period.min5, _Period.min60]
-                                      .map(
-                                        (p) => _fsBtn(
-                                          p.label,
-                                          _period == p,
-                                          cs,
-                                          () => _selectPeriod(p),
-                                        ),
-                                      )
-                                      .toList(),
+                                  children:
+                                      [
+                                            _Period.min1,
+                                            _Period.min5,
+                                            _Period.min60,
+                                          ]
+                                          .map(
+                                            (p) => _fsBtn(
+                                              p.label,
+                                              _period == p,
+                                              cs,
+                                              () => _selectPeriod(p),
+                                            ),
+                                          )
+                                          .toList(),
                                 ),
                               )
                             : const SizedBox.shrink(),
@@ -1294,5 +1289,3 @@ class _CandlePainter extends CustomPainter {
         oldDelegate.visibleStart != visibleStart;
   }
 }
-
-

@@ -45,26 +45,20 @@ class AnalyticsService {
     required String ticker,
     required String name,
     required String market,
-  }) =>
-      _analytics.logViewItem(
-        items: [
-          AnalyticsEventItem(
-            itemId: ticker,
-            itemName: name,
-            itemCategory: market,
-          )
-        ],
-      );
+  }) => _analytics.logViewItem(
+    items: [
+      AnalyticsEventItem(itemId: ticker, itemName: name, itemCategory: market),
+    ],
+  );
 
   Future<void> logToggleFavorite({
     required String ticker,
     required String name,
     required bool added,
-  }) =>
-      _analytics.logEvent(
-        name: added ? 'add_to_wishlist' : 'remove_from_wishlist',
-        parameters: {'ticker': ticker, 'name': name},
-      );
+  }) => _analytics.logEvent(
+    name: added ? 'add_to_wishlist' : 'remove_from_wishlist',
+    parameters: {'ticker': ticker, 'name': name},
+  );
 
   Future<void> logSearch(String query) =>
       _analytics.logSearch(searchTerm: query);
@@ -75,8 +69,10 @@ class AnalyticsService {
   Future<void> logAddComment(String ticker) =>
       _analytics.logEvent(name: 'add_comment', parameters: {'ticker': ticker});
 
-  Future<void> logViewIndexDetail(String name) =>
-      _analytics.logEvent(name: 'view_index_detail', parameters: {'index_name': name});
+  Future<void> logViewIndexDetail(String name) => _analytics.logEvent(
+    name: 'view_index_detail',
+    parameters: {'index_name': name},
+  );
 
   Future<void> logViewNightFutures() =>
       _analytics.logEvent(name: 'view_night_futures');
@@ -84,20 +80,20 @@ class AnalyticsService {
   // ── 매매일지 ─────────────────────────────────────────────────────────────────
 
   /// action: '매수' | '매도' | '관찰'
-  Future<void> logWriteJournal(String action) =>
-      _analytics.logEvent(name: 'write_journal', parameters: {'action': action});
+  Future<void> logWriteJournal(String action) => _analytics.logEvent(
+    name: 'write_journal',
+    parameters: {'action': action},
+  );
 
-  Future<void> logEditJournal() =>
-      _analytics.logEvent(name: 'edit_journal');
+  Future<void> logEditJournal() => _analytics.logEvent(name: 'edit_journal');
 
   Future<void> logDeleteJournal() =>
       _analytics.logEvent(name: 'delete_journal');
 
-  Future<void> logToggleJournalPublic(bool isPublic) =>
-      _analytics.logEvent(
-        name: 'toggle_journal_public',
-        parameters: {'is_public': isPublic ? 'true' : 'false'},
-      );
+  Future<void> logToggleJournalPublic(bool isPublic) => _analytics.logEvent(
+    name: 'toggle_journal_public',
+    parameters: {'is_public': isPublic ? 'true' : 'false'},
+  );
 
   Future<void> logViewJournalChart() =>
       _analytics.logEvent(name: 'view_journal_chart');
@@ -108,14 +104,11 @@ class AnalyticsService {
   Future<void> logLikeContent(String type) =>
       _analytics.logEvent(name: 'like_content', parameters: {'type': type});
 
-  Future<void> logWritePost() =>
-      _analytics.logEvent(name: 'write_post');
+  Future<void> logWritePost() => _analytics.logEvent(name: 'write_post');
 
-  Future<void> logEditPost() =>
-      _analytics.logEvent(name: 'edit_post');
+  Future<void> logEditPost() => _analytics.logEvent(name: 'edit_post');
 
-  Future<void> logDeletePost() =>
-      _analytics.logEvent(name: 'delete_post');
+  Future<void> logDeletePost() => _analytics.logEvent(name: 'delete_post');
 
   /// contentType: 'journal' | 'post' | 'comment'
   Future<void> logWriteCommunityComment(String contentType) =>
@@ -125,14 +118,12 @@ class AnalyticsService {
       );
 
   /// contentType: 'journal' | 'post' | 'comment'
-  Future<void> logReportContent(String contentType) =>
-      _analytics.logEvent(
-        name: 'report_content',
-        parameters: {'content_type': contentType},
-      );
+  Future<void> logReportContent(String contentType) => _analytics.logEvent(
+    name: 'report_content',
+    parameters: {'content_type': contentType},
+  );
 
-  Future<void> logBlockUser() =>
-      _analytics.logEvent(name: 'block_user');
+  Future<void> logBlockUser() => _analytics.logEvent(name: 'block_user');
 
   // ── 광고 ─────────────────────────────────────────────────────────────────
 

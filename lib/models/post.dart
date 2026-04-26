@@ -36,12 +36,12 @@ class Post {
   }
 
   Map<String, dynamic> toFirestore() => {
-        'uid': uid,
-        'nickname': nickname,
-        'title': title,
-        'content': content,
-        'likes': likes,
-        'createdAt': Timestamp.fromDate(createdAt),
-        'imageUrls': imageUrls,
-      };
+    'uid': uid,
+    'nickname': nickname,
+    'title': title,
+    'content': content,
+    'likes': likes,
+    'createdAt': Timestamp.fromDate(createdAt),
+    'imageUrls': imageUrls,
+  };
 }

@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../models/stock_pick.dart';
@@ -101,7 +100,7 @@ class _ExpandableNotePreviewState extends State<_ExpandableNotePreview> {
                 onTap: () => setState(() => _expanded = true),
                 child: Text(
                   '더보기',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     fontSize: 13,
                     color: const Color(0xFF10B981),
                     fontWeight: FontWeight.w600,
@@ -132,7 +131,7 @@ class _NotLoggedIn extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             '로그인이 필요합니다',
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.4),
               fontSize: 16,
             ),
@@ -151,10 +150,7 @@ class _NotLoggedIn extends StatelessWidget {
               context,
               MaterialPageRoute(builder: (_) => const LoginScreen()),
             ),
-            child: Text(
-              '로그인',
-              style: GoogleFonts.inter(fontWeight: FontWeight.w700),
-            ),
+            child: Text('로그인', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -194,6 +190,7 @@ class _JournalContentState extends State<_JournalContent> {
     String? initialStockName,
     String? initialTicker,
     String? initialRawMarket,
+    bool lockActionAndStock = false,
   }) async {
     final nickname = await _firestoreService.getNickname(widget.uid) ?? '익명';
     if (!mounted) return;
@@ -212,6 +209,7 @@ class _JournalContentState extends State<_JournalContent> {
         initialStockName: initialStockName,
         initialTicker: initialTicker,
         initialRawMarket: initialRawMarket,
+        lockActionAndStock: lockActionAndStock,
       ),
     );
   }
@@ -220,6 +218,7 @@ class _JournalContentState extends State<_JournalContent> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final bg = Theme.of(context).scaffoldBackgroundColor;
+    final isStockDetailPage = widget.filterTicker?.trim().isNotEmpty ?? false;
     return Scaffold(
       backgroundColor: bg,
       appBar: widget.pageTitle == null
@@ -229,20 +228,22 @@ class _JournalContentState extends State<_JournalContent> {
               elevation: 0,
               title: Text(
                 widget.pageTitle!,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontWeight: FontWeight.w700,
                   fontSize: 18,
                 ),
               ),
             ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'journal_add_fab',
-        onPressed: _openForm,
-        backgroundColor: const Color(0xFF10B981),
-        foregroundColor: Colors.black,
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: isStockDetailPage
+          ? null
+          : FloatingActionButton(
+              heroTag: 'journal_add_fab',
+              onPressed: _openForm,
+              backgroundColor: const Color(0xFF10B981),
+              foregroundColor: Colors.black,
+              child: const Icon(Icons.add),
+            ),
       body: StreamBuilder<List<TradingJournal>>(
         stream: _firestoreService.getMyJournals(widget.uid),
         builder: (context, snapshot) {
@@ -273,7 +274,7 @@ class _JournalContentState extends State<_JournalContent> {
                     (filterTicker != null && filterTicker.isNotEmpty)
                         ? '${widget.filterStockName ?? filterTicker} 매매일지가 없습니다'
                         : '매매일지를 작성해보세요',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.4),
                       fontSize: 15,
                     ),
@@ -283,7 +284,7 @@ class _JournalContentState extends State<_JournalContent> {
                     (filterTicker != null && filterTicker.isNotEmpty)
                         ? '전체보기에서 다른 종목을 확인해보세요'
                         : '우하단 + 버튼으로 추가',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.25),
                       fontSize: 12,
                     ),
@@ -354,7 +355,6 @@ class _JournalContentState extends State<_JournalContent> {
             return ListView(
               padding: const EdgeInsets.fromLTRB(0, 8, 0, 100),
               children: [
-                _JournalOverviewSection(journals: journals),
                 _JournalDateSection(
                   timeline: timeline,
                   buysByStock: buysByStock,
@@ -388,15 +388,20 @@ class _JournalContentState extends State<_JournalContent> {
               initialStockName: representative.stockName,
               initialTicker: representative.ticker,
               initialRawMarket: representative.market,
+              lockActionAndStock: true,
             ),
             onAddSell: () => _openForm(
               initialAction: '매도',
               initialStockName: representative.stockName,
               initialTicker: representative.ticker,
               initialRawMarket: representative.market,
+              lockActionAndStock: true,
             ),
-            onSellQuick: (buy, remainingQty) =>
-                _openForm(linkedBuy: buy, remainingQty: remainingQty),
+            onSellQuick: (buy, remainingQty) => _openForm(
+              linkedBuy: buy,
+              remainingQty: remainingQty,
+              lockActionAndStock: true,
+            ),
             onDeleteSell: onDeleteLinkedSell,
           );
         },
@@ -577,7 +582,7 @@ class _DetailTabChip extends StatelessWidget {
           alignment: Alignment.center,
           child: Text(
             label,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: selected
                   ? cs.onSurface
                   : cs.onSurface.withValues(alpha: 0.35),
@@ -593,26 +598,34 @@ class _DetailTabChip extends StatelessWidget {
 
 class _StockPositionMetrics {
   final double totalBuyQty;
+  final double totalBuyAmount;
+  final double totalSellAmount;
   final double remainingQty;
   final double avgBuyPrice;
+  final double avgSellPrice;
   final double currentPrice;
   final double evalAmount;
   final double evalPnl;
   final double? evalPnlRate;
   final double realizedPnl;
+  final double? realizedPnlRate;
   final TradingJournal? quickSellBuy;
   final double quickSellQty;
   final bool hasLivePrice;
 
   const _StockPositionMetrics({
     required this.totalBuyQty,
+    required this.totalBuyAmount,
+    required this.totalSellAmount,
     required this.remainingQty,
     required this.avgBuyPrice,
+    required this.avgSellPrice,
     required this.currentPrice,
     required this.evalAmount,
     required this.evalPnl,
     required this.evalPnlRate,
     required this.realizedPnl,
+    required this.realizedPnlRate,
     required this.quickSellBuy,
     required this.quickSellQty,
     required this.hasLivePrice,
@@ -639,12 +652,24 @@ class _StockPositionMetrics {
     }
 
     final totalBuyQty = buys.fold<double>(0, (sum, b) => sum + b.quantity);
+    final totalBuyAmount = buys.fold<double>(
+      0,
+      (sum, b) => sum + (b.price * b.quantity),
+    );
+    final totalSellQty = sells.fold<double>(0, (sum, s) => sum + s.quantity);
+    final totalSellAmount = sells.fold<double>(
+      0,
+      (sum, s) => sum + (s.price * s.quantity),
+    );
     final avgBuyPrice = remainingQty > _kQtyEpsilon
         ? remainingCost / remainingQty
         : (totalBuyQty > _kQtyEpsilon
               ? buys.fold<double>(0, (sum, b) => sum + b.price * b.quantity) /
                     totalBuyQty
               : 0.0);
+    final avgSellPrice = totalSellQty > _kQtyEpsilon
+        ? totalSellAmount / totalSellQty
+        : 0.0;
     final currentPrice = price?.price ?? avgBuyPrice;
     final evalAmount = currentPrice * remainingQty;
     final evalPnl = (currentPrice - avgBuyPrice) * remainingQty;
@@ -663,6 +688,9 @@ class _StockPositionMetrics {
         realizedPnl += (sell.price - bp) * sell.quantity;
       }
     }
+    final realizedPnlRate = totalBuyAmount > 0
+        ? ((totalSellAmount - totalBuyAmount) / totalBuyAmount) * 100
+        : null;
 
     TradingJournal? quickSellBuy;
     var quickSellQty = 0.0;
@@ -677,13 +705,17 @@ class _StockPositionMetrics {
 
     return _StockPositionMetrics(
       totalBuyQty: totalBuyQty,
+      totalBuyAmount: totalBuyAmount,
+      totalSellAmount: totalSellAmount,
       remainingQty: remainingQty,
       avgBuyPrice: avgBuyPrice,
+      avgSellPrice: avgSellPrice,
       currentPrice: currentPrice,
       evalAmount: evalAmount,
       evalPnl: evalPnl,
       evalPnlRate: evalPnlRate,
       realizedPnl: realizedPnl,
+      realizedPnlRate: realizedPnlRate,
       quickSellBuy: quickSellBuy,
       quickSellQty: quickSellQty,
       hasLivePrice: price != null,
@@ -705,10 +737,14 @@ class _StockHoldingStatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isKrw = stock.market != 'US';
     final isHolding = metrics.remainingQty > _kQtyEpsilon;
     final pnlUp = metrics.evalPnl >= 0;
     final realizedUp = metrics.realizedPnl >= 0;
+    final badgeBaseColor = isHolding
+        ? const Color(0xFF10B981)
+        : const Color(0xFF667085);
     final pnlColor = pnlUp ? const Color(0xFFF04452) : const Color(0xFF1677FF);
     final realizedColor = realizedUp
         ? const Color(0xFFF04452)
@@ -732,15 +768,17 @@ class _StockHoldingStatusCard extends StatelessWidget {
           border: Border(
             bottom: last
                 ? BorderSide.none
-                : BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+                : BorderSide(
+                    color: cs.onSurface.withValues(alpha: isDark ? 0.08 : 0.07),
+                  ),
           ),
         ),
         child: Row(
           children: [
             Text(
               label,
-              style: GoogleFonts.inter(
-                color: Colors.white.withValues(alpha: 0.5),
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: isDark ? 0.5 : 0.55),
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
@@ -751,8 +789,8 @@ class _StockHoldingStatusCard extends StatelessWidget {
               children: [
                 Text(
                   value,
-                  style: GoogleFonts.robotoMono(
-                    color: valueColor ?? Colors.white,
+                  style: TextStyle(
+                    color: valueColor ?? cs.onSurface,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
@@ -760,8 +798,8 @@ class _StockHoldingStatusCard extends StatelessWidget {
                 if (sub != null)
                   Text(
                     sub,
-                    style: GoogleFonts.robotoMono(
-                      color: (valueColor ?? Colors.white).withValues(
+                    style: TextStyle(
+                      color: (valueColor ?? cs.onSurface).withValues(
                         alpha: 0.75,
                       ),
                       fontSize: 11,
@@ -785,7 +823,7 @@ class _StockHoldingStatusCard extends StatelessWidget {
             children: [
               Text(
                 '실현손익',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.5),
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -798,7 +836,7 @@ class _StockHoldingStatusCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       '${realizedUp ? '+' : ''}${fmtP(metrics.realizedPnl)}',
-                      style: GoogleFonts.robotoMono(
+                      style: TextStyle(
                         color: realizedColor,
                         fontSize: 32,
                         height: 1.0,
@@ -814,26 +852,16 @@ class _StockHoldingStatusCard extends StatelessWidget {
                       vertical: 3,
                     ),
                     decoration: BoxDecoration(
-                      color:
-                          (isHolding
-                                  ? const Color(0xFF34D399)
-                                  : const Color(0xFF667085))
-                              .withValues(alpha: 0.14),
+                      color: badgeBaseColor.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(6),
                       border: Border.all(
-                        color:
-                            (isHolding
-                                    ? const Color(0xFF34D399)
-                                    : const Color(0xFF667085))
-                                .withValues(alpha: 0.28),
+                        color: badgeBaseColor.withValues(alpha: 0.34),
                       ),
                     ),
                     child: Text(
                       isHolding ? '보유중' : '완료',
-                      style: GoogleFonts.inter(
-                        color: isHolding
-                            ? const Color(0xFF34D399)
-                            : Colors.white.withValues(alpha: 0.55),
+                      style: TextStyle(
+                        color: badgeBaseColor.withValues(alpha: 0.92),
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
                       ),
@@ -848,36 +876,53 @@ class _StockHoldingStatusCard extends StatelessWidget {
           width: double.infinity,
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 2),
           decoration: BoxDecoration(
-            color: const Color(0xFF131929),
+            color: isDark ? const Color(0xFF131929) : cs.surface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+            border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
           ),
           child: Column(
             children: [
-              statRow('평균단가', fmtP(metrics.avgBuyPrice)),
-              statRow(
-                '현재가',
-                metrics.hasLivePrice ? fmtP(metrics.currentPrice) : '-',
-                valueColor: metrics.hasLivePrice ? pnlColor : Colors.white54,
-                sub: loadingPrice ? '불러오는 중' : null,
-              ),
-              statRow('수량', fmtQty(metrics.remainingQty)),
-              statRow('평가금액', fmtP(metrics.evalAmount)),
-              statRow(
-                '수익률',
-                metrics.evalPnlRate == null
-                    ? '—'
-                    : '${pnlUp ? '+' : ''}${metrics.evalPnlRate!.toStringAsFixed(2)}%',
-                valueColor: metrics.evalPnlRate == null
-                    ? Colors.white38
-                    : pnlColor,
-              ),
-              statRow(
-                '평가손익',
-                '${pnlUp ? '+' : ''}${fmtP(metrics.evalPnl)}',
-                valueColor: pnlColor,
-                last: true,
-              ),
+              if (isHolding) ...[
+                statRow('평균단가', fmtP(metrics.avgBuyPrice)),
+                statRow(
+                  '현재가',
+                  metrics.hasLivePrice ? fmtP(metrics.currentPrice) : '-',
+                  valueColor: metrics.hasLivePrice
+                      ? pnlColor
+                      : cs.onSurface.withValues(alpha: 0.45),
+                  sub: loadingPrice ? '불러오는 중' : null,
+                ),
+                statRow('잔량', fmtQty(metrics.remainingQty)),
+                statRow('평가금액', fmtP(metrics.evalAmount)),
+                statRow(
+                  '수익률',
+                  metrics.evalPnlRate == null
+                      ? '—'
+                      : '${pnlUp ? '+' : ''}${metrics.evalPnlRate!.toStringAsFixed(2)}%',
+                  valueColor: metrics.evalPnlRate == null
+                      ? cs.onSurface.withValues(alpha: 0.35)
+                      : pnlColor,
+                ),
+                statRow(
+                  '평가손익',
+                  '${pnlUp ? '+' : ''}${fmtP(metrics.evalPnl)}',
+                  valueColor: pnlColor,
+                  last: true,
+                ),
+              ] else ...[
+                statRow('총 매수금액', fmtP(metrics.totalBuyAmount)),
+                statRow('총 매도금액', fmtP(metrics.totalSellAmount)),
+                statRow(
+                  '실현수익률',
+                  metrics.realizedPnlRate == null
+                      ? '—'
+                      : '${(metrics.realizedPnlRate ?? 0) >= 0 ? '+' : ''}${metrics.realizedPnlRate!.toStringAsFixed(2)}%',
+                  valueColor: metrics.realizedPnlRate == null
+                      ? cs.onSurface.withValues(alpha: 0.35)
+                      : realizedColor,
+                  last: true,
+                ),
+              ],
             ],
           ),
         ),
@@ -904,6 +949,8 @@ class _StockTradeRecordsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isKrw = events.firstOrNull?.market != 'US';
     final buysAsc = [...buys]
       ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
@@ -924,8 +971,8 @@ class _StockTradeRecordsCard extends StatelessWidget {
           children: [
             Text(
               '매매기록',
-              style: GoogleFonts.inter(
-                color: Colors.white,
+              style: TextStyle(
+                color: cs.onSurface,
                 fontSize: 14,
                 fontWeight: FontWeight.w800,
               ),
@@ -934,13 +981,13 @@ class _StockTradeRecordsCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
+                color: cs.onSurface.withValues(alpha: isDark ? 0.08 : 0.06),
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
                 '${events.length}건',
-                style: GoogleFonts.inter(
-                  color: Colors.white.withValues(alpha: 0.58),
+                style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.6),
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                 ),
@@ -956,8 +1003,8 @@ class _StockTradeRecordsCard extends StatelessWidget {
               children: [
                 Text(
                   entry.key,
-                  style: GoogleFonts.inter(
-                    color: Colors.white.withValues(alpha: 0.5),
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.5),
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                   ),
@@ -965,7 +1012,7 @@ class _StockTradeRecordsCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Divider(
-                    color: Colors.white.withValues(alpha: 0.08),
+                    color: cs.onSurface.withValues(alpha: isDark ? 0.08 : 0.07),
                     height: 1,
                   ),
                 ),
@@ -1012,6 +1059,8 @@ class _StockTradeRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isBuy = journal.action == '매수';
     final color = isBuy ? const Color(0xFF10B981) : const Color(0xFFF04452);
     double? realizedPnl;
@@ -1028,7 +1077,9 @@ class _StockTradeRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         border: Border(
-          top: BorderSide(color: Colors.white.withValues(alpha: 0.045)),
+          top: BorderSide(
+            color: cs.onSurface.withValues(alpha: isDark ? 0.07 : 0.06),
+          ),
         ),
       ),
       child: Row(
@@ -1044,7 +1095,7 @@ class _StockTradeRow extends StatelessWidget {
             ),
             child: Text(
               journal.action,
-              style: GoogleFonts.robotoMono(
+              style: TextStyle(
                 color: color,
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
@@ -1058,8 +1109,8 @@ class _StockTradeRow extends StatelessWidget {
               children: [
                 Text(
                   fmtP(journal.price),
-                  style: GoogleFonts.robotoMono(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: cs.onSurface,
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                   ),
@@ -1067,8 +1118,8 @@ class _StockTradeRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   '${fmtQty(journal.quantity)} · ${NumberFormat('#,###').format((journal.price * journal.quantity).toInt())}원',
-                  style: GoogleFonts.inter(
-                    color: Colors.white.withValues(alpha: 0.48),
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.52),
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -1079,7 +1130,7 @@ class _StockTradeRow extends StatelessWidget {
           if (realizedPnl != null) ...[
             Text(
               '${pnlUp ? '+' : ''}${fmtP(realizedPnl)}',
-              style: GoogleFonts.robotoMono(
+              style: TextStyle(
                 color: pnlUp
                     ? const Color(0xFFF04452)
                     : const Color(0xFF1677FF),
@@ -1094,9 +1145,9 @@ class _StockTradeRow extends StatelessWidget {
             icon: Icon(
               Icons.more_vert,
               size: 18,
-              color: Colors.white.withValues(alpha: 0.3),
+              color: cs.onSurface.withValues(alpha: 0.4),
             ),
-            color: const Color(0xFF1A2235),
+            color: cs.surface,
             onSelected: (value) {
               if (value == 'edit') onEdit();
               if (value == 'delete') onDelete?.call();
@@ -1133,9 +1184,27 @@ class _StockChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isKrw = stock.market != 'US';
     final canOpenChart =
         stock.ticker.isNotEmpty && {'KS', 'KQ', 'US'}.contains(stock.market);
+    final totalBuyQty = buys.fold<double>(0, (sum, b) => sum + b.quantity);
+    final totalBuyAmount = buys.fold<double>(
+      0,
+      (sum, b) => sum + (b.price * b.quantity),
+    );
+    final totalSellQty = sells.fold<double>(0, (sum, s) => sum + s.quantity);
+    final totalSellAmount = sells.fold<double>(
+      0,
+      (sum, s) => sum + (s.price * s.quantity),
+    );
+    final avgBuyPrice = totalBuyQty > _kQtyEpsilon
+        ? totalBuyAmount / totalBuyQty
+        : 0.0;
+    final avgSellPrice = totalSellQty > _kQtyEpsilon
+        ? totalSellAmount / totalSellQty
+        : 0.0;
     String fmtP(double p) => isKrw
         ? '₩${NumberFormat('#,###').format(p.toInt())}'
         : '\$${p.toStringAsFixed(2)}';
@@ -1144,8 +1213,8 @@ class _StockChartCard extends StatelessWidget {
       children: [
         Text(
           '주가 차트',
-          style: GoogleFonts.inter(
-            color: Colors.white,
+          style: TextStyle(
+            color: cs.onSurface,
             fontSize: 14,
             fontWeight: FontWeight.w800,
           ),
@@ -1153,8 +1222,8 @@ class _StockChartCard extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           hasLivePrice ? '현재가 ${fmtP(currentPrice)}' : '현재가 -',
-          style: GoogleFonts.robotoMono(
-            color: Colors.white.withValues(alpha: 0.56),
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.58),
             fontSize: 11,
             fontWeight: FontWeight.w700,
           ),
@@ -1166,17 +1235,46 @@ class _StockChartCard extends StatelessWidget {
             market: stock.market,
             buys: buys,
             sells: sells,
+            avgBuyPrice: avgBuyPrice,
+            avgSellPrice: avgSellPrice,
           )
         else
           Text(
             '차트 지원 종목이 아닙니다',
-            style: GoogleFonts.inter(
-              color: Colors.white.withValues(alpha: 0.34),
+            style: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.45),
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
           ),
         if (canOpenChart) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '평균 매수가 ${avgBuyPrice > 0 ? fmtP(avgBuyPrice) : '-'}',
+                  style: TextStyle(
+                    color: const Color(0xFF34D399).withValues(alpha: 0.85),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (avgSellPrice > 0)
+                Expanded(
+                  child: Text(
+                    '평균 매도가 ${fmtP(avgSellPrice)}',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      color: const Color(0xFFF04452).withValues(alpha: 0.85),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+            ],
+          ),
           const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
@@ -1195,8 +1293,12 @@ class _StockChartCard extends StatelessWidget {
                 ),
               ),
               style: OutlinedButton.styleFrom(
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.20)),
-                foregroundColor: Colors.white.withValues(alpha: 0.80),
+                side: BorderSide(
+                  color: cs.onSurface.withValues(alpha: isDark ? 0.20 : 0.18),
+                ),
+                foregroundColor: cs.onSurface.withValues(
+                  alpha: isDark ? 0.80 : 0.72,
+                ),
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -1205,10 +1307,7 @@ class _StockChartCard extends StatelessWidget {
               icon: const Icon(Icons.open_in_full_rounded, size: 16),
               label: Text(
                 '차트 자세히',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
               ),
             ),
           ),
@@ -1223,12 +1322,16 @@ class _InlineStockChart extends StatefulWidget {
   final String market;
   final List<TradingJournal> buys;
   final List<TradingJournal> sells;
+  final double avgBuyPrice;
+  final double avgSellPrice;
 
   const _InlineStockChart({
     required this.ticker,
     required this.market,
     required this.buys,
     required this.sells,
+    required this.avgBuyPrice,
+    required this.avgSellPrice,
   });
 
   @override
@@ -1289,6 +1392,8 @@ class _InlineStockChartState extends State<_InlineStockChart> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 24),
@@ -1303,8 +1408,8 @@ class _InlineStockChartState extends State<_InlineStockChart> {
         child: Center(
           child: Text(
             '차트 데이터를 불러올 수 없습니다',
-            style: GoogleFonts.inter(
-              color: Colors.white.withValues(alpha: 0.4),
+            style: TextStyle(
+              color: cs.onSurface.withValues(alpha: isDark ? 0.4 : 0.48),
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -1332,6 +1437,8 @@ class _InlineStockChartState extends State<_InlineStockChart> {
               candles: _candles,
               buyMarkerIndexes: buyMarkers,
               sellMarkerIndexes: sellMarkers,
+              avgBuyPrice: widget.avgBuyPrice,
+              avgSellPrice: widget.avgSellPrice,
             ),
           ),
         ),
@@ -1357,6 +1464,8 @@ class _InlineLegendDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       children: [
         Container(
@@ -1367,8 +1476,8 @@ class _InlineLegendDot extends StatelessWidget {
         const SizedBox(width: 4),
         Text(
           label,
-          style: GoogleFonts.inter(
-            color: Colors.white.withValues(alpha: 0.52),
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: isDark ? 0.52 : 0.58),
             fontSize: 11,
             fontWeight: FontWeight.w600,
           ),
@@ -1410,7 +1519,7 @@ class _TradeAddActionsCard extends StatelessWidget {
                 const SizedBox(width: 7),
                 Text(
                   label,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: color,
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
@@ -1450,11 +1559,15 @@ class _InlineStockChartPainter extends CustomPainter {
   candles;
   final Set<int> buyMarkerIndexes;
   final Set<int> sellMarkerIndexes;
+  final double avgBuyPrice;
+  final double avgSellPrice;
 
   const _InlineStockChartPainter({
     required this.candles,
     required this.buyMarkerIndexes,
     required this.sellMarkerIndexes,
+    required this.avgBuyPrice,
+    required this.avgSellPrice,
   });
 
   @override
@@ -1470,6 +1583,14 @@ class _InlineStockChartPainter extends CustomPainter {
 
     final highs = candles.map((e) => e.high).toList();
     final lows = candles.map((e) => e.low).toList();
+    if (avgBuyPrice > 0) {
+      highs.add(avgBuyPrice);
+      lows.add(avgBuyPrice);
+    }
+    if (avgSellPrice > 0) {
+      highs.add(avgSellPrice);
+      lows.add(avgSellPrice);
+    }
     final maxY = highs.reduce((a, b) => a > b ? a : b);
     final minY = lows.reduce((a, b) => a < b ? a : b);
     final range = (maxY - minY).abs() < 1e-9 ? 1.0 : (maxY - minY);
@@ -1477,6 +1598,23 @@ class _InlineStockChartPainter extends CustomPainter {
     double toY(double v) => size.height - ((v - minY) / range) * size.height;
     double toX(int i) =>
         candles.length <= 1 ? 0 : (i / (candles.length - 1)) * size.width;
+
+    if (avgBuyPrice > 0) {
+      _drawDashedHLine(
+        canvas,
+        y: toY(avgBuyPrice),
+        width: size.width,
+        color: const Color(0xFF34D399).withValues(alpha: 0.70),
+      );
+    }
+    if (avgSellPrice > 0) {
+      _drawDashedHLine(
+        canvas,
+        y: toY(avgSellPrice),
+        width: size.width,
+        color: const Color(0xFFF04452).withValues(alpha: 0.70),
+      );
+    }
 
     final line = Path();
     for (var i = 0; i < candles.length; i++) {
@@ -1531,11 +1669,32 @@ class _InlineStockChartPainter extends CustomPainter {
     }
   }
 
+  void _drawDashedHLine(
+    Canvas canvas, {
+    required double y,
+    required double width,
+    required Color color,
+  }) {
+    const dash = 5.0;
+    const gap = 3.0;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1.0;
+    var x = 0.0;
+    while (x < width) {
+      final x2 = (x + dash).clamp(0.0, width);
+      canvas.drawLine(Offset(x, y), Offset(x2, y), paint);
+      x += dash + gap;
+    }
+  }
+
   @override
   bool shouldRepaint(covariant _InlineStockChartPainter oldDelegate) =>
       oldDelegate.candles != candles ||
       oldDelegate.buyMarkerIndexes != buyMarkerIndexes ||
-      oldDelegate.sellMarkerIndexes != sellMarkerIndexes;
+      oldDelegate.sellMarkerIndexes != sellMarkerIndexes ||
+      oldDelegate.avgBuyPrice != avgBuyPrice ||
+      oldDelegate.avgSellPrice != avgSellPrice;
 }
 
 class _JournalDateNavigator extends StatelessWidget {
@@ -1544,6 +1703,7 @@ class _JournalDateNavigator extends StatelessWidget {
   final bool canGoNext;
   final VoidCallback? onPrev;
   final VoidCallback? onNext;
+  final VoidCallback? onPickDate;
 
   const _JournalDateNavigator({
     required this.date,
@@ -1551,6 +1711,7 @@ class _JournalDateNavigator extends StatelessWidget {
     required this.canGoNext,
     this.onPrev,
     this.onNext,
+    this.onPickDate,
   });
 
   @override
@@ -1572,13 +1733,34 @@ class _JournalDateNavigator extends StatelessWidget {
           ),
           Expanded(
             child: Center(
-              child: Text(
-                DateFormat('yyyy.MM.dd').format(date),
-                style: GoogleFonts.robotoMono(
-                  color: cs.onSurface,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.4,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: onPickDate,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        DateFormat('yyyy.MM.dd').format(date),
+                        style: TextStyle(
+                          color: cs.onSurface,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.calendar_month_rounded,
+                        size: 16,
+                        color: cs.onSurface.withValues(alpha: 0.58),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1629,6 +1811,31 @@ class _JournalDateSectionState extends State<_JournalDateSection> {
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
+  Future<void> _pickDate(
+    List<DateTime> availableDates,
+    DateTime selected,
+  ) async {
+    if (availableDates.isEmpty) return;
+    DateTime minDate = availableDates.first;
+    DateTime maxDate = availableDates.first;
+    for (final d in availableDates.skip(1)) {
+      if (d.isBefore(minDate)) minDate = d;
+      if (d.isAfter(maxDate)) maxDate = d;
+    }
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: selected,
+      firstDate: minDate,
+      lastDate: maxDate,
+      selectableDayPredicate: (d) =>
+          availableDates.any((x) => _isSameDay(x, d)),
+      helpText: '거래일 선택',
+      locale: const Locale('ko', 'KR'),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _selectedDate = _dateOnly(picked));
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -1672,6 +1879,7 @@ class _JournalDateSectionState extends State<_JournalDateSection> {
                   () => _selectedDate = availableDates[selectedIdx - 1],
                 )
               : null,
+          onPickDate: () => _pickDate(availableDates, selectedDate),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
@@ -1679,7 +1887,7 @@ class _JournalDateSectionState extends State<_JournalDateSection> {
             alignment: Alignment.centerLeft,
             child: Text(
               '총 거래 ${filteredTimeline.length}건',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.45),
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -1911,7 +2119,7 @@ class _PortfolioSummarySectionState extends State<_PortfolioSummarySection> {
                 // 타이틀 + 종목 수
                 Text(
                   '보유 포지션',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.5),
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -1930,7 +2138,7 @@ class _PortfolioSummarySectionState extends State<_PortfolioSummarySection> {
                   ),
                   child: Text(
                     '${widget.holdings.length}',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: const Color(0xFF10B981),
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
@@ -1945,14 +2153,14 @@ class _PortfolioSummarySectionState extends State<_PortfolioSummarySection> {
                     children: [
                       Text(
                         '평가금액',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.3),
                           fontSize: 9,
                         ),
                       ),
                       Text(
                         fmtAmt(totalEval),
-                        style: GoogleFonts.robotoMono(
+                        style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.8),
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -1966,14 +2174,14 @@ class _PortfolioSummarySectionState extends State<_PortfolioSummarySection> {
                     children: [
                       Text(
                         '평가손익',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.3),
                           fontSize: 9,
                         ),
                       ),
                       Text(
                         '${isPnlUp ? '+' : ''}${fmtAmt(totalPnl)}',
-                        style: GoogleFonts.robotoMono(
+                        style: TextStyle(
                           color: pnlColor,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -2061,7 +2269,7 @@ class _HoldingRow extends StatelessWidget {
               children: [
                 Text(
                   buy.stockName,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -2072,7 +2280,7 @@ class _HoldingRow extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   buy.ticker.isNotEmpty ? '$qtyStr  ·  ${buy.ticker}' : qtyStr,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.4),
                     fontSize: 11,
                   ),
@@ -2088,7 +2296,7 @@ class _HoldingRow extends StatelessWidget {
               children: [
                 Text(
                   '평가금액',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.3),
                     fontSize: 9,
                   ),
@@ -2098,7 +2306,7 @@ class _HoldingRow extends StatelessWidget {
                   evalAmt != null
                       ? fmtP(evalAmt)
                       : (price == null ? '...' : '-'),
-                  style: GoogleFonts.robotoMono(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(
                       alpha: evalAmt != null ? 0.8 : 0.3,
                     ),
@@ -2118,7 +2326,7 @@ class _HoldingRow extends StatelessWidget {
               children: [
                 Text(
                   '평가손익',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.3),
                     fontSize: 9,
                   ),
@@ -2128,7 +2336,7 @@ class _HoldingRow extends StatelessWidget {
                   pnl != null
                       ? '${isUp ? '+' : ''}${fmtP(pnl)}'
                       : (price == null ? '...' : '-'),
-                  style: GoogleFonts.robotoMono(
+                  style: TextStyle(
                     color: pnlColor,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -2137,7 +2345,7 @@ class _HoldingRow extends StatelessWidget {
                 if (pnlPct != null)
                   Text(
                     '${isUp ? '+' : ''}${pnlPct.toStringAsFixed(1)}%',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: pnlColor.withValues(alpha: 0.7),
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
@@ -2476,14 +2684,14 @@ class _JournalCardState extends State<_JournalCard> {
               ),
               title: Text(
                 '삭제',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: isDark ? Colors.white : Colors.black87,
                   fontWeight: FontWeight.w700,
                 ),
               ),
               content: Text(
                 '이 일지를 삭제할까요?',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: isDark ? Colors.white70 : Colors.black54,
                 ),
               ),
@@ -2492,7 +2700,7 @@ class _JournalCardState extends State<_JournalCard> {
                   onPressed: () => Navigator.pop(ctx, false),
                   child: Text(
                     '취소',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: isDark ? Colors.white54 : Colors.black45,
                     ),
                   ),
@@ -2501,7 +2709,7 @@ class _JournalCardState extends State<_JournalCard> {
                   onPressed: () => Navigator.pop(ctx, true),
                   child: Text(
                     '삭제',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: Colors.redAccent,
                       fontWeight: FontWeight.w700,
                     ),
@@ -2524,7 +2732,7 @@ class _JournalCardState extends State<_JournalCard> {
               children: [
                 const Icon(Icons.edit_outlined, size: 16),
                 const SizedBox(width: 8),
-                Text('수정', style: GoogleFonts.inter(fontSize: 13)),
+                Text('수정', style: TextStyle(fontSize: 13)),
               ],
             ),
           ),
@@ -2539,7 +2747,7 @@ class _JournalCardState extends State<_JournalCard> {
               const SizedBox(width: 8),
               Text(
                 journal.isPublic ? '비공개로 전환' : '커뮤니티에 공유',
-                style: GoogleFonts.inter(fontSize: 13),
+                style: TextStyle(fontSize: 13),
               ),
             ],
           ),
@@ -2556,7 +2764,7 @@ class _JournalCardState extends State<_JournalCard> {
               const SizedBox(width: 8),
               Text(
                 '삭제',
-                style: GoogleFonts.inter(fontSize: 13, color: Colors.redAccent),
+                style: TextStyle(fontSize: 13, color: Colors.redAccent),
               ),
             ],
           ),
@@ -2598,7 +2806,7 @@ class _JournalCardState extends State<_JournalCard> {
               : cs.onSurface,
         ),
         (
-          label: journal.action == '매수' ? '매수수량' : '수량',
+          label: journal.action == '매수' ? '매수수량' : '매도수량',
           value: qtyText,
           color: cs.onSurface,
         ),
@@ -2635,7 +2843,7 @@ class _JournalCardState extends State<_JournalCard> {
           ),
           child: Text(
             text,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: color,
               fontSize: 10,
               fontWeight: FontWeight.w700,
@@ -2660,7 +2868,7 @@ class _JournalCardState extends State<_JournalCard> {
               Expanded(
                 child: Text(
                   metric.label,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: isDark ? 0.48 : 0.5),
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
@@ -2670,7 +2878,7 @@ class _JournalCardState extends State<_JournalCard> {
               const SizedBox(width: 16),
               Text(
                 metric.value,
-                style: GoogleFonts.robotoMono(
+                style: TextStyle(
                   color: metric.color,
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -2721,7 +2929,7 @@ class _JournalCardState extends State<_JournalCard> {
                           const SizedBox(width: 6),
                           Text(
                             '매매기록 차트보기',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: actionTone,
                               fontSize: 12,
                               fontWeight: FontWeight.w700,
@@ -2803,7 +3011,7 @@ class _JournalCardState extends State<_JournalCard> {
                                 const SizedBox(width: 5),
                                 Text(
                                   journal.action,
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: actionTone,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w700,
@@ -2840,7 +3048,7 @@ class _JournalCardState extends State<_JournalCard> {
                           Expanded(
                             child: Text(
                               journal.stockName,
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: cs.onSurface,
                                 fontWeight: FontWeight.w800,
                                 fontSize: 20,
@@ -2882,7 +3090,7 @@ class _JournalCardState extends State<_JournalCard> {
                     padding: const EdgeInsets.symmetric(horizontal: 18),
                     child: _ExpandableNotePreview(
                       content: journal.note,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.68),
                         fontSize: 13,
                         height: 1.55,
@@ -2904,7 +3112,7 @@ class _JournalCardState extends State<_JournalCard> {
                             children: [
                               Text(
                                 journal.action == '매도' ? '실현손익' : '평가손익',
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   color: cs.onSurface.withValues(alpha: 0.24),
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
@@ -2914,7 +3122,7 @@ class _JournalCardState extends State<_JournalCard> {
                               const SizedBox(height: 5),
                               Text(
                                 '${isHeadlineUp ? '+' : ''}${fmtP(headlineAmount)}',
-                                style: GoogleFonts.robotoMono(
+                                style: TextStyle(
                                   color: headlineColor,
                                   fontSize: 30,
                                   fontWeight: FontWeight.w700,
@@ -2937,7 +3145,7 @@ class _JournalCardState extends State<_JournalCard> {
                             ),
                             child: Text(
                               '${isHeadlineUp ? '+' : ''}${headlineRate.toStringAsFixed(2)}%',
-                              style: GoogleFonts.robotoMono(
+                              style: TextStyle(
                                 color: headlineColor,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -3020,7 +3228,7 @@ class _JournalCardState extends State<_JournalCard> {
                           const SizedBox(width: 6),
                           Text(
                             '포지션 종료',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: cs.onSurface.withValues(alpha: 0.5),
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
@@ -3052,7 +3260,7 @@ class _JournalCardState extends State<_JournalCard> {
                             children: [
                               Text(
                                 '거래일',
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   color: tradeDateLabelColor,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
@@ -3062,7 +3270,7 @@ class _JournalCardState extends State<_JournalCard> {
                               const SizedBox(width: 8),
                               Text(
                                 tradeDateText,
-                                style: GoogleFonts.robotoMono(
+                                style: TextStyle(
                                   color: tradeDateValueColor,
                                   fontSize: 24,
                                   fontWeight: FontWeight.w800,
@@ -3082,7 +3290,7 @@ class _JournalCardState extends State<_JournalCard> {
                                   ),
                                   child: Text(
                                     '매수',
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: actionColor,
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
@@ -3114,7 +3322,7 @@ class _JournalCardState extends State<_JournalCard> {
                                   ),
                                   child: Text(
                                     '매수',
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: actionColor,
                                       fontSize: 11,
                                       fontWeight: FontWeight.w700,
@@ -3138,7 +3346,7 @@ class _JournalCardState extends State<_JournalCard> {
                                       Expanded(
                                         child: Text(
                                           journal.stockName,
-                                          style: GoogleFonts.inter(
+                                          style: TextStyle(
                                             color: cs.onSurface,
                                             fontWeight: FontWeight.w700,
                                             fontSize: 15,
@@ -3155,7 +3363,7 @@ class _JournalCardState extends State<_JournalCard> {
                                       if (journal.ticker.isNotEmpty) ...[
                                         Text(
                                           journal.ticker,
-                                          style: GoogleFonts.robotoMono(
+                                          style: TextStyle(
                                             color: cs.onSurface.withValues(
                                               alpha: 0.45,
                                             ),
@@ -3167,7 +3375,7 @@ class _JournalCardState extends State<_JournalCard> {
                                           marketLabel.isNotEmpty)
                                         Text(
                                           '  ·  ',
-                                          style: GoogleFonts.inter(
+                                          style: TextStyle(
                                             color: cs.onSurface.withValues(
                                               alpha: 0.2,
                                             ),
@@ -3177,7 +3385,7 @@ class _JournalCardState extends State<_JournalCard> {
                                       if (marketLabel.isNotEmpty)
                                         Text(
                                           marketLabel,
-                                          style: GoogleFonts.inter(
+                                          style: TextStyle(
                                             color: cs.onSurface.withValues(
                                               alpha: 0.35,
                                             ),
@@ -3212,7 +3420,7 @@ class _JournalCardState extends State<_JournalCard> {
                           _ExpandableNotePreview(
                             content: journal.note,
                             maxLines: 3,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: cs.onSurface.withValues(alpha: 0.62),
                               fontSize: 14,
                               height: 1.6,
@@ -3250,7 +3458,7 @@ class _JournalCardState extends State<_JournalCard> {
                                     children: [
                                       Text(
                                         label,
-                                        style: GoogleFonts.inter(
+                                        style: TextStyle(
                                           color: cs.onSurface.withValues(
                                             alpha: 0.38,
                                           ),
@@ -3262,7 +3470,7 @@ class _JournalCardState extends State<_JournalCard> {
                                       const SizedBox(height: 4),
                                       Text(
                                         value,
-                                        style: GoogleFonts.robotoMono(
+                                        style: TextStyle(
                                           color: valueColor ?? cs.onSurface,
                                           fontSize: 13,
                                           fontWeight: FontWeight.w700,
@@ -3610,7 +3818,7 @@ class _JournalCardState extends State<_JournalCard> {
                                           vd(),
                                         ],
                                         if (journal.quantity > 0)
-                                          cell('수량', qtyStr),
+                                          cell('매도수량', qtyStr),
                                       ],
                                     ),
                                   ),
@@ -3679,14 +3887,14 @@ class _JournalCardState extends State<_JournalCard> {
                                 const SizedBox(width: 6),
                                 Text(
                                   '실현손익  ',
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: isRealizedUp ? _upColor : _downColor,
                                     fontSize: 11,
                                   ),
                                 ),
                                 Text(
                                   '${isRealizedUp ? '+' : ''}${fmtP(realizedPnl)}',
-                                  style: GoogleFonts.robotoMono(
+                                  style: TextStyle(
                                     color: isRealizedUp ? _upColor : _downColor,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
@@ -3695,7 +3903,7 @@ class _JournalCardState extends State<_JournalCard> {
                                 const SizedBox(width: 6),
                                 Text(
                                   '(${isRealizedUp ? '+' : ''}${realizedPnlPct!.toStringAsFixed(2)}%)',
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: isRealizedUp
                                         ? _upColor.withValues(alpha: 0.8)
                                         : _downColor.withValues(alpha: 0.8),
@@ -3727,7 +3935,7 @@ class _JournalCardState extends State<_JournalCard> {
                                   const SizedBox(width: 6),
                                   Text(
                                     '현재가 조회 중...',
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: cs.onSurface.withValues(
                                         alpha: 0.3,
                                       ),
@@ -3743,14 +3951,14 @@ class _JournalCardState extends State<_JournalCard> {
                               children: [
                                 Text(
                                   '현재가  ',
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: cs.onSurface.withValues(alpha: 0.4),
                                     fontSize: 11,
                                   ),
                                 ),
                                 Text(
                                   _price!.formattedPrice,
-                                  style: GoogleFonts.robotoMono(
+                                  style: TextStyle(
                                     color: cs.onSurface,
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
@@ -3759,7 +3967,7 @@ class _JournalCardState extends State<_JournalCard> {
                                 const SizedBox(width: 8),
                                 Text(
                                   _price!.formattedChange,
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: _price!.isUp
                                         ? const Color(0xFF10B981)
                                         : Colors.redAccent,
@@ -3807,7 +4015,7 @@ class _JournalCardState extends State<_JournalCard> {
                                     const SizedBox(width: 6),
                                     Text(
                                       '평가손익  ',
-                                      style: GoogleFonts.inter(
+                                      style: TextStyle(
                                         color: isPnlUp
                                             ? const Color(0xFF10B981)
                                             : Colors.redAccent,
@@ -3816,7 +4024,7 @@ class _JournalCardState extends State<_JournalCard> {
                                     ),
                                     Text(
                                       '${isPnlUp ? '+' : ''}${fmtP(pnl)}',
-                                      style: GoogleFonts.robotoMono(
+                                      style: TextStyle(
                                         color: isPnlUp
                                             ? const Color(0xFF10B981)
                                             : Colors.redAccent,
@@ -3827,7 +4035,7 @@ class _JournalCardState extends State<_JournalCard> {
                                     const SizedBox(width: 6),
                                     Text(
                                       '(${isPnlUp ? '+' : ''}${pnlPct!.toStringAsFixed(2)}%)',
-                                      style: GoogleFonts.inter(
+                                      style: TextStyle(
                                         color: isPnlUp
                                             ? const Color(
                                                 0xFF10B981,
@@ -3884,7 +4092,7 @@ class _JournalCardState extends State<_JournalCard> {
                                         ),
                                         child: Text(
                                           '매매 기록',
-                                          style: GoogleFonts.inter(
+                                          style: TextStyle(
                                             color: cs.onSurface.withValues(
                                               alpha: 0.7,
                                             ),
@@ -3896,7 +4104,7 @@ class _JournalCardState extends State<_JournalCard> {
                                       const SizedBox(width: 6),
                                       Text(
                                         '${historyEvents.length}건',
-                                        style: GoogleFonts.inter(
+                                        style: TextStyle(
                                           color: cs.onSurface.withValues(
                                             alpha: 0.45,
                                           ),
@@ -3951,7 +4159,7 @@ class _JournalCardState extends State<_JournalCard> {
                                         const SizedBox(width: 8),
                                         Text(
                                           isBuy ? '매수' : '매도',
-                                          style: GoogleFonts.inter(
+                                          style: TextStyle(
                                             color: isBuy
                                                 ? const Color(0xFF10B981)
                                                 : _upColor,
@@ -3962,7 +4170,7 @@ class _JournalCardState extends State<_JournalCard> {
                                         const SizedBox(width: 8),
                                         Text(
                                           tradeDate,
-                                          style: GoogleFonts.inter(
+                                          style: TextStyle(
                                             color: cs.onSurface.withValues(
                                               alpha: 0.4,
                                             ),
@@ -3972,7 +4180,7 @@ class _JournalCardState extends State<_JournalCard> {
                                         const SizedBox(width: 6),
                                         Text(
                                           qtyStr,
-                                          style: GoogleFonts.inter(
+                                          style: TextStyle(
                                             color: cs.onSurface.withValues(
                                               alpha: 0.7,
                                             ),
@@ -3983,7 +4191,7 @@ class _JournalCardState extends State<_JournalCard> {
                                         const SizedBox(width: 6),
                                         Text(
                                           priceStr,
-                                          style: GoogleFonts.robotoMono(
+                                          style: TextStyle(
                                             color: cs.onSurface.withValues(
                                               alpha: 0.6,
                                             ),
@@ -3994,7 +4202,7 @@ class _JournalCardState extends State<_JournalCard> {
                                         if (tradePnl != null)
                                           Text(
                                             '${isTradePnlUp ? '+' : ''}${fmtP(tradePnl)}',
-                                            style: GoogleFonts.robotoMono(
+                                            style: TextStyle(
                                               color: isTradePnlUp
                                                   ? _upColor
                                                   : _downColor,
@@ -4076,7 +4284,7 @@ class _JournalCardState extends State<_JournalCard> {
                                         children: [
                                           Text(
                                             '총 실현손익',
-                                            style: GoogleFonts.inter(
+                                            style: TextStyle(
                                               color: cs.onSurface.withValues(
                                                 alpha: 0.5,
                                               ),
@@ -4087,7 +4295,7 @@ class _JournalCardState extends State<_JournalCard> {
                                           const Spacer(),
                                           Text(
                                             '${isLinkedTotalUp ? '+' : ''}${fmtP(linkedRealizedTotal)}',
-                                            style: GoogleFonts.robotoMono(
+                                            style: TextStyle(
                                               color: isLinkedTotalUp
                                                   ? _upColor
                                                   : _downColor,
@@ -4130,7 +4338,7 @@ class _JournalCardState extends State<_JournalCard> {
                           ),
                           child: Text(
                             'CLOSED',
-                            style: GoogleFonts.robotoMono(
+                            style: TextStyle(
                               color: cs.onSurface.withValues(alpha: 0.13),
                               fontSize: 26,
                               fontWeight: FontWeight.w800,
@@ -4270,7 +4478,7 @@ class _JournalDetailSheet extends StatelessWidget {
         children: [
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.4),
               fontSize: 13,
             ),
@@ -4278,7 +4486,7 @@ class _JournalDetailSheet extends StatelessWidget {
           const Spacer(),
           Text(
             value,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: valueColor ?? cs.onSurface,
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -4292,7 +4500,7 @@ class _JournalDetailSheet extends StatelessWidget {
       padding: const EdgeInsets.only(top: 20, bottom: 10),
       child: Text(
         text,
-        style: GoogleFonts.inter(
+        style: TextStyle(
           color: cs.onSurface.withValues(alpha: 0.35),
           fontSize: 11,
           fontWeight: FontWeight.w600,
@@ -4326,7 +4534,7 @@ class _JournalDetailSheet extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: isUp ? upColor : downColor,
                   fontSize: 11,
                 ),
@@ -4334,7 +4542,7 @@ class _JournalDetailSheet extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 pct,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: (isUp ? upColor : downColor).withValues(alpha: 0.7),
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -4345,7 +4553,7 @@ class _JournalDetailSheet extends StatelessWidget {
           const Spacer(),
           Text(
             amt,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: isUp ? upColor : downColor,
               fontSize: 22,
               fontWeight: FontWeight.w800,
@@ -4391,7 +4599,7 @@ class _JournalDetailSheet extends StatelessWidget {
                   ),
                   child: Text(
                     journal.action,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: actionColor,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
@@ -4411,7 +4619,7 @@ class _JournalDetailSheet extends StatelessWidget {
                     ),
                     child: Text(
                       '종료',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.4),
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -4423,7 +4631,7 @@ class _JournalDetailSheet extends StatelessWidget {
                 Expanded(
                   child: Text(
                     journal.stockName,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
@@ -4448,7 +4656,7 @@ class _JournalDetailSheet extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 '${journal.ticker}  ·  $marketLabel',
-                style: GoogleFonts.robotoMono(
+                style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.4),
                   fontSize: 12,
                 ),
@@ -4572,7 +4780,7 @@ class _JournalDetailSheet extends StatelessWidget {
                             const SizedBox(width: 8),
                             Text(
                               DateFormat('yyyy.MM.dd').format(s.tradeDate),
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: cs.onSurface.withValues(alpha: 0.4),
                                 fontSize: 12,
                               ),
@@ -4580,7 +4788,7 @@ class _JournalDetailSheet extends StatelessWidget {
                             const Spacer(),
                             Text(
                               fmtQty(s.quantity),
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: cs.onSurface,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
@@ -4633,7 +4841,7 @@ class _JournalDetailSheet extends StatelessWidget {
                                 children: [
                                   Text(
                                     '매도가',
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: cs.onSurface.withValues(
                                         alpha: 0.35,
                                       ),
@@ -4643,7 +4851,7 @@ class _JournalDetailSheet extends StatelessWidget {
                                   const SizedBox(height: 2),
                                   Text(
                                     fmtP(s.price),
-                                    style: GoogleFonts.robotoMono(
+                                    style: TextStyle(
                                       color: cs.onSurface,
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
@@ -4659,7 +4867,7 @@ class _JournalDetailSheet extends StatelessWidget {
                                   children: [
                                     Text(
                                       '실현손익',
-                                      style: GoogleFonts.inter(
+                                      style: TextStyle(
                                         color: cs.onSurface.withValues(
                                           alpha: 0.35,
                                         ),
@@ -4669,7 +4877,7 @@ class _JournalDetailSheet extends StatelessWidget {
                                     const SizedBox(height: 2),
                                     Text(
                                       '${sIsUp ? '+' : ''}${fmtP(sPnl)}',
-                                      style: GoogleFonts.robotoMono(
+                                      style: TextStyle(
                                         color: sIsUp ? upColor : downColor,
                                         fontSize: 14,
                                         fontWeight: FontWeight.w700,
@@ -4678,7 +4886,7 @@ class _JournalDetailSheet extends StatelessWidget {
                                     if (sPnlPct != null)
                                       Text(
                                         '${sIsUp ? '+' : ''}${sPnlPct.toStringAsFixed(2)}%',
-                                        style: GoogleFonts.inter(
+                                        style: TextStyle(
                                           color: (sIsUp ? upColor : downColor)
                                               .withValues(alpha: 0.7),
                                           fontSize: 11,
@@ -4703,7 +4911,7 @@ class _JournalDetailSheet extends StatelessWidget {
               sectionLabel('메모'),
               Text(
                 journal.note,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface,
                   fontSize: 14,
                   height: 1.7,
@@ -4725,7 +4933,7 @@ class _JournalDetailSheet extends StatelessWidget {
                 const SizedBox(width: 6),
                 Text(
                   journal.isPublic ? '커뮤니티에 공개됨' : '나만 볼 수 있음',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: journal.isPublic
                         ? const Color(0xFF10B981).withValues(alpha: 0.7)
                         : cs.onSurface.withValues(alpha: 0.3),
@@ -4754,6 +4962,7 @@ class _JournalFormSheet extends StatefulWidget {
   final String? initialStockName;
   final String? initialTicker;
   final String? initialRawMarket;
+  final bool lockActionAndStock;
 
   const _JournalFormSheet({
     required this.uid,
@@ -4766,6 +4975,7 @@ class _JournalFormSheet extends StatefulWidget {
     this.initialStockName,
     this.initialTicker,
     this.initialRawMarket,
+    this.lockActionAndStock = false,
   });
 
   @override
@@ -4795,6 +5005,8 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
   bool _fetchingPrice = false;
 
   static const _actions = ['매수', '매도', '기타'];
+  bool get _isActionStockLocked =>
+      widget.lockActionAndStock && widget.existing == null;
 
   String _marketFromPick(StockPick p) => p.market == 'US' ? 'US' : 'KR';
 
@@ -5122,7 +5334,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
 
     InputDecoration inputDeco(String hint) => InputDecoration(
       hintText: hint,
-      hintStyle: GoogleFonts.inter(
+      hintStyle: TextStyle(
         color: isDark ? Colors.white30 : Colors.black26,
         fontSize: 14,
       ),
@@ -5193,7 +5405,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                           child: Text(
                             _qtyError!,
                             softWrap: true,
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: Colors.redAccent,
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -5207,7 +5419,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                 ],
                 Text(
                   widget.existing != null ? '매매일지 수정' : '매매일지 작성',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: isDark ? Colors.white : Colors.black87,
                     fontWeight: FontWeight.w700,
                     fontSize: 17,
@@ -5217,7 +5429,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                 // 매매 구분
                 Text(
                   '매매 구분',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: labelColor,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -5234,7 +5446,9 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                         : Colors.orangeAccent;
                     // 기존 항목 수정 시 액션 변경 불가
                     final isLocked =
-                        widget.existing != null && a != widget.existing!.action;
+                        (widget.existing != null &&
+                            a != widget.existing!.action) ||
+                        (_isActionStockLocked && a != _action);
                     return Expanded(
                       child: GestureDetector(
                         onTap: () {
@@ -5274,7 +5488,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                           child: Center(
                             child: Text(
                               a,
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: isLocked
                                     ? cs.onSurface.withValues(alpha: 0.2)
                                     : selected
@@ -5301,7 +5515,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                   if (widget.existing != null && _action == '매도') ...[
                     Text(
                       '종목',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: labelColor,
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -5331,7 +5545,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                           Expanded(
                             child: Text(
                               _stockName,
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: cs.onSurface.withValues(alpha: 0.6),
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
@@ -5341,7 +5555,58 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                           if (_ticker.isNotEmpty)
                             Text(
                               _ticker,
-                              style: GoogleFonts.robotoMono(
+                              style: TextStyle(
+                                color: cs.onSurface.withValues(alpha: 0.3),
+                                fontSize: 12,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ] else if (_isActionStockLocked) ...[
+                    Text(
+                      '종목',
+                      style: TextStyle(
+                        color: labelColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: cs.onSurface.withValues(alpha: 0.04),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: cs.onSurface.withValues(alpha: 0.08),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.lock_outline,
+                            size: 14,
+                            color: cs.onSurface.withValues(alpha: 0.3),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _stockName,
+                              style: TextStyle(
+                                color: cs.onSurface.withValues(alpha: 0.6),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          if (_ticker.isNotEmpty)
+                            Text(
+                              _ticker,
+                              style: TextStyle(
                                 color: cs.onSurface.withValues(alpha: 0.3),
                                 fontSize: 12,
                               ),
@@ -5355,7 +5620,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                       children: [
                         Text(
                           '종목',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: labelColor,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -5366,7 +5631,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                             onTap: _clearSelection,
                             child: Text(
                               '다시 선택',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: cs.onSurface.withValues(alpha: 0.4),
                                 fontSize: 11,
                               ),
@@ -5408,7 +5673,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                     const SizedBox(width: 6),
                                     Text(
                                       '추천주에서 선택',
-                                      style: GoogleFonts.inter(
+                                      style: TextStyle(
                                         color: const Color(0xFF10B981),
                                         fontSize: 13,
                                         fontWeight: FontWeight.w600,
@@ -5447,7 +5712,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                     const SizedBox(width: 6),
                                     Text(
                                       '직접 입력',
-                                      style: GoogleFonts.inter(
+                                      style: TextStyle(
                                         color: isDark
                                             ? Colors.white54
                                             : Colors.black45,
@@ -5494,7 +5759,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                 children: [
                                   Text(
                                     _stockName,
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: isDark
                                           ? Colors.white
                                           : Colors.black87,
@@ -5505,7 +5770,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                   if (_ticker.isNotEmpty)
                                     Text(
                                       _ticker,
-                                      style: GoogleFonts.robotoMono(
+                                      style: TextStyle(
                                         color: isDark
                                             ? Colors.white54
                                             : Colors.black45,
@@ -5526,7 +5791,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                               ),
                               child: Text(
                                 _market,
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   color: isDark
                                       ? Colors.white54
                                       : Colors.black45,
@@ -5569,7 +5834,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                 children: [
                                   Text(
                                     _stockName,
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: isDark
                                           ? Colors.white
                                           : Colors.black87,
@@ -5580,7 +5845,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                   if (_ticker.isNotEmpty)
                                     Text(
                                       _ticker,
-                                      style: GoogleFonts.robotoMono(
+                                      style: TextStyle(
                                         color: isDark
                                             ? Colors.white54
                                             : Colors.black45,
@@ -5601,7 +5866,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                               ),
                               child: Text(
                                 _market,
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   color: isDark
                                       ? Colors.white54
                                       : Colors.black45,
@@ -5647,7 +5912,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                   const SizedBox(width: 6),
                                   Text(
                                     '현재가 조회 중...',
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: cs.onSurface.withValues(
                                         alpha: 0.35,
                                       ),
@@ -5660,7 +5925,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                 children: [
                                   Text(
                                     '현재가:',
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: cs.onSurface.withValues(
                                         alpha: 0.4,
                                       ),
@@ -5670,7 +5935,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                   const SizedBox(width: 6),
                                   Text(
                                     _priceResult!.formattedPrice,
-                                    style: GoogleFonts.robotoMono(
+                                    style: TextStyle(
                                       color: cs.onSurface.withValues(
                                         alpha: 0.85,
                                       ),
@@ -5681,7 +5946,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                   const SizedBox(width: 8),
                                   Text(
                                     _priceResult!.formattedChange,
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: _priceResult!.isUp
                                           ? const Color(0xFF10B981)
                                           : Colors.redAccent,
@@ -5700,13 +5965,13 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                     children: [
                       Text(
                         '종목',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: labelColor,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      if (_stockName.isNotEmpty)
+                      if (_stockName.isNotEmpty && !_isActionStockLocked)
                         GestureDetector(
                           onTap: () => setState(() {
                             _stockName = '';
@@ -5718,7 +5983,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                           }),
                           child: Text(
                             '다시 선택',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: cs.onSurface.withValues(alpha: 0.4),
                               fontSize: 11,
                             ),
@@ -5727,7 +5992,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  if (_stockName.isEmpty)
+                  if (_stockName.isEmpty && !_isActionStockLocked)
                     GestureDetector(
                       onTap: _openSellStockPicker,
                       child: Container(
@@ -5751,7 +6016,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                             const SizedBox(width: 6),
                             Text(
                               '보유 종목 선택',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: Colors.redAccent,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -5759,6 +6024,37 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                             ),
                           ],
                         ),
+                      ),
+                    )
+                  else if (_stockName.isEmpty && _isActionStockLocked)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: cs.onSurface.withValues(alpha: 0.04),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: cs.onSurface.withValues(alpha: 0.08),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.lock_outline,
+                            size: 14,
+                            color: cs.onSurface.withValues(alpha: 0.35),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '종목 고정',
+                            style: TextStyle(
+                              color: cs.onSurface.withValues(alpha: 0.45),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
                     )
                   else
@@ -5788,7 +6084,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                               Expanded(
                                 child: Text(
                                   _stockName,
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: isDark
                                         ? Colors.white
                                         : Colors.black87,
@@ -5800,7 +6096,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                               if (_ticker.isNotEmpty)
                                 Text(
                                   _ticker,
-                                  style: GoogleFonts.robotoMono(
+                                  style: TextStyle(
                                     color: isDark
                                         ? Colors.white54
                                         : Colors.black45,
@@ -5812,7 +6108,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                           const SizedBox(height: 4),
                           Text(
                             '보유 잔량 ${_remainingQty % 1 == 0 ? _remainingQty.toInt() : _remainingQty}주',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: cs.onSurface.withValues(alpha: 0.5),
                               fontSize: 12,
                             ),
@@ -5838,7 +6134,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                 const SizedBox(width: 6),
                                 Text(
                                   '현재가 조회 중...',
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: cs.onSurface.withValues(alpha: 0.35),
                                     fontSize: 11,
                                   ),
@@ -5849,7 +6145,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                               children: [
                                 Text(
                                   '현재가:',
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: cs.onSurface.withValues(alpha: 0.4),
                                     fontSize: 11,
                                   ),
@@ -5857,7 +6153,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                 const SizedBox(width: 6),
                                 Text(
                                   _priceResult!.formattedPrice,
-                                  style: GoogleFonts.robotoMono(
+                                  style: TextStyle(
                                     color: cs.onSurface.withValues(alpha: 0.85),
                                     fontSize: 13,
                                     fontWeight: FontWeight.w700,
@@ -5866,7 +6162,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                 const SizedBox(width: 8),
                                 Text(
                                   _priceResult!.formattedChange,
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: _priceResult!.isUp
                                         ? const Color(0xFF10B981)
                                         : Colors.redAccent,
@@ -5893,7 +6189,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                   : _action == '매도'
                                   ? '매도가'
                                   : '가격 (선택)',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: labelColor,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
@@ -5906,7 +6202,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                   const TextInputType.numberWithOptions(
                                     decimal: true,
                                   ),
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: isDark ? Colors.white : Colors.black87,
                               ),
                               decoration: inputDeco('0'),
@@ -5931,7 +6227,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                               _action == '매도' && _remainingQty > 0
                                   ? '수량 (최대 ${_remainingQty % 1 == 0 ? _remainingQty.toInt() : _remainingQty}주)'
                                   : '수량',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: labelColor,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
@@ -5944,7 +6240,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                   const TextInputType.numberWithOptions(
                                     decimal: true,
                                   ),
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: isDark ? Colors.white : Colors.black87,
                               ),
                               decoration: inputDeco('0'),
@@ -5972,7 +6268,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                   const SizedBox(height: 12),
                   Text(
                     '거래일',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: labelColor,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -6001,7 +6297,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                           const SizedBox(width: 8),
                           Text(
                             DateFormat('yyyy년 MM월 dd일').format(_tradeDate),
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: isDark ? Colors.white : Colors.black87,
                               fontSize: 14,
                             ),
@@ -6015,7 +6311,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                 // 메모
                 Text(
                   '메모 (선택)',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: labelColor,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -6025,7 +6321,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                 TextFormField(
                   controller: _noteCtrl,
                   maxLines: 3,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: isDark ? Colors.white : Colors.black87,
                     fontSize: 13,
                   ),
@@ -6060,7 +6356,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                           children: [
                             Text(
                               '커뮤니티에 공유',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: isDark ? Colors.white : Colors.black87,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
@@ -6068,7 +6364,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                             ),
                             Text(
                               '다른 유저들이 볼 수 있습니다',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: isDark ? Colors.white38 : Colors.black38,
                                 fontSize: 11,
                               ),
@@ -6114,7 +6410,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                           )
                         : Text(
                             widget.existing != null ? '수정 완료' : '저장',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 15,
                             ),
@@ -6211,7 +6507,7 @@ class _StockPickerSheetState extends State<_StockPickerSheet> {
               children: [
                 Text(
                   '종목 선택',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: isDark ? Colors.white : Colors.black87,
                     fontWeight: FontWeight.w700,
                     fontSize: 17,
@@ -6221,13 +6517,13 @@ class _StockPickerSheetState extends State<_StockPickerSheet> {
                 TextField(
                   controller: _searchCtrl,
                   autofocus: true,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: isDark ? Colors.white : Colors.black87,
                   ),
                   onChanged: (v) => setState(() => _query = v),
                   decoration: InputDecoration(
                     hintText: '종목명 또는 티커 검색',
-                    hintStyle: GoogleFonts.inter(
+                    hintStyle: TextStyle(
                       color: isDark ? Colors.white30 : Colors.black26,
                       fontSize: 14,
                     ),
@@ -6262,7 +6558,7 @@ class _StockPickerSheetState extends State<_StockPickerSheet> {
                 ? Center(
                     child: Text(
                       '검색 결과가 없습니다',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.4),
                       ),
                     ),
@@ -6301,7 +6597,7 @@ class _StockPickerSheetState extends State<_StockPickerSheet> {
                                 ),
                                 child: Text(
                                   pick.ticker,
-                                  style: GoogleFonts.robotoMono(
+                                  style: TextStyle(
                                     color: cs.onSurface,
                                     fontWeight: FontWeight.w700,
                                     fontSize: 12,
@@ -6312,7 +6608,7 @@ class _StockPickerSheetState extends State<_StockPickerSheet> {
                               Expanded(
                                 child: Text(
                                   pick.name,
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: cs.onSurface,
                                     fontWeight: FontWeight.w600,
                                     fontSize: 14,
@@ -6331,7 +6627,7 @@ class _StockPickerSheetState extends State<_StockPickerSheet> {
                                   ),
                                   child: Text(
                                     '종료',
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: cs.onSurface.withValues(
                                         alpha: 0.4,
                                       ),
@@ -6353,7 +6649,7 @@ class _StockPickerSheetState extends State<_StockPickerSheet> {
                                 ),
                                 child: Text(
                                   pick.market,
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: const Color(0xFF10B981),
                                     fontSize: 10,
                                     fontWeight: FontWeight.w600,
@@ -6432,7 +6728,7 @@ class _SellStockPickerSheet extends StatelessWidget {
               children: [
                 Text(
                   '매도할 종목 선택',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: isDark ? Colors.white : Colors.black87,
                     fontWeight: FontWeight.w700,
                     fontSize: 17,
@@ -6490,7 +6786,7 @@ class _SellStockPickerSheet extends StatelessWidget {
                         const SizedBox(height: 12),
                         Text(
                           '매도 가능한 종목이 없습니다',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.4),
                             fontSize: 14,
                           ),
@@ -6498,7 +6794,7 @@ class _SellStockPickerSheet extends StatelessWidget {
                         const SizedBox(height: 4),
                         Text(
                           '보유 잔량이 있는 종목이 없습니다',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.25),
                             fontSize: 12,
                           ),
@@ -6562,7 +6858,7 @@ class _SellStockPickerSheet extends StatelessWidget {
                                     children: [
                                       Text(
                                         item.stockName,
-                                        style: GoogleFonts.inter(
+                                        style: TextStyle(
                                           color: isDark
                                               ? Colors.white
                                               : Colors.black87,
@@ -6575,7 +6871,7 @@ class _SellStockPickerSheet extends StatelessWidget {
                                   const SizedBox(height: 2),
                                   Text(
                                     '${item.ticker}  ·  $marketLabel  ·  잔량 $qtyStr',
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: cs.onSurface.withValues(
                                         alpha: 0.45,
                                       ),

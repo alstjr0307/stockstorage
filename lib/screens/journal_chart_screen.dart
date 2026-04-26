@@ -1,7 +1,6 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemChrome, DeviceOrientation;
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../models/trading_journal.dart';
 import '../services/firestore_service.dart';
@@ -293,7 +292,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
           children: [
             Text(
               buy.stockName,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontWeight: FontWeight.w700,
                 fontSize: 16,
                 color: Colors.white,
@@ -302,7 +301,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
             if (buy.ticker.isNotEmpty)
               Text(
                 '${buy.ticker} · ${buy.market}',
-                style: GoogleFonts.robotoMono(
+                style: TextStyle(
                   fontSize: 11,
                   color: Colors.white.withValues(alpha: 0.35),
                 ),
@@ -321,7 +320,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
             ),
             child: Text(
               isClosed ? '청산완료' : '보유중',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
                 color: isClosed
@@ -349,7 +348,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
                   const SizedBox(height: 12),
                   Text(
                     '차트 데이터를 불러올 수 없습니다',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.4),
                     ),
                   ),
@@ -378,12 +377,13 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
                       ),
                       _summaryCell(
                         label: '총 실현손익',
-                        value:
-                            '${_totalRealizedPnl >= 0 ? '+' : ''}${fmtP(_totalRealizedPnl)}',
-                        valueColor: _totalRealizedPnl >= 0
-                            ? _kUpColor
-                            : _kDownColor,
-                        subValue: realizedPct != null
+                        value: hasSell
+                            ? '${_totalRealizedPnl >= 0 ? '+' : ''}${fmtP(_totalRealizedPnl)}'
+                            : '-',
+                        valueColor: hasSell
+                            ? (_totalRealizedPnl >= 0 ? _kUpColor : _kDownColor)
+                            : Colors.white.withValues(alpha: 0.65),
+                        subValue: hasSell && realizedPct != null
                             ? '${_totalRealizedPnl >= 0 ? '+' : ''}${realizedPct.toStringAsFixed(2)}%'
                             : null,
                       ),
@@ -418,7 +418,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
           children: [
             Text(
               label,
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 9,
                 fontWeight: FontWeight.w600,
                 color: Colors.white.withValues(alpha: 0.28),
@@ -428,7 +428,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
             const SizedBox(height: 4),
             Text(
               value,
-              style: GoogleFonts.robotoMono(
+              style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: valueColor,
@@ -437,7 +437,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
             if (subValue != null)
               Text(
                 subValue,
-                style: GoogleFonts.robotoMono(
+                style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
                   color: valueColor,
@@ -482,7 +482,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
                       ),
                       child: Text(
                         opt.$1,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: selected
@@ -537,7 +537,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
         const SizedBox(width: 4),
         Text(
           label,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             fontSize: 10,
             color: Colors.white.withValues(alpha: 0.38),
           ),
@@ -553,69 +553,82 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
             _touchedIndex! >= 0 &&
             _touchedIndex! < dc.length)
         ? dc[_touchedIndex!]
-        : null;
-    if (touched == null) {
-      return Container(
-        height: 22,
-        width: double.infinity,
-        color: Colors.white.withValues(alpha: 0.02),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        alignment: Alignment.centerLeft,
-        child: Text(
-          '롱프레스로 탐색',
-          style: GoogleFonts.inter(
-            fontSize: 10,
-            color: Colors.white.withValues(alpha: 0.3),
-          ),
-        ),
-      );
-    }
+        : (dc.isNotEmpty ? dc.last : null);
+    if (touched == null) return const SizedBox.shrink();
     final isKrw = widget.buy.market != 'US';
     String fmt(double v) =>
         isKrw ? NumberFormat('#,###').format(v.toInt()) : v.toStringAsFixed(2);
     final isUp = touched.close >= touched.open;
     final valColor = isUp ? _kUpColor : _kDownColor;
+    final changePct = touched.open > 0
+        ? ((touched.close - touched.open) / touched.open) * 100
+        : null;
+    final spans = <InlineSpan>[
+      TextSpan(
+        text: DateFormat('yyyy.MM.dd').format(touched.date),
+        style: TextStyle(
+          fontSize: 10,
+          color: Colors.white.withValues(alpha: 0.38),
+        ),
+      ),
+      const TextSpan(text: '   '),
+    ];
+    if (changePct != null) {
+      spans.add(
+        TextSpan(
+          text: '등락 ',
+          style: TextStyle(
+            fontSize: 9,
+            color: Colors.white.withValues(alpha: 0.28),
+          ),
+        ),
+      );
+      spans.add(
+        TextSpan(
+          text: '${changePct >= 0 ? '+' : ''}${changePct.toStringAsFixed(2)}%',
+          style: TextStyle(fontSize: 9, color: valColor),
+        ),
+      );
+      spans.add(const TextSpan(text: '   '));
+    }
+    for (final entry in [
+      ('O', touched.open),
+      ('H', touched.high),
+      ('L', touched.low),
+      ('C', touched.close),
+    ]) {
+      spans.add(
+        TextSpan(
+          text: '${entry.$1} ',
+          style: TextStyle(
+            fontSize: 9,
+            color: Colors.white.withValues(alpha: 0.28),
+          ),
+        ),
+      );
+      spans.add(
+        TextSpan(
+          text: fmt(entry.$2),
+          style: TextStyle(fontSize: 9, color: valColor),
+        ),
+      );
+      spans.add(const TextSpan(text: '   '));
+    }
     return Container(
       height: 22,
       width: double.infinity,
       color: Colors.white.withValues(alpha: 0.02),
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          Text(
-            DateFormat('yyyy.MM.dd').format(touched.date),
-            style: GoogleFonts.robotoMono(
-              fontSize: 10,
-              color: Colors.white.withValues(alpha: 0.38),
-            ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Text.rich(
+            TextSpan(children: spans),
+            maxLines: 1,
+            overflow: TextOverflow.visible,
           ),
-          const SizedBox(width: 10),
-          ...[
-            ('O', touched.open),
-            ('H', touched.high),
-            ('L', touched.low),
-            ('C', touched.close),
-          ].map(
-            (e) => Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: Row(
-                children: [
-                  Text(
-                    '${e.$1} ',
-                    style: GoogleFonts.robotoMono(
-                      fontSize: 9,
-                      color: Colors.white.withValues(alpha: 0.28),
-                    ),
-                  ),
-                  Text(
-                    fmt(e.$2),
-                    style: GoogleFonts.robotoMono(fontSize: 9, color: valColor),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -679,7 +692,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
             child: Text(
               '거래 내역',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
                 color: Colors.white.withValues(alpha: 0.35),
@@ -693,7 +706,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
                 ? Center(
                     child: Text(
                       '거래 기록이 없습니다',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 12,
                         color: Colors.white.withValues(alpha: 0.3),
                       ),
@@ -795,7 +808,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
             width: 28,
             child: Text(
               isBuy ? '매수' : '매도',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 color: actionColor,
@@ -805,7 +818,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
           const SizedBox(width: 10),
           Text(
             DateFormat('yy.MM.dd').format(journal.tradeDate),
-            style: GoogleFonts.robotoMono(
+            style: TextStyle(
               fontSize: 11,
               color: Colors.white.withValues(alpha: 0.28),
             ),
@@ -814,7 +827,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
           Expanded(
             child: Text(
               '${fmtP(journal.price)}  ·  $qty',
-              style: GoogleFonts.robotoMono(
+              style: TextStyle(
                 fontSize: 11,
                 color: Colors.white.withValues(alpha: 0.7),
               ),
@@ -823,7 +836,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
           if (realizedPnl != null)
             Text(
               '${isPnlUp ? '+' : ''}${fmtP(realizedPnl)}',
-              style: GoogleFonts.robotoMono(
+              style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
                 color: isPnlUp ? _kUpColor : _kDownColor,
@@ -878,13 +891,6 @@ class _ChartFullscreenPageState extends State<_ChartFullscreenPage> {
 
   double _candleAreaW(double w) => w - _leftPad - _rightAxisW;
 
-  List<_OHLC> get _displayCandles {
-    if (widget.candles.isEmpty || _visibleRange.width <= 0) return [];
-    final start = _visibleRange.start.floor().clamp(0, widget.candles.length);
-    final end = _visibleRange.end.ceil().clamp(start, widget.candles.length);
-    return widget.candles.sublist(start, end);
-  }
-
   void _onTouch(double localX, double chartW) {
     final cw = _candleAreaW(chartW);
     final x = (localX - _leftPad).clamp(0.0, cw);
@@ -892,6 +898,13 @@ class _ChartFullscreenPageState extends State<_ChartFullscreenPage> {
     final idx = frac.floor().clamp(0, widget.candles.length - 1);
     final disp = idx - _visibleRange.start.floor();
     if (_touchedIndex != disp) setState(() => _touchedIndex = disp);
+  }
+
+  List<_OHLC> get _displayCandles {
+    if (widget.candles.isEmpty || _visibleRange.width <= 0) return [];
+    final start = _visibleRange.start.floor().clamp(0, widget.candles.length);
+    final end = _visibleRange.end.ceil().clamp(start, widget.candles.length);
+    return widget.candles.sublist(start, end);
   }
 
   void _onScaleStart(ScaleStartDetails d) {

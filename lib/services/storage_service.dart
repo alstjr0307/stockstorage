@@ -27,14 +27,20 @@ class StorageService {
     required String uid,
   }) async {
     final ext = file.path.split('.').last.toLowerCase();
-    final mime = ext == 'jpg' || ext == 'jpeg' ? 'image/jpeg'
-                : ext == 'png' ? 'image/png'
-                : ext == 'webp' ? 'image/webp'
-                : 'image/jpeg';
+    final mime = ext == 'jpg' || ext == 'jpeg'
+        ? 'image/jpeg'
+        : ext == 'png'
+        ? 'image/png'
+        : ext == 'webp'
+        ? 'image/webp'
+        : 'image/jpeg';
     final name = '${DateTime.now().millisecondsSinceEpoch}_$uid.$ext';
     final ref = _storage.ref('$folder/$name');
     final bytes = await file.readAsBytes();
-    final snapshot = await ref.putData(bytes, SettableMetadata(contentType: mime));
+    final snapshot = await ref.putData(
+      bytes,
+      SettableMetadata(contentType: mime),
+    );
     return snapshot.ref.getDownloadURL();
   }
 

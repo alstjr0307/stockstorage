@@ -4,7 +4,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -143,7 +142,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
         centerTitle: false,
         title: Text(
           '시장 심리 지표',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             fontWeight: FontWeight.w800,
             fontSize: 20,
             color: cs.onSurface,
@@ -195,7 +194,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
                     : const Icon(Icons.camera_alt_outlined),
                 label: Text(
                   _capturing ? '캡처 중...' : '캡처해서 공유하기',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w800),
+                  style: TextStyle(fontWeight: FontWeight.w800),
                 ),
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF10B981),
@@ -230,7 +229,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
               const SizedBox(width: 5),
               Text(
                 _dataAsOfText!,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.48),
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -326,7 +325,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
           child: Center(
             child: Text(
               '주식저장소 앱에서 확인하세요',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.42),
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
@@ -345,7 +344,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
       children: [
         Text(
           title,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface,
             fontSize: 24,
             fontWeight: FontWeight.w900,
@@ -378,9 +377,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
         child: Center(
           child: Text(
             '데이터 없음',
-            style: GoogleFonts.inter(
-              color: cs.onSurface.withValues(alpha: 0.45),
-            ),
+            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.45)),
           ),
         ),
       );
@@ -409,7 +406,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
               ),
               child: Text(
                 'Fear & Greed',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: color,
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
@@ -419,7 +416,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
             const Spacer(),
             Text(
               'CNN 기준',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 fontSize: 11,
                 color: cs.onSurface.withValues(alpha: 0.38),
               ),
@@ -442,7 +439,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
               ),
               Text(
                 fg.score.toStringAsFixed(0),
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: color,
                   fontSize: 44,
                   fontWeight: FontWeight.w800,
@@ -452,7 +449,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
               const SizedBox(height: 4),
               Text(
                 _fearAndGreedLabel(fg.rating),
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: color,
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
@@ -481,7 +478,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
                 children: [
                   Text(
                     item.$1,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
                       color: cs.onSurface.withValues(alpha: 0.5),
@@ -490,7 +487,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
                   const SizedBox(height: 4),
                   Text(
                     '${isUp ? '▲' : '▼'} ${item.$2.toStringAsFixed(0)}',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       fontSize: 10.5,
                       fontWeight: FontWeight.w800,
                       color: chipColor,
@@ -534,7 +531,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
                   children: [
                     Text(
                       title,
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                         color: cs.onSurface,
@@ -553,7 +550,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
                       ),
                       child: Text(
                         benchmarkText,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.55),
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -569,7 +566,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
                 children: [
                   Text(
                     valueText,
-                    style: GoogleFonts.robotoMono(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontWeight: FontWeight.w700,
                       fontSize: valueText == '--' ? 20 : 31,
@@ -589,7 +586,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
                       ),
                       child: Text(
                         changeText,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: color,
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
@@ -604,7 +601,7 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
           const SizedBox(height: 12),
           Text(
             description,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.58),
               fontSize: 13.5,
               height: 1.56,

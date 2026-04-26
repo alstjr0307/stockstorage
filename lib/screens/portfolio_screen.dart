@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -14,6 +13,7 @@ import '../providers/auth_provider.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
 import '../services/stock_price_service.dart';
+import '../widgets/position_summary_card.dart';
 import 'login_screen.dart';
 import 'stock_detail_screen.dart';
 import 'trading_journal_screen.dart';
@@ -66,11 +66,8 @@ class _PortfolioScreenState extends State<PortfolioScreen>
               ),
               labelColor: cs.onSurface,
               unselectedLabelColor: cs.onSurface.withValues(alpha: 0.45),
-              labelStyle: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-              unselectedLabelStyle: GoogleFonts.inter(
+              labelStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              unselectedLabelStyle: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
               ),
@@ -180,6 +177,13 @@ class _GroupedJournalTabState extends State<_GroupedJournalTab> {
         for (final stock in grouped) {
           _fetchPriceIfNeeded(stock);
         }
+        final livePrices = <String, double>{};
+        for (final entry in _prices.entries) {
+          final value = entry.value;
+          if (value != null) {
+            livePrices[entry.key] = value.price;
+          }
+        }
         final holdingStocks = grouped
             .where((s) => s.remainingQty > 1e-6)
             .toList();
@@ -200,7 +204,7 @@ class _GroupedJournalTabState extends State<_GroupedJournalTab> {
                 const SizedBox(height: 12),
                 Text(
                   '종목별 매매일지가 없습니다',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.4),
                     fontSize: 15,
                   ),
@@ -217,7 +221,7 @@ class _GroupedJournalTabState extends State<_GroupedJournalTab> {
               children: [
                 Text(
                   title,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: dim ? 0.48 : 0.82),
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
@@ -235,7 +239,7 @@ class _GroupedJournalTabState extends State<_GroupedJournalTab> {
                   ),
                   child: Text(
                     '$count',
-                    style: GoogleFonts.robotoMono(
+                    style: TextStyle(
                       color: cs.onSurface.withValues(alpha: dim ? 0.45 : 0.72),
                       fontSize: 11,
                       fontWeight: FontWeight.w800,
@@ -266,30 +270,25 @@ class _GroupedJournalTabState extends State<_GroupedJournalTab> {
         }
 
         final children = <Widget>[
+          PositionSummaryCard(
+            journals: journals,
+            livePrices: livePrices,
+            margin: const EdgeInsets.fromLTRB(0, 0, 0, 16),
+          ),
           if (holdingStocks.isNotEmpty) ...[
             sectionHeader('보유중 종목', holdingStocks.length),
-            for (var i = 0; i < holdingStocks.length; i++) ...[
-              stockRow(holdingStocks[i]),
-              if (i < holdingStocks.length - 1)
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: cs.onSurface.withValues(alpha: 0.07),
-                ),
+            for (final stock in holdingStocks) ...[
+              stockRow(stock),
+              const SizedBox(height: 8),
             ],
           ],
           if (holdingStocks.isNotEmpty && completedStocks.isNotEmpty)
             const SizedBox(height: 14),
           if (completedStocks.isNotEmpty) ...[
             sectionHeader('완료 종목', completedStocks.length, dim: true),
-            for (var i = 0; i < completedStocks.length; i++) ...[
-              stockRow(completedStocks[i]),
-              if (i < completedStocks.length - 1)
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: cs.onSurface.withValues(alpha: 0.06),
-                ),
+            for (final stock in completedStocks) ...[
+              stockRow(stock),
+              const SizedBox(height: 8),
             ],
           ],
         ];
@@ -345,6 +344,26 @@ class _GroupedStockJournal {
     return cost / qty;
   }
 
+  double get avgBuyPrice {
+    final totalQty = buys.fold<double>(0, (sum, b) => sum + b.quantity);
+    if (totalQty <= 1e-6) return 0;
+    final totalCost = buys.fold<double>(
+      0,
+      (sum, b) => sum + (b.price * b.quantity),
+    );
+    return totalCost / totalQty;
+  }
+
+  double get avgSellPrice {
+    final totalQty = sells.fold<double>(0, (sum, s) => sum + s.quantity);
+    if (totalQty <= 1e-6) return 0;
+    final totalAmount = sells.fold<double>(
+      0,
+      (sum, s) => sum + (s.price * s.quantity),
+    );
+    return totalAmount / totalQty;
+  }
+
   double realizedPnl() {
     double avgBuyPriceAt(DateTime sellDate) {
       var qty = 0.0;
@@ -392,95 +411,50 @@ class _GroupedStockRow extends StatelessWidget {
     final displayPnl = evalPnl ?? realizedPnl;
     final isUp = displayPnl >= 0;
     final color = isUp ? const Color(0xFFF04452) : const Color(0xFF1677FF);
-
     String fmtP(double p) => isKrw
         ? '₩${NumberFormat('#,###').format(p.toInt())}'
         : '\$${p.toStringAsFixed(2)}';
     String fmtQty(double q) => q % 1 == 0 ? '${q.toInt()}주' : '$q주';
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 14),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+      decoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: 0.025),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.07)),
+      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 48,
-            height: 48,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: hasHolding
-                  ? const Color(0xFF10B981).withValues(alpha: 0.12)
-                  : cs.onSurface.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              stock.ticker.length > 4
-                  ? stock.ticker.substring(0, 4)
-                  : stock.ticker,
-              style: GoogleFonts.robotoMono(
-                color: hasHolding
-                    ? const Color(0xFF10B981)
-                    : cs.onSurface.withValues(alpha: 0.55),
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        stock.stockName,
-                        style: GoogleFonts.inter(
-                          color: cs.onSurface,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: hasHolding
-                            ? const Color(0xFF10B981).withValues(alpha: 0.12)
-                            : cs.onSurface.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        hasHolding ? '보유중' : '완료',
-                        style: GoogleFonts.inter(
-                          color: hasHolding
-                              ? const Color(0xFF10B981)
-                              : cs.onSurface.withValues(alpha: 0.45),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 5),
                 Text(
-                  hasHolding
-                      ? '${fmtQty(remainingQty)} · 평균 ${fmtP(avgPrice)} · ${stock.count}건'
-                      : '매매기록 ${stock.count}건 · 실현손익 ${realizedPnl >= 0 ? '+' : ''}${fmtP(realizedPnl)}',
-                  style: GoogleFonts.inter(
-                    color: cs.onSurface.withValues(alpha: 0.45),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                  stock.stockName,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    height: 1.1,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(height: 8),
+                if (hasHolding)
+                  Text(
+                    '보유 ${fmtQty(remainingQty)} · 평균단가 ${fmtP(avgPrice)}',
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.5),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  )
+                else
+                  const SizedBox.shrink(),
               ],
             ),
           ),
@@ -490,37 +464,46 @@ class _GroupedStockRow extends StatelessWidget {
             children: [
               Text(
                 hasHolding ? '평가손익' : '실현손익',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.35),
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
                 '${isUp ? '+' : ''}${fmtP(displayPnl)}',
-                style: GoogleFonts.robotoMono(
+                style: TextStyle(
                   color: color,
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              if (evalRate != null)
+              if (hasHolding)
                 Text(
-                  '${isUp ? '+' : ''}${evalRate.toStringAsFixed(1)}%',
-                  style: GoogleFonts.robotoMono(
-                    color: color.withValues(alpha: 0.75),
+                  evalRate != null
+                      ? '${isUp ? '+' : ''}${evalRate.toStringAsFixed(1)}%'
+                      : '-',
+                  style: TextStyle(
+                    color: (evalRate != null ? color : cs.onSurface).withValues(
+                      alpha: 0.72,
+                    ),
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                   ),
-                ),
+                )
+              else
+                const SizedBox(height: 14),
             ],
           ),
           const SizedBox(width: 4),
-          Icon(
-            Icons.chevron_right_rounded,
-            color: cs.onSurface.withValues(alpha: 0.32),
-            size: 20,
+          Padding(
+            padding: const EdgeInsets.only(top: 18),
+            child: Icon(
+              Icons.chevron_right_rounded,
+              color: cs.onSurface.withValues(alpha: 0.32),
+              size: 20,
+            ),
           ),
         ],
       ),
@@ -535,10 +518,7 @@ class FavoritesPicksScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          '관심 추천주',
-          style: GoogleFonts.inter(fontWeight: FontWeight.w700),
-        ),
+        title: Text('관심 추천주', style: TextStyle(fontWeight: FontWeight.w700)),
       ),
       body: Container(
         color: Theme.of(context).scaffoldBackgroundColor,
@@ -576,7 +556,7 @@ class _NotLoggedIn extends StatelessWidget {
           const SizedBox(height: 16),
           Text(
             '로그인이 필요합니다',
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.4),
               fontSize: 16,
             ),
@@ -584,7 +564,7 @@ class _NotLoggedIn extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             '추천주를 추가하고 수익률을 확인하세요',
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.25),
               fontSize: 13,
             ),
@@ -603,10 +583,7 @@ class _NotLoggedIn extends StatelessWidget {
               context,
               MaterialPageRoute(builder: (_) => const LoginScreen()),
             ),
-            child: Text(
-              '로그인',
-              style: GoogleFonts.inter(fontWeight: FontWeight.w700),
-            ),
+            child: Text('로그인', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -722,7 +699,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                     const SizedBox(height: 14),
                     Text(
                       '추천주를 추가해보세요',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.4),
                         fontSize: 15,
                       ),
@@ -730,7 +707,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                     const SizedBox(height: 4),
                     Text(
                       '종목 카드의 ♡ 버튼을 눌러 추가',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.25),
                         fontSize: 12,
                       ),
@@ -818,7 +795,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
             const SizedBox(width: 6),
             Text(
               '관심추천주 현황',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface,
                 fontWeight: FontWeight.w700,
                 fontSize: 22,
@@ -846,10 +823,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
               icon: const Icon(Icons.ios_share_rounded, size: 14),
               label: Text(
                 '공유',
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
               ),
             ),
           ],
@@ -910,7 +884,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.38),
             fontSize: 11,
           ),
@@ -918,7 +892,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
         const SizedBox(height: 6),
         Text(
           value,
-          style: GoogleFonts.robotoMono(
+          style: TextStyle(
             color: color,
             fontWeight: FontWeight.w700,
             fontSize: 15,
@@ -959,7 +933,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
               ),
               child: Text(
                 pick.ticker,
-                style: GoogleFonts.robotoMono(
+                style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.8),
                   fontWeight: FontWeight.w700,
                   fontSize: 12,
@@ -973,7 +947,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                 children: [
                   Text(
                     pick.name,
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface,
                       fontWeight: FontWeight.w700,
                       fontSize: 16,
@@ -985,7 +959,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                     children: [
                       Text(
                         '매수 ${formatPrice(pick.buyPrice)}',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.45),
                           fontSize: 11,
                         ),
@@ -1004,7 +978,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
                         const SizedBox(width: 6),
                         Text(
                           '현재 ${formatPrice(livePrice)}',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.45),
                             fontSize: 11,
                           ),
@@ -1025,7 +999,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
               ),
               child: Text(
                 '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(1)}%',
-                style: GoogleFonts.robotoMono(
+                style: TextStyle(
                   color: isPositive
                       ? const Color(0xFFF04452)
                       : const Color(0xFF1677FF),
@@ -1160,7 +1134,7 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
                           const SizedBox(width: 6),
                           Text(
                             '주식저장소',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: const Color(0xFF10B981),
                               fontWeight: FontWeight.w700,
                               fontSize: 13,
@@ -1170,7 +1144,7 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
                       ),
                       Text(
                         DateFormat('yyyy.MM.dd').format(DateTime.now()),
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.4),
                           fontSize: 12,
                         ),
@@ -1181,7 +1155,7 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
                   // 추천주 평균 수익률 (메인)
                   Text(
                     '추천주 평균 수익률',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.5),
                       fontSize: 13,
                     ),
@@ -1191,7 +1165,7 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
                     widget.withPrice == 0
                         ? '--'
                         : '$sign${widget.avgReturn.toStringAsFixed(2)}%',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: color,
                       fontWeight: FontWeight.w800,
                       fontSize: 42,
@@ -1262,7 +1236,7 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
                               ),
                               child: Text(
                                 pick.ticker,
-                                style: GoogleFonts.robotoMono(
+                                style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.9),
                                   fontWeight: FontWeight.w700,
                                   fontSize: 11,
@@ -1273,7 +1247,7 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
                             Expanded(
                               child: Text(
                                 pick.name,
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.7),
                                   fontSize: 12,
                                 ),
@@ -1282,7 +1256,7 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
                             ),
                             Text(
                               '${isPos ? '+' : ''}${returnRate.toStringAsFixed(1)}%',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: retColor,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 12,
@@ -1298,7 +1272,7 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
                   Center(
                     child: Text(
                       '주식저장소 앱에서 확인하세요',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.25),
                         fontSize: 11,
                       ),
@@ -1337,10 +1311,7 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
                   : const Icon(Icons.ios_share_rounded, size: 18),
               label: Text(
                 _sharing ? '처리 중...' : '이미지로 공유',
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
               ),
             ),
           ),
@@ -1355,7 +1326,7 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
         children: [
           Text(
             value,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: color,
               fontWeight: FontWeight.w700,
               fontSize: 18,
@@ -1364,7 +1335,7 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
           const SizedBox(height: 4),
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: Colors.white.withValues(alpha: 0.4),
               fontSize: 11,
             ),

@@ -1,7 +1,6 @@
-﻿import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -18,13 +17,18 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
-    final coverImage = analysis.imageUrls.isNotEmpty ? analysis.imageUrls.first : null;
-    final extraImages =
-        analysis.imageUrls.length > 1 ? analysis.imageUrls.skip(1).toList() : const <String>[];
+    final coverImage = analysis.imageUrls.isNotEmpty
+        ? analysis.imageUrls.first
+        : null;
+    final extraImages = analysis.imageUrls.length > 1
+        ? analysis.imageUrls.skip(1).toList()
+        : const <String>[];
     final renderedBody = _normalizeBodyForMarkdown(analysis.body);
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A0E1A) : const Color(0xFFF8F9FA),
+      backgroundColor: isDark
+          ? const Color(0xFF0A0E1A)
+          : const Color(0xFFF8F9FA),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -39,7 +43,7 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
         ),
         title: Text(
           '시황 분석',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface,
             fontSize: 18,
             fontWeight: FontWeight.w800,
@@ -122,8 +126,9 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
 
   String _shareText() {
     final preview = analysis.body.replaceAll('\n', ' ').trim();
-    final shortPreview =
-        preview.length > 100 ? '${preview.substring(0, 100)}...' : preview;
+    final shortPreview = preview.length > 100
+        ? '${preview.substring(0, 100)}...'
+        : preview;
     return '주식저장소 시황 분석\n\n'
         '${analysis.title}\n\n'
         '$shortPreview\n\n'
@@ -140,8 +145,12 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
   MarkdownStyleSheet _markdownStyleSheet(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    TextStyle body(double size, double height, {FontWeight weight = FontWeight.w400}) {
-      return GoogleFonts.inter(
+    TextStyle body(
+      double size,
+      double height, {
+      FontWeight weight = FontWeight.w400,
+    }) {
+      return TextStyle(
         color: cs.onSurface.withValues(alpha: 0.88),
         fontSize: size,
         height: height,
@@ -152,19 +161,26 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
     return MarkdownStyleSheet(
       p: body(16, 1.65),
       pPadding: const EdgeInsets.only(bottom: 16),
-      strong: body(16, 1.65, weight: FontWeight.w700).copyWith(color: cs.onSurface),
+      strong: body(
+        16,
+        1.65,
+        weight: FontWeight.w700,
+      ).copyWith(color: cs.onSurface),
       em: body(16, 1.65).copyWith(fontStyle: FontStyle.italic),
       del: body(16, 1.65).copyWith(
         color: cs.onSurface.withValues(alpha: 0.5),
         decoration: TextDecoration.lineThrough,
       ),
-      blockquote: body(15, 1.65).copyWith(
-        color: cs.onSurface.withValues(alpha: 0.72),
-      ),
+      blockquote: body(
+        15,
+        1.65,
+      ).copyWith(color: cs.onSurface.withValues(alpha: 0.72)),
       blockquoteDecoration: BoxDecoration(
         color: const Color(0xFF10B981).withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.15)),
+        border: Border.all(
+          color: const Color(0xFF10B981).withValues(alpha: 0.15),
+        ),
       ),
       blockquotePadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       h1: body(26, 1.25, weight: FontWeight.w700).copyWith(color: cs.onSurface),
@@ -173,7 +189,7 @@ class MarketAnalysisDetailScreen extends StatelessWidget {
       h1Padding: const EdgeInsets.only(top: 12, bottom: 12),
       h2Padding: const EdgeInsets.only(top: 10, bottom: 10),
       h3Padding: const EdgeInsets.only(top: 8, bottom: 8),
-      code: GoogleFonts.jetBrainsMono(
+      code: TextStyle(
         color: cs.onSurface,
         fontSize: 13,
         height: 1.7,
@@ -264,10 +280,7 @@ class _HeroHeader extends StatelessWidget {
   final MarketAnalysis analysis;
   final String? coverImage;
 
-  const _HeroHeader({
-    required this.analysis,
-    required this.coverImage,
-  });
+  const _HeroHeader({required this.analysis, required this.coverImage});
 
   @override
   Widget build(BuildContext context) {
@@ -281,13 +294,16 @@ class _HeroHeader extends StatelessWidget {
         children: [
           if (coverImage != null)
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(16),
+              ),
               child: AspectRatio(
                 aspectRatio: 16 / 9,
                 child: CachedNetworkImage(
                   imageUrl: coverImage!,
                   fit: BoxFit.cover,
-                  placeholder: (_, _) => _imagePlaceholder(context, height: double.infinity),
+                  placeholder: (_, _) =>
+                      _imagePlaceholder(context, height: double.infinity),
                   errorWidget: (_, _, _) => _imageError(context),
                 ),
               ),
@@ -303,21 +319,23 @@ class _HeroHeader extends StatelessWidget {
                   children: [
                     _MetaChip(
                       icon: Icons.calendar_today_rounded,
-                      label: DateFormat('yyyy년 MM월 dd일').format(analysis.createdAt),
+                      label: DateFormat(
+                        'yyyy년 MM월 dd일',
+                      ).format(analysis.createdAt),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
-          Text(
-            analysis.title,
-            style: GoogleFonts.inter(
-              color: cs.onSurface,
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              height: 1.25,
-              letterSpacing: -0.6,
-            ),
-          ),
+                Text(
+                  analysis.title,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                    height: 1.25,
+                    letterSpacing: -0.6,
+                  ),
+                ),
                 const SizedBox(height: 10),
                 Container(
                   width: 44,
@@ -340,10 +358,7 @@ class _MetaChip extends StatelessWidget {
   final IconData icon;
   final String label;
 
-  const _MetaChip({
-    required this.icon,
-    required this.label,
-  });
+  const _MetaChip({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -358,15 +373,11 @@ class _MetaChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 13,
-            color: cs.onSurface.withValues(alpha: 0.55),
-          ),
+          Icon(icon, size: 13, color: cs.onSurface.withValues(alpha: 0.55)),
           const SizedBox(width: 5),
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.75),
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -379,10 +390,7 @@ class _MetaChip extends StatelessWidget {
 }
 
 class _TopActionButton extends StatelessWidget {
-  const _TopActionButton({
-    required this.icon,
-    required this.onTap,
-  });
+  const _TopActionButton({required this.icon, required this.onTap});
 
   final IconData icon;
   final VoidCallback onTap;
@@ -401,11 +409,7 @@ class _TopActionButton extends StatelessWidget {
         padding: EdgeInsets.zero,
         splashRadius: 20,
         onPressed: onTap,
-        icon: Icon(
-          icon,
-          size: 19,
-          color: cs.onSurface.withValues(alpha: 0.78),
-        ),
+        icon: Icon(icon, size: 19, color: cs.onSurface.withValues(alpha: 0.78)),
       ),
     );
   }
@@ -460,5 +464,3 @@ Widget _imageError(BuildContext context) {
     ),
   );
 }
-
-

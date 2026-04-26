@@ -1,7 +1,6 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/market_analysis.dart';
 import '../services/firestore_service.dart';
@@ -13,8 +12,8 @@ class _TextBlock {
   final TextEditingController ctrl;
   final FocusNode focus;
   _TextBlock([String text = ''])
-      : ctrl = TextEditingController(text: text),
-        focus = FocusNode();
+    : ctrl = TextEditingController(text: text),
+      focus = FocusNode();
   void dispose() {
     ctrl.dispose();
     focus.dispose();
@@ -22,9 +21,9 @@ class _TextBlock {
 }
 
 class _ImageBlock {
-  final XFile? file;    // new local image
-  final String? url;    // existing uploaded URL
-  String? uploadedUrl;  // set after uploading local file
+  final XFile? file; // new local image
+  final String? url; // existing uploaded URL
+  String? uploadedUrl; // set after uploading local file
   _ImageBlock({this.file, this.url}) : assert(file != null || url != null);
   String? get finalUrl => uploadedUrl ?? url;
 }
@@ -40,8 +39,7 @@ class WriteMarketAnalysisScreen extends StatefulWidget {
       _WriteMarketAnalysisScreenState();
 }
 
-class _WriteMarketAnalysisScreenState
-    extends State<WriteMarketAnalysisScreen> {
+class _WriteMarketAnalysisScreenState extends State<WriteMarketAnalysisScreen> {
   final _titleCtrl = TextEditingController();
   final _fs = FirestoreService();
 
@@ -153,20 +151,23 @@ class _WriteMarketAnalysisScreenState
         selection: TextSelection.collapsed(offset: start + prefix.length),
       );
     } else if (selected.startsWith(prefix) && selected.endsWith(suffix)) {
-      final inner =
-          selected.substring(prefix.length, selected.length - suffix.length);
+      final inner = selected.substring(
+        prefix.length,
+        selected.length - suffix.length,
+      );
       ctrl.value = ctrl.value.copyWith(
         text: before + inner + after,
-        selection:
-            TextSelection(baseOffset: start, extentOffset: start + inner.length),
+        selection: TextSelection(
+          baseOffset: start,
+          extentOffset: start + inner.length,
+        ),
       );
     } else {
       ctrl.value = ctrl.value.copyWith(
         text: before + prefix + selected + suffix + after,
         selection: TextSelection(
           baseOffset: start,
-          extentOffset:
-              start + prefix.length + selected.length + suffix.length,
+          extentOffset: start + prefix.length + selected.length + suffix.length,
         ),
       );
     }
@@ -178,8 +179,9 @@ class _WriteMarketAnalysisScreenState
     if (block == null) return;
     final ctrl = block.ctrl;
     final text = ctrl.text;
-    final pos =
-        ctrl.selection.isValid ? ctrl.selection.baseOffset : text.length;
+    final pos = ctrl.selection.isValid
+        ? ctrl.selection.baseOffset
+        : text.length;
     final lineStart = text.lastIndexOf('\n', pos > 0 ? pos - 1 : 0);
     final insertAt = lineStart == -1 ? 0 : lineStart + 1;
     if (text.substring(insertAt, pos).startsWith('- ')) {
@@ -200,16 +202,24 @@ class _WriteMarketAnalysisScreenState
 
   Future<void> _pickImages() async {
     final remaining = _maxImages - _imageCount;
-    if (remaining <= 0) { _showMaxSnack(); return; }
+    if (remaining <= 0) {
+      _showMaxSnack();
+      return;
+    }
     final picked = await StorageService.pickImages(maxImages: remaining);
     if (picked.isEmpty || !mounted) return;
     setState(() {
-      for (final f in picked) { _insertImage(_ImageBlock(file: f)); }
+      for (final f in picked) {
+        _insertImage(_ImageBlock(file: f));
+      }
     });
   }
 
   Future<void> _pickFromCamera() async {
-    if (_imageCount >= _maxImages) { _showMaxSnack(); return; }
+    if (_imageCount >= _maxImages) {
+      _showMaxSnack();
+      return;
+    }
     final f = await StorageService.pickFromCamera();
     if (f == null || !mounted) return;
     setState(() => _insertImage(_ImageBlock(file: f)));
@@ -228,8 +238,9 @@ class _WriteMarketAnalysisScreenState
         _blocks[insertAfter + 2] is _ImageBlock) {
       final next = _listenedTextBlock();
       _blocks.insert(insertAfter + 2, next);
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => next.focus.requestFocus());
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => next.focus.requestFocus(),
+      );
     }
   }
 
@@ -246,21 +257,26 @@ class _WriteMarketAnalysisScreenState
           final a = _blocks[i - 1] as _TextBlock;
           final b = _blocks[i] as _TextBlock;
           final merged = _listenedTextBlock(
-              [a.ctrl.text, b.ctrl.text].where((s) => s.isNotEmpty).join('\n'));
+            [a.ctrl.text, b.ctrl.text].where((s) => s.isNotEmpty).join('\n'),
+          );
           a.dispose();
           b.dispose();
           _blocks.removeAt(i);
           _blocks[i - 1] = merged;
         }
       }
-      if (_blocks.isEmpty) { _blocks.add(_listenedTextBlock()); }
+      if (_blocks.isEmpty) {
+        _blocks.add(_listenedTextBlock());
+      }
     });
   }
 
   void _moveImageUp(int index) {
     setState(() {
       int prev = index - 1;
-      while (prev >= 0 && _blocks[prev] is _TextBlock) { prev--; }
+      while (prev >= 0 && _blocks[prev] is _TextBlock) {
+        prev--;
+      }
       if (prev < 0) return;
       final tmp = _blocks[index];
       _blocks[index] = _blocks[prev];
@@ -271,7 +287,9 @@ class _WriteMarketAnalysisScreenState
   void _moveImageDown(int index) {
     setState(() {
       int next = index + 1;
-      while (next < _blocks.length && _blocks[next] is _TextBlock) { next++; }
+      while (next < _blocks.length && _blocks[next] is _TextBlock) {
+        next++;
+      }
       if (next >= _blocks.length) return;
       final tmp = _blocks[index];
       _blocks[index] = _blocks[next];
@@ -279,8 +297,9 @@ class _WriteMarketAnalysisScreenState
     });
   }
 
-  void _showMaxSnack() => ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('사진은 최대 5장까지 첨부할 수 있습니다')));
+  void _showMaxSnack() => ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(const SnackBar(content: Text('사진은 최대 5장까지 첨부할 수 있습니다')));
 
   void _showImageSourceSheet() {
     final cs = Theme.of(context).colorScheme;
@@ -288,7 +307,8 @@ class _WriteMarketAnalysisScreenState
       context: context,
       backgroundColor: cs.surface,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (_) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -298,22 +318,31 @@ class _WriteMarketAnalysisScreenState
               width: 36,
               height: 4,
               decoration: BoxDecoration(
-                  color: cs.onSurface.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(2)),
+                color: cs.onSurface.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
             ListTile(
-              leading: const Icon(Icons.photo_library_outlined,
-                  color: Color(0xFF10B981)),
-              title: Text('갤러리에서 선택',
-                  style: GoogleFonts.inter(color: cs.onSurface)),
-              onTap: () { Navigator.pop(context); _pickImages(); },
+              leading: const Icon(
+                Icons.photo_library_outlined,
+                color: Color(0xFF10B981),
+              ),
+              title: Text('갤러리에서 선택', style: TextStyle(color: cs.onSurface)),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImages();
+              },
             ),
             ListTile(
-              leading: const Icon(Icons.camera_alt_outlined,
-                  color: Color(0xFF10B981)),
-              title: Text('카메라로 촬영',
-                  style: GoogleFonts.inter(color: cs.onSurface)),
-              onTap: () { Navigator.pop(context); _pickFromCamera(); },
+              leading: const Icon(
+                Icons.camera_alt_outlined,
+                color: Color(0xFF10B981),
+              ),
+              title: Text('카메라로 촬영', style: TextStyle(color: cs.onSurface)),
+              onTap: () {
+                Navigator.pop(context);
+                _pickFromCamera();
+              },
             ),
             const SizedBox(height: 8),
           ],
@@ -342,8 +371,12 @@ class _WriteMarketAnalysisScreenState
 
   MarkdownStyleSheet _previewStyleSheet(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    TextStyle body(double size, double height, {FontWeight weight = FontWeight.w500}) {
-      return GoogleFonts.inter(
+    TextStyle body(
+      double size,
+      double height, {
+      FontWeight weight = FontWeight.w500,
+    }) {
+      return TextStyle(
         color: cs.onSurface.withValues(alpha: 0.88),
         fontSize: size,
         height: height,
@@ -354,7 +387,11 @@ class _WriteMarketAnalysisScreenState
     return MarkdownStyleSheet(
       p: body(14, 1.7),
       pPadding: const EdgeInsets.only(bottom: 10),
-      strong: body(14, 1.7, weight: FontWeight.w800).copyWith(color: cs.onSurface),
+      strong: body(
+        14,
+        1.7,
+        weight: FontWeight.w800,
+      ).copyWith(color: cs.onSurface),
       em: body(14, 1.7).copyWith(fontStyle: FontStyle.italic),
       del: body(14, 1.7).copyWith(
         color: cs.onSurface.withValues(alpha: 0.5),
@@ -363,20 +400,17 @@ class _WriteMarketAnalysisScreenState
       h1: body(22, 1.4, weight: FontWeight.w800),
       h2: body(19, 1.45, weight: FontWeight.w800),
       h3: body(17, 1.5, weight: FontWeight.w700),
-      blockquote: body(13, 1.65).copyWith(
-        color: cs.onSurface.withValues(alpha: 0.74),
-      ),
+      blockquote: body(
+        13,
+        1.65,
+      ).copyWith(color: cs.onSurface.withValues(alpha: 0.74)),
       blockquoteDecoration: BoxDecoration(
         color: cs.onSurface.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
       ),
       blockquotePadding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      code: GoogleFonts.jetBrainsMono(
-        color: cs.onSurface,
-        fontSize: 12.5,
-        height: 1.6,
-      ),
+      code: TextStyle(color: cs.onSurface, fontSize: 12.5, height: 1.6),
       codeblockDecoration: BoxDecoration(
         color: cs.onSurface.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(14),
@@ -396,8 +430,9 @@ class _WriteMarketAnalysisScreenState
   Future<void> _submit() async {
     final title = _titleCtrl.text.trim();
     if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('제목을 입력해주세요')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('제목을 입력해주세요')));
       return;
     }
     setState(() => _saving = true);
@@ -411,9 +446,10 @@ class _WriteMarketAnalysisScreenState
       try {
         for (int i = 0; i < newImgBlocks.length; i++) {
           newImgBlocks[i].uploadedUrl = await StorageService.uploadImage(
-              file: newImgBlocks[i].file!,
-              folder: 'market_analyses',
-              uid: 'admin');
+            file: newImgBlocks[i].file!,
+            folder: 'market_analyses',
+            uid: 'admin',
+          );
         }
       } catch (e) {
         if (!mounted) return;
@@ -421,16 +457,18 @@ class _WriteMarketAnalysisScreenState
           context: context,
           builder: (_) => AlertDialog(
             title: const Text('사진 업로드 실패'),
-            content:
-                Text('사진 업로드에 실패했습니다.\n사진 없이 저장할까요?\n\n(오류: $e)'),
+            content: Text('사진 업로드에 실패했습니다.\n사진 없이 저장할까요?\n\n(오류: $e)'),
             actions: [
               TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('취소')),
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('취소'),
+              ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('사진 없이 저장',
-                    style: TextStyle(color: Color(0xFF10B981))),
+                child: const Text(
+                  '사진 없이 저장',
+                  style: TextStyle(color: Color(0xFF10B981)),
+                ),
               ),
             ],
           ),
@@ -439,7 +477,9 @@ class _WriteMarketAnalysisScreenState
           if (mounted) setState(() => _saving = false);
           return;
         }
-        for (final b in newImgBlocks) { b.uploadedUrl = null; }
+        for (final b in newImgBlocks) {
+          b.uploadedUrl = null;
+        }
       }
     }
 
@@ -480,8 +520,9 @@ class _WriteMarketAnalysisScreenState
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('저장 실패: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('저장 실패: $e')));
         setState(() => _saving = false);
       }
     }
@@ -506,8 +547,11 @@ class _WriteMarketAnalysisScreenState
         ),
         title: Text(
           widget.editing != null ? '시황 분석 수정' : '시황 분석 작성',
-          style: GoogleFonts.inter(
-              color: cs.onSurface, fontSize: 17, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            color: cs.onSurface,
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         centerTitle: true,
         actions: [
@@ -516,19 +560,24 @@ class _WriteMarketAnalysisScreenState
                   padding: EdgeInsets.only(right: 16),
                   child: Center(
                     child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Color(0xFF10B981))),
-                  ))
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF10B981),
+                      ),
+                    ),
+                  ),
+                )
               : TextButton(
                   onPressed: _submit,
                   child: Text(
                     widget.editing != null ? '수정' : '등록',
-                    style: GoogleFonts.inter(
-                        color: const Color(0xFF10B981),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      color: const Color(0xFF10B981),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
         ],
@@ -546,16 +595,18 @@ class _WriteMarketAnalysisScreenState
                 children: [
                   TextField(
                     controller: _titleCtrl,
-                    style: GoogleFonts.inter(
-                        color: cs.onSurface,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
                     decoration: InputDecoration(
                       hintText: '제목',
-                      hintStyle: GoogleFonts.inter(
-                          color: cs.onSurface.withValues(alpha: 0.3),
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700),
+                      hintStyle: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.3),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(vertical: 4),
                     ),
@@ -563,9 +614,10 @@ class _WriteMarketAnalysisScreenState
                     textInputAction: TextInputAction.next,
                   ),
                   Divider(
-                      height: 24,
-                      thickness: 0.5,
-                      color: cs.onSurface.withValues(alpha: 0.1)),
+                    height: 24,
+                    thickness: 0.5,
+                    color: cs.onSurface.withValues(alpha: 0.1),
+                  ),
 
                   // ── 본문 블록들 ──
                   for (int i = 0; i < _blocks.length; i++)
@@ -589,7 +641,7 @@ class _WriteMarketAnalysisScreenState
                         children: [
                           Text(
                             '미리보기',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               color: cs.onSurface.withValues(alpha: 0.72),
                               fontSize: 12,
                               fontWeight: FontWeight.w800,
@@ -619,23 +671,35 @@ class _WriteMarketAnalysisScreenState
               decoration: BoxDecoration(
                 color: cs.surface,
                 border: Border(
-                    top: BorderSide(
-                        color: cs.onSurface.withValues(alpha: 0.1),
-                        width: 0.5)),
+                  top: BorderSide(
+                    color: cs.onSurface.withValues(alpha: 0.1),
+                    width: 0.5,
+                  ),
+                ),
               ),
               child: Row(
                 children: [
                   _FmtBtn(
-                      label: 'B', bold: true, onTap: () => _applyFormat('**', '**')),
+                    label: 'B',
+                    bold: true,
+                    onTap: () => _applyFormat('**', '**'),
+                  ),
                   _FmtBtn(
-                      label: 'I', italic: true, onTap: () => _applyFormat('*', '*')),
+                    label: 'I',
+                    italic: true,
+                    onTap: () => _applyFormat('*', '*'),
+                  ),
                   _FmtBtn(
-                      label: 'S',
-                      strikethrough: true,
-                      onTap: () => _applyFormat('~~', '~~')),
+                    label: 'S',
+                    strikethrough: true,
+                    onTap: () => _applyFormat('~~', '~~'),
+                  ),
                   IconButton(
-                    icon: Icon(Icons.format_list_bulleted,
-                        size: 20, color: cs.onSurface.withValues(alpha: 0.6)),
+                    icon: Icon(
+                      Icons.format_list_bulleted,
+                      size: 20,
+                      color: cs.onSurface.withValues(alpha: 0.6),
+                    ),
                     onPressed: _applyBullet,
                   ),
                   Container(
@@ -645,22 +709,27 @@ class _WriteMarketAnalysisScreenState
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                   ),
                   IconButton(
-                    icon: Icon(Icons.image_outlined,
-                        size: 22,
-                        color: _imageCount >= _maxImages
-                            ? cs.onSurface.withValues(alpha: 0.3)
-                            : cs.onSurface.withValues(alpha: 0.6)),
+                    icon: Icon(
+                      Icons.image_outlined,
+                      size: 22,
+                      color: _imageCount >= _maxImages
+                          ? cs.onSurface.withValues(alpha: 0.3)
+                          : cs.onSurface.withValues(alpha: 0.6),
+                    ),
                     tooltip: '사진 삽입',
                     onPressed: _imageCount >= _maxImages
                         ? null
                         : _showImageSourceSheet,
                   ),
                   if (_imageCount > 0)
-                    Text('$_imageCount/$_maxImages',
-                        style: GoogleFonts.inter(
-                            color: const Color(0xFF10B981),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600)),
+                    Text(
+                      '$_imageCount/$_maxImages',
+                      style: TextStyle(
+                        color: const Color(0xFF10B981),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -672,16 +741,17 @@ class _WriteMarketAnalysisScreenState
 
   Widget _buildTextBlock(_TextBlock block) {
     final cs = Theme.of(context).colorScheme;
-    final isFirstText =
-        _blocks.whereType<_TextBlock>().firstOrNull == block;
+    final isFirstText = _blocks.whereType<_TextBlock>().firstOrNull == block;
     return TextField(
       controller: block.ctrl,
       focusNode: block.focus,
-      style: GoogleFonts.inter(color: cs.onSurface, fontSize: 15, height: 1.7),
+      style: TextStyle(color: cs.onSurface, fontSize: 15, height: 1.7),
       decoration: InputDecoration(
         hintText: isFirstText ? '시황 분석 내용을 입력해주세요' : null,
-        hintStyle: GoogleFonts.inter(
-            color: cs.onSurface.withValues(alpha: 0.3), fontSize: 15),
+        hintStyle: TextStyle(
+          color: cs.onSurface.withValues(alpha: 0.3),
+          fontSize: 15,
+        ),
         border: InputBorder.none,
         contentPadding: const EdgeInsets.symmetric(vertical: 4),
       ),
@@ -698,8 +768,11 @@ class _WriteMarketAnalysisScreenState
 
     final imageWidget = block.url != null
         ? Image.network(block.url!, width: double.infinity, fit: BoxFit.cover)
-        : Image.file(File(block.file!.path),
-            width: double.infinity, fit: BoxFit.cover);
+        : Image.file(
+            File(block.file!.path),
+            width: double.infinity,
+            fit: BoxFit.cover,
+          );
 
     return Padding(
       key: ValueKey(block),
@@ -724,14 +797,18 @@ class _WriteMarketAnalysisScreenState
                 children: [
                   if (!isFirstImg)
                     _ImgCtrlBtn(
-                        icon: Icons.keyboard_arrow_up,
-                        onTap: () => _moveImageUp(index)),
+                      icon: Icons.keyboard_arrow_up,
+                      onTap: () => _moveImageUp(index),
+                    ),
                   if (!isLastImg)
                     _ImgCtrlBtn(
-                        icon: Icons.keyboard_arrow_down,
-                        onTap: () => _moveImageDown(index)),
+                      icon: Icons.keyboard_arrow_down,
+                      onTap: () => _moveImageDown(index),
+                    ),
                   _ImgCtrlBtn(
-                      icon: Icons.close, onTap: () => _removeImage(index)),
+                    icon: Icons.close,
+                    onTap: () => _removeImage(index),
+                  ),
                 ],
               ),
             ),
@@ -784,19 +861,20 @@ class _FmtBtn extends StatelessWidget {
       borderRadius: BorderRadius.circular(6),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        child: Text(label,
-            style: TextStyle(
-              color: cs.onSurface.withValues(alpha: 0.6),
-              fontSize: 15,
-              fontWeight: bold ? FontWeight.w900 : FontWeight.w400,
-              fontStyle: italic ? FontStyle.italic : FontStyle.normal,
-              decoration:
-                  strikethrough ? TextDecoration.lineThrough : TextDecoration.none,
-              decorationColor: cs.onSurface.withValues(alpha: 0.6),
-            )),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.6),
+            fontSize: 15,
+            fontWeight: bold ? FontWeight.w900 : FontWeight.w400,
+            fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+            decoration: strikethrough
+                ? TextDecoration.lineThrough
+                : TextDecoration.none,
+            decorationColor: cs.onSurface.withValues(alpha: 0.6),
+          ),
+        ),
       ),
     );
   }
 }
-
-

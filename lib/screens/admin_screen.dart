@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../models/announcement.dart';
 import '../models/market_analysis.dart';
@@ -52,7 +51,7 @@ class _AdminScreenState extends State<AdminScreen>
         ),
         title: Text(
           '관리자 패널',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w600,
           ),
@@ -64,11 +63,8 @@ class _AdminScreenState extends State<AdminScreen>
           unselectedLabelColor: Theme.of(
             context,
           ).colorScheme.onSurface.withValues(alpha: 0.38),
-          labelStyle: GoogleFonts.inter(
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
-          unselectedLabelStyle: GoogleFonts.inter(fontSize: 14),
+          labelStyle: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          unselectedLabelStyle: TextStyle(fontSize: 14),
           isScrollable: true,
           tabs: const [
             Tab(text: '종목 등록'),
@@ -206,7 +202,7 @@ class _UploadTabState extends State<_UploadTab> {
               contentPadding: EdgeInsets.zero,
               title: Text(
                 '로그인 후 열람 가능',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: Theme.of(
                     context,
                   ).colorScheme.onSurface.withValues(alpha: 0.7),
@@ -214,7 +210,7 @@ class _UploadTabState extends State<_UploadTab> {
               ),
               subtitle: Text(
                 '로그인 사용자만 상세 열람 가능',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: Theme.of(
                     context,
                   ).colorScheme.onSurface.withValues(alpha: 0.38),
@@ -243,7 +239,7 @@ class _UploadTabState extends State<_UploadTab> {
                   ? const CircularProgressIndicator(color: Colors.black)
                   : Text(
                       _isEdit ? '수정하기' : '등록하기',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 16,
                       ),
@@ -268,7 +264,7 @@ class _UploadTabState extends State<_UploadTab> {
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.54),
             fontSize: 12,
           ),
@@ -280,12 +276,10 @@ class _UploadTabState extends State<_UploadTab> {
           keyboardType: isNumber
               ? TextInputType.number
               : TextInputType.multiline,
-          style: GoogleFonts.inter(color: cs.onSurface),
+          style: TextStyle(color: cs.onSurface),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.inter(
-              color: cs.onSurface.withValues(alpha: 0.24),
-            ),
+            hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.24)),
             filled: true,
             fillColor: const Color(0xFF1A2035),
             border: OutlineInputBorder(
@@ -318,7 +312,7 @@ class _UploadTabState extends State<_UploadTab> {
       children: [
         Text(
           '실적 발표일',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.54),
             fontSize: 12,
           ),
@@ -362,7 +356,7 @@ class _UploadTabState extends State<_UploadTab> {
                     _earningsDate != null
                         ? DateFormat('yyyy년 MM월 dd일').format(_earningsDate!)
                         : '선택사항',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: _earningsDate != null
                           ? cs.onSurface
                           : cs.onSurface.withValues(alpha: 0.38),
@@ -423,7 +417,7 @@ class _UploadTabState extends State<_UploadTab> {
           SnackBar(
             content: Text(
               '${pick.name} ${_isEdit ? '수정' : '등록'} 완료!',
-              style: GoogleFonts.inter(),
+              style: TextStyle(),
             ),
             backgroundColor: const Color(0xFF10B981),
           ),
@@ -485,9 +479,7 @@ class _ManageTab extends StatelessWidget {
               return Center(
                 child: Text(
                   '등록된 종목이 없습니다',
-                  style: GoogleFonts.inter(
-                    color: cs.onSurface.withValues(alpha: 0.38),
-                  ),
+                  style: TextStyle(color: cs.onSurface.withValues(alpha: 0.38)),
                 ),
               );
             }
@@ -527,7 +519,7 @@ class _ManageTab extends StatelessWidget {
   Widget _sectionLabel(ColorScheme cs, String text) {
     return Text(
       text,
-      style: GoogleFonts.inter(
+      style: TextStyle(
         color: cs.onSurface.withValues(alpha: 0.45),
         fontSize: 12,
         fontWeight: FontWeight.w600,
@@ -567,7 +559,7 @@ class _ManageCard extends StatelessWidget {
                   children: [
                     Text(
                       pick.ticker,
-                      style: GoogleFonts.robotoMono(
+                      style: TextStyle(
                         color: Theme.of(context).colorScheme.onSurface,
                         fontWeight: FontWeight.w700,
                         fontSize: 14,
@@ -586,7 +578,7 @@ class _ManageCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   pick.name,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: Theme.of(
                       context,
                     ).colorScheme.onSurface.withValues(alpha: 0.54),
@@ -595,7 +587,7 @@ class _ManageCard extends StatelessWidget {
                 ),
                 Text(
                   '매수 ${pick.buyPrice.toInt().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}원  →  목표 ${pick.targetPrice.toInt().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')}원',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: Theme.of(
                       context,
                     ).colorScheme.onSurface.withValues(alpha: 0.38),
@@ -660,7 +652,7 @@ class _ManageCard extends StatelessWidget {
         backgroundColor: const Color(0xFF1A2035),
         title: Text(
           '종료 처리',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w600,
           ),
@@ -671,7 +663,7 @@ class _ManageCard extends StatelessWidget {
           children: [
             Text(
               '${pick.name} (${pick.ticker})\n실제 종료가를 입력하세요.',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: Theme.of(
                   context,
                 ).colorScheme.onSurface.withValues(alpha: 0.7),
@@ -683,12 +675,10 @@ class _ManageCard extends StatelessWidget {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              style: GoogleFonts.inter(
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
               decoration: InputDecoration(
                 hintText: '종료가',
-                hintStyle: GoogleFonts.inter(
+                hintStyle: TextStyle(
                   color: Theme.of(
                     context,
                   ).colorScheme.onSurface.withValues(alpha: 0.24),
@@ -712,7 +702,7 @@ class _ManageCard extends StatelessWidget {
             onPressed: () => Navigator.pop(context),
             child: Text(
               '취소',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: Theme.of(
                   context,
                 ).colorScheme.onSurface.withValues(alpha: 0.38),
@@ -728,7 +718,7 @@ class _ManageCard extends StatelessWidget {
             },
             child: Text(
               '종료',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: Colors.orangeAccent,
                 fontWeight: FontWeight.w600,
               ),
@@ -744,7 +734,7 @@ class _ManageCard extends StatelessWidget {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('${pick.name} 종료 처리됨', style: GoogleFonts.inter()),
+              content: Text('${pick.name} 종료 처리됨', style: TextStyle()),
               backgroundColor: Colors.orangeAccent,
             ),
           );
@@ -769,14 +759,14 @@ class _ManageCard extends StatelessWidget {
         backgroundColor: const Color(0xFF1A2035),
         title: Text(
           '삭제 확인',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w600,
           ),
         ),
         content: Text(
           '${pick.name}(${pick.ticker})을 삭제하시겠습니까?',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: Theme.of(
               context,
             ).colorScheme.onSurface.withValues(alpha: 0.7),
@@ -787,7 +777,7 @@ class _ManageCard extends StatelessWidget {
             onPressed: () => Navigator.pop(context, false),
             child: Text(
               '취소',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: Theme.of(
                   context,
                 ).colorScheme.onSurface.withValues(alpha: 0.38),
@@ -798,7 +788,7 @@ class _ManageCard extends StatelessWidget {
             onPressed: () => Navigator.pop(context, true),
             child: Text(
               '삭제',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: Colors.redAccent,
                 fontWeight: FontWeight.w600,
               ),
@@ -814,7 +804,7 @@ class _ManageCard extends StatelessWidget {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('${pick.name} 삭제됨', style: GoogleFonts.inter()),
+              content: Text('${pick.name} 삭제됨', style: TextStyle()),
               backgroundColor: Colors.redAccent,
             ),
           );
@@ -856,7 +846,7 @@ class _EditScreen extends StatelessWidget {
         ),
         title: Text(
           '종목 수정',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w600,
           ),
@@ -935,7 +925,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
           SnackBar(
             content: Text(
               _editing != null ? '공지 수정 완료' : '공지 등록 완료',
-              style: GoogleFonts.inter(),
+              style: TextStyle(),
             ),
             backgroundColor: const Color(0xFF10B981),
           ),
@@ -960,14 +950,14 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
         backgroundColor: const Color(0xFF1A2035),
         title: Text(
           '삭제 확인',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w600,
           ),
         ),
         content: Text(
           '공지 "${a.title}"를 삭제하시겠습니까?',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: Theme.of(
               context,
             ).colorScheme.onSurface.withValues(alpha: 0.7),
@@ -978,7 +968,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
             onPressed: () => Navigator.pop(context, false),
             child: Text(
               '취소',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: Theme.of(
                   context,
                 ).colorScheme.onSurface.withValues(alpha: 0.38),
@@ -989,7 +979,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
             onPressed: () => Navigator.pop(context, true),
             child: Text(
               '삭제',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: Colors.redAccent,
                 fontWeight: FontWeight.w600,
               ),
@@ -1023,7 +1013,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
             children: [
               Text(
                 _editing != null ? '공지 수정' : '공지 등록',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: Theme.of(
                     context,
                   ).colorScheme.onSurface.withValues(alpha: 0.54),
@@ -1034,7 +1024,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
               const SizedBox(height: 10),
               TextField(
                 controller: _titleCtrl,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
                 decoration: _inputDeco(context, '제목'),
@@ -1043,7 +1033,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
               TextField(
                 controller: _bodyCtrl,
                 maxLines: 4,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
                 decoration: _inputDeco(context, '본문'),
@@ -1058,7 +1048,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
                   ),
                   Text(
                     '상단 고정',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: Theme.of(
                         context,
                       ).colorScheme.onSurface.withValues(alpha: 0.7),
@@ -1071,7 +1061,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
                       onPressed: _cancelEdit,
                       child: Text(
                         '취소',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: Theme.of(
                             context,
                           ).colorScheme.onSurface.withValues(alpha: 0.38),
@@ -1103,9 +1093,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
                           )
                         : Text(
                             _editing != null ? '수정' : '등록',
-                            style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w700,
-                            ),
+                            style: TextStyle(fontWeight: FontWeight.w700),
                           ),
                   ),
                 ],
@@ -1128,7 +1116,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
                 return Center(
                   child: Text(
                     '등록된 공지가 없습니다',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: Theme.of(
                         context,
                       ).colorScheme.onSurface.withValues(alpha: 0.38),
@@ -1172,7 +1160,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
                             children: [
                               Text(
                                 a.title,
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   color: Theme.of(
                                     context,
                                   ).colorScheme.onSurface,
@@ -1184,7 +1172,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
                                 a.body,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   color: Theme.of(context).colorScheme.onSurface
                                       .withValues(alpha: 0.38),
                                   fontSize: 11,
@@ -1225,7 +1213,7 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
     final cs = Theme.of(context).colorScheme;
     return InputDecoration(
       hintText: hint,
-      hintStyle: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.24)),
+      hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.24)),
       filled: true,
       fillColor: const Color(0xFF0A0E1A),
       border: OutlineInputBorder(
@@ -1271,14 +1259,14 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
         backgroundColor: const Color(0xFF1A2035),
         title: Text(
           '삭제 확인',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w600,
           ),
         ),
         content: Text(
           '"${a.title}"를 삭제하시겠습니까?',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: Theme.of(
               context,
             ).colorScheme.onSurface.withValues(alpha: 0.7),
@@ -1289,7 +1277,7 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
             onPressed: () => Navigator.pop(context, false),
             child: Text(
               '취소',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: Theme.of(
                   context,
                 ).colorScheme.onSurface.withValues(alpha: 0.38),
@@ -1300,7 +1288,7 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
             onPressed: () => Navigator.pop(context, true),
             child: Text(
               '삭제',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: Colors.redAccent,
                 fontWeight: FontWeight.w600,
               ),
@@ -1344,10 +1332,7 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
               icon: const Icon(Icons.add, size: 20),
               label: Text(
                 '새 시황 분석 작성',
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 14,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
               ),
             ),
           ),
@@ -1367,7 +1352,7 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
                 return Center(
                   child: Text(
                     '등록된 시황 분석이 없습니다',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: Theme.of(
                         context,
                       ).colorScheme.onSurface.withValues(alpha: 0.38),
@@ -1400,7 +1385,7 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
                             children: [
                               Text(
                                 a.title,
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   color: Theme.of(
                                     context,
                                   ).colorScheme.onSurface,
@@ -1412,7 +1397,7 @@ class _MarketAnalysisAdminTabState extends State<_MarketAnalysisAdminTab> {
                                 a.body,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   color: Theme.of(context).colorScheme.onSurface
                                       .withValues(alpha: 0.38),
                                   fontSize: 11,
@@ -1505,7 +1490,7 @@ class _PushNotificationTabState extends State<_PushNotificationTab> {
         children: [
           Text(
             '전체 유저에게 푸시 알림을 보냅니다',
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.5),
               fontSize: 13,
             ),
@@ -1513,7 +1498,7 @@ class _PushNotificationTabState extends State<_PushNotificationTab> {
           const SizedBox(height: 24),
           Text(
             '제목',
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface,
               fontWeight: FontWeight.w600,
               fontSize: 14,
@@ -1522,10 +1507,10 @@ class _PushNotificationTabState extends State<_PushNotificationTab> {
           const SizedBox(height: 8),
           TextField(
             controller: _titleController,
-            style: GoogleFonts.inter(color: cs.onSurface, fontSize: 14),
+            style: TextStyle(color: cs.onSurface, fontSize: 14),
             decoration: InputDecoration(
               hintText: '예) 📈 새 추천주 등록!',
-              hintStyle: GoogleFonts.inter(
+              hintStyle: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.3),
                 fontSize: 14,
               ),
@@ -1544,7 +1529,7 @@ class _PushNotificationTabState extends State<_PushNotificationTab> {
           const SizedBox(height: 16),
           Text(
             '내용',
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface,
               fontWeight: FontWeight.w600,
               fontSize: 14,
@@ -1553,11 +1538,11 @@ class _PushNotificationTabState extends State<_PushNotificationTab> {
           const SizedBox(height: 8),
           TextField(
             controller: _bodyController,
-            style: GoogleFonts.inter(color: cs.onSurface, fontSize: 14),
+            style: TextStyle(color: cs.onSurface, fontSize: 14),
             maxLines: 4,
             decoration: InputDecoration(
               hintText: '예) 지금 바로 확인해보세요!',
-              hintStyle: GoogleFonts.inter(
+              hintStyle: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.3),
                 fontSize: 14,
               ),
@@ -1601,10 +1586,7 @@ class _PushNotificationTabState extends State<_PushNotificationTab> {
                   : const Icon(Icons.send_rounded, size: 18),
               label: Text(
                 _sending ? '발송 중...' : '전체 발송',
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                ),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
               ),
             ),
           ),
@@ -1619,7 +1601,7 @@ class _PushNotificationTabState extends State<_PushNotificationTab> {
               ),
               child: Text(
                 _lastResult!,
-                style: GoogleFonts.inter(color: cs.onSurface, fontSize: 13),
+                style: TextStyle(color: cs.onSurface, fontSize: 13),
               ),
             ),
           ],
@@ -1746,10 +1728,7 @@ class _UsersTabState extends State<_UsersTab> {
     }
     if (_error != null && _users.isEmpty) {
       return Center(
-        child: Text(
-          '오류: $_error',
-          style: GoogleFonts.inter(color: cs.onSurface),
-        ),
+        child: Text('오류: $_error', style: TextStyle(color: cs.onSurface)),
       );
     }
 
@@ -1780,7 +1759,7 @@ class _UsersTabState extends State<_UsersTab> {
                       children: [
                         Text(
                           '전체 가입자',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.5),
                             fontSize: 12,
                           ),
@@ -1788,7 +1767,7 @@ class _UsersTabState extends State<_UsersTab> {
                         const SizedBox(height: 4),
                         Text(
                           '$_totalUsers명',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface,
                             fontWeight: FontWeight.w700,
                             fontSize: 22,
@@ -1807,7 +1786,7 @@ class _UsersTabState extends State<_UsersTab> {
                       children: [
                         Text(
                           '오늘 가입',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.5),
                             fontSize: 12,
                           ),
@@ -1815,7 +1794,7 @@ class _UsersTabState extends State<_UsersTab> {
                         const SizedBox(height: 4),
                         Text(
                           '+$_todayUsers명',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: const Color(0xFF10B981),
                             fontWeight: FontWeight.w700,
                             fontSize: 22,
@@ -1835,10 +1814,10 @@ class _UsersTabState extends State<_UsersTab> {
               child: TextField(
                 controller: _searchController,
                 onChanged: (v) => setState(() => _query = v),
-                style: GoogleFonts.inter(color: cs.onSurface, fontSize: 14),
+                style: TextStyle(color: cs.onSurface, fontSize: 14),
                 decoration: InputDecoration(
                   hintText: '닉네임 또는 UID 검색',
-                  hintStyle: GoogleFonts.inter(
+                  hintStyle: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.35),
                     fontSize: 13,
                   ),
@@ -1885,7 +1864,7 @@ class _UsersTabState extends State<_UsersTab> {
               child: Center(
                 child: Text(
                   '검색 결과가 없습니다',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.45),
                     fontSize: 13,
                   ),
@@ -1906,7 +1885,7 @@ class _UsersTabState extends State<_UsersTab> {
                       )
                     : Text(
                         '아래로 스크롤하면 다음 100명을 불러옵니다',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.45),
                           fontSize: 12,
                         ),
@@ -1944,7 +1923,7 @@ class _UsersTabState extends State<_UsersTab> {
                     children: [
                       Text(
                         nickname.isNotEmpty ? nickname : '(닉네임 없음)',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: cs.onSurface,
                           fontWeight: FontWeight.w600,
                           fontSize: 14,
@@ -1953,7 +1932,7 @@ class _UsersTabState extends State<_UsersTab> {
                       const SizedBox(height: 2),
                       Text(
                         uid,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.4),
                           fontSize: 11,
                         ),
@@ -1968,7 +1947,7 @@ class _UsersTabState extends State<_UsersTab> {
                   children: [
                     Text(
                       'Lv.$level · 글/일지 $postCount · 댓글 $commentCount',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: const Color(0xFF10B981),
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
@@ -1977,7 +1956,7 @@ class _UsersTabState extends State<_UsersTab> {
                     const SizedBox(height: 2),
                     Text(
                       '가입 $joinDate',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.5),
                         fontSize: 12,
                       ),
@@ -1985,7 +1964,7 @@ class _UsersTabState extends State<_UsersTab> {
                     const SizedBox(height: 2),
                     Text(
                       '최근 접속 $lastActiveText',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.5),
                         fontSize: 12,
                       ),
@@ -2048,7 +2027,7 @@ class _ReportsTabState extends State<_ReportsTab> {
       return Center(
         child: Text(
           '신고 내역이 없습니다',
-          style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.4)),
+          style: TextStyle(color: cs.onSurface.withValues(alpha: 0.4)),
         ),
       );
     }
@@ -2091,7 +2070,7 @@ class _ReportsTabState extends State<_ReportsTab> {
                       ),
                       child: Text(
                         typeLabel,
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: Colors.orangeAccent,
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -2101,7 +2080,7 @@ class _ReportsTabState extends State<_ReportsTab> {
                     const SizedBox(width: 8),
                     Text(
                       r['reason'] as String? ?? '',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface,
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -2123,21 +2102,21 @@ class _ReportsTabState extends State<_ReportsTab> {
                 const SizedBox(height: 6),
                 Text(
                   '신고자: ${r['reporterUid']}',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.4),
                     fontSize: 11,
                   ),
                 ),
                 Text(
                   '대상: ${r['targetUid']}',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.4),
                     fontSize: 11,
                   ),
                 ),
                 Text(
                   '컨텐츠 ID: ${r['contentId']}',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.4),
                     fontSize: 11,
                   ),
@@ -2145,7 +2124,7 @@ class _ReportsTabState extends State<_ReportsTab> {
                 if (createdAt != null)
                   Text(
                     DateFormat('yyyy.MM.dd HH:mm').format(createdAt),
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.3),
                       fontSize: 11,
                     ),

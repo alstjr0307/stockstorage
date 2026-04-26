@@ -8,7 +8,7 @@ class StockPick {
   final double targetPrice;
   final String reason;
   final String category; // 단기, 장기
-  final String market;   // KS(KOSPI), KQ(KOSDAQ), US(미국)
+  final String market; // KS(KOSPI), KQ(KOSDAQ), US(미국)
   final bool isPremium;
   final DateTime createdAt;
   final String? imageUrl;
@@ -87,7 +87,8 @@ class StockPick {
       'status': status,
       if (closedPrice != null) 'closedPrice': closedPrice,
       if (closedAt != null) 'closedAt': Timestamp.fromDate(closedAt!),
-      if (earningsDate != null) 'earningsDate': Timestamp.fromDate(earningsDate!),
+      if (earningsDate != null)
+        'earningsDate': Timestamp.fromDate(earningsDate!),
     };
   }
 }

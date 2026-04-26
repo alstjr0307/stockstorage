@@ -7,7 +7,6 @@ import 'package:flutter/rendering.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:stockstorage/screens/chart_visible_range.dart';
@@ -238,10 +237,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            '메모가 저장되었습니다',
-            style: GoogleFonts.inter(color: Colors.white),
-          ),
+          content: Text('메모가 저장되었습니다', style: TextStyle(color: Colors.white)),
           backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.9),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -491,10 +487,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           ),
           title: Text(
             pick.ticker,
-            style: GoogleFonts.robotoMono(
-              color: cs.onSurface,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700),
           ),
           actions: [
             GestureDetector(
@@ -528,7 +521,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                     const SizedBox(width: 4),
                     Text(
                       '종목비교',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: const Color(0xFF10B981),
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
@@ -584,7 +577,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                             children: [
                               Text(
                                 pick.name,
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   color: cs.onSurface,
                                   fontSize: 22,
                                   fontWeight: FontWeight.w700,
@@ -599,7 +592,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                     DateFormat(
                                       'yyyy.MM.dd',
                                     ).format(pick.createdAt),
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: cs.onSurface.withValues(
                                         alpha: 0.38,
                                       ),
@@ -640,7 +633,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                             children: [
                               Text(
                                 hasClosedPrice ? '종료 수익률' : '매수가 대비',
-                                style: GoogleFonts.inter(
+                                style: TextStyle(
                                   color: isPositive
                                       ? const Color(
                                           0xFFF04452,
@@ -655,7 +648,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                               const SizedBox(height: 2),
                               Text(
                                 '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
-                                style: GoogleFonts.robotoMono(
+                                style: TextStyle(
                                   color: isPositive
                                       ? const Color(0xFFF04452)
                                       : const Color(0xFF1677FF),
@@ -699,11 +692,11 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                       color: isDark ? Colors.white : cs.onSurface,
                       borderRadius: BorderRadius.circular(9999),
                     ),
-                    labelStyle: GoogleFonts.inter(
+                    labelStyle: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
-                    unselectedLabelStyle: GoogleFonts.inter(
+                    unselectedLabelStyle: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                     ),
@@ -767,7 +760,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                   children: [
                                                     Text(
                                                       pick.name,
-                                                      style: GoogleFonts.inter(
+                                                      style: TextStyle(
                                                         color: cs.onSurface,
                                                         fontSize: 20,
                                                         fontWeight:
@@ -789,16 +782,13 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                           ).format(
                                                             pick.createdAt,
                                                           ),
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                                color: cs
-                                                                    .onSurface
-                                                                    .withValues(
-                                                                      alpha:
-                                                                          0.38,
-                                                                    ),
-                                                                fontSize: 11,
-                                                              ),
+                                                          style: TextStyle(
+                                                            color: cs.onSurface
+                                                                .withValues(
+                                                                  alpha: 0.38,
+                                                                ),
+                                                            fontSize: 11,
+                                                          ),
                                                         ),
                                                       ],
                                                     ),
@@ -834,7 +824,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                 ),
                                                 child: Text(
                                                   '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
-                                                  style: GoogleFonts.inter(
+                                                  style: TextStyle(
                                                     color: isPositive
                                                         ? _kUpColor
                                                         : _kDownColor,
@@ -928,18 +918,16 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                           ),
                                                     hasClosedPrice
                                                         ? (_livePrice != null
-                                                              ? (((_livePrice!
-                                                                              .price -
-                                                                          pick.buyPrice) /
-                                                                      pick
-                                                                          .buyPrice) >=
-                                                                  0
-                                                                  ? const Color(
-                                                                      0xFFF04452,
-                                                                    )
-                                                                  : const Color(
-                                                                      0xFF1677FF,
-                                                                    ))
+                                                              ? (((_livePrice!.price -
+                                                                                pick.buyPrice) /
+                                                                            pick.buyPrice) >=
+                                                                        0
+                                                                    ? const Color(
+                                                                        0xFFF04452,
+                                                                      )
+                                                                    : const Color(
+                                                                        0xFF1677FF,
+                                                                      ))
                                                               : cs.onSurface
                                                                     .withValues(
                                                                       alpha:
@@ -978,7 +966,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                         // 매수 근거
                                         Text(
                                           '매수 근거',
-                                          style: GoogleFonts.inter(
+                                          style: TextStyle(
                                             color: cs.onSurface.withValues(
                                               alpha: 0.5,
                                             ),
@@ -990,7 +978,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                         const SizedBox(height: 8),
                                         Text(
                                           pick.reason,
-                                          style: GoogleFonts.inter(
+                                          style: TextStyle(
                                             color: cs.onSurface,
                                             fontSize: 14,
                                             height: 1.8,
@@ -1005,7 +993,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                 children: [
                                                   TextSpan(
                                                     text: '주식저장소',
-                                                    style: GoogleFonts.inter(
+                                                    style: TextStyle(
                                                       color: const Color(
                                                         0xFF10B981,
                                                       ),
@@ -1016,7 +1004,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                   ),
                                                   TextSpan(
                                                     text: ' 앱에서 확인하세요 📈',
-                                                    style: GoogleFonts.inter(
+                                                    style: TextStyle(
                                                       color: cs.onSurface
                                                           .withValues(
                                                             alpha: 0.4,
@@ -1037,7 +1025,9 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                 const SizedBox(height: 10),
                                 Center(
                                   child: TextButton.icon(
-                                    onPressed: _capturing ? null : _captureAndShare,
+                                    onPressed: _capturing
+                                        ? null
+                                        : _captureAndShare,
                                     icon: _capturing
                                         ? const SizedBox(
                                             width: 14,
@@ -1050,12 +1040,16 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                         : Icon(
                                             Icons.camera_alt_outlined,
                                             size: 16,
-                                            color: cs.onSurface.withValues(alpha: 0.4),
+                                            color: cs.onSurface.withValues(
+                                              alpha: 0.4,
+                                            ),
                                           ),
                                     label: Text(
                                       _capturing ? '캡처 중...' : '캡처해서 공유하기',
-                                      style: GoogleFonts.inter(
-                                        color: cs.onSurface.withValues(alpha: 0.4),
+                                      style: TextStyle(
+                                        color: cs.onSurface.withValues(
+                                          alpha: 0.4,
+                                        ),
                                         fontWeight: FontWeight.w500,
                                         fontSize: 13,
                                       ),
@@ -1103,7 +1097,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                         : Center(
                             child: Text(
                               '한국 주식에서만 제공됩니다',
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: cs.onSurface.withValues(alpha: 0.3),
                               ),
                             ),
@@ -1163,10 +1157,8 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                     if (hasData) ...[
                       Text(
                         '$sign${changePct.toStringAsFixed(2)}%',
-                        style: GoogleFonts.inter(
-                          color: changePct >= 0
-                              ? _kUpColor
-                              : _kDownColor,
+                        style: TextStyle(
+                          color: changePct >= 0 ? _kUpColor : _kDownColor,
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                         ),
@@ -1271,23 +1263,15 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                   : _selectedPeriod == _Period.month
                                   ? DateFormat('yyyy년 MM월').format(touched.date)
                                   : DateFormat('MM월 dd일').format(touched.date),
-                              style: GoogleFonts.inter(
+                              style: TextStyle(
                                 color: cs.onSurface.withValues(alpha: 0.54),
                                 fontSize: 10,
                               ),
                             ),
                             const SizedBox(width: 12),
                             _ohlcLabel('시', touched.open),
-                            _ohlcLabel(
-                              '고',
-                              touched.high,
-                              color: _kUpColor,
-                            ),
-                            _ohlcLabel(
-                              '저',
-                              touched.low,
-                              color: _kDownColor,
-                            ),
+                            _ohlcLabel('고', touched.high, color: _kUpColor),
+                            _ohlcLabel('저', touched.low, color: _kDownColor),
                             _ohlcLabel(
                               '종',
                               touched.close,
@@ -1363,7 +1347,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         ),
         child: Text(
           label,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: active
                 ? const Color(0xFF10B981)
                 : cs.onSurface.withValues(alpha: 0.38),
@@ -1384,14 +1368,14 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           children: [
             TextSpan(
               text: '$label ',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.38),
                 fontSize: 10,
               ),
             ),
             TextSpan(
               text: _formatPrice(value, widget.pick.market),
-              style: GoogleFonts.robotoMono(
+              style: TextStyle(
                 color: color ?? cs.onSurface.withValues(alpha: 0.7),
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
@@ -1420,7 +1404,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           const SizedBox(width: 10),
           Text(
             '현재가',
-            style: GoogleFonts.inter(
+            style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.38),
               fontSize: 12,
             ),
@@ -1436,7 +1420,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                         hasLivePrice
                             ? _livePrice!.formattedPrice
                             : _formatPrice(pick.closedPrice!, pick.market),
-                        style: GoogleFonts.robotoMono(
+                        style: TextStyle(
                           color: cs.onSurface,
                           fontWeight: FontWeight.w700,
                           fontSize: 18,
@@ -1446,7 +1430,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                         hasLivePrice
                             ? _livePrice!.formattedChange
                             : '${isClosedPositive ? '+' : ''}${closedReturnRate.toStringAsFixed(2)}%',
-                        style: GoogleFonts.robotoMono(
+                        style: TextStyle(
                           color: hasLivePrice
                               ? (_livePrice!.isUp
                                     ? const Color(0xFFF04452)
@@ -1472,7 +1456,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                 : _livePrice == null
                 ? Text(
                     '조회 불가',
-                    style: GoogleFonts.inter(
+                    style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.24),
                       fontSize: 13,
                     ),
@@ -1483,7 +1467,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                     children: [
                       Text(
                         _livePrice!.formattedPrice,
-                        style: GoogleFonts.robotoMono(
+                        style: TextStyle(
                           color: cs.onSurface,
                           fontWeight: FontWeight.w700,
                           fontSize: 18,
@@ -1491,7 +1475,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                       ),
                       Text(
                         _livePrice!.formattedChange,
-                        style: GoogleFonts.robotoMono(
+                        style: TextStyle(
                           color: _livePrice!.isUp
                               ? const Color(0xFFF04452)
                               : const Color(0xFF1677FF),
@@ -1528,14 +1512,14 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       children: [
         Text(
           '$label ',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.35),
             fontSize: 11,
           ),
         ),
         Text(
           value,
-          style: GoogleFonts.robotoMono(
+          style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.75),
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -1560,7 +1544,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       ),
       child: Text(
         info.$1,
-        style: GoogleFonts.inter(
+        style: TextStyle(
           color: info.$2,
           fontSize: 10,
           fontWeight: FontWeight.w600,
@@ -1586,7 +1570,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.38),
             fontSize: 11,
           ),
@@ -1594,7 +1578,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         const SizedBox(height: 6),
         Text(
           value,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: color,
             fontWeight: FontWeight.w700,
             fontSize: 15,
@@ -1635,21 +1619,21 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           children: [
             Text(
               '매수가',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.3),
                 fontSize: 10,
               ),
             ),
             Text(
               '목표까지 ${((1 - progress) * 100).toStringAsFixed(1)}% 남음',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.4),
                 fontSize: 10,
               ),
             ),
             Text(
               '목표가',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.3),
                 fontSize: 10,
               ),
@@ -1664,7 +1648,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     final cs = Theme.of(context).colorScheme;
     return Text(
       text,
-      style: GoogleFonts.inter(
+      style: TextStyle(
         color: cs.onSurface.withValues(alpha: 0.54),
         fontSize: 12,
         fontWeight: FontWeight.w600,
@@ -1694,7 +1678,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
             if (total > 0)
               Text(
                 '$total명 참여',
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.3),
                   fontSize: 11,
                 ),
@@ -1759,7 +1743,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                       const SizedBox(width: 5),
                       Text(
                         '상승  $upCount',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: isUp
                               ? const Color(0xFF10B981)
                               : cs.onSurface.withValues(alpha: 0.6),
@@ -1805,7 +1789,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                       const SizedBox(width: 5),
                       Text(
                         '하락  $downCount',
-                        style: GoogleFonts.inter(
+                        style: TextStyle(
                           color: isDown
                               ? const Color(0xFF1677FF)
                               : cs.onSurface.withValues(alpha: 0.6),
@@ -1825,7 +1809,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
             padding: const EdgeInsets.only(top: 6),
             child: Text(
               '로그인 후 투표할 수 있습니다',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.3),
                 fontSize: 11,
               ),
@@ -2075,7 +2059,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
             children: [
               TextField(
                 controller: _memoController,
-                style: GoogleFonts.inter(
+                style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.7),
                   fontSize: 14,
                   height: 1.7,
@@ -2088,7 +2072,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                 },
                 decoration: InputDecoration(
                   hintText: '이 종목에 대한 나만의 메모를 남겨보세요\n(매수 이유, 목표, 주의사항 등)',
-                  hintStyle: GoogleFonts.inter(
+                  hintStyle: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.24),
                     fontSize: 13,
                     height: 1.6,
@@ -2128,9 +2112,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                             )
                           : Text(
                               '저장',
-                              style: GoogleFonts.inter(
-                                fontWeight: FontWeight.w700,
-                              ),
+                              style: TextStyle(fontWeight: FontWeight.w700),
                             ),
                     ),
                   ),
@@ -2179,7 +2161,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                     const SizedBox(width: 6),
                     Text(
                       '${comments.length}',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.38),
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -2193,7 +2175,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Text(
                       '첫 번째 코멘트를 남겨보세요',
-                      style: GoogleFonts.inter(
+                      style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.24),
                         fontSize: 13,
                       ),
@@ -2228,7 +2210,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                     uid: comment.uid,
                     radius: 18,
                     backgroundColor: cs.onSurface.withValues(alpha: 0.07),
-                    textStyle: GoogleFonts.inter(
+                    textStyle: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.55),
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -2241,7 +2223,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                       children: [
                         Text(
                           comment.nickname,
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface,
                             fontSize: 13,
                             fontWeight: FontWeight.w700,
@@ -2249,7 +2231,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                         ),
                         Text(
                           timeago.format(comment.createdAt, locale: 'ko'),
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.3),
                             fontSize: 11,
                           ),
@@ -2268,19 +2250,22 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                               final confirm = await showDialog<bool>(
                                 context: context,
                                 builder: (ctx) => AlertDialog(
-                                  backgroundColor:
-                                      Theme.of(context).colorScheme.surface,
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.surface,
                                   title: Text(
                                     '댓글 삭제',
-                                    style: GoogleFonts.inter(
+                                    style: TextStyle(
                                       color: cs.onSurface,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                   content: Text(
                                     '이 댓글을 삭제하시겠습니까?',
-                                    style: GoogleFonts.inter(
-                                      color: cs.onSurface.withValues(alpha: 0.7),
+                                    style: TextStyle(
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.7,
+                                      ),
                                     ),
                                   ),
                                   actions: [
@@ -2289,18 +2274,18 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                           Navigator.pop(ctx, false),
                                       child: Text(
                                         '취소',
-                                        style: GoogleFonts.inter(
-                                          color: cs.onSurface
-                                              .withValues(alpha: 0.54),
+                                        style: TextStyle(
+                                          color: cs.onSurface.withValues(
+                                            alpha: 0.54,
+                                          ),
                                         ),
                                       ),
                                     ),
                                     TextButton(
-                                      onPressed: () =>
-                                          Navigator.pop(ctx, true),
+                                      onPressed: () => Navigator.pop(ctx, true),
                                       child: Text(
                                         '삭제',
-                                        style: GoogleFonts.inter(
+                                        style: TextStyle(
                                           color: Colors.redAccent,
                                           fontWeight: FontWeight.w700,
                                         ),
@@ -2320,8 +2305,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                               );
                               if (mounted) {
                                 setState(
-                                  () =>
-                                      _deletingCommentIds.remove(comment.id),
+                                  () => _deletingCommentIds.remove(comment.id),
                                 );
                               }
                             },
@@ -2346,7 +2330,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                 padding: const EdgeInsets.only(left: 46, top: 8),
                 child: Text(
                   comment.content,
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.85),
                     fontSize: 14,
                     height: 1.55,
@@ -2375,7 +2359,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         color: Theme.of(context).scaffoldBackgroundColor,
         child: Text(
           '로그인 후 코멘트를 남길 수 있습니다',
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.24),
             fontSize: 13,
           ),
@@ -2406,13 +2390,13 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           Expanded(
             child: TextField(
               controller: _commentController,
-              style: GoogleFonts.inter(color: cs.onSurface, fontSize: 14),
+              style: TextStyle(color: cs.onSurface, fontSize: 14),
               maxLines: null,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _submitComment(user),
               decoration: InputDecoration(
                 hintText: '코멘트를 입력하세요...',
-                hintStyle: GoogleFonts.inter(
+                hintStyle: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.24),
                   fontSize: 14,
                 ),
@@ -2920,7 +2904,7 @@ class _FullscreenCandleChartPageState
                               children: [
                                 Text(
                                   _formatDate(touched.date),
-                                  style: GoogleFonts.inter(
+                                  style: TextStyle(
                                     color: cs.onSurface.withValues(alpha: 0.54),
                                     fontSize: 11,
                                   ),
@@ -3079,7 +3063,7 @@ class _FullscreenCandleChartPageState
         ),
         child: Text(
           label,
-          style: GoogleFonts.inter(
+          style: TextStyle(
             color: active ? Colors.black : cs.onSurface.withValues(alpha: 0.6),
             fontSize: 12,
             fontWeight: active ? FontWeight.w700 : FontWeight.w500,
@@ -3102,14 +3086,14 @@ class _FullscreenCandleChartPageState
           children: [
             TextSpan(
               text: '$label ',
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.38),
                 fontSize: 10,
               ),
             ),
             TextSpan(
               text: widget.formatValue(value),
-              style: GoogleFonts.inter(
+              style: TextStyle(
                 color: color ?? cs.onSurface.withValues(alpha: 0.87),
                 fontSize: 10,
                 fontWeight: FontWeight.w600,

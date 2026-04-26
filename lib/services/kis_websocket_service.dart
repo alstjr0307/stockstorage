@@ -28,17 +28,19 @@ class KisWebSocketService {
       Uri.parse('ws://ops.koreainvestment.com:31000'),
     );
 
-    _channel!.sink.add(jsonEncode({
-      'header': {
-        'approval_key': approvalKey,
-        'custtype': 'P',
-        'tr_type': '1',
-        'content-type': 'utf-8',
-      },
-      'body': {
-        'input': {'tr_id': 'H0UPANC0', 'tr_key': symbol},
-      },
-    }));
+    _channel!.sink.add(
+      jsonEncode({
+        'header': {
+          'approval_key': approvalKey,
+          'custtype': 'P',
+          'tr_type': '1',
+          'content-type': 'utf-8',
+        },
+        'body': {
+          'input': {'tr_id': 'H0UPANC0', 'tr_key': symbol},
+        },
+      }),
+    );
 
     _sub = _channel!.stream.listen(
       (raw) => _handleMessage(raw.toString()),
@@ -69,12 +71,14 @@ class KisWebSocketService {
     final changeRate = double.tryParse(fields[5]);
     if (price == null || price <= 0) return;
 
-    _controller.add(NightFuturesTick(
-      time: DateTime.now(),
-      price: price,
-      change: change ?? 0,
-      changeRate: changeRate ?? 0,
-    ));
+    _controller.add(
+      NightFuturesTick(
+        time: DateTime.now(),
+        price: price,
+        change: change ?? 0,
+        changeRate: changeRate ?? 0,
+      ),
+    );
   }
 
   void dispose() {

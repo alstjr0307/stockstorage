@@ -57,7 +57,10 @@ class FmkoreaStockMentionsSnapshot {
       uniqueStockCount: (data['uniqueStockCount'] as num?)?.toInt() ?? 0,
       topMentions: mentionsRaw
           .whereType<Map>()
-          .map((item) => FmkoreaStockMention.fromMap(Map<String, dynamic>.from(item)))
+          .map(
+            (item) =>
+                FmkoreaStockMention.fromMap(Map<String, dynamic>.from(item)),
+          )
           .toList(),
       mode: data['mode'] as String? ?? '',
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),

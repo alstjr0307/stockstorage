@@ -1,5 +1,4 @@
-﻿import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/firestore_service.dart';
@@ -52,7 +51,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 20),
                 Text(
                   _isLogin ? '로그인' : '회원가입',
-                  style: GoogleFonts.inter(
+                  style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
@@ -61,17 +60,23 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 8),
                 Text(
                   '추천주 상세 정보를 확인하세요',
-                  style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38), fontSize: 14),
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.38),
+                    fontSize: 14,
+                  ),
                 ),
                 const SizedBox(height: 40),
                 _buildField('이메일', _emailController, hint: 'email@example.com'),
                 const SizedBox(height: 14),
-                _buildField('비밀번호', _passwordController,
-                    hint: '••••••••', isPassword: true),
+                _buildField(
+                  '비밀번호',
+                  _passwordController,
+                  hint: '••••••••',
+                  isPassword: true,
+                ),
                 if (!_isLogin) ...[
                   const SizedBox(height: 14),
-                  _buildField('닉네임', _nicknameController,
-                      hint: '댓글에 표시될 닉네임'),
+                  _buildField('닉네임', _nicknameController, hint: '댓글에 표시될 닉네임'),
                 ],
                 const SizedBox(height: 30),
                 SizedBox(
@@ -90,7 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ? const CircularProgressIndicator(color: Colors.black)
                         : Text(
                             _isLogin ? '로그인' : '회원가입',
-                            style: GoogleFonts.inter(
+                            style: TextStyle(
                               fontWeight: FontWeight.w700,
                               fontSize: 16,
                             ),
@@ -100,14 +105,26 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    Expanded(child: Divider(color: cs.onSurface.withValues(alpha: 0.12))),
+                    Expanded(
+                      child: Divider(
+                        color: cs.onSurface.withValues(alpha: 0.12),
+                      ),
+                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('또는',
-                          style: GoogleFonts.inter(
-                              color: cs.onSurface.withValues(alpha: 0.24), fontSize: 12)),
+                      child: Text(
+                        '또는',
+                        style: TextStyle(
+                          color: cs.onSurface.withValues(alpha: 0.24),
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
-                    Expanded(child: Divider(color: cs.onSurface.withValues(alpha: 0.12))),
+                    Expanded(
+                      child: Divider(
+                        color: cs.onSurface.withValues(alpha: 0.12),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -120,7 +137,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       backgroundColor: Colors.white,
                       side: const BorderSide(color: Color(0xFFDADCE0)),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                     ),
                     onPressed: _isLoading ? null : _signInWithGoogle,
@@ -132,7 +150,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(width: 12),
                         Text(
                           'Google로 로그인',
-                          style: GoogleFonts.roboto(
+                          style: TextStyle(
                             color: const Color(0xFF3C4043),
                             fontWeight: FontWeight.w500,
                             fontSize: 15,
@@ -152,7 +170,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       backgroundColor: const Color(0xFFFEE500),
                       foregroundColor: const Color(0xFF191919),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                     ),
@@ -165,7 +184,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(width: 8),
                         Text(
                           '카카오로 로그인',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: const Color(0xFF191919),
                             fontWeight: FontWeight.w600,
                             fontSize: 15,
@@ -185,7 +204,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       backgroundColor: Colors.black,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                     ),
@@ -197,7 +217,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(width: 8),
                         Text(
                           'Apple로 로그인',
-                          style: GoogleFonts.inter(
+                          style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.w600,
                             fontSize: 15,
@@ -216,7 +236,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     }),
                     child: Text(
                       _isLogin ? '계정이 없으신가요? 회원가입' : '이미 계정이 있으신가요? 로그인',
-                      style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.38)),
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.38),
+                      ),
                     ),
                   ),
                 ),
@@ -238,16 +260,21 @@ class _LoginScreenState extends State<LoginScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.54), fontSize: 12)),
+        Text(
+          label,
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.54),
+            fontSize: 12,
+          ),
+        ),
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
           obscureText: isPassword,
-          style: GoogleFonts.inter(color: cs.onSurface),
+          style: TextStyle(color: cs.onSurface),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.inter(color: cs.onSurface.withValues(alpha: 0.24)),
+            hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.24)),
             filled: true,
             fillColor: const Color(0xFF1A2035),
             border: OutlineInputBorder(
@@ -256,11 +283,15 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  const BorderSide(color: Color(0xFF10B981), width: 1.5),
+              borderSide: const BorderSide(
+                color: Color(0xFF10B981),
+                width: 1.5,
+              ),
             ),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
           ),
           validator: (val) =>
               val == null || val.isEmpty ? '$label을 입력하세요' : null,
@@ -285,8 +316,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(e.toString()),
-              backgroundColor: Colors.redAccent),
+            content: Text(e.toString()),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     } finally {
@@ -308,7 +340,10 @@ class _LoginScreenState extends State<LoginScreen> {
     } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.redAccent),
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     } finally {
@@ -331,8 +366,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(e.toString()),
-              backgroundColor: Colors.redAccent),
+            content: Text(e.toString()),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     } finally {
@@ -347,14 +383,20 @@ class _LoginScreenState extends State<LoginScreen> {
       final auth = context.read<AuthProvider>();
       if (_isLogin) {
         await auth.signIn(
-            _emailController.text.trim(), _passwordController.text);
+          _emailController.text.trim(),
+          _passwordController.text,
+        );
       } else {
         final user = await auth.signUp(
-            _emailController.text.trim(), _passwordController.text);
+          _emailController.text.trim(),
+          _passwordController.text,
+        );
         if (user != null) {
           final nickname = _nicknameController.text.trim();
           await _firestoreService.setNickname(
-              user.uid, nickname.isEmpty ? '익명' : nickname);
+            user.uid,
+            nickname.isEmpty ? '익명' : nickname,
+          );
         }
       }
       if (mounted) Navigator.pop(context);
@@ -362,8 +404,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(e.toString()),
-              backgroundColor: Colors.redAccent),
+            content: Text(e.toString()),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     } finally {
@@ -381,42 +424,59 @@ class _LoginScreenState extends State<LoginScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           '닉네임 설정',
-          style: GoogleFonts.inter(
-              color: Theme.of(context).colorScheme.onSurface, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-            Text(
-              '댓글에 표시될 닉네임을 입력하세요.',
-              style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.54), fontSize: 13),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: controller,
-              autofocus: true,
-              style: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface),
-              decoration: InputDecoration(
-                hintText: '닉네임',
-                hintStyle: GoogleFonts.inter(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.24)),
-                filled: true,
-                fillColor: const Color(0xFF0A0E1A),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide.none,
+              Text(
+                '댓글에 표시될 닉네임을 입력하세요.',
+                style: TextStyle(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.54),
+                  fontSize: 13,
                 ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(
-                      color: Color(0xFF10B981), width: 1.5),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 12),
               ),
-            ),
-          ],
+              const SizedBox(height: 14),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                decoration: InputDecoration(
+                  hintText: '닉네임',
+                  hintStyle: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.24),
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFF0A0E1A),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF10B981),
+                      width: 1.5,
+                    ),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         actions: [
@@ -424,14 +484,17 @@ class _LoginScreenState extends State<LoginScreen> {
             onPressed: () async {
               final nickname = controller.text.trim();
               await _firestoreService.setNickname(
-                  uid, nickname.isEmpty ? '익명' : nickname);
+                uid,
+                nickname.isEmpty ? '익명' : nickname,
+              );
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: Text(
               '확인',
-              style: GoogleFonts.inter(
-                  color: const Color(0xFF10B981),
-                  fontWeight: FontWeight.w700),
+              style: TextStyle(
+                color: const Color(0xFF10B981),
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -512,7 +575,10 @@ class _KakaoLogoPainter extends CustomPainter {
 
     // 말풍선 타원
     final paint = Paint()..color = const Color(0xFF191919);
-    canvas.drawOval(Rect.fromCenter(center: Offset(cx, cy), width: rx * 2, height: ry * 2), paint);
+    canvas.drawOval(
+      Rect.fromCenter(center: Offset(cx, cy), width: rx * 2, height: ry * 2),
+      paint,
+    );
 
     // 말풍선 꼬리
     final path = Path()
@@ -534,5 +600,3 @@ class _KakaoLogoPainter extends CustomPainter {
   @override
   bool shouldRepaint(_) => false;
 }
-
-

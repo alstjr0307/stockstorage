@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/material.dart';
@@ -40,15 +40,13 @@ class DeepLinkService {
     if (ctx == null) return;
 
     if (pick == null) {
-      ScaffoldMessenger.of(ctx).showSnackBar(
-        const SnackBar(content: Text('종목을 찾을 수 없습니다.')),
-      );
+      ScaffoldMessenger.of(
+        ctx,
+      ).showSnackBar(const SnackBar(content: Text('종목을 찾을 수 없습니다.')));
       return;
     }
 
-    navigatorKey.currentState?.push(
-      stockDetailRoute(pick),
-    );
+    navigatorKey.currentState?.push(stockDetailRoute(pick));
   }
 
   static Future<void> _navigateToAnalysis(String analysisId) async {
@@ -57,9 +55,9 @@ class DeepLinkService {
     if (ctx == null) return;
 
     if (analysis == null) {
-      ScaffoldMessenger.of(ctx).showSnackBar(
-        const SnackBar(content: Text('시황 분석을 찾을 수 없습니다.')),
-      );
+      ScaffoldMessenger.of(
+        ctx,
+      ).showSnackBar(const SnackBar(content: Text('시황 분석을 찾을 수 없습니다.')));
       return;
     }
 
@@ -75,4 +73,3 @@ class DeepLinkService {
   static String analysisUrl(MarketAnalysis a) =>
       'https://$_host/analysis/${a.id}';
 }
-
