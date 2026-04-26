@@ -296,6 +296,21 @@
         <label>내용</label>
         <textarea id="an-body" placeholder="시황 분석 내용을 입력하세요..." style="min-height:200px;"></textarea>
       </div>
+      <div>
+        <label>이미지 첨부 (최대 5장)</label>
+        <div id="an-img-drop" style="
+          border: 2px dashed #2a3550; border-radius: 10px; padding: 20px;
+          text-align: center; cursor: pointer; color: #555; font-size: 13px;
+          transition: border-color 0.2s;
+        " onclick="document.getElementById('an-img-input').click()"
+           ondragover="event.preventDefault();this.style.borderColor='#4ADE80'"
+           ondragleave="this.style.borderColor='#2a3550'"
+           ondrop="handleImgDrop(event)">
+          클릭하거나 이미지를 드래그해서 추가하세요
+        </div>
+        <input type="file" id="an-img-input" accept="image/*" multiple style="display:none" onchange="handleImgSelect(this.files)" />
+        <div id="an-img-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>
+      </div>
       <button class="submit-btn" id="an-btn" onclick="addAnalysis()">시황 분석 등록</button>
       <div id="an-msg" class="msg"></div>
     </div>
@@ -331,6 +346,7 @@
     <div class="modal-body">
       <div id="an-detail-title"></div>
       <div id="an-detail-date"></div>
+      <div id="an-detail-images" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;"></div>
       <div id="an-detail-body"></div>
     </div>
     <div class="modal-btns" style="margin-top:16px;">
@@ -362,6 +378,8 @@
   import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc,
     serverTimestamp, query, orderBy, Timestamp }
     from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+  import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject }
+    from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
   const firebaseConfig = {
     apiKey: 'AIzaSyDIp4yXMzaYXj_XKv8UBrck6fzar4a0TgQ',
@@ -375,6 +393,7 @@
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
+  const storage = getStorage(app);
   const functions = getFunctions(app, 'asia-northeast3');
 
   Kakao.init('b191753c48f2905ad615405358d53eba');
@@ -606,6 +625,63 @@
     } catch(e) { alert('오류: ' + e.message); }
   };
 
+  // 이미지 선택 관리
+  let anImgFiles = [];
+  const MAX_IMGS = 5;
+
+  window.handleImgSelect = (files) => {
+    const newFiles = Array.from(files);
+    for (const f of newFiles) {
+      if (anImgFiles.length >= MAX_IMGS) break;
+      if (!anImgFiles.find(x => x.name === f.name && x.size === f.size)) {
+        anImgFiles.push(f);
+      }
+    }
+    renderImgPreviews();
+    document.getElementById('an-img-input').value = '';
+  };
+
+  window.handleImgDrop = (e) => {
+    e.preventDefault();
+    document.getElementById('an-img-drop').style.borderColor = '#2a3550';
+    handleImgSelect(e.dataTransfer.files);
+  };
+
+  window.removeImgPreview = (idx) => {
+    anImgFiles.splice(idx, 1);
+    renderImgPreviews();
+  };
+
+  function renderImgPreviews() {
+    const container = document.getElementById('an-img-preview');
+    container.innerHTML = anImgFiles.map((f, i) => {
+      const url = URL.createObjectURL(f);
+      return `
+        <div style="position:relative;width:80px;height:80px;flex-shrink:0;">
+          <img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #2a3550;" />
+          <button onclick="removeImgPreview(${i})" style="
+            position:absolute;top:-6px;right:-6px;width:20px;height:20px;
+            background:#f87171;border:none;border-radius:50%;color:#fff;
+            font-size:12px;cursor:pointer;line-height:20px;padding:0;
+          ">✕</button>
+        </div>`;
+    }).join('');
+    const drop = document.getElementById('an-img-drop');
+    drop.style.display = anImgFiles.length >= MAX_IMGS ? 'none' : 'block';
+  }
+
+  async function uploadAnalysisImages(files) {
+    const urls = [];
+    for (const f of files) {
+      const path = `market_analyses/${Date.now()}_${f.name}`;
+      const storageRef = ref(storage, path);
+      await uploadBytes(storageRef, f);
+      const url = await getDownloadURL(storageRef);
+      urls.push(url);
+    }
+    return urls;
+  }
+
   // 시황 분석 등록
   window.addAnalysis = async () => {
     const btn = document.getElementById('an-btn');
@@ -613,12 +689,20 @@
     const title = document.getElementById('an-title').value.trim();
     const body = document.getElementById('an-body').value.trim();
     if (!title || !body) { showMsg(msg, 'error', '제목과 내용을 입력하세요.'); return; }
-    btn.disabled = true; btn.textContent = '등록 중...';
+    btn.disabled = true;
+    btn.textContent = anImgFiles.length > 0 ? '이미지 업로드 중...' : '등록 중...';
     try {
-      await addDoc(collection(db, 'market_analyses'), { title, body, createdAt: serverTimestamp() });
+      const imageUrls = anImgFiles.length > 0 ? await uploadAnalysisImages(anImgFiles) : [];
+      btn.textContent = '등록 중...';
+      await addDoc(collection(db, 'market_analyses'), {
+        title, body, imageUrls, createdAt: serverTimestamp(),
+      });
       showMsg(msg, 'success', '✓ 시황 분석이 등록되었습니다.');
       document.getElementById('an-title').value = '';
       document.getElementById('an-body').value = '';
+      anImgFiles = [];
+      renderImgPreviews();
+      document.getElementById('an-img-drop').style.display = 'block';
       loadAnalyses();
     } catch(e) { showMsg(msg, 'error', '오류: ' + e.message); }
     btn.disabled = false; btn.textContent = '시황 분석 등록';
@@ -670,6 +754,13 @@
       document.getElementById('an-detail-title').textContent = data.title;
       document.getElementById('an-detail-date').textContent = data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString('ko-KR') : '';
       document.getElementById('an-detail-body').textContent = data.body;
+      const imgs = data.imageUrls || [];
+      const imgsEl = document.getElementById('an-detail-images');
+      imgsEl.style.display = imgs.length ? 'flex' : 'none';
+      imgsEl.innerHTML = imgs.map(url => `
+        <a href="${url}" target="_blank" style="flex-shrink:0;">
+          <img src="${url}" style="height:120px;max-width:180px;object-fit:cover;border-radius:8px;border:1px solid #2a3550;cursor:pointer;" />
+        </a>`).join('');
     } catch(e) {
       document.getElementById('an-detail-title').textContent = '오류: ' + e.message;
     }
