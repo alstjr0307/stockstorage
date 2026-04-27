@@ -34,16 +34,16 @@ exports.runDailyInvestorFlowNow = onCall(
   }
 );
 
-// ?�?� ?�규 가?�자 ??관리자?�게 ?�림 ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+// ── 신규 가입자 → 관리자에게 알림 ────────────────────────────────────────────
 exports.notifyAdminOnNewUser = auth.user().onCreate(async (user) => {
   const db = getFirestore();
 
-  // config/admin 문서?�서 관리자 UID 조회
+  // config/admin 문서에서 관리자 UID 조회
   const adminSnap = await db.collection('config').doc('admin').get();
   const adminUid = adminSnap.data()?.uid;
   if (!adminUid) return;
 
-  // 관리자 FCM ?�큰 조회
+  // 관리자 FCM 토큰 조회
   const tokensSnap = await db.collection('fcm_tokens')
     .where('uid', '==', adminUid).get();
   const tokens = tokensSnap.docs
@@ -51,7 +51,7 @@ exports.notifyAdminOnNewUser = auth.user().onCreate(async (user) => {
     .filter((t) => typeof t === 'string' && t.length > 0);
   if (tokens.length === 0) return;
 
-  const displayName = user.displayName || user.email || '?????�음';
+  const displayName = user.displayName || user.email || '알 수 없음';
   const provider = user.providerData?.[0]?.providerId ?? 'unknown';
 
   await getMessaging().sendEachForMulticast({
@@ -65,22 +65,22 @@ exports.notifyAdminOnNewUser = auth.user().onCreate(async (user) => {
   });
 });
 
-// ?�?� ?��? ?�림 (???��? ??같�? 종목 ?��? ?�성?�들?�게 ?�시) ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+// ── 댓글 알림 (새 댓글 → 같은 종목 댓글 작성자들에게 푸시) ──────────────────
 exports.sendCommentNotification = onDocumentCreated(
   { document: 'stock_picks/{pickId}/comments/{commentId}', region: 'asia-northeast3' },
   async (event) => {
     const data = event.data?.data();
     if (!data) return;
 
-    const { uid: commenterUid, nickname, content: text } = data;
+    const { uid: commenterUid, nickname, content } = data;
     const { pickId } = event.params;
     const db = getFirestore();
 
-    // 종목 ?�름 조회
+    // 종목 이름 조회
     const pickSnap = await db.collection('stock_picks').doc(pickId).get();
     const pickName = pickSnap.data()?.name ?? '종목';
 
-    // 같�? 종목???��? ???�른 ?��? uid ?�집
+    // 같은 종목에 댓글 단 다른 유저 uid 수집
     const commentsSnap = await db
       .collection('stock_picks').doc(pickId).collection('comments').get();
     const uids = new Set(
@@ -90,7 +90,7 @@ exports.sendCommentNotification = onDocumentCreated(
     );
     if (uids.size === 0) return;
 
-    // uid ??FCM ?�큰 조회
+    // uid → FCM 토큰 조회
     const tokensSnap = await db.collection('fcm_tokens').get();
     const tokens = tokensSnap.docs
       .filter((d) => uids.has(d.data().uid))
@@ -98,8 +98,8 @@ exports.sendCommentNotification = onDocumentCreated(
       .filter((t) => typeof t === 'string' && t.length > 0);
     if (tokens.length === 0) return;
 
-    const senderName = nickname || '?�군가';
-    const preview = text?.length > 30 ? text.slice(0, 30) + '...' : text;
+    const senderName = nickname || '누군가';
+    const preview = content?.length > 30 ? content.slice(0, 30) + '…' : content;
 
     // FCM 발송
     const chunkSize = 500;
@@ -124,7 +124,7 @@ exports.sendCommentNotification = onDocumentCreated(
       });
     }
 
-    // 만료 ?�큰 ?�리
+    // 만료 토큰 정리
     if (invalidTokens.length > 0) {
       await Promise.all(
         invalidTokens.map((t) => db.collection('fcm_tokens').doc(t).delete())
@@ -133,7 +133,7 @@ exports.sendCommentNotification = onDocumentCreated(
   }
 );
 
-// ?�?� ?�유게시???��? ?�림 (???��? ??게시글 ?�성?�에�??�시) ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+// ── 자유게시판 댓글 알림 (새 댓글 → 게시글 작성자에게 푸시) ──────────────────
 exports.sendPostCommentNotification = onDocumentCreated(
   { document: 'posts/{postId}/comments/{commentId}', region: 'asia-northeast3' },
   async (event) => {
@@ -144,17 +144,17 @@ exports.sendPostCommentNotification = onDocumentCreated(
     const { postId } = event.params;
     const db = getFirestore();
 
-    // 게시글 조회 ???�성??UID ?�인
+    // 게시글 조회 → 작성자 UID 확인
     const postSnap = await db.collection('posts').doc(postId).get();
     if (!postSnap.exists) return;
 
     const postData = postSnap.data();
     const authorUid = postData?.uid;
 
-    // ?�기 글???�기가 ?��? ???�림 ?�음
+    // 자기 글에 자기가 댓글 → 알림 없음
     if (!authorUid || authorUid === commenterUid) return;
 
-    // ?�성??FCM ?�큰 조회
+    // 작성자 FCM 토큰 조회
     const tokensSnap = await db.collection('fcm_tokens')
       .where('uid', '==', authorUid).get();
     const tokens = tokensSnap.docs
@@ -162,8 +162,8 @@ exports.sendPostCommentNotification = onDocumentCreated(
       .filter((t) => typeof t === 'string' && t.length > 0);
     if (tokens.length === 0) return;
 
-    const senderName = nickname || '?�군가';
-    const preview = content?.length > 30 ? content.slice(0, 30) + '...' : content;
+    const senderName = nickname || '누군가';
+    const preview = content?.length > 30 ? content.slice(0, 30) + '…' : content;
 
     const invalidTokens = [];
     const chunkSize = 500;
@@ -196,8 +196,7 @@ exports.sendPostCommentNotification = onDocumentCreated(
   }
 );
 
-// ?�?� ?�코지?? 30분마???�펨코리??주식게시??글 ???�집 ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
-// ���� �Ÿ����� ��� �˸� (�� ��� �� �Ÿ����� �ۼ��ڿ��� Ǫ��) ����������������������������������������������
+// Journal comment notification -> journal author
 exports.sendJournalCommentNotification = onDocumentCreated(
   { document: 'trading_journal/{journalId}/comments/{commentId}', region: 'asia-northeast3' },
   async (event) => {
@@ -208,26 +207,24 @@ exports.sendJournalCommentNotification = onDocumentCreated(
     const { journalId } = event.params;
     const db = getFirestore();
 
-    // �Ÿ����� ��ȸ �� �ۼ��� UID Ȯ��
     const journalSnap = await db.collection('trading_journal').doc(journalId).get();
     if (!journalSnap.exists) return;
 
-    const journalData = journalSnap.data();
-    const authorUid = journalData?.uid;
-
-    // �ڱ� �ۿ� �ڱ� ����� �˸� ����
+    const journalData = journalSnap.data() || {};
+    const authorUid = journalData.uid;
     if (!authorUid || authorUid === commenterUid) return;
 
-    // �ۼ��� FCM ��ū ��ȸ
     const tokensSnap = await db.collection('fcm_tokens')
-      .where('uid', '==', authorUid).get();
+      .where('uid', '==', authorUid)
+      .get();
     const tokens = tokensSnap.docs
       .map((d) => d.data().token)
       .filter((t) => typeof t === 'string' && t.length > 0);
     if (tokens.length === 0) return;
 
-    const senderName = nickname || '�͸�';
-    const preview = content?.length > 30 ? content.slice(0, 30) + '��' : content;
+    const senderName = nickname || '\uB204\uAD70\uAC00';
+    const previewRaw = typeof content === 'string' ? content : '';
+    const preview = previewRaw.length > 30 ? `${previewRaw.slice(0, 30)}...` : previewRaw;
 
     const invalidTokens = [];
     const chunkSize = 500;
@@ -235,7 +232,7 @@ exports.sendJournalCommentNotification = onDocumentCreated(
       const chunk = tokens.slice(i, i + chunkSize);
       const response = await getMessaging().sendEachForMulticast({
         notification: {
-          title: '📝 매매일지에 댓글이 달렸어요',
+          title: '\uD83D\uDCDD \uB9E4\uB9E4\uC77C\uC9C0\uC5D0 \uB313\uAE00\uC774 \uB2EC\uB838\uC5B4\uC694',
           body: `${senderName}: ${preview}`,
         },
         data: { journalId },
@@ -243,6 +240,7 @@ exports.sendJournalCommentNotification = onDocumentCreated(
         apns: { payload: { aps: { sound: 'default' } } },
         tokens: chunk,
       });
+
       response.responses.forEach((r, idx) => {
         if (!r.success &&
           (r.error?.code === 'messaging/invalid-registration-token' ||
@@ -259,7 +257,8 @@ exports.sendJournalCommentNotification = onDocumentCreated(
     }
   }
 );
-// trading_journal ?? ??? publishedAt? ??? ?? ??
+
+// Backfill publishedAt for public journal docs
 exports.ensureJournalPublishedAt = onDocumentWritten(
   { document: 'trading_journal/{journalId}', region: 'asia-northeast3' },
   async (event) => {
@@ -275,12 +274,13 @@ exports.ensureJournalPublishedAt = onDocumentWritten(
   }
 );
 
+// ── 펨코지수: 30분마다 에펨코리아 주식게시판 글 수 수집 ──────────────────────
 exports.crawlFemcoIndex = onSchedule(
   { schedule: 'every 30 minutes', region: 'asia-northeast3', timeoutSeconds: 60 },
   async () => {
     const db = getFirestore();
     const now = new Date();
-    const cutoff = new Date(now.getTime() - 30 * 60 * 1000); // 30�???
+    const cutoff = new Date(now.getTime() - 30 * 60 * 1000); // 30분 전
 
     try {
       const headers = {
@@ -289,7 +289,7 @@ exports.crawlFemcoIndex = onSchedule(
         'Referer': 'https://www.fmkorea.com/',
       };
 
-      // ?�펨코리??주식 게시??1~3?�이지 ?�집
+      // 에펨코리아 주식 게시판 1~3페이지 수집
       let count = 0;
       for (let page = 1; page <= 3; page++) {
         const { data } = await axios.get(
@@ -301,7 +301,7 @@ exports.crawlFemcoIndex = onSchedule(
         let hitCutoff = false;
         $('ul.list_body li.li').each((_, el) => {
           const timeText = $(el).find('.time, .regdate, span[class*="date"]').text().trim();
-          // ?�간 ?�싱: "HH:MM" ?�식?�면 ?�늘 ?�짜�? "MM.DD" ?�면 과거
+          // 시간 파싱: "HH:MM" 형식이면 오늘 날짜로, "MM.DD" 이면 과거
           if (!timeText) return;
 
           let postDate = null;
@@ -310,7 +310,7 @@ exports.crawlFemcoIndex = onSchedule(
             postDate = new Date(now);
             postDate.setHours(h, m, 0, 0);
           } else {
-            // MM.DD ?�식?�면 ?�늘보다 과거
+            // MM.DD 형식이면 오늘보다 과거
             hitCutoff = true;
             return false;
           }
@@ -326,7 +326,7 @@ exports.crawlFemcoIndex = onSchedule(
         if (hitCutoff) break;
       }
 
-      // Firestore ?�??
+      // Firestore 저장
       const slotKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}:${now.getMinutes() < 30 ? '00' : '30'}`;
 
       await db.collection('board_index').doc('femco')
@@ -336,7 +336,7 @@ exports.crawlFemcoIndex = onSchedule(
           slot: slotKey,
         });
 
-      // 최신�?갱신
+      // 최신값 갱신
       await db.collection('board_index').doc('femco').set({
         count,
         updatedAt: now,
@@ -348,16 +348,16 @@ exports.crawlFemcoIndex = onSchedule(
   }
 );
 
-// ?�?� 카카???�증코드 ??Firebase 커스?� ?�큰 (??admin?? ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+// ── 카카오 인증코드 → Firebase 커스텀 토큰 (웹 admin용) ──────────────────────
 exports.kakaoAuthCode = onCall(
   { region: 'asia-northeast3' },
   async (request) => {
     const { code, redirectUri } = request.data;
     if (!code || !redirectUri) {
-      throw new HttpsError('invalid-argument', 'code?� redirectUri가 ?�요?�니??');
+      throw new HttpsError('invalid-argument', 'code와 redirectUri가 필요합니다.');
     }
 
-    // ?�증코드 ???�세???�큰
+    // 인증코드 → 액세스 토큰
     const tokenRes = await axios.post(
       'https://kauth.kakao.com/oauth/token',
       new URLSearchParams({
@@ -370,7 +370,7 @@ exports.kakaoAuthCode = onCall(
     );
     const accessToken = tokenRes.data.access_token;
 
-    // ?�세???�큰 ???��? ?�보
+    // 액세스 토큰 → 유저 정보
     const userRes = await axios.get('https://kapi.kakao.com/v2/user/me', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
@@ -385,17 +385,17 @@ exports.kakaoAuthCode = onCall(
   }
 );
 
-// ?�?� 카카??커스?� ?�큰 발급 ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
-// ?�라?�언?�에??카카???�세???�큰??보내�??�버?�서 검�???Firebase 커스?� ?�큰 반환
+// ── 카카오 커스텀 토큰 발급 ────────────────────────────────────────────────
+// 클라이언트에서 카카오 액세스 토큰을 보내면 서버에서 검증 후 Firebase 커스텀 토큰 반환
 exports.createKakaoCustomToken = onCall(
   { region: 'asia-northeast3' },
   async (request) => {
     const { accessToken } = request.data;
     if (!accessToken) {
-      throw new HttpsError('invalid-argument', 'accessToken???�요?�니??');
+      throw new HttpsError('invalid-argument', 'accessToken이 필요합니다.');
     }
 
-    // 카카??API�??�세???�큰 검�?
+    // 카카오 API로 액세스 토큰 검증
     const kakaoUser = await new Promise((resolve, reject) => {
       const options = {
         hostname: 'kapi.kakao.com',
@@ -408,7 +408,7 @@ exports.createKakaoCustomToken = onCall(
         res.on('data', (chunk) => (body += chunk));
         res.on('end', () => {
           if (res.statusCode !== 200) {
-            reject(new HttpsError('unauthenticated', '?�효?��? ?��? 카카???�큰?�니??'));
+            reject(new HttpsError('unauthenticated', '유효하지 않은 카카오 토큰입니다.'));
           } else {
             resolve(JSON.parse(body));
           }
@@ -421,7 +421,7 @@ exports.createKakaoCustomToken = onCall(
     const kakaoId = String(kakaoUser.id);
     const uid = `kakao:${kakaoId}`;
 
-    // Firebase 커스?� ?�큰 ?�성
+    // Firebase 커스텀 토큰 생성
     const customToken = await getAuth().createCustomToken(uid, {
       provider: 'kakao',
       kakaoId,
@@ -431,7 +431,7 @@ exports.createKakaoCustomToken = onCall(
   }
 );
 
-// ?�?� FCM ?�시 ?�림 발송 (notification_queue ?�리�? ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+// ── FCM 푸시 알림 발송 (notification_queue 트리거) ────────────────────────
 exports.sendPushOnNotificationQueue = onDocumentCreated(
   { document: 'notification_queue/{docId}', region: 'asia-northeast3' },
   async (event) => {
@@ -443,7 +443,7 @@ exports.sendPushOnNotificationQueue = onDocumentCreated(
 
     const db = getFirestore();
 
-    // fcm_tokens 컬렉?�에??모든 ?�큰 ?�집
+    // fcm_tokens 컬렉션에서 모든 토큰 수집
     const tokensSnap = await db.collection('fcm_tokens').get();
     const tokens = tokensSnap.docs
       .map((d) => d.data().token)
@@ -454,7 +454,7 @@ exports.sendPushOnNotificationQueue = onDocumentCreated(
       return;
     }
 
-    // FCM 멀?�캐?�트 발송 (??번에 최�? 500�?
+    // FCM 멀티캐스트 발송 (한 번에 최대 500개)
     const chunkSize = 500;
     const invalidTokens = [];
 
@@ -485,19 +485,19 @@ exports.sendPushOnNotificationQueue = onDocumentCreated(
       });
     }
 
-    // 만료???�큰 ?�리
+    // 만료된 토큰 정리
     if (invalidTokens.length > 0) {
       await Promise.all(
         invalidTokens.map((t) => db.collection('fcm_tokens').doc(t).delete())
       );
     }
 
-    // 처리 ?�료????문서 ??��
+    // 처리 완료된 큐 문서 삭제
     await event.data.ref.delete();
   }
 );
 
-// ?�?� KOSPI 200 ?�간?�물 ?�재가 (KIS API) ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+// ── KOSPI 200 야간선물 현재가 (KIS API) ──────────────────────────────────────
 let _kisToken = null;
 let _kisTokenExpiry = null;
 
@@ -512,20 +512,20 @@ async function getKisToken(appKey, appSecret) {
     appsecret: appSecret,
   });
   _kisToken = res.data.access_token;
-  _kisTokenExpiry = now + (res.data.expires_in - 300) * 1000; // 5�??�유
+  _kisTokenExpiry = now + (res.data.expires_in - 300) * 1000; // 5분 여유
   return _kisToken;
 }
 
-// ?�당 ???�의 ??번째 목요???�물 최종거래?? ?�짜 반환
+// 해당 연/월의 두 번째 목요일(선물 최종거래일) 날짜 반환
 function getSecondThursday(year, month) {
   const firstDay = new Date(Date.UTC(year, month - 1, 1));
-  const dow = firstDay.getUTCDay(); // 0=?? 4=�?
+  const dow = firstDay.getUTCDay(); // 0=일, 4=목
   const firstThursday = 1 + (4 - dow + 7) % 7;
   return firstThursday + 7;
 }
 
-// KOSPI200 ?�간?�물 ?�축코드: A0 + (year-2010 2?�리) + ??2?�리
-// 최종거래??분기 ??번째 목요?? ?�후�??�음 분기물로 ?�환
+// KOSPI200 야간선물 단축코드: A0 + (year-2010 2자리) + 월 2자리
+// 최종거래일(분기 두 번째 목요일) 이후면 다음 분기물로 전환
 function getNightFuturesSymbol() {
   const kst = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
   const year = kst.getUTCFullYear();
@@ -537,7 +537,7 @@ function getNightFuturesSymbol() {
   let expiryYear = year;
   if (!expiryMonth) { expiryMonth = 3; expiryYear = year + 1; }
 
-  // ?�재 분기?�이�? 최종거래???�후�??�음 분기�??�용
+  // 현재 분기월이고, 최종거래일 이후면 다음 분기물 사용
   if (expiryMonth === month && expiryYear === year) {
     const lastTradingDay = getSecondThursday(year, month);
     if (day > lastTradingDay) {
@@ -554,7 +554,7 @@ function getNightFuturesSymbol() {
   return `A0${String(expiryYear - 2010).padStart(2, '0')}${String(expiryMonth).padStart(2, '0')}`;
 }
 
-// KIS WebSocket ?�인??발급
+// KIS WebSocket 승인키 발급
 async function getKisApprovalKey(appKey, appSecret) {
   const res = await axios.post(
     'https://openapi.koreainvestment.com:9443/oauth2/Approval',
@@ -563,7 +563,7 @@ async function getKisApprovalKey(appKey, appSecret) {
   return res.data.approval_key;
 }
 
-// AES-256-CBC 복호??
+// AES-256-CBC 복호화
 function aesDecrypt(encData, key, iv) {
   const crypto = require('crypto');
   const decipher = crypto.createDecipheriv(
@@ -576,7 +576,7 @@ function aesDecrypt(encData, key, iv) {
   return dec;
 }
 
-// KIS WebSocket?�로 ?�간?�물 ?�시�?체결가 1???�신 (?�시???�함)
+// KIS WebSocket으로 야간선물 실시간 체결가 1회 수신 (재시도 포함)
 function fetchViaWebSocket(approvalKey, symbol, timeoutMs = 25000) {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -589,7 +589,7 @@ function fetchViaWebSocket(approvalKey, symbol, timeoutMs = 25000) {
     const ws = new WebSocket('ws://ops.koreainvestment.com:21000');
 
     ws.on('open', () => {
-      console.log('[WS] connected');
+      console.log('[WS] 연결됨');
       ws.send(JSON.stringify({
         header: { approval_key: approvalKey, custtype: 'P', tr_type: '1', 'content-type': 'utf-8' },
         body: { input: { tr_id: 'H0UPANC0', tr_key: symbol } },
@@ -605,67 +605,67 @@ function fetchViaWebSocket(approvalKey, symbol, timeoutMs = 25000) {
           if (json.body?.rt_cd === '9' && json.body?.msg_cd === 'OPSP8996') {
             done(reject, new Error('ALREADY_IN_USE')); return;
           }
-          // SUBSCRIBE SUCCESS ??AES ???�??
+          // SUBSCRIBE SUCCESS → AES 키 저장
           if (json.body?.msg1 === 'SUBSCRIBE SUCCESS') {
             aesKey = json.body?.output?.key;
             aesIv  = json.body?.output?.iv;
-            console.log('[WS] 구독 ?�공, ?�호?�키 ?�신:', !!aesKey);
+            console.log('[WS] 구독 성공, 암호화키 수신:', !!aesKey);
           }
         } catch (_) {}
         return;
       }
 
       const parts = msg.split('|');
-      console.log('[WS] ?�이?�메?��?:', parts[0], parts[1], parts[2], parts[3]?.slice(0, 60));
+      console.log('[WS] 파이프메시지:', parts[0], parts[1], parts[2], parts[3]?.slice(0, 60));
       if (parts.length < 4 || parts[1] !== 'H0UPANC0') return;
 
       let dataStr = parts[3];
 
-      // ?�호?�된 경우 복호??
+      // 암호화된 경우 복호화
       if (parts[0] === '1') {
         if (!aesKey || !aesIv) {
-          console.warn('[WS] ?�호???�이?�인?????�음');
+          console.warn('[WS] 암호화 데이터인데 키 없음');
           return;
         }
         try {
           dataStr = aesDecrypt(dataStr, aesKey, aesIv);
         } catch (e) {
-          console.error('[WS] 복호???�패:', e.message);
+          console.error('[WS] 복호화 실패:', e.message);
           return;
         }
       }
 
-      // ?�이??건수(parts[2])만큼 ?�코?��? ?�을 ???�음 ??�?번째�??�용
+      // 데이터 건수(parts[2])만큼 레코드가 있을 수 있음 → 첫 번째만 사용
       const firstRecord = dataStr.split('^' + symbol).shift() || dataStr;
       const fields = firstRecord.split('^');
       console.log('[WS] fields[0..9]:', fields.slice(0, 10).join(', '));
 
-      // H0UPANC0 ?�드: 0:?�축코드 1:?�업?�자 2:체결?�각 3:?�재가 4:?�일?��?5:?�락�?
+      // H0UPANC0 필드: 0:단축코드 1:영업일자 2:체결시각 3:현재가 4:전일대비 5:등락률
       const price = parseFloat(fields[3]);
       const change = parseFloat(fields[4]);
       const changeRate = parseFloat(fields[5]);
       if (!price || price <= 0) {
-        console.warn('[WS] 가�??�싱 ?�패, fields:', fields.slice(0, 8).join(', '));
+        console.warn('[WS] 가격 파싱 실패, fields:', fields.slice(0, 8).join(', '));
         return;
       }
 
-      console.log('[WS] 체결가 ?�신:', price, change, changeRate);
+      console.log('[WS] 체결가 수신:', price, change, changeRate);
       done(resolve, { price, change, changeRate });
     });
 
-    ws.on('error', (e) => { console.error('[WS] ?�러:', e.message); done(reject, e); });
+    ws.on('error', (e) => { console.error('[WS] 에러:', e.message); done(reject, e); });
   });
 }
 
-// approvalKey ?�발�????�시???�함 fetchViaWebSocket
+// approvalKey 재발급 후 재시도 포함 fetchViaWebSocket
 async function fetchWithRetry(appKey, appSecret, symbol) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const approvalKey = await getKisApprovalKey(appKey, appSecret);
-      const data = await fetchViaWebSocket(approvalKey, symbol, 20000); // 20�?
+      const data = await fetchViaWebSocket(approvalKey, symbol, 20000); // 20초
       return data;
     } catch (e) {
-      console.error(`[WS] ?�도 ${attempt} ?�패:`, e.message);
+      console.error(`[WS] 시도 ${attempt} 실패:`, e.message);
       if (attempt < 2) {
         await new Promise(r => setTimeout(r, 1000));
       } else {
@@ -675,13 +675,13 @@ async function fetchWithRetry(appKey, appSecret, symbol) {
   }
 }
 
-// ?�?� ?�간?�물 가�?5분마??Firestore??기록 (?�스?�리 축적) ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+// ── 야간선물 가격 5분마다 Firestore에 기록 (히스토리 축적) ──────────────────
 exports.recordNightFuturesPrice = onSchedule(
   { schedule: 'every 1 minutes', region: 'asia-northeast3', timeoutSeconds: 60 },
   async () => {
     const kst = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
     const kstHour = kst.getUTCHours();
-    if (kstHour >= 5 && kstHour < 18) return; // ???�간 ?�킵
+    if (kstHour >= 5 && kstHour < 18) return; // 낮 시간 스킵
 
     const db = getFirestore();
     const snap = await db.collection('_admin').doc('kis').get();
@@ -702,7 +702,7 @@ exports.recordNightFuturesPrice = onSchedule(
         symbol,
       });
 
-      // 7???�상 ???�이???�리 (최�? 2000�??��?)
+      // 7일 이상 된 데이터 정리 (최대 2000개 유지)
       const old = await db.collection('night_futures_prices')
         .orderBy('timestamp', 'desc').offset(2000).limit(100).get();
       if (!old.empty) {
@@ -714,19 +714,19 @@ exports.recordNightFuturesPrice = onSchedule(
   }
 );
 
-// ?�?� ?�간?�물 ?�정 반환 (approval_key + symbol + ?�스?�리) ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+// ── 야간선물 설정 반환 (approval_key + symbol + 히스토리) ──────────────────
 exports.getKisNightFuturesConfig = onCall(
   { region: 'asia-northeast3', timeoutSeconds: 15 },
   async () => {
     const db = getFirestore();
     const snap = await db.collection('_admin').doc('kis').get();
-    if (!snap.exists) throw new HttpsError('not-found', 'KIS ?�정 ?�음');
+    if (!snap.exists) throw new HttpsError('not-found', 'KIS 설정 없음');
 
     const { appKey, appSecret } = snap.data();
     const symbol = getNightFuturesSymbol();
     const approvalKey = await getKisApprovalKey(appKey, appSecret);
 
-    // 최근 300�?(5분봉 기�? ??25?�간)
+    // 최근 300개 (5분봉 기준 약 25시간)
     const histSnap = await db.collection('night_futures_prices')
       .orderBy('timestamp', 'desc').limit(300).get();
 
@@ -739,8 +739,8 @@ exports.getKisNightFuturesConfig = onCall(
   }
 );
 
-// getKospiNightFutures: WebSocket ?�이 Firestore 최신 ?�이?�만 반환
-// (WebSocket?� recordNightFuturesPrice ?��?줄러�??�용 ??appkey 충돌 방�?)
+// getKospiNightFutures: WebSocket 없이 Firestore 최신 데이터만 반환
+// (WebSocket은 recordNightFuturesPrice 스케줄러만 사용 — appkey 충돌 방지)
 exports.getKospiNightFutures = onCall(
   { region: 'asia-northeast3', timeoutSeconds: 10 },
   async () => {
@@ -751,14 +751,14 @@ exports.getKospiNightFutures = onCall(
       .orderBy('timestamp', 'desc').limit(1).get();
 
     if (histSnap.empty) {
-      console.warn('[getKospiNightFutures] night_futures_prices 컬렉??비어 ?�음');
+      console.warn('[getKospiNightFutures] night_futures_prices 컬렉션 비어 있음');
       return { hasData: false };
     }
 
     const d = histSnap.docs[0].data();
     return {
       hasData: true,
-      name: `KOSPI200 ?�간?�물 (${symbol})`,
+      name: `KOSPI200 야간선물 (${symbol})`,
       price: d.price,
       change: d.change,
       changeRate: d.changeRate,
@@ -771,7 +771,7 @@ exports.getKospiNightFutures = onCall(
 
 
 
-// ?�?� ?�코 주갤 ?�롤�?공통 로직 ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+// ── 펨코 주갤 크롤링 공통 로직 ──────────────────────────────────────────────
 async function _scrapeFmkoreaIndex() {
   const db = getFirestore();
   const now = new Date();
@@ -841,13 +841,13 @@ async function _scrapeFmkoreaIndex() {
   return counts;
 }
 
-// ?�?� ?�코 주갤 ?�자�?게시글 ??집계 (1?�간마다) ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+// ── 펨코 주갤 일자별 게시글 수 집계 (1시간마다) ──────────────────────────────
 exports.fetchFmkoreaIndex = onSchedule(
   { schedule: 'every 60 minutes', region: 'asia-northeast3', timeoutSeconds: 120 },
   async () => { await _scrapeFmkoreaIndex(); }
 );
 
-// ?�?� ?�코 주갤 ?�동 ?�리�?(최초 1???�행?? ?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�
+// ── 펨코 주갤 수동 트리거 (최초 1회 실행용) ──────────────────────────────────
 exports.fetchFmkoreaIndexNow = onRequest(
   { region: 'asia-northeast3', timeoutSeconds: 120 },
   async (req, res) => {
@@ -869,281 +869,3 @@ exports.fetchFmkoreaIndexNow = onRequest(
     }
   }
 );
-
-// ── 커뮤니티 자동 포스팅(일상 글) ───────────────────────────────────────────
-
-const BOT_SCHEDULE_COLLECTION = 'bot_daily_post_schedules';
-const BOT_POSTS_PER_DAY = 20;
-const BOT_WINDOW_START_MINUTE = 9 * 60; // 09:00 KST
-const BOT_WINDOW_END_MINUTE = 22 * 60; // 22:00 KST (exclusive)
-const BOT_MAX_POSTS_PER_RUN = 1;
-const BOT_STOCK_RATIO = 0.7;
-const BOT_UID_PREFIX = 'bot_user_';
-
-const BOT_PERSONAS = [
-  { uid: `${BOT_UID_PREFIX}01`, nickname: '동네직장인' },
-  { uid: `${BOT_UID_PREFIX}02`, nickname: '아침러너' },
-  { uid: `${BOT_UID_PREFIX}03`, nickname: '퇴근후독서' },
-  { uid: `${BOT_UID_PREFIX}04`, nickname: '커피한잔' },
-  { uid: `${BOT_UID_PREFIX}05`, nickname: '소소한기록' },
-  { uid: `${BOT_UID_PREFIX}06`, nickname: '집밥연구소' },
-  { uid: `${BOT_UID_PREFIX}07`, nickname: '주말산책러' },
-  { uid: `${BOT_UID_PREFIX}08`, nickname: '야식참는중' },
-];
-
-const BOT_FALLBACK_STOCKS = [
-  { ticker: '005930', name: '삼성전자', mentionCount: 0 },
-  { ticker: '000660', name: 'SK하이닉스', mentionCount: 0 },
-  { ticker: '035420', name: 'NAVER', mentionCount: 0 },
-  { ticker: '068270', name: '셀트리온', mentionCount: 0 },
-  { ticker: '005380', name: '현대차', mentionCount: 0 },
-  { ticker: '012450', name: '한화에어로스페이스', mentionCount: 0 },
-];
-
-const BOT_STOCK_TITLE_TEMPLATES = [
-  '{name} 오늘 자리 보는 사람?',
-  '{name} ({ticker}) 눌림 구간 애매하네',
-  '{name} 수급 계속 붙는 느낌',
-  '{name} 오늘 거래대금 꽤 도네',
-  '{name} 지금 추격 vs 관망',
-  '{name} 단기 자리 의견 갈리네',
-];
-
-const BOT_STOCK_CONTENT_TEMPLATES = [
-  '펨코 언급 {mentions}회 찍혔네요. 저는 오늘은 추격보다 눌림 대기 중입니다.',
-  '체감상 {name} 얘기가 계속 나오네요. 단타 구간이면 손절 라인 짧게 잡는 게 맞아 보입니다.',
-  '{name} 오늘 변동 꽤 크네요. 시초 강하면 따라가고 아니면 관망하려고요.',
-  '{name} 관심도 올라온 건 확실한데, 종가 위치 보고 내일 대응할 생각입니다.',
-  '오늘은 {name} 수급 체크하는 날인 듯요. 급등 캔들 나오면 분할로만 접근하려고 합니다.',
-  '{name} 커뮤 화력 붙었네요. 저는 돌파 확인 전엔 비중 크게 안 싣는 쪽입니다.',
-  '{name} 차트 예쁘긴 한데 고점 매수는 부담되네요. 눌릴 때만 볼까 합니다.',
-  '{name} 단기 탄력은 살아있는 듯합니다. 다만 추격은 리스크 커서 짧게만 볼게요.',
-];
-
-const BOT_DAILY_TITLE_TEMPLATES = [
-  '오늘 장 보고 멘탈 관리 중',
-  '다들 오늘 매매 어땠나요',
-  '장 끝나고 복기하는 중',
-  '손절 원칙 다시 적어봄',
-  '오늘은 매매 쉬는 게 맞았나',
-  '시드 관리가 제일 어렵네요',
-  '수익보다 잃지 않는 날로',
-  '장마감 후 마음 정리',
-];
-
-const BOT_DAILY_CONTENT_TEMPLATES = [
-  '수익보다 원칙 지키는 날로 마감했습니다. 다들 고생했어요.',
-  '오늘은 무리 안 하고 관망 위주로 갔네요. 멘탈 지키는 게 더 중요하네요.',
-  '진입보다 기다림이 더 어려운 날이었네요. 내일은 더 차분하게 가봅니다.',
-  '손절 한 번 했지만 계획대로라 괜찮았습니다. 복기하고 마무리합니다.',
-  '괜히 조급하면 실수만 늘더라고요. 오늘은 매매 횟수 줄여서 마감했습니다.',
-  '수익보다 리스크 관리가 더 체감되는 날이네요. 다들 저녁 맛있게 드세요.',
-  '장중에 흔들렸는데 비중 조절 덕분에 크게 안 다쳤습니다. 내일 다시 봅시다.',
-  '오늘은 쉬어가는 매매였습니다. 시장은 내일도 열리니 무리 안 하려 합니다.',
-];
-
-function getKstNow(base = new Date()) {
-  return new Date(base.getTime() + (9 * 60 * 60 * 1000));
-}
-
-function getKstDateKey(base = new Date()) {
-  const kst = getKstNow(base);
-  const y = kst.getUTCFullYear();
-  const m = String(kst.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(kst.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function parseDateKey(dateKey) {
-  const [yy, mm, dd] = dateKey.split('-').map((v) => parseInt(v, 10));
-  return { yy, mm, dd };
-}
-
-function getKstMinuteOfDay(base = new Date()) {
-  const kst = getKstNow(base);
-  return (kst.getUTCHours() * 60) + kst.getUTCMinutes();
-}
-
-function pickUniqueRandomMinutes(count, startMinute, endMinuteExclusive) {
-  const pool = [];
-  for (let m = startMinute; m < endMinuteExclusive; m++) pool.push(m);
-
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
-  }
-
-  return pool.slice(0, count).sort((a, b) => a - b);
-}
-
-function hashString(input) {
-  let h = 2166136261;
-  for (let i = 0; i < input.length; i++) {
-    h ^= input.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return (h >>> 0);
-}
-
-function pickBySeed(arr, seedText) {
-  const idx = hashString(seedText) % arr.length;
-  return arr[idx];
-}
-
-function pickByWeightedSeed(seedText, ratioA = 0.5) {
-  const normalized = Math.max(0, Math.min(1, ratioA));
-  const val = hashString(seedText) / 4294967295;
-  return val < normalized;
-}
-
-async function getHotMentionsForBot(db) {
-  try {
-    const snap = await db
-      .collection('fmkorea_stock_mentions_realtime')
-      .doc('today')
-      .get();
-    if (!snap.exists) return [];
-    const data = snap.data() || {};
-    const topMentions = Array.isArray(data.topMentions) ? data.topMentions : [];
-    return topMentions
-      .map((m) => ({
-        ticker: typeof m.ticker === 'string' ? m.ticker.trim() : '',
-        name: typeof m.name === 'string' ? m.name.trim() : '',
-        mentionCount: Number.isFinite(m.mentionCount) ? Number(m.mentionCount) : 0,
-      }))
-      .filter((m) => m.name || m.ticker)
-      .slice(0, 20);
-  } catch (_) {
-    return [];
-  }
-}
-
-async function ensureBotDailySchedule(db, dateKey) {
-  const ref = db.collection(BOT_SCHEDULE_COLLECTION).doc(dateKey);
-  await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
-    if (snap.exists) return;
-
-    const minuteOffsets = pickUniqueRandomMinutes(
-      BOT_POSTS_PER_DAY,
-      BOT_WINDOW_START_MINUTE,
-      BOT_WINDOW_END_MINUTE,
-    );
-
-    tx.set(ref, {
-      dateKey,
-      targetCount: BOT_POSTS_PER_DAY,
-      minuteOffsets,
-      postedOffsets: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-  });
-}
-
-function resolveBotStock(seed, hotMentions) {
-  if (Array.isArray(hotMentions) && hotMentions.length > 0) {
-    return pickBySeed(hotMentions, `${seed}-hot-stock`);
-  }
-  return pickBySeed(BOT_FALLBACK_STOCKS, `${seed}-fallback-stock`);
-}
-
-function buildBotDraft(seed, stock) {
-  const rawTitle = pickBySeed(BOT_STOCK_TITLE_TEMPLATES, `${seed}-title`);
-  const rawContent = pickBySeed(BOT_STOCK_CONTENT_TEMPLATES, `${seed}-content`);
-  const name = stock.name || stock.ticker || '이 종목';
-  const ticker = stock.ticker || '';
-  const mentions = Math.max(0, Number(stock.mentionCount) || 0);
-  return {
-    title: rawTitle
-      .replaceAll('{name}', name)
-      .replaceAll('{ticker}', ticker),
-    content: rawContent
-      .replaceAll('{name}', name)
-      .replaceAll('{ticker}', ticker)
-      .replaceAll('{mentions}', String(mentions)),
-  };
-}
-
-function buildDailyDraft(seed) {
-  const title = pickBySeed(BOT_DAILY_TITLE_TEMPLATES, `${seed}-daily-title`);
-  const content = pickBySeed(BOT_DAILY_CONTENT_TEMPLATES, `${seed}-daily-content`);
-  return { title, content };
-}
-
-function buildBotPost(dateKey, minuteOffset, hotMentions) {
-  const seed = `${dateKey}-${minuteOffset}`;
-  const persona = pickBySeed(BOT_PERSONAS, `${seed}-persona`);
-  const useStockPost = pickByWeightedSeed(`${seed}-type`, BOT_STOCK_RATIO);
-  const stock = resolveBotStock(seed, hotMentions);
-  const draft = useStockPost ? buildBotDraft(seed, stock) : buildDailyDraft(seed);
-  const postType = useStockPost ? 'stock' : 'daily';
-  return {
-    uid: persona.uid,
-    nickname: persona.nickname,
-    title: draft.title,
-    content: draft.content,
-    likes: 0,
-    imageUrls: [],
-    isBot: true,
-    botProfileId: persona.uid,
-    botPostType: postType,
-    createdAt: new Date(),
-  };
-}
-
-exports.generateBotDailySchedule = onSchedule(
-  { schedule: 'every day 00:01', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 60 },
-  async () => {
-    const db = getFirestore();
-    const dateKey = getKstDateKey();
-    await ensureBotDailySchedule(db, dateKey);
-  }
-);
-
-exports.publishCommunityBotPosts = onSchedule(
-  { schedule: 'every 5 minutes', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 60 },
-  async () => {
-    const db = getFirestore();
-    const nowMinute = getKstMinuteOfDay();
-    const dateKey = getKstDateKey();
-    const hotMentions = await getHotMentionsForBot(db);
-
-    if (nowMinute < BOT_WINDOW_START_MINUTE || nowMinute >= BOT_WINDOW_END_MINUTE) {
-      return;
-    }
-
-    await ensureBotDailySchedule(db, dateKey);
-    const scheduleRef = db.collection(BOT_SCHEDULE_COLLECTION).doc(dateKey);
-
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(scheduleRef);
-      if (!snap.exists) return;
-
-      const data = snap.data() || {};
-      const minuteOffsets = Array.isArray(data.minuteOffsets) ? data.minuteOffsets : [];
-      const postedOffsets = Array.isArray(data.postedOffsets) ? data.postedOffsets : [];
-      const postedSet = new Set(postedOffsets);
-
-      const dueOffsets = minuteOffsets
-        .filter((m) => typeof m === 'number' && m <= nowMinute && !postedSet.has(m))
-        .sort((a, b) => a - b);
-
-      if (dueOffsets.length === 0) return;
-      const offsetsToPost = dueOffsets.slice(0, BOT_MAX_POSTS_PER_RUN);
-
-      for (const minuteOffset of offsetsToPost) {
-        const postRef = db.collection('posts').doc();
-        tx.set(postRef, buildBotPost(dateKey, minuteOffset, hotMentions));
-        postedSet.add(minuteOffset);
-      }
-
-      tx.set(scheduleRef, {
-        postedOffsets: Array.from(postedSet).sort((a, b) => a - b),
-        lastRunMinute: nowMinute,
-        updatedAt: new Date(),
-      }, { merge: true });
-    });
-  }
-);
-
