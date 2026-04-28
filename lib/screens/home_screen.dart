@@ -19,6 +19,7 @@ import 'market_analysis_screen.dart';
 import 'portfolio_screen.dart';
 import 'my_comments_screen.dart';
 import 'my_posts_screen.dart';
+import 'notification_settings_screen.dart';
 import 'stock_compare_screen.dart';
 import 'stock_detail_screen.dart';
 import '../main.dart' show initAds;
@@ -869,6 +870,47 @@ class _HomeScreenState extends State<HomeScreen>
                             context,
                             MaterialPageRoute(
                               builder: (_) => const FavoritesPicksScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: isDark
+                              ? Colors.white70
+                              : Colors.black54,
+                          side: BorderSide(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : Colors.black.withValues(alpha: 0.1),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        icon: const Icon(
+                          Icons.notifications_outlined,
+                          size: 16,
+                        ),
+                        label: Text(
+                          '알림 설정',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  const NotificationSettingsScreen(),
                             ),
                           );
                         },

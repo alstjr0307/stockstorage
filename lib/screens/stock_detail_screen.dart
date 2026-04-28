@@ -220,6 +220,16 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     }
   }
 
+  Future<void> _togglePickCommentNotification(bool enabled) async {
+    final user = _currentUser;
+    if (user == null) return;
+    await _firestoreService.setPickCommentNotificationEnabled(
+      user.uid,
+      widget.pick.id,
+      enabled,
+    );
+  }
+
   Future<void> _saveMemo() async {
     final user = _currentUser;
     if (user == null) return;
@@ -490,46 +500,52 @@ class _StockDetailScreenState extends State<StockDetailScreen>
             style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700),
           ),
           actions: [
-            GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => StockCompareScreen(basePick: widget.pick),
-                ),
-              ),
-              child: Container(
-                margin: const EdgeInsets.only(right: 4),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(9999),
-                  border: Border.all(
-                    color: const Color(0xFF10B981).withValues(alpha: 0.35),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.compare_arrows,
-                      color: Color(0xFF10B981),
-                      size: 15,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '종목비교',
-                      style: TextStyle(
-                        color: const Color(0xFF10B981),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
+            IconButton(
+              icon: StreamBuilder<bool>(
+                stream: _currentUser == null
+                    ? null
+                    : _firestoreService.watchPickCommentNotificationEnabled(
+                        _currentUser!.uid,
+                        widget.pick.id,
                       ),
-                    ),
-                  ],
-                ),
+                builder: (context, snap) {
+                  final enabled = snap.data ?? true;
+                  return Icon(
+                    enabled
+                        ? Icons.notifications_active_outlined
+                        : Icons.notifications_off_outlined,
+                    color: enabled
+                        ? const Color(0xFF10B981)
+                        : cs.onSurface.withValues(alpha: 0.54),
+                    size: 20,
+                  );
+                },
               ),
+              onPressed: () async {
+                final user = _currentUser;
+                if (user == null) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('로그인 후 설정할 수 있습니다.')),
+                  );
+                  return;
+                }
+                final current = await _firestoreService
+                    .getPickCommentNotificationEnabled(user.uid, widget.pick.id);
+                final next = !current;
+                await _togglePickCommentNotification(next);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      next
+                          ? '이 추천주 댓글 알림이 켜졌습니다.'
+                          : '이 추천주 댓글 알림이 꺼졌습니다.',
+                    ),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              },
             ),
             IconButton(
               key: _shareButtonKey,
@@ -952,6 +968,64 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                 isPositive,
                                               ),
                                             ],
+                                            const SizedBox(height: 12),
+                                            const SizedBox(height: 10),
+                                            SizedBox(
+                                              width: double.infinity,
+                                              child: OutlinedButton.icon(
+                                                onPressed: () => Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        StockCompareScreen(
+                                                          basePick: widget.pick,
+                                                        ),
+                                                  ),
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.compare_arrows,
+                                                  size: 18,
+                                                ),
+                                                label: const Text(
+                                                  '다른 종목이랑 비교하기',
+                                                ),
+                                                style:
+                                                    OutlinedButton.styleFrom(
+                                                      foregroundColor: cs
+                                                          .onSurface
+                                                          .withValues(
+                                                            alpha: 0.78,
+                                                          ),
+                                                      backgroundColor:
+                                                          cs.onSurface
+                                                              .withValues(
+                                                                alpha: 0.04,
+                                                              ),
+                                                      side: BorderSide(
+                                                        color: cs.onSurface
+                                                            .withValues(
+                                                              alpha: 0.14,
+                                                            ),
+                                                      ),
+                                                      minimumSize:
+                                                          const Size.fromHeight(
+                                                            44,
+                                                          ),
+                                                      textStyle:
+                                                          const TextStyle(
+                                                            fontSize: 14,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                      shape: RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              12,
+                                                            ),
+                                                      ),
+                                                    ),
+                                              ),
+                                            ),
                                             const SizedBox(height: 2),
                                             Divider(
                                               height: 16,

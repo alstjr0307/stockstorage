@@ -18,6 +18,18 @@ class NotificationService {
   bool _initialized = false;
   static final _localNotifications = FlutterLocalNotificationsPlugin();
 
+  Future<void> _applyNewPickTopicSubscription() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final settings = await FirestoreService().getNotificationSettings(user.uid);
+    final enabled = settings['newPick'] ?? true;
+    if (enabled) {
+      await FirebaseMessaging.instance.subscribeToTopic('new_pick_alerts');
+    } else {
+      await FirebaseMessaging.instance.unsubscribeFromTopic('new_pick_alerts');
+    }
+  }
+
   static void registerBackgroundHandler() {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   }
@@ -82,6 +94,7 @@ class NotificationService {
 
     // 새 종목 알림 토픽 구독
     messaging.subscribeToTopic('stock_alerts').catchError((_) {});
+    _applyNewPickTopicSubscription().catchError((_) {});
 
     // 토큰 갱신 시 재저장
     messaging.onTokenRefresh.listen((t) {
@@ -99,6 +112,7 @@ class NotificationService {
               .saveFcmToken(token, uid: user.uid)
               .catchError((_) {});
         }
+        _applyNewPickTopicSubscription().catchError((_) {});
       } catch (_) {}
     });
 

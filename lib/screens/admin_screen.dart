@@ -409,6 +409,7 @@ class _UploadTabState extends State<_UploadTab> {
         FcmDirectService.sendTopicNotification(
           title: '📈 새 추천 종목',
           body: '새 추천 종목이 등록되었습니다. 지금 확인해보세요!',
+          topic: 'new_pick_alerts',
         ).catchError((_) {});
       }
 
@@ -1469,7 +1470,11 @@ class _PushNotificationTabState extends State<_PushNotificationTab> {
 
     try {
       // FcmDirectService로 직접 발송 (Cloud Function 의존 없음)
-      await FcmDirectService.sendTopicNotification(title: title, body: body);
+      await FcmDirectService.sendTopicNotification(
+        title: title,
+        body: body,
+        topic: 'new_pick_alerts',
+      );
       _titleController.clear();
       _bodyController.clear();
       setState(() => _lastResult = '✅ 발송 완료! 전체 유저에게 전송됩니다.');

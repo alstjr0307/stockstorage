@@ -1,9 +1,9 @@
-rules_version = '2';
+﻿rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 관리자 UID
+    // Admin UIDs
     function isAdmin() {
       return request.auth != null && (
         request.auth.uid == '1KzEXKZMoFaYOymYyoI283AR3Y32' ||
@@ -15,22 +15,21 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // ─── _admin: 관리자만 접근 ──────────────────────────────────────────
+    // Admin-only config
     match /_admin/{docId} {
       allow read, write: if isAdmin();
     }
 
-    // ─── stock_picks: 읽기 전체, 쓰기 관리자만 ─────────────────────────
+    // Stock picks
     match /stock_picks/{pickId} {
       allow read: if true;
       allow create, delete: if isAdmin();
-      // 관리자는 모든 필드 수정 가능, 로그인 유저는 upVotes/downVotes만 수정 가능
       allow update: if isAdmin() ||
         (isLoggedIn() &&
          request.resource.data.diff(resource.data).affectedKeys()
            .hasOnly(['upVotes', 'downVotes']));
 
-      // 댓글: 읽기 전체, 쓰기 로그인 유저, 삭제 작성자 또는 관리자
+      // Pick comments
       match /comments/{commentId} {
         allow read: if true;
         allow create: if isLoggedIn();
@@ -38,7 +37,6 @@ service cloud.firestore {
           (resource.data.uid == request.auth.uid || isAdmin());
         allow update: if false;
       }
-
     }
 
     match /users/{userId}/myComments/{commentId} {
@@ -51,26 +49,26 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // ─── announcements: 읽기 전체, 쓰기 관리자만 ──────────────────────
+    // Announcements
     match /announcements/{docId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // ─── market_analyses: 읽기 전체, 쓰기 관리자만 ────────────────────
+    // Market analyses
     match /market_analyses/{docId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // ─── nicknames: 닉네임 중복 확인용 (공개 읽기, 본인만 쓰기) ─────────
+    // Nickname registry
     match /nicknames/{nickname} {
       allow read: if true;
       allow create, update: if isLoggedIn() && request.resource.data.uid == request.auth.uid;
       allow delete: if isLoggedIn() && (resource == null || resource.data.uid == request.auth.uid);
     }
 
-    // ─── users: 본인 데이터만 읽기/쓰기, 관리자 전체 읽기 ────────────
+    // User private data
     match /users/{uid} {
       allow read: if isAdmin() || (isLoggedIn() && request.auth.uid == uid);
       allow write: if isLoggedIn() && request.auth.uid == uid;
@@ -86,34 +84,46 @@ service cloud.firestore {
       match /blockedUsers/{blockedUid} {
         allow read, write: if isLoggedIn() && request.auth.uid == uid;
       }
+
+      match /pick_comment_subscriptions/{pickId} {
+        allow read, write: if isLoggedIn() && request.auth.uid == uid;
+      }
+
+      match /post_comment_subscriptions/{postId} {
+        allow read, write: if isLoggedIn() && request.auth.uid == uid;
+      }
     }
 
-    // ─── user_public: 닉네임/레벨 공개 프로필 ────────────────────────────
+    // User public profile
     match /user_public/{uid} {
       allow read: if true;
       allow write: if isLoggedIn() && request.auth.uid == uid;
     }
 
-    // ─── reports: 로그인 유저 생성, 관리자 읽기/삭제 ──────────────────
+    // Reports
     match /reports/{reportId} {
       allow create: if isLoggedIn() && request.resource.data.reporterUid == request.auth.uid;
       allow read, delete: if isAdmin();
       allow update: if false;
     }
 
-    // ─── fcm_tokens: 누구나 쓰기, 관리자 읽기/삭제 ──────────────────
+    // FCM tokens
     match /fcm_tokens/{token} {
       allow create, update: if request.resource.data.keys().hasOnly(['token', 'uid', 'updatedAt'])
-        && request.resource.data.token == token;
+        && request.resource.data.token == token
+        && (
+          (isLoggedIn() && request.resource.data.uid == request.auth.uid) ||
+          (!isLoggedIn() && request.resource.data.uid == null)
+        );
       allow read, delete: if isAdmin();
     }
 
-    // ─── notification_queue: 관리자만 ─────────────────────────────────
+    // Notification queue
     match /notification_queue/{docId} {
       allow read, write: if isAdmin();
     }
 
-    // ─── fmkorea_index: 읽기 전체, 쓰기 로그인 유저 (앱 캐시) ────────────
+    // FMKorea index/cache
     match /fmkorea_index/{docId} {
       allow read: if true;
       allow write: if isLoggedIn();
@@ -134,13 +144,13 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // ─── night_futures_prices: 읽기 전체, 쓰기 Cloud Function(admin SDK)만 ──
+    // Night futures prices
     match /night_futures_prices/{docId} {
       allow read: if true;
       allow write: if false; // Cloud Function admin SDK bypasses rules
     }
 
-    // ─── posts (자유게시판): 읽기 전체, 쓰기 로그인 유저, 삭제 작성자/관리자 ──
+    // Free board posts
     match /posts/{postId} {
       allow read: if true;
       allow create: if isLoggedIn() && request.resource.data.uid == request.auth.uid;
@@ -161,7 +171,7 @@ service cloud.firestore {
       }
     }
 
-    // ─── trading_journal: 본인만 쓰기, 공개글은 전체 읽기 ──────────────
+    // Trading journal
     match /trading_journal/{journalId} {
       allow read: if resource.data.get('isPublic', false) == true || (isLoggedIn() && resource.data.uid == request.auth.uid);
       allow create: if isLoggedIn() && request.resource.data.uid == request.auth.uid;

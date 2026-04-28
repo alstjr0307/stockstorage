@@ -18,6 +18,19 @@ class UserLevelAvatar extends StatelessWidget {
 
   static final FirestoreService _firestoreService = FirestoreService();
 
+  Widget _buildAvatarShell({required Color accent, required Widget child}) {
+    return Container(
+      width: radius * 2,
+      height: radius * 2,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Color.alphaBlend(accent.withValues(alpha: 0.2), backgroundColor),
+        border: Border.all(color: accent.withValues(alpha: 0.35), width: 1.1),
+      ),
+      child: Center(child: child),
+    );
+  }
+
   Color _levelColor(int level) {
     if (level >= 20) return const Color(0xFFDC2626);
     if (level >= 17) return const Color(0xFFEA580C);
@@ -33,16 +46,13 @@ class UserLevelAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (AuthService.adminUids.contains(uid)) {
-      return CircleAvatar(
-        radius: radius,
-        backgroundColor: Color.alphaBlend(
-          const Color(0xFFF59E0B).withValues(alpha: 0.22),
-          backgroundColor,
-        ),
+      const adminAccent = Color(0xFFF59E0B);
+      return _buildAvatarShell(
+        accent: adminAccent,
         child: Icon(
           Icons.workspace_premium_rounded,
-          size: radius * 1.05,
-          color: const Color(0xFFF59E0B),
+          size: radius * 0.9,
+          color: adminAccent,
         ),
       );
     }
@@ -53,13 +63,15 @@ class UserLevelAvatar extends StatelessWidget {
       builder: (context, snapshot) {
         final level = snapshot.data ?? 1;
         final accent = _levelColor(level);
-        return CircleAvatar(
-          radius: radius,
-          backgroundColor: Color.alphaBlend(
-            accent.withValues(alpha: 0.22),
-            backgroundColor,
+        return _buildAvatarShell(
+          accent: accent,
+          child: Text(
+            '$level',
+            style: textStyle.copyWith(
+              color: accent,
+              fontWeight: FontWeight.w800,
+            ),
           ),
-          child: Text('$level', style: textStyle.copyWith(color: accent)),
         );
       },
     );

@@ -37,6 +37,12 @@ class FirestoreService {
     1045, // Lv.20
   ];
   static const int _afterTableStep = 110;
+  static const Map<String, bool> _defaultNotificationSettings = {
+    'newPick': true,
+    'pickComment': true,
+    'postComment': true,
+    'journalComment': true,
+  };
 
   int calculateUserLevel({
     required int postCount,
@@ -449,9 +455,19 @@ class FirestoreService {
         'favorites': FieldValue.arrayRemove([pickId]),
       }, SetOptions(merge: true));
     } else {
-      return ref.set({
+      final batch = _db.batch();
+      batch.set(ref, {
         'favorites': FieldValue.arrayUnion([pickId]),
       }, SetOptions(merge: true));
+      // 관심추천주 추가 시 해당 종목 댓글 알림을 기본 ON 처리 (유저가 상세에서 OFF 가능)
+      final subRef = ref.collection('pick_comment_subscriptions').doc(pickId);
+      batch.set(subRef, {
+        'pickId': pickId,
+        'enabled': true,
+        'autoFromFavorite': true,
+        'updatedAt': Timestamp.fromDate(DateTime.now()),
+      }, SetOptions(merge: true));
+      return batch.commit();
     }
   }
 
@@ -509,7 +525,7 @@ class FirestoreService {
         .collection('stock_picks')
         .doc(pickId)
         .collection('comments')
-        .orderBy('createdAt', descending: false)
+        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((s) => s.docs.map((d) => Comment.fromFirestore(d)).toList());
   }
@@ -535,6 +551,18 @@ class FirestoreService {
         'createdAt': Timestamp.fromDate(comment.createdAt),
       },
     );
+    // 댓글을 작성한 경우 해당 추천주 댓글 알림을 자동 ON 처리
+    final pickSubRef = _db
+        .collection('users')
+        .doc(comment.uid)
+        .collection('pick_comment_subscriptions')
+        .doc(pickId);
+    batch.set(pickSubRef, {
+      'pickId': pickId,
+      'enabled': true,
+      'autoFromComment': true,
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    }, SetOptions(merge: true));
     await batch.commit();
     await recordCommentCreated(comment.uid);
   }
@@ -890,6 +918,144 @@ class FirestoreService {
       'uid': uid,
       'updatedAt': Timestamp.fromDate(DateTime.now()),
     }, SetOptions(merge: true));
+  }
+
+  Map<String, bool> _parseNotificationSettings(Map<String, dynamic>? data) {
+    final raw = (data?['notificationSettings'] as Map<String, dynamic>?) ?? {};
+    return {
+      'newPick':
+          (raw['newPick'] as bool?) ?? _defaultNotificationSettings['newPick']!,
+      'pickComment':
+          (raw['pickComment'] as bool?) ??
+          _defaultNotificationSettings['pickComment']!,
+      'postComment':
+          (raw['postComment'] as bool?) ??
+          _defaultNotificationSettings['postComment']!,
+      'journalComment':
+          (raw['journalComment'] as bool?) ??
+          _defaultNotificationSettings['journalComment']!,
+    };
+  }
+
+  Future<Map<String, bool>> getNotificationSettings(String uid) async {
+    final doc = await _db.collection('users').doc(uid).get();
+    return _parseNotificationSettings(doc.data());
+  }
+
+  Stream<Map<String, bool>> watchNotificationSettings(String uid) {
+    return _db.collection('users').doc(uid).snapshots().map((doc) {
+      return _parseNotificationSettings(doc.data());
+    });
+  }
+
+  Future<void> updateNotificationSetting(String uid, String key, bool enabled) {
+    return _db.collection('users').doc(uid).set({
+      'notificationSettings': {key: enabled},
+      'lastActiveAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<bool> getPickCommentNotificationEnabled(
+    String uid,
+    String pickId,
+  ) async {
+    final doc = await _db
+        .collection('users')
+        .doc(uid)
+        .collection('pick_comment_subscriptions')
+        .doc(pickId)
+        .get();
+    final explicit = doc.data()?['enabled'] as bool?;
+    if (explicit != null) return explicit;
+    // Legacy users may receive notifications via commenter rule
+    // even without subscription doc.
+    final commented = await _db
+        .collection('stock_picks')
+        .doc(pickId)
+        .collection('comments')
+        .where('uid', isEqualTo: uid)
+        .limit(1)
+        .get();
+    return commented.docs.isNotEmpty;
+  }
+
+  Stream<bool> watchPickCommentNotificationEnabled(String uid, String pickId) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('pick_comment_subscriptions')
+        .doc(pickId)
+        .snapshots()
+        .asyncMap((doc) async {
+          final explicit = doc.data()?['enabled'] as bool?;
+          if (explicit != null) return explicit;
+          final commented = await _db
+              .collection('stock_picks')
+              .doc(pickId)
+              .collection('comments')
+              .where('uid', isEqualTo: uid)
+              .limit(1)
+              .get();
+          return commented.docs.isNotEmpty;
+        });
+  }
+
+  Future<void> setPickCommentNotificationEnabled(
+    String uid,
+    String pickId,
+    bool enabled,
+  ) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('pick_comment_subscriptions')
+        .doc(pickId)
+        .set({
+          'pickId': pickId,
+          'enabled': enabled,
+          'autoFromFavorite': false,
+          'updatedAt': Timestamp.fromDate(DateTime.now()),
+        }, SetOptions(merge: true));
+  }
+
+  Future<bool> getPostCommentNotificationEnabled(
+    String uid,
+    String postId,
+  ) async {
+    final doc = await _db
+        .collection('users')
+        .doc(uid)
+        .collection('post_comment_subscriptions')
+        .doc(postId)
+        .get();
+    return (doc.data()?['enabled'] as bool?) ?? true;
+  }
+
+  Stream<bool> watchPostCommentNotificationEnabled(String uid, String postId) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('post_comment_subscriptions')
+        .doc(postId)
+        .snapshots()
+        .map((doc) => (doc.data()?['enabled'] as bool?) ?? true);
+  }
+
+  Future<void> setPostCommentNotificationEnabled(
+    String uid,
+    String postId,
+    bool enabled,
+  ) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('post_comment_subscriptions')
+        .doc(postId)
+        .set({
+          'postId': postId,
+          'enabled': enabled,
+          'updatedAt': Timestamp.fromDate(DateTime.now()),
+        }, SetOptions(merge: true));
   }
 
   // ── 투자 메모 (users/{uid}/memos/{pickId}) ────────────────────────────

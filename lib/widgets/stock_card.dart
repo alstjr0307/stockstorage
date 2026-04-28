@@ -66,6 +66,16 @@ class _StockCardState extends State<StockCard>
     return pick.returnRate;
   }
 
+  String _mosaicText(String text) {
+    if (text.isEmpty) return text;
+    final chars = text.runes.map((r) => String.fromCharCode(r)).toList();
+    for (var i = 0; i < chars.length; i++) {
+      if (chars[i].trim().isEmpty) continue;
+      chars[i] = '●';
+    }
+    return chars.join();
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -159,7 +169,9 @@ class _StockCardState extends State<StockCard>
                                       ),
                                     )
                                   : Text(
-                                      pick.name,
+                                      isNewPick
+                                          ? _mosaicText(pick.name)
+                                          : pick.name,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: _pretendard(
@@ -182,7 +194,9 @@ class _StockCardState extends State<StockCard>
                                   borderRadius: BorderRadius.circular(9999),
                                 ),
                                 child: Text(
-                                  pick.ticker,
+                                  isNewPick
+                                      ? _mosaicText(pick.ticker)
+                                      : pick.ticker,
                                   style: TextStyle(
                                     color: textSecondary,
                                     fontSize: 11,

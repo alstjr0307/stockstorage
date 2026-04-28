@@ -5,7 +5,7 @@ const { auth } = require('firebase-functions/v1');
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getMessaging } = require('firebase-admin/messaging');
-const { getFirestore } = require('firebase-admin/firestore');
+const { getFirestore, FieldPath } = require('firebase-admin/firestore');
 const https = require('https');
 const axios = require('axios');
 const cheerio = require('cheerio');
@@ -17,6 +17,68 @@ const {
 } = require('./investor_flow');
 
 initializeApp();
+
+async function getTokensByUids(db, uidSet) {
+  const uids = Array.from(uidSet).filter(
+    (uid) => typeof uid === 'string' && uid.length > 0
+  );
+  if (uids.length === 0) return [];
+
+  const tokens = new Set();
+  for (let i = 0; i < uids.length; i += 30) {
+    const chunk = uids.slice(i, i + 30);
+    const snap = await db
+      .collection('fcm_tokens')
+      .where('uid', 'in', chunk)
+      .get();
+    snap.docs.forEach((d) => {
+      const token = d.data().token;
+      if (typeof token === 'string' && token.length > 0) tokens.add(token);
+    });
+  }
+  return Array.from(tokens);
+}
+
+function isNotificationEnabled(userData, key) {
+  const settings = userData?.notificationSettings || {};
+  const value = settings?.[key];
+  return typeof value === 'boolean' ? value : true;
+}
+
+async function filterUsersByGlobalSetting(db, uidSet, key) {
+  const uids = Array.from(uidSet).filter(
+    (uid) => typeof uid === 'string' && uid.length > 0
+  );
+  if (uids.length === 0) return new Set();
+
+  const allowed = new Set();
+  for (let i = 0; i < uids.length; i += 30) {
+    const chunk = uids.slice(i, i + 30);
+    const snap = await db
+      .collection('users')
+      .where(FieldPath.documentId(), 'in', chunk)
+      .get();
+    snap.docs.forEach((d) => {
+      if (isNotificationEnabled(d.data(), key)) allowed.add(d.id);
+    });
+  }
+  return allowed;
+}
+
+async function getPickSubscriptionMap(db, pickId) {
+  const snap = await db
+    .collectionGroup('pick_comment_subscriptions')
+    .where('pickId', '==', pickId)
+    .get();
+  const map = new Map();
+  snap.docs.forEach((d) => {
+    const uid = d.ref.parent.parent?.id;
+    if (!uid) return;
+    map.set(uid, { enabled: d.data()?.enabled !== false });
+  });
+  return map;
+}
+
 exports.crawlDailyInvestorFlow = crawlDailyInvestorFlow;
 exports.runDailyInvestorFlowNow = onCall(
   { region: 'asia-northeast3', timeoutSeconds: 120 },
@@ -80,22 +142,41 @@ exports.sendCommentNotification = onDocumentCreated(
     const pickSnap = await db.collection('stock_picks').doc(pickId).get();
     const pickName = pickSnap.data()?.name ?? '종목';
 
-    // 같은 종목에 댓글 단 다른 유저 uid 수집
+    // same pick commenters
     const commentsSnap = await db
       .collection('stock_picks').doc(pickId).collection('comments').get();
-    const uids = new Set(
+    const commenterUids = new Set(
       commentsSnap.docs
         .map((d) => d.data().uid)
         .filter((u) => u && u !== commenterUid)
     );
-    if (uids.size === 0) return;
 
-    // uid → FCM 토큰 조회
-    const tokensSnap = await db.collection('fcm_tokens').get();
-    const tokens = tokensSnap.docs
-      .filter((d) => uids.has(d.data().uid))
-      .map((d) => d.data().token)
-      .filter((t) => typeof t === 'string' && t.length > 0);
+    // explicit subscribers for this pick
+    const subscriptionMap = await getPickSubscriptionMap(db, pickId);
+    const explicitOnUids = new Set();
+    subscriptionMap.forEach((value, uid) => {
+      if (value.enabled && uid !== commenterUid) explicitOnUids.add(uid);
+    });
+
+    const candidateUids = new Set([...commenterUids, ...explicitOnUids]);
+    if (candidateUids.size === 0) return;
+
+    const globalAllowed = await filterUsersByGlobalSetting(
+      db,
+      candidateUids,
+      'pickComment'
+    );
+    if (globalAllowed.size === 0) return;
+
+    // apply per-pick off
+    const recipientUids = new Set();
+    globalAllowed.forEach((uid) => {
+      const sub = subscriptionMap.get(uid);
+      if (!sub || sub.enabled) recipientUids.add(uid);
+    });
+    if (recipientUids.size === 0) return;
+
+    const tokens = await getTokensByUids(db, recipientUids);
     if (tokens.length === 0) return;
 
     const senderName = nickname || '누군가';
@@ -154,7 +235,24 @@ exports.sendPostCommentNotification = onDocumentCreated(
     // 자기 글에 자기가 댓글 → 알림 없음
     if (!authorUid || authorUid === commenterUid) return;
 
-    // 작성자 FCM 토큰 조회
+    // per-post off
+    const postSubDoc = await db
+      .collection('users')
+      .doc(authorUid)
+      .collection('post_comment_subscriptions')
+      .doc(postId)
+      .get();
+    if ((postSubDoc.data()?.enabled ?? true) === false) return;
+
+    // global off
+    const allowedPostUsers = await filterUsersByGlobalSetting(
+      db,
+      new Set([authorUid]),
+      'postComment'
+    );
+    if (!allowedPostUsers.has(authorUid)) return;
+
+    // author tokens
     const tokensSnap = await db.collection('fcm_tokens')
       .where('uid', '==', authorUid).get();
     const tokens = tokensSnap.docs
@@ -213,6 +311,13 @@ exports.sendJournalCommentNotification = onDocumentCreated(
     const journalData = journalSnap.data() || {};
     const authorUid = journalData.uid;
     if (!authorUid || authorUid === commenterUid) return;
+
+    const allowedJournalUsers = await filterUsersByGlobalSetting(
+      db,
+      new Set([authorUid]),
+      'journalComment'
+    );
+    if (!allowedJournalUsers.has(authorUid)) return;
 
     const tokensSnap = await db.collection('fcm_tokens')
       .where('uid', '==', authorUid)

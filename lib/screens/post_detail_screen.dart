@@ -85,10 +85,11 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
       contentId: c.id,
       reason: reason,
     );
-    if (mounted)
+    if (mounted) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('신고가 접수되었습니다')));
+    }
   }
 
   Future<void> _blockFromComment(Comment c) async {
@@ -209,6 +210,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     await _firestoreService.deletePostComment(widget.post.id, commentId);
   }
 
+  Future<void> _togglePostCommentNotification(bool enabled) async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isLoggedIn) return;
+    await _firestoreService.setPostCommentNotificationEnabled(
+      auth.user!.uid,
+      widget.post.id,
+      enabled,
+    );
+  }
+
   Future<void> _confirmDelete() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -235,15 +246,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final pageBg = theme.scaffoldBackgroundColor;
     final auth = context.watch<AuthProvider>();
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: cs.surface,
+        backgroundColor: pageBg,
         appBar: AppBar(
-          backgroundColor: cs.surface,
+          backgroundColor: pageBg,
           elevation: 0,
           scrolledUnderElevation: 0,
           leading: IconButton(
@@ -260,6 +273,33 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           ),
           centerTitle: true,
           actions: [
+            if (auth.isLoggedIn && auth.user!.uid == widget.post.uid)
+              IconButton(
+                icon: StreamBuilder<bool>(
+                  stream: _firestoreService.watchPostCommentNotificationEnabled(
+                    auth.user!.uid,
+                    widget.post.id,
+                  ),
+                  builder: (context, snap) {
+                    final enabled = snap.data ?? true;
+                    return Icon(
+                      enabled
+                          ? Icons.notifications_active_outlined
+                          : Icons.notifications_off_outlined,
+                      size: 20,
+                      color: cs.onSurface.withValues(alpha: 0.45),
+                    );
+                  },
+                ),
+                onPressed: () async {
+                  final current = await _firestoreService
+                      .getPostCommentNotificationEnabled(
+                        auth.user!.uid,
+                        widget.post.id,
+                      );
+                  await _togglePostCommentNotification(!current);
+                },
+              ),
             if (widget.isOwn && widget.onDelete != null)
               IconButton(
                 icon: Icon(
@@ -282,8 +322,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   if (v == 'report') await widget.onReport?.call();
                   if (v == 'block') {
                     final blocked = await widget.onBlock?.call();
-                    if (blocked == true && context.mounted)
+                    if (blocked == true && context.mounted) {
                       Navigator.pop(context);
+                    }
                   }
                 },
                 itemBuilder: (_) => [
@@ -338,7 +379,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   // 게시글 본문
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
+                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -349,7 +390,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               color: cs.onSurface,
                               fontSize: 22,
                               fontWeight: FontWeight.w800,
-                              height: 1.3,
+                              height: 1.32,
                             ),
                           ),
                           const SizedBox(height: 14),
@@ -358,13 +399,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             children: [
                               UserLevelAvatar(
                                 uid: widget.post.uid,
-                                radius: 14,
-                                backgroundColor: const Color(
-                                  0xFF10B981,
-                                ).withValues(alpha: 0.16),
+                                radius: 11.5,
+                                backgroundColor: cs.onSurface.withValues(
+                                  alpha: 0.08,
+                                ),
                                 textStyle: TextStyle(
-                                  color: const Color(0xFF10B981),
-                                  fontSize: 12,
+                                  color: cs.onSurface.withValues(alpha: 0.62),
+                                  fontSize: 9.5,
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
@@ -372,9 +413,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               Text(
                                 widget.post.nickname,
                                 style: TextStyle(
-                                  color: cs.onSurface.withValues(alpha: 0.75),
+                                  color: cs.onSurface.withValues(alpha: 0.8),
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                               const Spacer(),
@@ -383,15 +424,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                   'yyyy.MM.dd HH:mm',
                                 ).format(widget.post.createdAt),
                                 style: TextStyle(
-                                  color: cs.onSurface.withValues(alpha: 0.3),
-                                  fontSize: 12,
+                                  color: cs.onSurface.withValues(alpha: 0.4),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 20),
                           Divider(
-                            color: cs.onSurface.withValues(alpha: 0.07),
+                            color: cs.onSurface.withValues(alpha: 0.08),
                             height: 1,
                           ),
                           const SizedBox(height: 20),
@@ -510,7 +552,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               ),
                             ),
                           ],
-                          const SizedBox(height: 28),
+                          const SizedBox(height: 20),
                           Row(
                             children: [
                               _LikeRow(
@@ -520,9 +562,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 10),
                           Divider(
-                            color: cs.onSurface.withValues(alpha: 0.07),
+                            color: cs.onSurface.withValues(alpha: 0.08),
                             height: 1,
                           ),
                         ],
@@ -561,12 +603,30 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                   20,
                                   8,
                                 ),
-                                child: Text(
-                                  '댓글($commentCount)',
-                                  style: TextStyle(
-                                    color: cs.onSurface,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
+                                child: RichText(
+                                  text: TextSpan(
+                                    children: [
+                                      TextSpan(
+                                        text: '댓글',
+                                        style: TextStyle(
+                                          color: cs.onSurface,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const TextSpan(text: ' '),
+                                      TextSpan(
+                                        text: '$commentCount',
+                                        style: TextStyle(
+                                          color: cs.onSurface.withValues(
+                                            alpha: 0.72,
+                                          ),
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 0.2,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -644,20 +704,31 @@ class _LikeRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = isLiked ? Colors.redAccent : cs.onSurface;
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: accent.withValues(
+            alpha: isLiked ? 0.12 : (isDark ? 0.14 : 0.08),
+          ),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: accent.withValues(alpha: isLiked ? 0.28 : 0.18),
+          ),
+        ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               isLiked ? Icons.favorite : Icons.favorite_border,
-              size: 18,
+              size: 17,
               color: isLiked
                   ? Colors.redAccent
-                  : cs.onSurface.withValues(alpha: 0.3),
+                  : cs.onSurface.withValues(alpha: 0.55),
             ),
             const SizedBox(width: 5),
             Text(
@@ -665,9 +736,9 @@ class _LikeRow extends StatelessWidget {
               style: TextStyle(
                 color: isLiked
                     ? Colors.redAccent
-                    : cs.onSurface.withValues(alpha: 0.4),
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
+                    : cs.onSurface.withValues(alpha: 0.65),
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ],
@@ -698,18 +769,18 @@ class _CommentTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           UserLevelAvatar(
             uid: comment.uid,
-            radius: 15,
+            radius: 12,
             backgroundColor: cs.onSurface.withValues(alpha: 0.07),
             textStyle: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.55),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
             ),
           ),
           const SizedBox(width: 10),
@@ -722,7 +793,7 @@ class _CommentTile extends StatelessWidget {
                     Text(
                       comment.nickname,
                       style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.8),
+                        color: cs.onSurface.withValues(alpha: 0.82),
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                       ),
@@ -731,8 +802,8 @@ class _CommentTile extends StatelessWidget {
                     Text(
                       DateFormat('MM.dd HH:mm').format(comment.createdAt),
                       style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.3),
-                        fontSize: 12,
+                        color: cs.onSurface.withValues(alpha: 0.38),
+                        fontSize: 11,
                       ),
                     ),
                   ],
@@ -741,7 +812,7 @@ class _CommentTile extends StatelessWidget {
                 Text(
                   comment.content,
                   style: TextStyle(
-                    color: cs.onSurface.withValues(alpha: 0.85),
+                    color: cs.onSurface.withValues(alpha: 0.9),
                     fontSize: 15,
                     height: 1.55,
                   ),
@@ -757,7 +828,7 @@ class _CommentTile extends StatelessWidget {
                 child: Icon(
                   Icons.close,
                   size: 14,
-                  color: cs.onSurface.withValues(alpha: 0.2),
+                  color: cs.onSurface.withValues(alpha: 0.25),
                 ),
               ),
             )
@@ -832,12 +903,13 @@ class _CommentInput extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final pageBg = Theme.of(context).scaffoldBackgroundColor;
     final bottomPad = MediaQuery.of(context).viewInsets.bottom;
     final safeBottom = MediaQuery.of(context).padding.bottom;
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0D1117) : Colors.white,
+        color: pageBg,
         border: Border(
           top: BorderSide(color: cs.onSurface.withValues(alpha: 0.07)),
         ),
@@ -865,9 +937,11 @@ class _CommentInput extends StatelessWidget {
                         fontSize: 15,
                       ),
                       filled: true,
-                      fillColor: cs.onSurface.withValues(alpha: 0.05),
+                      fillColor: isDark
+                          ? cs.surface.withValues(alpha: 0.65)
+                          : Colors.white.withValues(alpha: 0.92),
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(22),
+                        borderRadius: BorderRadius.circular(18),
                         borderSide: BorderSide.none,
                       ),
                       contentPadding: const EdgeInsets.symmetric(

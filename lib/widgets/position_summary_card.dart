@@ -237,7 +237,7 @@ class _PositionSummaryCardState extends State<PositionSummaryCard> {
                                 '₩${_formatter.format(pos.evalAmount.toInt())}',
                                 style: TextStyle(
                                   color: cs.onSurface.withValues(alpha: 0.38),
-                                  fontSize: 11,
+                                  fontSize: 12,
                                 ),
                               ),
                             ),
@@ -270,7 +270,7 @@ class _PositionSummaryCardState extends State<PositionSummaryCard> {
                           '총 평가금액',
                           style: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.38),
-                            fontSize: 11,
+                            fontSize: 12,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -300,7 +300,7 @@ class _PositionSummaryCardState extends State<PositionSummaryCard> {
                           '평가손익',
                           style: TextStyle(
                             color: cs.onSurface.withValues(alpha: 0.38),
-                            fontSize: 11,
+                            fontSize: 12,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -418,7 +418,7 @@ class _DonutChartPainter extends CustomPainter {
       centerLabel,
       const TextStyle(
         color: Colors.white38,
-        fontSize: 9,
+        fontSize: 10,
         fontFamily: 'Pretendard',
       ),
       Offset(center.dx, center.dy - 9),

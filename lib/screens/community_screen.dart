@@ -1949,7 +1949,7 @@ class _JournalCardState extends State<_JournalCard>
         headlineColor: pnlColor,
         rows: [
           (
-            label: '평균단가',
+            label: '평균매입가',
             value: (buyPrice != null && buyPrice > 0) ? fmtP(buyPrice) : '-',
             valueColor: null,
           ),
