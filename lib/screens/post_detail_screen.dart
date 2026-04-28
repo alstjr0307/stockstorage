@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/comment.dart';
 import '../models/post.dart';
 import '../providers/auth_provider.dart';
+import 'write_post_screen.dart';
 import '../services/analytics_service.dart';
 import '../services/firestore_service.dart';
 import '../utils/dialogs.dart';
@@ -18,6 +19,7 @@ class PostDetailScreen extends StatefulWidget {
   final int likeCount;
   final void Function(bool nowLiked)? onLikeChanged;
   final Future<void> Function()? onDelete;
+  final VoidCallback? onEdited;
   final Future<void> Function()? onReport;
   final Future<bool> Function()? onBlock;
 
@@ -29,6 +31,7 @@ class PostDetailScreen extends StatefulWidget {
     required this.likeCount,
     this.onLikeChanged,
     this.onDelete,
+    this.onEdited,
     this.onReport,
     this.onBlock,
   });
@@ -220,6 +223,23 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
+  Future<void> _openEdit() async {
+    final edited = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WritePostScreen(
+          uid: widget.post.uid,
+          nickname: widget.post.nickname,
+          editingPost: widget.post,
+        ),
+      ),
+    );
+    if (edited == true && mounted) {
+      widget.onEdited?.call();
+      Navigator.pop(context, true);
+    }
+  }
+
   Future<void> _confirmDelete() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -300,14 +320,51 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   await _togglePostCommentNotification(!current);
                 },
               ),
-            if (widget.isOwn && widget.onDelete != null)
-              IconButton(
+            if (widget.isOwn)
+              PopupMenuButton<String>(
                 icon: Icon(
-                  Icons.delete_outline,
+                  Icons.more_vert,
                   size: 20,
                   color: cs.onSurface.withValues(alpha: 0.4),
                 ),
-                onPressed: _confirmDelete,
+                color: cs.surface,
+                onSelected: (v) async {
+                  if (v == 'edit') await _openEdit();
+                  if (v == 'delete') await _confirmDelete();
+                },
+                itemBuilder: (_) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 16),
+                        SizedBox(width: 8),
+                        Text('수정하기', style: TextStyle(fontSize: 14)),
+                      ],
+                    ),
+                  ),
+                  if (widget.onDelete != null)
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.delete_outline,
+                            size: 16,
+                            color: Colors.redAccent,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            '삭제하기',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.redAccent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               )
             else if (!widget.isOwn &&
                 (widget.onReport != null || widget.onBlock != null))
@@ -554,6 +611,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           ],
                           const SizedBox(height: 20),
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
                             children: [
                               _LikeRow(
                                 isLiked: _liked,
