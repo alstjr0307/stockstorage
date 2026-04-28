@@ -15,16 +15,46 @@ import 'journal_chart_screen.dart';
 
 const _kQtyEpsilon = 1e-6;
 
-/// 매도 시점(sellDate) 이전 매수들의 가중평균 단가를 반환
-double _avgBuyPriceAt(List<TradingJournal> buys, DateTime sellDate) {
-  double qty = 0, cost = 0;
-  for (final b in buys) {
-    if (!b.tradeDate.isAfter(sellDate)) {
-      qty += b.quantity;
-      cost += b.price * b.quantity;
+/// 매도 시점(sellDate) 직전의 평균단가를 반환.
+/// 이전 매도 물량을 FIFO로 먼저 차감한 뒤 남은 보유 기준으로 계산한다.
+double _avgBuyPriceAt(
+  List<TradingJournal> buys,
+  DateTime sellDate, {
+  List<TradingJournal> sells = const [],
+  String? excludingSellId,
+}) {
+  final buysAsc = buys
+      .where((b) => !b.tradeDate.isAfter(sellDate) && b.quantity > 0 && b.price > 0)
+      .toList()
+    ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+  if (buysAsc.isEmpty) return 0;
+
+  final sellsBefore = sells
+      .where(
+        (s) =>
+            s.id != excludingSellId &&
+            !s.tradeDate.isAfter(sellDate) &&
+            s.quantity > 0,
+      )
+      .toList()
+    ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+
+  var soldLeft = sellsBefore.fold<double>(0.0, (acc, s) => acc + s.quantity);
+  var remainQty = 0.0;
+  var remainCost = 0.0;
+  for (final b in buysAsc) {
+    var lot = b.quantity;
+    if (soldLeft > 0) {
+      final consumed = lot < soldLeft ? lot : soldLeft;
+      lot -= consumed;
+      soldLeft -= consumed;
+    }
+    if (lot > 0) {
+      remainQty += lot;
+      remainCost += b.price * lot;
     }
   }
-  return qty > 0 ? cost / qty : 0;
+  return remainQty > 0 ? remainCost / remainQty : 0;
 }
 
 class TradingJournalTab extends StatelessWidget {
@@ -681,9 +711,12 @@ class _StockPositionMetrics {
     final buysForAvg = [...buys]
       ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
     for (final sell in sells) {
-      final bp = sell.buyPrice > 0
-          ? sell.buyPrice
-          : _avgBuyPriceAt(buysForAvg, sell.tradeDate);
+      final bp = _avgBuyPriceAt(
+        buysForAvg,
+        sell.tradeDate,
+        sells: sells,
+        excludingSellId: sell.id,
+      );
       if (bp > 0 && sell.price > 0 && sell.quantity > 0) {
         realizedPnl += (sell.price - bp) * sell.quantity;
       }
@@ -802,7 +835,7 @@ class _StockHoldingStatusCard extends StatelessWidget {
                       color: (valueColor ?? cs.onSurface).withValues(
                         alpha: 0.75,
                       ),
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -825,7 +858,7 @@ class _StockHoldingStatusCard extends StatelessWidget {
                 '실현손익',
                 style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.5),
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -862,7 +895,7 @@ class _StockHoldingStatusCard extends StatelessWidget {
                       isHolding ? '보유중' : '완료',
                       style: TextStyle(
                         color: badgeBaseColor.withValues(alpha: 0.92),
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -947,6 +980,56 @@ class _StockTradeRecordsCard extends StatelessWidget {
     required this.onDeleteSell,
   });
 
+  Future<void> _openTradeCardOverlay(
+    BuildContext context, {
+    required TradingJournal journal,
+    required List<TradingJournal> buysAsc,
+    required List<TradingJournal> sells,
+  }) async {
+    final sameStockBuys = buysAsc
+        .where((b) => b.ticker == journal.ticker && b.market == journal.market)
+        .toList();
+    final sameStockSells = sells
+        .where((s) => s.ticker == journal.ticker && s.market == journal.market)
+        .toList();
+
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 620, maxHeight: 760),
+          child: SingleChildScrollView(
+            child: _JournalCard(
+              journal: journal,
+              showTradeDate: false,
+              simpleTradeOnly: true,
+              relatedBuys: sameStockBuys,
+              linkedSells: journal.action == '매수'
+                  ? sameStockSells
+                  : const <TradingJournal>[],
+              firestoreService: firestoreService,
+              onEdit: () {
+                Navigator.pop(context);
+                onEdit(journal);
+              },
+              onEditLinkedSell: (sell) {
+                Navigator.pop(context);
+                onEdit(sell);
+              },
+              onDeleteLinkedSell: (sell) {
+                Navigator.pop(context);
+                onDeleteSell(sell);
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -954,6 +1037,7 @@ class _StockTradeRecordsCard extends StatelessWidget {
     final isKrw = events.firstOrNull?.market != 'US';
     final buysAsc = [...buys]
       ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+    final sells = events.where((e) => e.action == '매도').toList();
     String fmtP(double p) => isKrw
         ? '₩${NumberFormat('#,###').format(p.toInt())}'
         : '\$${p.toStringAsFixed(2)}';
@@ -988,7 +1072,7 @@ class _StockTradeRecordsCard extends StatelessWidget {
                 '${events.length}건',
                 style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.6),
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -1005,7 +1089,7 @@ class _StockTradeRecordsCard extends StatelessWidget {
                   entry.key,
                   style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.5),
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1023,12 +1107,21 @@ class _StockTradeRecordsCard extends StatelessWidget {
             _StockTradeRow(
               journal: journal,
               buyAvgPrice: journal.action == '매도'
-                  ? (journal.buyPrice > 0
-                        ? journal.buyPrice
-                        : _avgBuyPriceAt(buysAsc, journal.tradeDate))
+                  ? _avgBuyPriceAt(
+                      buysAsc,
+                      journal.tradeDate,
+                      sells: sells,
+                      excludingSellId: journal.id,
+                    )
                   : null,
               fmtP: fmtP,
               fmtQty: fmtQty,
+              onOpenDetail: () => _openTradeCardOverlay(
+                context,
+                journal: journal,
+                buysAsc: buysAsc,
+                sells: sells,
+              ),
               onEdit: () => onEdit(journal),
               onDelete: journal.action == '매도'
                   ? () => onDeleteSell(journal)
@@ -1045,6 +1138,7 @@ class _StockTradeRow extends StatelessWidget {
   final double? buyAvgPrice;
   final String Function(double value) fmtP;
   final String Function(double value) fmtQty;
+  final VoidCallback onOpenDetail;
   final VoidCallback onEdit;
   final VoidCallback? onDelete;
 
@@ -1053,6 +1147,7 @@ class _StockTradeRow extends StatelessWidget {
     required this.buyAvgPrice,
     required this.fmtP,
     required this.fmtQty,
+    required this.onOpenDetail,
     required this.onEdit,
     this.onDelete,
   });
@@ -1073,92 +1168,96 @@ class _StockTradeRow extends StatelessWidget {
     }
     final pnlUp = realizedPnl == null || realizedPnl >= 0;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(
-            color: cs.onSurface.withValues(alpha: isDark ? 0.07 : 0.06),
+    return GestureDetector(
+      onTap: onOpenDetail,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(
+              color: cs.onSurface.withValues(alpha: isDark ? 0.07 : 0.06),
+            ),
           ),
         ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.11),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: color.withValues(alpha: 0.24)),
-            ),
-            child: Text(
-              journal.action,
-              style: TextStyle(
-                color: color,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.11),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: color.withValues(alpha: 0.24)),
+              ),
+              child: Text(
+                journal.action,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  fmtP(journal.price),
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    fmtP(journal.price),
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${fmtQty(journal.quantity)} · ${NumberFormat('#,###').format((journal.price * journal.quantity).toInt())}원',
-                  style: TextStyle(
-                    color: cs.onSurface.withValues(alpha: 0.52),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                  const SizedBox(height: 2),
+                  Text(
+                    '${fmtQty(journal.quantity)} · ${NumberFormat('#,###').format((journal.price * journal.quantity).toInt())}원',
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.52),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
+                ],
+              ),
+            ),
+            if (realizedPnl != null) ...[
+              Text(
+                '${pnlUp ? '+' : ''}${fmtP(realizedPnl)}',
+                style: TextStyle(
+                  color: pnlUp
+                      ? const Color(0xFFF04452)
+                      : const Color(0xFF1677FF),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
                 ),
+              ),
+              const SizedBox(width: 4),
+            ],
+            PopupMenuButton<String>(
+              tooltip: '매매기록 메뉴',
+              icon: Icon(
+                Icons.more_vert,
+                size: 18,
+                color: cs.onSurface.withValues(alpha: 0.4),
+              ),
+              color: cs.surface,
+              onSelected: (value) {
+                if (value == 'edit') onEdit();
+                if (value == 'delete') onDelete?.call();
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: 'edit', child: Text('수정')),
+                if (onDelete != null)
+                  const PopupMenuItem(value: 'delete', child: Text('삭제')),
               ],
             ),
-          ),
-          if (realizedPnl != null) ...[
-            Text(
-              '${pnlUp ? '+' : ''}${fmtP(realizedPnl)}',
-              style: TextStyle(
-                color: pnlUp
-                    ? const Color(0xFFF04452)
-                    : const Color(0xFF1677FF),
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(width: 4),
           ],
-          PopupMenuButton<String>(
-            tooltip: '매매기록 메뉴',
-            icon: Icon(
-              Icons.more_vert,
-              size: 18,
-              color: cs.onSurface.withValues(alpha: 0.4),
-            ),
-            color: cs.surface,
-            onSelected: (value) {
-              if (value == 'edit') onEdit();
-              if (value == 'delete') onDelete?.call();
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(value: 'edit', child: Text('수정')),
-              if (onDelete != null)
-                const PopupMenuItem(value: 'delete', child: Text('삭제')),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1224,7 +1323,7 @@ class _StockChartCard extends StatelessWidget {
           hasLivePrice ? '현재가 ${fmtP(currentPrice)}' : '현재가 -',
           style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.58),
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -1256,7 +1355,7 @@ class _StockChartCard extends StatelessWidget {
                   '평균 매수가 ${avgBuyPrice > 0 ? fmtP(avgBuyPrice) : '-'}',
                   style: TextStyle(
                     color: const Color(0xFF34D399).withValues(alpha: 0.85),
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1268,7 +1367,7 @@ class _StockChartCard extends StatelessWidget {
                     textAlign: TextAlign.right,
                     style: TextStyle(
                       color: const Color(0xFFF04452).withValues(alpha: 0.85),
-                      fontSize: 11,
+                      fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -1478,7 +1577,7 @@ class _InlineLegendDot extends StatelessWidget {
           label,
           style: TextStyle(
             color: cs.onSurface.withValues(alpha: isDark ? 0.52 : 0.58),
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -2121,7 +2220,7 @@ class _PortfolioSummarySectionState extends State<_PortfolioSummarySection> {
                   '보유 포지션',
                   style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.5),
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.5,
                   ),
@@ -2140,7 +2239,7 @@ class _PortfolioSummarySectionState extends State<_PortfolioSummarySection> {
                     '${widget.holdings.length}',
                     style: TextStyle(
                       color: const Color(0xFF10B981),
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -2155,7 +2254,7 @@ class _PortfolioSummarySectionState extends State<_PortfolioSummarySection> {
                         '평가금액',
                         style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.3),
-                          fontSize: 9,
+                          fontSize: 10,
                         ),
                       ),
                       Text(
@@ -2176,7 +2275,7 @@ class _PortfolioSummarySectionState extends State<_PortfolioSummarySection> {
                         '평가손익',
                         style: TextStyle(
                           color: cs.onSurface.withValues(alpha: 0.3),
-                          fontSize: 9,
+                          fontSize: 10,
                         ),
                       ),
                       Text(
@@ -2282,7 +2381,7 @@ class _HoldingRow extends StatelessWidget {
                   buy.ticker.isNotEmpty ? '$qtyStr  ·  ${buy.ticker}' : qtyStr,
                   style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.4),
-                    fontSize: 11,
+                    fontSize: 12,
                   ),
                 ),
               ],
@@ -2298,7 +2397,7 @@ class _HoldingRow extends StatelessWidget {
                   '평가금액',
                   style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.3),
-                    fontSize: 9,
+                    fontSize: 10,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -2328,7 +2427,7 @@ class _HoldingRow extends StatelessWidget {
                   '평가손익',
                   style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.3),
-                    fontSize: 9,
+                    fontSize: 10,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -2347,7 +2446,7 @@ class _HoldingRow extends StatelessWidget {
                     '${isUp ? '+' : ''}${pnlPct.toStringAsFixed(1)}%',
                     style: TextStyle(
                       color: pnlColor.withValues(alpha: 0.7),
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -2425,30 +2524,16 @@ class _JournalCardState extends State<_JournalCard> {
         : (journal.action == '매수' ? [journal] : <TradingJournal>[]);
 
     final result = <String, double>{};
-    final hasLinkedLot = widget.linkedSells.any(
-      (s) =>
-          s.linkedBuyId.isNotEmpty &&
-          _groupedBuys.any((b) => b.id == s.linkedBuyId),
+    final buysAsc = [..._groupedBuys]
+      ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+    var soldLeft = widget.linkedSells.fold<double>(
+      0.0,
+      (sum, s) => sum + s.quantity,
     );
-    if (hasLinkedLot) {
-      for (final buy in _groupedBuys) {
-        final sold = widget.linkedSells
-            .where((s) => s.linkedBuyId == buy.id)
-            .fold(0.0, (sum, s) => sum + s.quantity);
-        result[buy.id] = (buy.quantity - sold).clamp(0.0, buy.quantity);
-      }
-    } else {
-      final buysAsc = [..._groupedBuys]
-        ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
-      var soldLeft = widget.linkedSells.fold<double>(
-        0.0,
-        (sum, s) => sum + s.quantity,
-      );
-      for (final buy in buysAsc) {
-        final consumed = soldLeft > buy.quantity ? buy.quantity : soldLeft;
-        result[buy.id] = (buy.quantity - consumed).clamp(0.0, buy.quantity);
-        soldLeft = soldLeft > consumed ? soldLeft - consumed : 0.0;
-      }
+    for (final buy in buysAsc) {
+      final consumed = soldLeft > buy.quantity ? buy.quantity : soldLeft;
+      result[buy.id] = (buy.quantity - consumed).clamp(0.0, buy.quantity);
+      soldLeft = soldLeft > consumed ? soldLeft - consumed : 0.0;
     }
     _remainingByBuyId = result;
   }
@@ -2548,6 +2633,20 @@ class _JournalCardState extends State<_JournalCard> {
         ),
       );
     }
+  }
+
+  Future<void> _openHoldingStatus(BuildContext context) async {
+    if (widget.journal.ticker.isEmpty) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TradingJournalTab(
+          filterTicker: widget.journal.ticker,
+          filterStockName: widget.journal.stockName,
+          pageTitle: widget.journal.stockName,
+        ),
+      ),
+    );
   }
 
   @override
@@ -2845,7 +2944,7 @@ class _JournalCardState extends State<_JournalCard> {
             text,
             style: TextStyle(
               color: color,
-              fontSize: 10,
+              fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -2942,6 +3041,48 @@ class _JournalCardState extends State<_JournalCard> {
                 )
               else
                 const Spacer(),
+              if (!isEtcCard) const SizedBox(width: 8),
+              if (!isEtcCard)
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => _openHoldingStatus(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: cs.onSurface.withValues(
+                          alpha: isDark ? 0.08 : 0.05,
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: cs.onSurface.withValues(
+                            alpha: isDark ? 0.22 : 0.16,
+                          ),
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.account_balance_wallet_outlined,
+                            size: 16,
+                            color: cs.onSurface.withValues(alpha: 0.72),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '보유 현황',
+                            style: TextStyle(
+                              color: cs.onSurface.withValues(alpha: 0.78),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               if (!isEtcCard) const SizedBox(width: 10),
               if (!isEtcCard)
                 Container(
@@ -3114,7 +3255,7 @@ class _JournalCardState extends State<_JournalCard> {
                                 journal.action == '매도' ? '실현손익' : '평가손익',
                                 style: TextStyle(
                                   color: cs.onSurface.withValues(alpha: 0.24),
-                                  fontSize: 10,
+                                  fontSize: 11,
                                   fontWeight: FontWeight.w600,
                                   letterSpacing: 0.4,
                                 ),
@@ -3230,7 +3371,7 @@ class _JournalCardState extends State<_JournalCard> {
                             '포지션 종료',
                             style: TextStyle(
                               color: cs.onSurface.withValues(alpha: 0.5),
-                              fontSize: 11,
+                              fontSize: 12,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 0.5,
                             ),
@@ -3262,7 +3403,7 @@ class _JournalCardState extends State<_JournalCard> {
                                 '거래일',
                                 style: TextStyle(
                                   color: tradeDateLabelColor,
-                                  fontSize: 11,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: 0.3,
                                 ),
@@ -3292,7 +3433,7 @@ class _JournalCardState extends State<_JournalCard> {
                                     '매수',
                                     style: TextStyle(
                                       color: actionColor,
-                                      fontSize: 11,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -3324,7 +3465,7 @@ class _JournalCardState extends State<_JournalCard> {
                                     '매수',
                                     style: TextStyle(
                                       color: actionColor,
-                                      fontSize: 11,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -3367,7 +3508,7 @@ class _JournalCardState extends State<_JournalCard> {
                                             color: cs.onSurface.withValues(
                                               alpha: 0.45,
                                             ),
-                                            fontSize: 10,
+                                            fontSize: 11,
                                           ),
                                         ),
                                       ],
@@ -3379,7 +3520,7 @@ class _JournalCardState extends State<_JournalCard> {
                                             color: cs.onSurface.withValues(
                                               alpha: 0.2,
                                             ),
-                                            fontSize: 10,
+                                            fontSize: 11,
                                           ),
                                         ),
                                       if (marketLabel.isNotEmpty)
@@ -3389,7 +3530,7 @@ class _JournalCardState extends State<_JournalCard> {
                                             color: cs.onSurface.withValues(
                                               alpha: 0.35,
                                             ),
-                                            fontSize: 10,
+                                            fontSize: 11,
                                           ),
                                         ),
                                     ],
@@ -3462,7 +3603,7 @@ class _JournalCardState extends State<_JournalCard> {
                                           color: cs.onSurface.withValues(
                                             alpha: 0.38,
                                           ),
-                                          fontSize: 10,
+                                          fontSize: 11,
                                           fontWeight: FontWeight.w500,
                                           letterSpacing: 0.3,
                                         ),
@@ -3889,7 +4030,7 @@ class _JournalCardState extends State<_JournalCard> {
                                   '실현손익  ',
                                   style: TextStyle(
                                     color: isRealizedUp ? _upColor : _downColor,
-                                    fontSize: 11,
+                                    fontSize: 12,
                                   ),
                                 ),
                                 Text(
@@ -3907,7 +4048,7 @@ class _JournalCardState extends State<_JournalCard> {
                                     color: isRealizedUp
                                         ? _upColor.withValues(alpha: 0.8)
                                         : _downColor.withValues(alpha: 0.8),
-                                    fontSize: 11,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -3939,7 +4080,7 @@ class _JournalCardState extends State<_JournalCard> {
                                       color: cs.onSurface.withValues(
                                         alpha: 0.3,
                                       ),
-                                      fontSize: 10,
+                                      fontSize: 11,
                                     ),
                                   ),
                                 ],
@@ -3953,7 +4094,7 @@ class _JournalCardState extends State<_JournalCard> {
                                   '현재가  ',
                                   style: TextStyle(
                                     color: cs.onSurface.withValues(alpha: 0.4),
-                                    fontSize: 11,
+                                    fontSize: 12,
                                   ),
                                 ),
                                 Text(
@@ -3971,7 +4112,7 @@ class _JournalCardState extends State<_JournalCard> {
                                     color: _price!.isUp
                                         ? const Color(0xFF10B981)
                                         : Colors.redAccent,
-                                    fontSize: 11,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -4019,7 +4160,7 @@ class _JournalCardState extends State<_JournalCard> {
                                         color: isPnlUp
                                             ? const Color(0xFF10B981)
                                             : Colors.redAccent,
-                                        fontSize: 11,
+                                        fontSize: 12,
                                       ),
                                     ),
                                     Text(
@@ -4043,7 +4184,7 @@ class _JournalCardState extends State<_JournalCard> {
                                             : Colors.redAccent.withValues(
                                                 alpha: 0.8,
                                               ),
-                                        fontSize: 11,
+                                        fontSize: 12,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
@@ -4096,7 +4237,7 @@ class _JournalCardState extends State<_JournalCard> {
                                             color: cs.onSurface.withValues(
                                               alpha: 0.7,
                                             ),
-                                            fontSize: 11,
+                                            fontSize: 12,
                                             fontWeight: FontWeight.w700,
                                           ),
                                         ),
@@ -4108,7 +4249,7 @@ class _JournalCardState extends State<_JournalCard> {
                                           color: cs.onSurface.withValues(
                                             alpha: 0.45,
                                           ),
-                                          fontSize: 10,
+                                          fontSize: 11,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -4128,12 +4269,16 @@ class _JournalCardState extends State<_JournalCard> {
                                       ? fmtP(t.price)
                                       : '-';
                                   double? tradePnl;
-                                  if (!isBuy &&
-                                      t.buyPrice > 0 &&
-                                      t.price > 0 &&
-                                      t.quantity > 0) {
-                                    tradePnl =
-                                        (t.price - t.buyPrice) * t.quantity;
+                                  if (!isBuy && t.price > 0 && t.quantity > 0) {
+                                    final bp = _avgBuyPriceAt(
+                                      groupedBuys,
+                                      t.tradeDate,
+                                      sells: widget.linkedSells,
+                                      excludingSellId: t.id,
+                                    );
+                                    if (bp > 0) {
+                                      tradePnl = (t.price - bp) * t.quantity;
+                                    }
                                   }
                                   final isTradePnlUp =
                                       tradePnl != null && tradePnl >= 0;
@@ -4163,7 +4308,7 @@ class _JournalCardState extends State<_JournalCard> {
                                             color: isBuy
                                                 ? const Color(0xFF10B981)
                                                 : _upColor,
-                                            fontSize: 11,
+                                            fontSize: 12,
                                             fontWeight: FontWeight.w700,
                                           ),
                                         ),
@@ -4288,7 +4433,7 @@ class _JournalCardState extends State<_JournalCard> {
                                               color: cs.onSurface.withValues(
                                                 alpha: 0.5,
                                               ),
-                                              fontSize: 11,
+                                              fontSize: 12,
                                               fontWeight: FontWeight.w700,
                                             ),
                                           ),
@@ -4502,7 +4647,7 @@ class _JournalDetailSheet extends StatelessWidget {
         text,
         style: TextStyle(
           color: cs.onSurface.withValues(alpha: 0.35),
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: FontWeight.w600,
           letterSpacing: 0.5,
         ),
@@ -4536,7 +4681,7 @@ class _JournalDetailSheet extends StatelessWidget {
                 label,
                 style: TextStyle(
                   color: isUp ? upColor : downColor,
-                  fontSize: 11,
+                  fontSize: 12,
                 ),
               ),
               const SizedBox(height: 4),
@@ -4845,7 +4990,7 @@ class _JournalDetailSheet extends StatelessWidget {
                                       color: cs.onSurface.withValues(
                                         alpha: 0.35,
                                       ),
-                                      fontSize: 11,
+                                      fontSize: 12,
                                     ),
                                   ),
                                   const SizedBox(height: 2),
@@ -4871,7 +5016,7 @@ class _JournalDetailSheet extends StatelessWidget {
                                         color: cs.onSurface.withValues(
                                           alpha: 0.35,
                                         ),
-                                        fontSize: 11,
+                                        fontSize: 12,
                                       ),
                                     ),
                                     const SizedBox(height: 2),
@@ -4889,7 +5034,7 @@ class _JournalDetailSheet extends StatelessWidget {
                                         style: TextStyle(
                                           color: (sIsUp ? upColor : downColor)
                                               .withValues(alpha: 0.7),
-                                          fontSize: 11,
+                                          fontSize: 12,
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -5000,6 +5145,9 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
   bool _isPublic = false;
   bool _saving = false;
   bool _manualMode = false; // 직접 입력 모드
+  bool get _isEditingTradeDateLocked =>
+      widget.existing != null &&
+      (widget.existing!.action == '매도' || widget.existing!.action == '매수');
 
   PriceResult? _priceResult;
   bool _fetchingPrice = false;
@@ -5200,6 +5348,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
   }
 
   Future<void> _pickDate() async {
+    if (_isEditingTradeDateLocked) return;
     final picked = await showDatePicker(
       context: context,
       initialDate: _tradeDate,
@@ -5287,6 +5436,32 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
     setState(() => _qtyError = null);
     setState(() => _saving = true);
     try {
+      double sellBuyPrice = 0;
+      String sellLinkedBuyId = '';
+      if (_action == '매도') {
+        if (widget.existing?.action == '매도') {
+          sellBuyPrice = widget.existing!.buyPrice;
+          sellLinkedBuyId = widget.existing!.linkedBuyId;
+        } else if (widget.initialLinkedBuyJournal != null) {
+          final linkedBuy = widget.initialLinkedBuyJournal!;
+          sellBuyPrice = linkedBuy.price;
+          sellLinkedBuyId = linkedBuy.id;
+        } else if (_ticker.trim().isNotEmpty) {
+          final allJournals = await widget.firestoreService
+              .getMyJournalsByUidOnce(widget.uid);
+          final buysAsc = allJournals
+              .where(
+                (j) =>
+                    j.action == '매수' &&
+                    j.ticker == _ticker.toUpperCase() &&
+                    j.market == (_rawMarket.isNotEmpty ? _rawMarket : _market),
+              )
+              .toList()
+            ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+          sellBuyPrice = _avgBuyPriceAt(buysAsc, _tradeDate);
+        }
+      }
+
       final journal = TradingJournal(
         id: widget.existing?.id ?? '',
         uid: widget.uid,
@@ -5302,12 +5477,8 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
         isPublic: _isPublic,
         likes: widget.existing?.likes ?? 0,
         createdAt: widget.existing?.createdAt ?? DateTime.now(),
-        buyPrice: widget.existing?.action == '매도'
-            ? widget.existing!.buyPrice
-            : 0,
-        linkedBuyId: widget.existing?.action == '매도'
-            ? widget.existing!.linkedBuyId
-            : '',
+        buyPrice: sellBuyPrice,
+        linkedBuyId: sellLinkedBuyId,
       );
       if (widget.existing != null) {
         await widget.firestoreService.updateJournal(journal);
@@ -5633,7 +5804,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                               '다시 선택',
                               style: TextStyle(
                                 color: cs.onSurface.withValues(alpha: 0.4),
-                                fontSize: 11,
+                                fontSize: 12,
                               ),
                             ),
                           ),
@@ -5916,7 +6087,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                       color: cs.onSurface.withValues(
                                         alpha: 0.35,
                                       ),
-                                      fontSize: 11,
+                                      fontSize: 12,
                                     ),
                                   ),
                                 ],
@@ -5929,7 +6100,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                       color: cs.onSurface.withValues(
                                         alpha: 0.4,
                                       ),
-                                      fontSize: 11,
+                                      fontSize: 12,
                                     ),
                                   ),
                                   const SizedBox(width: 6),
@@ -5950,7 +6121,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                       color: _priceResult!.isUp
                                           ? const Color(0xFF10B981)
                                           : Colors.redAccent,
-                                      fontSize: 11,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -5985,7 +6156,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                             '다시 선택',
                             style: TextStyle(
                               color: cs.onSurface.withValues(alpha: 0.4),
-                              fontSize: 11,
+                              fontSize: 12,
                             ),
                           ),
                         ),
@@ -6136,7 +6307,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                   '현재가 조회 중...',
                                   style: TextStyle(
                                     color: cs.onSurface.withValues(alpha: 0.35),
-                                    fontSize: 11,
+                                    fontSize: 12,
                                   ),
                                 ),
                               ],
@@ -6147,7 +6318,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                   '현재가:',
                                   style: TextStyle(
                                     color: cs.onSurface.withValues(alpha: 0.4),
-                                    fontSize: 11,
+                                    fontSize: 12,
                                   ),
                                 ),
                                 const SizedBox(width: 6),
@@ -6166,7 +6337,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                     color: _priceResult!.isUp
                                         ? const Color(0xFF10B981)
                                         : Colors.redAccent,
-                                    fontSize: 11,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -6276,7 +6447,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                   ),
                   const SizedBox(height: 6),
                   GestureDetector(
-                    onTap: _pickDate,
+                    onTap: _isEditingTradeDateLocked ? null : _pickDate,
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
@@ -6302,10 +6473,28 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                               fontSize: 14,
                             ),
                           ),
+                          if (_isEditingTradeDateLocked) ...[
+                            const SizedBox(width: 8),
+                            Icon(
+                              Icons.lock_outline,
+                              size: 14,
+                              color: cs.onSurface.withValues(alpha: 0.4),
+                            ),
+                          ],
                         ],
                       ),
                     ),
                   ),
+                  if (_isEditingTradeDateLocked) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '수정 시 거래일은 변경할 수 없습니다.',
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.45),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
                 ],
                 const SizedBox(height: 12),
                 // 메모
@@ -6366,7 +6555,7 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                               '다른 유저들이 볼 수 있습니다',
                               style: TextStyle(
                                 color: isDark ? Colors.white38 : Colors.black38,
-                                fontSize: 11,
+                                fontSize: 12,
                               ),
                             ),
                           ],
@@ -6631,7 +6820,7 @@ class _StockPickerSheetState extends State<_StockPickerSheet> {
                                       color: cs.onSurface.withValues(
                                         alpha: 0.4,
                                       ),
-                                      fontSize: 10,
+                                      fontSize: 11,
                                     ),
                                   ),
                                 ),
@@ -6651,7 +6840,7 @@ class _StockPickerSheetState extends State<_StockPickerSheet> {
                                   pick.market,
                                   style: TextStyle(
                                     color: const Color(0xFF10B981),
-                                    fontSize: 10,
+                                    fontSize: 11,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),

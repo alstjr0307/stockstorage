@@ -1019,6 +1019,7 @@ class _JournalCardState extends State<_JournalCard>
   bool _openingChart = false;
   bool _loadingPrice = false;
   PriceResult? _price;
+  Future<double?>? _sellAvgBuyPriceFuture;
   late final AnimationController _newBadgeController;
   late final Animation<double> _newBadgeOpacity;
   late final Animation<double> _newBadgeScale;
@@ -1037,6 +1038,9 @@ class _JournalCardState extends State<_JournalCard>
       CurvedAnimation(parent: _newBadgeController, curve: Curves.easeOut),
     );
     _fetchPriceForBuyIfNeeded();
+    if (widget.journal.action == '매도') {
+      _sellAvgBuyPriceFuture = _resolveSellAvgBuyPrice();
+    }
   }
 
   @override
@@ -1051,7 +1055,68 @@ class _JournalCardState extends State<_JournalCard>
       _price = null;
       _loadingPrice = false;
       _fetchPriceForBuyIfNeeded();
+      _sellAvgBuyPriceFuture = (newJ.action == '매도')
+          ? _resolveSellAvgBuyPrice()
+          : null;
     }
+  }
+
+  Future<double?> _resolveSellAvgBuyPrice() async {
+    final journal = widget.journal;
+    final items = await _firestoreService.getPublicJournalsByUidOnce(journal.uid);
+    final buys = items
+        .where(
+          (j) =>
+              j.action == '매수' &&
+              j.ticker == journal.ticker &&
+              j.market == journal.market &&
+              !j.tradeDate.isAfter(journal.tradeDate) &&
+              j.price > 0 &&
+              j.quantity > 0,
+        )
+        .toList()
+      ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+    final sellsBefore = items
+        .where(
+          (j) =>
+              j.action == '매도' &&
+              j.id != journal.id &&
+              j.ticker == journal.ticker &&
+              j.market == journal.market &&
+              !j.tradeDate.isAfter(journal.tradeDate) &&
+              j.quantity > 0,
+        )
+        .toList();
+    if (buys.isEmpty) {
+      return null;
+    }
+    // FIFO로 이전 매도 물량을 차감한 뒤, 현재 매도 시점의 보유 원가평균 계산
+    var sellQtyToConsume = sellsBefore.fold<double>(0.0, (acc, s) => acc + s.quantity);
+    final remainingLots = <(double price, double qty)>[];
+    for (final b in buys) {
+      var lotQty = b.quantity;
+      if (sellQtyToConsume > 0) {
+        final consumed = lotQty < sellQtyToConsume ? lotQty : sellQtyToConsume;
+        lotQty -= consumed;
+        sellQtyToConsume -= consumed;
+      }
+      if (lotQty > 0) {
+        remainingLots.add((b.price, lotQty));
+      }
+    }
+    if (remainingLots.isEmpty) {
+      return null;
+    }
+    var remainQty = 0.0;
+    var remainCost = 0.0;
+    for (final lot in remainingLots) {
+      remainQty += lot.$2;
+      remainCost += lot.$1 * lot.$2;
+    }
+    if (remainQty <= 0) {
+      return null;
+    }
+    return remainCost / remainQty;
   }
 
   @override
@@ -1849,55 +1914,66 @@ class _JournalCardState extends State<_JournalCard>
         ? '${journal.quantity % 1 == 0 ? journal.quantity.toInt() : journal.quantity}주'
         : '-';
 
-    double? realizedPnl;
-    double? realizedPct;
-    if (journal.buyPrice > 0 && journal.price > 0 && journal.quantity > 0) {
-      realizedPnl = (journal.price - journal.buyPrice) * journal.quantity;
-      realizedPct = (journal.price - journal.buyPrice) / journal.buyPrice * 100;
+    Widget buildCard(double? buyPrice) {
+      double? realizedPnl;
+      double? realizedPct;
+      if (buyPrice != null &&
+          buyPrice > 0 &&
+          journal.price > 0 &&
+          journal.quantity > 0) {
+        realizedPnl = (journal.price - buyPrice) * journal.quantity;
+        realizedPct = (journal.price - buyPrice) / buyPrice * 100;
+      }
+      final isUp = realizedPnl == null || realizedPnl >= 0;
+      const upColor = Color(0xFFF04452);
+      const downColor = Color(0xFF1677FF);
+      final pnlColor = realizedPnl != null
+          ? (isUp ? upColor : downColor)
+          : cs.onSurface.withValues(alpha: 0.45);
+
+      final pnlText = realizedPnl != null
+          ? '${isUp ? '+' : ''}${fmtP(realizedPnl)}'
+          : '-';
+      final pctText = realizedPct != null
+          ? '${isUp ? '+' : ''}${realizedPct.toStringAsFixed(1)}%'
+          : '-';
+
+      return _buildShareTradeCard(
+        journal: journal,
+        actionLabel: '매도',
+        tone: const Color(0xFFF04452),
+        tradeDateText: tradeDateText,
+        headlineLabel: '실현손익',
+        headlineValue: pnlText,
+        headlineBadge: pctText,
+        headlineColor: pnlColor,
+        rows: [
+          (
+            label: '평균단가',
+            value: (buyPrice != null && buyPrice > 0) ? fmtP(buyPrice) : '-',
+            valueColor: null,
+          ),
+          (
+            label: '매도가',
+            value: journal.price > 0 ? fmtP(journal.price) : '-',
+            valueColor: pnlColor,
+          ),
+          (label: '매도수량', value: qtyStr, valueColor: null),
+          (
+            label: '매도금액',
+            value: journal.price > 0 && journal.quantity > 0
+                ? fmtP(journal.price * journal.quantity)
+                : '-',
+            valueColor: null,
+          ),
+        ],
+      );
     }
-    final isUp = realizedPnl == null || realizedPnl >= 0;
-    const upColor = Color(0xFFF04452);
-    const downColor = Color(0xFF1677FF);
-    final pnlColor = realizedPnl != null
-        ? (isUp ? upColor : downColor)
-        : cs.onSurface.withValues(alpha: 0.45);
 
-    final pnlText = realizedPnl != null
-        ? '${isUp ? '+' : ''}${fmtP(realizedPnl)}'
-        : '-';
-    final pctText = realizedPct != null
-        ? '${isUp ? '+' : ''}${realizedPct.toStringAsFixed(1)}%'
-        : '-';
-
-    return _buildShareTradeCard(
-      journal: journal,
-      actionLabel: '매도',
-      tone: const Color(0xFFF04452),
-      tradeDateText: tradeDateText,
-      headlineLabel: '실현손익',
-      headlineValue: pnlText,
-      headlineBadge: pctText,
-      headlineColor: pnlColor,
-      rows: [
-        (
-          label: '평균단가',
-          value: journal.buyPrice > 0 ? fmtP(journal.buyPrice) : '-',
-          valueColor: null,
-        ),
-        (
-          label: '매도가',
-          value: journal.price > 0 ? fmtP(journal.price) : '-',
-          valueColor: pnlColor,
-        ),
-        (label: '매도수량', value: qtyStr, valueColor: null),
-        (
-          label: '매도금액',
-          value: journal.price > 0 && journal.quantity > 0
-              ? fmtP(journal.price * journal.quantity)
-              : '-',
-          valueColor: null,
-        ),
-      ],
+    return FutureBuilder<double?>(
+      future: _sellAvgBuyPriceFuture ?? _resolveSellAvgBuyPrice(),
+      builder: (context, snap) =>
+          buildCard(snap.data ?? (journal.buyPrice > 0 ? journal.buyPrice : null)),
     );
   }
 
@@ -2183,6 +2259,7 @@ class _PostCardState extends State<_PostCard> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final post = widget.post;
     final imageUrls = _extractImageUrls(post.content);
     final textContent = _stripImages(post.content);
@@ -2333,33 +2410,110 @@ class _PostCardState extends State<_PostCard> {
                 // ⑤ 인터랙션 바
                 Row(
                   children: [
-                    _LikeButton(
-                      isLiked: widget.isLiked,
-                      isLoading: widget.isLoadingLike,
-                      count: widget.likeCount,
+                    InkWell(
+                      borderRadius: BorderRadius.circular(999),
                       onTap: widget.onLike,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color:
+                              (widget.isLiked ? Colors.redAccent : cs.onSurface)
+                                  .withValues(
+                                    alpha: widget.isLiked
+                                        ? 0.12
+                                        : (isDark ? 0.16 : 0.09),
+                                  ),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color:
+                                (widget.isLiked
+                                        ? Colors.redAccent
+                                        : cs.onSurface)
+                                    .withValues(
+                                      alpha: widget.isLiked ? 0.28 : 0.18,
+                                    ),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (widget.isLoadingLike)
+                              SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: widget.isLiked
+                                      ? Colors.redAccent
+                                      : cs.onSurface.withValues(alpha: 0.5),
+                                ),
+                              )
+                            else
+                              Icon(
+                                widget.isLiked
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                                size: 16,
+                                color: widget.isLiked
+                                    ? Colors.redAccent
+                                    : cs.onSurface.withValues(alpha: 0.55),
+                              ),
+                            const SizedBox(width: 5),
+                            Text(
+                              '${widget.likeCount}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: widget.isLiked
+                                    ? Colors.redAccent
+                                    : cs.onSurface.withValues(alpha: 0.62),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: 18),
-                    Row(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: Icon(
-                            Icons.chat_bubble_outline_rounded,
-                            size: 18,
-                            color: cs.onSurface.withValues(alpha: 0.32),
+                    const SizedBox(width: 10),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(999),
+                      onTap: widget.onTap,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.onSurface.withValues(
+                            alpha: isDark ? 0.16 : 0.09,
+                          ),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: cs.onSurface.withValues(alpha: 0.18),
                           ),
                         ),
-                        const SizedBox(width: 2),
-                        Text(
-                          '${widget.commentCount}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: cs.onSurface.withValues(alpha: 0.4),
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              size: 16,
+                              color: cs.onSurface.withValues(alpha: 0.55),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              '${widget.commentCount}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: cs.onSurface.withValues(alpha: 0.62),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
@@ -2368,8 +2522,8 @@ class _PostCardState extends State<_PostCard> {
           ),
           Divider(
             height: 1,
-            thickness: 1,
-            color: cs.onSurface.withValues(alpha: 0.07),
+            thickness: 1.2,
+            color: cs.onSurface.withValues(alpha: 0.14),
           ),
         ],
       ),

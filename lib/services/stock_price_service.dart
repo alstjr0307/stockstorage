@@ -149,6 +149,7 @@ class StockPriceService {
 
   static final _cache = <String, _CachedPrice>{};
   static const _cacheDuration = Duration(minutes: 3);
+  static const _domesticRealtimeCacheDuration = Duration(seconds: 5);
   static const _ohlcCacheDuration = Duration(minutes: 3);
 
   static void invalidateCache(String symbol) {
@@ -169,12 +170,35 @@ class StockPriceService {
   /// 현재가 반환. 실패 시 null.
   static Future<PriceResult?> fetchPrice(String ticker, String market) async {
     final symbol = toSymbol(ticker, market);
+    final cacheDuration = {'KS', 'KQ'}.contains(market)
+        ? _domesticRealtimeCacheDuration
+        : _cacheDuration;
 
     // 캐시 확인
     final cached = _cache[symbol];
     if (cached != null &&
-        DateTime.now().difference(cached.fetchedAt) < _cacheDuration) {
+        DateTime.now().difference(cached.fetchedAt) < cacheDuration) {
       return cached.result;
+    }
+
+    if ({'KS', 'KQ'}.contains(market)) {
+      final result = await _fetchNaverStockPrice(ticker);
+      if (result != null) {
+        _cache[symbol] = _CachedPrice(
+          result: result,
+          fetchedAt: DateTime.now(),
+        );
+        return result;
+      }
+
+      final kisResult = await _fetchKisDomesticPrice(ticker);
+      if (kisResult != null) {
+        _cache[symbol] = _CachedPrice(
+          result: kisResult,
+          fetchedAt: DateTime.now(),
+        );
+        return kisResult;
+      }
     }
 
     // 한국 주요 지수는 네이버 realtime API 우선
@@ -352,6 +376,285 @@ class StockPriceService {
     }
   }
 
+  static Future<PriceResult?> _fetchNaverStockPrice(String ticker) async {
+    try {
+      final uri = Uri.parse(
+        'https://polling.finance.naver.com/api/realtime/domestic/stock/$ticker',
+      );
+      final response = await http
+          .get(
+            uri,
+            headers: {
+              'User-Agent': 'Mozilla/5.0',
+              'Referer': 'https://finance.naver.com',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
+      if (response.statusCode != 200) return null;
+
+      final json = jsonDecode(response.body);
+      final item = (json['datas'] as List?)?.whereType<Map>().firstOrNull;
+      if (item == null) return null;
+
+      double parse(String? s) =>
+          double.tryParse((s ?? '').replaceAll(',', '')) ?? 0.0;
+      final over = item['overMarketPriceInfo'] as Map?;
+      final overPrice = parse(over?['overPrice'] as String?);
+      final overChange = parse(
+        over?['compareToPreviousClosePrice'] as String?,
+      );
+      final overRate =
+          double.tryParse(
+            (over?['fluctuationsRatio'] as String? ?? '').replaceAll(',', ''),
+          ) ??
+          0.0;
+      final overTradedAt = DateTime.tryParse(
+        over?['localTradedAt'] as String? ?? '',
+      )?.toLocal();
+
+      final regularPrice = parse(
+        item['closePriceRaw'] as String? ?? item['closePrice'] as String? ?? '',
+      );
+      final price = overPrice > 0 ? overPrice : regularPrice;
+      if (price == 0) return null;
+
+      final change = overPrice > 0
+          ? overChange
+          : parse(
+              item['compareToPreviousClosePriceRaw'] as String? ??
+                  item['compareToPreviousClosePrice'] as String? ??
+                  '',
+            );
+      final changeRate =
+          overPrice > 0
+              ? overRate
+              : double.tryParse(
+                    (item['fluctuationsRatioRaw'] as String? ??
+                            item['fluctuationsRatio'] as String? ??
+                            '')
+                        .replaceAll(',', ''),
+                  ) ??
+                  0.0;
+      final regularTradedAt = DateTime.tryParse(
+        item['localTradedAt'] as String? ?? '',
+      )?.toLocal();
+      final marketTime = overTradedAt ?? regularTradedAt;
+
+      return PriceResult(
+        price: price,
+        currency: 'KRW',
+        change: change,
+        changeRate: changeRate,
+        marketTime: marketTime,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<PriceResult?> _fetchKisDomesticPrice(String ticker) async {
+    try {
+      final fn = FirebaseFunctions.instanceFor(region: 'asia-northeast3')
+          .httpsCallable(
+            'getKisDomesticQuote',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 10)),
+          );
+      final res = await fn.call({'ticker': ticker});
+      final d = res.data as Map<String, dynamic>;
+      if (d['hasData'] == false) return null;
+
+      final price = (d['price'] as num?)?.toDouble();
+      if (price == null || price <= 0) return null;
+      final change = (d['change'] as num?)?.toDouble() ?? 0.0;
+      final changeRate = (d['changeRate'] as num?)?.toDouble() ?? 0.0;
+
+      return PriceResult(
+        price: price,
+        currency: 'KRW',
+        change: change,
+        changeRate: changeRate,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> _patchDomesticMinuteCandle(
+    List<({DateTime date, double open, double high, double low, double close})>
+        out,
+    String ticker,
+    String interval,
+  ) async {
+    final minuteUnit = switch (interval) {
+      '1m' => 1,
+      '5m' => 5,
+      '60m' => 60,
+      _ => 0,
+    };
+    if (minuteUnit == 0) return;
+
+    try {
+      final uri = Uri.parse(
+        'https://polling.finance.naver.com/api/realtime/domestic/stock/$ticker',
+      );
+      final res = await http
+          .get(
+            uri,
+            headers: {
+              'User-Agent': 'Mozilla/5.0',
+              'Referer': 'https://finance.naver.com',
+            },
+          )
+          .timeout(const Duration(seconds: 5));
+      if (res.statusCode != 200) return;
+
+      final json = jsonDecode(res.body);
+      final item = (json['datas'] as List?)?.whereType<Map>().firstOrNull;
+      if (item == null) return;
+
+      double parseNum(dynamic v) {
+        if (v == null) return 0.0;
+        if (v is num) return v.toDouble();
+        return double.tryParse(v.toString().replaceAll(',', '')) ?? 0.0;
+      }
+      DateTime? parseTime(dynamic v) {
+        if (v == null) return null;
+        return DateTime.tryParse(v.toString())?.toLocal();
+      }
+      final over = item['overMarketPriceInfo'] as Map?;
+      final integrated = item['integratedPriceInfo'] as Map?;
+
+      final overTradedAt = parseTime(over?['localTradedAt']);
+      final regularTradedAt = parseTime(item['localTradedAt']);
+      final overClose = parseNum(over?['overPrice']);
+      DateTime? tradedAt = overTradedAt ?? regularTradedAt;
+      // some responses have overPrice but miss over-market traded time.
+      // in that case, promote bucket to current time so post-market candle appears.
+      if (overClose > 0 && overTradedAt == null && tradedAt != null) {
+        final now = DateTime.now();
+        final sameDay =
+            now.year == tradedAt.year &&
+            now.month == tradedAt.month &&
+            now.day == tradedAt.day;
+        final weekday = now.weekday >= DateTime.monday &&
+            now.weekday <= DateTime.friday;
+        final afterRegularClose = now.hour > 15 ||
+            (now.hour == 15 && now.minute >= 30);
+        if (sameDay && weekday && afterRegularClose) {
+          tradedAt = now;
+        }
+      }
+      if (tradedAt == null) return;
+
+      final close = overClose > 0
+          ? overClose
+          : parseNum(
+              item['closePriceRaw'] ??
+                  item['closePrice'] ??
+                  '',
+            );
+      if (close <= 0) return;
+
+      final highCandidate = parseNum(
+        integrated?['highPrice'] ??
+            over?['highPrice'] ??
+            item['highPriceRaw'] ??
+            item['highPrice'],
+      );
+      final lowCandidate = parseNum(
+        integrated?['lowPrice'] ??
+            over?['lowPrice'] ??
+            item['lowPriceRaw'] ??
+            item['lowPrice'],
+      );
+      final high = highCandidate > 0 ? highCandidate : close;
+      final low = lowCandidate > 0 ? lowCandidate : close;
+
+      final minuteBucket = (tradedAt.minute ~/ minuteUnit) * minuteUnit;
+      final bucket = DateTime(
+        tradedAt.year,
+        tradedAt.month,
+        tradedAt.day,
+        tradedAt.hour,
+        minuteBucket,
+      );
+
+      if (out.isEmpty) {
+        out.add((date: bucket, open: close, high: high, low: low, close: close));
+        return;
+      }
+
+      final last = out.last;
+      if (last.date.isAtSameMomentAs(bucket)) {
+        out[out.length - 1] = (
+          date: bucket,
+          open: last.open,
+          high: last.high > high ? last.high : high,
+          low: last.low < low ? last.low : low,
+          close: close,
+        );
+        return;
+      }
+
+      if (last.date.isBefore(bucket)) {
+        out.add((date: bucket, open: close, high: high, low: low, close: close));
+      }
+    } catch (_) {}
+  }
+
+  static Future<void> _forceAppendDomesticAfterHoursMinuteCandle(
+    List<({DateTime date, double open, double high, double low, double close})>
+        out,
+    String ticker,
+    String interval,
+  ) async {
+    final minuteUnit = switch (interval) {
+      '1m' => 1,
+      '5m' => 5,
+      '60m' => 60,
+      _ => 0,
+    };
+    if (minuteUnit == 0) return;
+
+    final now = DateTime.now();
+    final weekday = now.weekday >= DateTime.monday &&
+        now.weekday <= DateTime.friday;
+    final afterRegularClose = now.hour > 15 || (now.hour == 15 && now.minute >= 30);
+    if (!weekday || !afterRegularClose) return;
+
+    final price = await _fetchNaverStockPrice(ticker);
+    if (price == null || price.price <= 0) return;
+
+    final minuteBucket = (now.minute ~/ minuteUnit) * minuteUnit;
+    final bucket = DateTime(now.year, now.month, now.day, now.hour, minuteBucket);
+    final close = price.price;
+
+    if (out.isEmpty) {
+      out.add((date: bucket, open: close, high: close, low: close, close: close));
+      return;
+    }
+
+    final last = out.last;
+    final lastBucket = DateTime(
+      last.date.year,
+      last.date.month,
+      last.date.day,
+      last.date.hour,
+      (last.date.minute ~/ minuteUnit) * minuteUnit,
+    );
+    if (bucket.isAfter(lastBucket)) {
+      out.add((date: bucket, open: close, high: close, low: close, close: close));
+    } else if (bucket.isAtSameMomentAs(lastBucket)) {
+      out[out.length - 1] = (
+        date: last.date,
+        open: last.open,
+        high: last.high > close ? last.high : close,
+        low: last.low < close ? last.low : close,
+        close: close,
+      );
+    }
+  }
+
   static Future<
     List<({DateTime date, double open, double high, double low, double close})>
   >
@@ -470,6 +773,95 @@ class StockPriceService {
         }
       }
 
+      if (!isIndex && out.isNotEmpty) {
+        final today = DateTime.now();
+        final todayDate = DateTime(today.year, today.month, today.day);
+        try {
+          final rtUri = Uri.parse(
+            'https://polling.finance.naver.com/api/realtime/domestic/stock/$naverSymbol',
+          );
+          final rtRes = await http
+              .get(
+                rtUri,
+                headers: {
+                  'User-Agent': 'Mozilla/5.0',
+                  'Referer': 'https://finance.naver.com',
+                },
+              )
+              .timeout(const Duration(seconds: 5));
+          if (rtRes.statusCode == 200) {
+            final rtJson = jsonDecode(rtRes.body);
+            final item =
+                (rtJson['datas'] as List?)?.whereType<Map>().firstOrNull;
+            if (item != null) {
+              final over = item['overMarketPriceInfo'] as Map?;
+              final integrated = item['integratedPriceInfo'] as Map?;
+              final overTradedAt = DateTime.tryParse(
+                over?['localTradedAt'] as String? ?? '',
+              )?.toLocal();
+              final regularTradedAt = DateTime.tryParse(
+                item['localTradedAt'] as String? ?? '',
+              )?.toLocal();
+              final tradedAt = overTradedAt ?? regularTradedAt;
+              final tradedDate = tradedAt == null
+                  ? null
+                  : DateTime(tradedAt.year, tradedAt.month, tradedAt.day);
+              if (tradedDate != null &&
+                  tradedDate.isAtSameMomentAs(todayDate)) {
+                double parse(String? s) =>
+                    double.tryParse((s ?? '').replaceAll(',', '')) ?? 0.0;
+                final overClose = parse(over?['overPrice'] as String?);
+                final o = parse(
+                  item['openPriceRaw'] as String? ??
+                      item['openPrice'] as String? ??
+                      '',
+                );
+                final h = parse(
+                  integrated?['highPrice'] as String? ??
+                      over?['highPrice'] as String? ??
+                      item['highPriceRaw'] as String? ??
+                      item['highPrice'] as String? ??
+                      '',
+                );
+                final l = parse(
+                  integrated?['lowPrice'] as String? ??
+                      over?['lowPrice'] as String? ??
+                      item['lowPriceRaw'] as String? ??
+                      item['lowPrice'] as String? ??
+                      '',
+                );
+                final c = overClose > 0
+                    ? overClose
+                    : parse(
+                        item['closePriceRaw'] as String? ??
+                            item['closePrice'] as String? ??
+                            '',
+                      );
+                if (o > 0 && h > 0 && l > 0 && c > 0) {
+                  final candle = (
+                    date: todayDate,
+                    open: o,
+                    high: h,
+                    low: l,
+                    close: c,
+                  );
+                  final lastDate = DateTime(
+                    out.last.date.year,
+                    out.last.date.month,
+                    out.last.date.day,
+                  );
+                  if (lastDate.isAtSameMomentAs(todayDate)) {
+                    out[out.length - 1] = candle;
+                  } else if (lastDate.isBefore(todayDate)) {
+                    out.add(candle);
+                  }
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       return out;
     } catch (_) {
       return [];
@@ -487,6 +879,15 @@ class StockPriceService {
     String range = '1mo',
   }) async {
     final symbol = toSymbol(ticker, market);
+    final isDomestic = {'KS', 'KQ'}.contains(market);
+    final isDomesticMinute =
+        isDomestic &&
+        (interval == '1m' || interval == '5m' || interval == '60m');
+    final fastDomesticInterval =
+        interval == '1m' || interval == '5m' || interval == '60m' || interval == '1d';
+    final ohlcCacheDuration = isDomestic && fastDomesticInterval
+        ? const Duration(seconds: 20)
+        : _ohlcCacheDuration;
 
     // 한국 개별 종목 일봉은 네이버 우선 (Yahoo 일봉 1일 지연 대응)
     if (interval == '1d' && {'KS', 'KQ'}.contains(market)) {
@@ -494,7 +895,7 @@ class StockPriceService {
       final stockFetchedAt = _ohlcCacheFetchedAt[cacheKey];
       if (_ohlcCache.containsKey(cacheKey) &&
           stockFetchedAt != null &&
-          DateTime.now().difference(stockFetchedAt) < _ohlcCacheDuration) {
+          DateTime.now().difference(stockFetchedAt) < ohlcCacheDuration) {
         return _ohlcCache[cacheKey]!;
       }
       final naverData = await _fetchNaverDailyOHLC(ticker, range);
@@ -512,7 +913,7 @@ class StockPriceService {
       final naverFetchedAt = _ohlcCacheFetchedAt[cacheKey];
       if (_ohlcCache.containsKey(cacheKey) &&
           naverFetchedAt != null &&
-          DateTime.now().difference(naverFetchedAt) < _ohlcCacheDuration) {
+          DateTime.now().difference(naverFetchedAt) < ohlcCacheDuration) {
         return _ohlcCache[cacheKey]!;
       }
       final naverData = await _fetchNaverDailyOHLC(
@@ -528,9 +929,10 @@ class StockPriceService {
     }
     final cacheKey = '$symbol:$interval:$range';
     final fetchedAt = _ohlcCacheFetchedAt[cacheKey];
-    if (_ohlcCache.containsKey(cacheKey) &&
+    if (!isDomesticMinute &&
+        _ohlcCache.containsKey(cacheKey) &&
         fetchedAt != null &&
-        DateTime.now().difference(fetchedAt) < _ohlcCacheDuration) {
+        DateTime.now().difference(fetchedAt) < ohlcCacheDuration) {
       return _ohlcCache[cacheKey]!;
     }
     try {
@@ -542,10 +944,52 @@ class StockPriceService {
           .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
           .timeout(const Duration(seconds: 8));
 
-      if (response.statusCode != 200) return [];
+      if (response.statusCode != 200) {
+        if (isDomestic &&
+            (interval == '1m' || interval == '5m' || interval == '60m')) {
+          final fallback =
+              <
+                ({
+                  DateTime date,
+                  double open,
+                  double high,
+                  double low,
+                  double close,
+                })
+              >[];
+          await _patchDomesticMinuteCandle(fallback, ticker, interval);
+          if (fallback.isNotEmpty) {
+            _ohlcCache[cacheKey] = fallback;
+            _ohlcCacheFetchedAt[cacheKey] = DateTime.now();
+          }
+          return fallback;
+        }
+        return [];
+      }
       final json = jsonDecode(response.body);
       final result = json['chart']?['result']?[0];
-      if (result == null) return [];
+      if (result == null) {
+        if (isDomestic &&
+            (interval == '1m' || interval == '5m' || interval == '60m')) {
+          final fallback =
+              <
+                ({
+                  DateTime date,
+                  double open,
+                  double high,
+                  double low,
+                  double close,
+                })
+              >[];
+          await _patchDomesticMinuteCandle(fallback, ticker, interval);
+          if (fallback.isNotEmpty) {
+            _ohlcCache[cacheKey] = fallback;
+            _ohlcCacheFetchedAt[cacheKey] = DateTime.now();
+          }
+          return fallback;
+        }
+        return [];
+      }
 
       final timestamps = (result['timestamp'] as List<dynamic>?)
           ?.whereType<num>()
@@ -575,6 +1019,25 @@ class StockPriceService {
           highs == null ||
           lows == null ||
           closes == null) {
+        if (isDomestic &&
+            (interval == '1m' || interval == '5m' || interval == '60m')) {
+          final fallback =
+              <
+                ({
+                  DateTime date,
+                  double open,
+                  double high,
+                  double low,
+                  double close,
+                })
+              >[];
+          await _patchDomesticMinuteCandle(fallback, ticker, interval);
+          if (fallback.isNotEmpty) {
+            _ohlcCache[cacheKey] = fallback;
+            _ohlcCacheFetchedAt[cacheKey] = DateTime.now();
+          }
+          return fallback;
+        }
         return [];
       }
 
@@ -688,6 +1151,12 @@ class StockPriceService {
             }
           } catch (_) {}
         }
+      }
+
+      if (isDomestic &&
+          (interval == '1m' || interval == '5m' || interval == '60m')) {
+        await _patchDomesticMinuteCandle(out, ticker, interval);
+        await _forceAppendDomesticAfterHoursMinuteCandle(out, ticker, interval);
       }
 
       if (out.isNotEmpty) {

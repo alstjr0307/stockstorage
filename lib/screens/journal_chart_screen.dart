@@ -258,12 +258,6 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
         : '\$${p.toStringAsFixed(2)}';
     final isClosed =
         _totalBuyQty > 0 && (_totalBuyQty - _totalSellQty) <= _kQtyEpsilon;
-    final baseForRate = _avgBuyPrice > 0 && _totalSellQty > 0
-        ? _avgBuyPrice * _totalSellQty
-        : 0.0;
-    final realizedPct = baseForRate > 0
-        ? (_totalRealizedPnl / baseForRate) * 100
-        : null;
     final hasSell = _allSells.isNotEmpty;
 
     return Scaffold(
@@ -302,7 +296,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
               Text(
                 '${buy.ticker} · ${buy.market}',
                 style: TextStyle(
-                  fontSize: 11,
+                  fontSize: 12,
                   color: Colors.white.withValues(alpha: 0.35),
                 ),
               ),
@@ -321,7 +315,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
             child: Text(
               isClosed ? '청산완료' : '보유중',
               style: TextStyle(
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: FontWeight.w700,
                 color: isClosed
                     ? Colors.white.withValues(alpha: 0.35)
@@ -383,9 +377,6 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
                         valueColor: hasSell
                             ? (_totalRealizedPnl >= 0 ? _kUpColor : _kDownColor)
                             : Colors.white.withValues(alpha: 0.65),
-                        subValue: hasSell && realizedPct != null
-                            ? '${_totalRealizedPnl >= 0 ? '+' : ''}${realizedPct.toStringAsFixed(2)}%'
-                            : null,
                       ),
                     ],
                   ),
@@ -419,7 +410,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
             Text(
               label,
               style: TextStyle(
-                fontSize: 9,
+                fontSize: 10,
                 fontWeight: FontWeight.w600,
                 color: Colors.white.withValues(alpha: 0.28),
                 letterSpacing: 0.3,
@@ -438,7 +429,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
               Text(
                 subValue,
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: FontWeight.w600,
                   color: valueColor,
                 ),
@@ -538,7 +529,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
         Text(
           label,
           style: TextStyle(
-            fontSize: 10,
+            fontSize: 11,
             color: Colors.white.withValues(alpha: 0.38),
           ),
         ),
@@ -567,7 +558,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
       TextSpan(
         text: DateFormat('yyyy.MM.dd').format(touched.date),
         style: TextStyle(
-          fontSize: 10,
+          fontSize: 11,
           color: Colors.white.withValues(alpha: 0.38),
         ),
       ),
@@ -578,7 +569,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
         TextSpan(
           text: '등락 ',
           style: TextStyle(
-            fontSize: 9,
+            fontSize: 10,
             color: Colors.white.withValues(alpha: 0.28),
           ),
         ),
@@ -586,7 +577,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
       spans.add(
         TextSpan(
           text: '${changePct >= 0 ? '+' : ''}${changePct.toStringAsFixed(2)}%',
-          style: TextStyle(fontSize: 9, color: valColor),
+          style: TextStyle(fontSize: 10, color: valColor),
         ),
       );
       spans.add(const TextSpan(text: '   '));
@@ -601,7 +592,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
         TextSpan(
           text: '${entry.$1} ',
           style: TextStyle(
-            fontSize: 9,
+            fontSize: 10,
             color: Colors.white.withValues(alpha: 0.28),
           ),
         ),
@@ -609,7 +600,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
       spans.add(
         TextSpan(
           text: fmt(entry.$2),
-          style: TextStyle(fontSize: 9, color: valColor),
+          style: TextStyle(fontSize: 10, color: valColor),
         ),
       );
       spans.add(const TextSpan(text: '   '));
@@ -693,7 +684,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
             child: Text(
               '거래 내역',
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: Colors.white.withValues(alpha: 0.35),
                 letterSpacing: 0.4,
@@ -757,21 +748,43 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
     return total / _totalSellQty;
   }
 
-  double _avgBuyPriceAt(DateTime sellDate) {
-    double qty = 0, cost = 0;
-    for (final b in _allBuys) {
-      if (!b.tradeDate.isAfter(sellDate)) {
-        qty += b.quantity;
-        cost += b.price * b.quantity;
+  double _avgBuyPriceAt(DateTime sellDate, {String? excludingSellId}) {
+    final buysAsc = _allBuys
+        .where((b) => !b.tradeDate.isAfter(sellDate) && b.quantity > 0 && b.price > 0)
+        .toList()
+      ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+    if (buysAsc.isEmpty) return 0;
+    final sellsBefore = _allSells
+        .where(
+          (s) =>
+              s.id != excludingSellId &&
+              !s.tradeDate.isAfter(sellDate) &&
+              s.quantity > 0,
+        )
+        .toList()
+      ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+    var soldLeft = sellsBefore.fold<double>(0.0, (acc, s) => acc + s.quantity);
+    var remainQty = 0.0;
+    var remainCost = 0.0;
+    for (final b in buysAsc) {
+      var lot = b.quantity;
+      if (soldLeft > 0) {
+        final consumed = lot < soldLeft ? lot : soldLeft;
+        lot -= consumed;
+        soldLeft -= consumed;
+      }
+      if (lot > 0) {
+        remainQty += lot;
+        remainCost += b.price * lot;
       }
     }
-    return qty > 0 ? cost / qty : 0;
+    return remainQty > 0 ? remainCost / remainQty : 0;
   }
 
   double get _totalRealizedPnl {
     return _allSells.fold<double>(0, (sum, s) {
       if (s.price <= 0 || s.quantity <= 0) return sum;
-      final bp = s.buyPrice > 0 ? s.buyPrice : _avgBuyPriceAt(s.tradeDate);
+      final bp = _avgBuyPriceAt(s.tradeDate, excludingSellId: s.id);
       if (bp <= 0) return sum;
       return sum + (s.price - bp) * s.quantity;
     });
@@ -788,9 +801,10 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
     final actionColor = isBuy
         ? const Color(0xFF34D399)
         : const Color(0xFFF04452);
-    final effectiveBuyPrice = journal.buyPrice > 0
-        ? journal.buyPrice
-        : _avgBuyPriceAt(journal.tradeDate);
+    final effectiveBuyPrice = _avgBuyPriceAt(
+      journal.tradeDate,
+      excludingSellId: journal.id,
+    );
     final realizedPnl =
         !isBuy &&
             effectiveBuyPrice > 0 &&
@@ -809,7 +823,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
             child: Text(
               isBuy ? '매수' : '매도',
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: actionColor,
               ),
@@ -819,7 +833,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
           Text(
             DateFormat('yy.MM.dd').format(journal.tradeDate),
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 12,
               color: Colors.white.withValues(alpha: 0.28),
             ),
           ),
@@ -828,7 +842,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
             child: Text(
               '${fmtP(journal.price)}  ·  $qty',
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 12,
                 color: Colors.white.withValues(alpha: 0.7),
               ),
             ),
@@ -837,7 +851,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
             Text(
               '${isPnlUp ? '+' : ''}${fmtP(realizedPnl)}',
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: isPnlUp ? _kUpColor : _kDownColor,
               ),
@@ -1187,7 +1201,7 @@ class _JournalCandlePainter extends CustomPainter {
           text: actionLabel,
           style: const TextStyle(
             color: Colors.black,
-            fontSize: 9,
+            fontSize: 10,
             fontWeight: FontWeight.w800,
             fontFamily: 'Inter',
           ),
@@ -1200,7 +1214,7 @@ class _JournalCandlePainter extends CustomPainter {
           text: priceLabel,
           style: TextStyle(
             color: color,
-            fontSize: 9,
+            fontSize: 10,
             fontWeight: FontWeight.w700,
             fontFamily: 'RobotoMono',
           ),
@@ -1264,7 +1278,7 @@ class _JournalCandlePainter extends CustomPainter {
           text: _fmtVal(v),
           style: TextStyle(
             color: labelColor.withValues(alpha: 0.65),
-            fontSize: 9,
+            fontSize: 10,
             fontWeight: FontWeight.w600,
             fontFamily: 'RobotoMono',
           ),
@@ -1282,7 +1296,7 @@ class _JournalCandlePainter extends CustomPainter {
     const labelCount = 4;
     final labelStyle = TextStyle(
       color: labelColor.withValues(alpha: 0.35),
-      fontSize: 10,
+      fontSize: 11,
       fontFamily: 'RobotoMono',
     );
     for (int i = 0; i < labelCount; i++) {
