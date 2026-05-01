@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart' show setEquals;
+import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -23,21 +23,26 @@ double _avgBuyPriceAt(
   List<TradingJournal> sells = const [],
   String? excludingSellId,
 }) {
-  final buysAsc = buys
-      .where((b) => !b.tradeDate.isAfter(sellDate) && b.quantity > 0 && b.price > 0)
-      .toList()
-    ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+  final buysAsc =
+      buys
+          .where(
+            (b) =>
+                !b.tradeDate.isAfter(sellDate) && b.quantity > 0 && b.price > 0,
+          )
+          .toList()
+        ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
   if (buysAsc.isEmpty) return 0;
 
-  final sellsBefore = sells
-      .where(
-        (s) =>
-            s.id != excludingSellId &&
-            !s.tradeDate.isAfter(sellDate) &&
-            s.quantity > 0,
-      )
-      .toList()
-    ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+  final sellsBefore =
+      sells
+          .where(
+            (s) =>
+                s.id != excludingSellId &&
+                !s.tradeDate.isAfter(sellDate) &&
+                s.quantity > 0,
+          )
+          .toList()
+        ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
 
   var soldLeft = sellsBefore.fold<double>(0.0, (acc, s) => acc + s.quantity);
   var remainQty = 0.0;
@@ -1970,12 +1975,10 @@ class _JournalDateSectionState extends State<_JournalDateSection> {
     final daySellUsd = filteredTimeline
         .where((j) => j.action == '매도' && j.market == 'US')
         .fold<double>(0, (sum, j) => sum + (j.price * j.quantity));
-    String fmtDayAmount(double krw, double usd) {
-      final parts = <String>[];
-      if (krw > 0) parts.add('₩${NumberFormat('#,###').format(krw.toInt())}');
-      if (usd > 0) parts.add('\$${usd.toStringAsFixed(2)}');
-      return parts.isEmpty ? '-' : parts.join(' / ');
-    }
+    String fmtKrw(double amount) =>
+        amount > 0 ? '₩${NumberFormat('#,###').format(amount.toInt())}' : '₩0';
+    String fmtUsd(double amount) =>
+        amount > 0 ? '\$${NumberFormat('#,##0.00').format(amount)}' : '\$0.00';
 
     return Column(
       children: [
@@ -1996,78 +1999,42 @@ class _JournalDateSectionState extends State<_JournalDateSection> {
               : null,
           onPickDate: () => _pickDate(availableDates, selectedDate),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          color: const Color(0xFF10B981).withValues(alpha: 0.08),
+          child: Row(
             children: [
-              Text(
-                '총 거래 ${filteredTimeline.length}건',
-                style: TextStyle(
-                  color: cs.onSurface.withValues(alpha: 0.45),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+              const SizedBox(
+                width: 40,
+                child: Text(
+                  '매수',
+                  style: TextStyle(
+                    color: Color(0xFF10B981),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: cs.onSurface.withValues(alpha: 0.03),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
-                ),
-                child: Column(
+              Expanded(
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        const Text(
-                          '매수',
-                          style: TextStyle(
-                            color: Color(0xFF10B981),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          fmtDayAmount(dayBuyKrw, dayBuyUsd),
-                          style: const TextStyle(
-                            color: Color(0xFF10B981),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Divider(
-                        height: 1,
-                        color: cs.onSurface.withValues(alpha: 0.08),
+                    Text(
+                      '원화  ${fmtKrw(dayBuyKrw)}',
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.82),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    Row(
-                      children: [
-                        const Text(
-                          '매도',
-                          style: TextStyle(
-                            color: Color(0xFFF04452),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          fmtDayAmount(daySellKrw, daySellUsd),
-                          style: const TextStyle(
-                            color: Color(0xFFF04452),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
+                    const SizedBox(width: 14),
+                    Text(
+                      '달러  ${fmtUsd(dayBuyUsd)}',
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.82),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
@@ -2075,6 +2042,50 @@ class _JournalDateSectionState extends State<_JournalDateSection> {
             ],
           ),
         ),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          color: const Color(0xFFF04452).withValues(alpha: 0.08),
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 40,
+                child: Text(
+                  '매도',
+                  style: TextStyle(
+                    color: Color(0xFFF04452),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Row(
+                  children: [
+                    Text(
+                      '원화  ${fmtKrw(daySellKrw)}',
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.82),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Text(
+                      '달러  ${fmtUsd(daySellUsd)}',
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.82),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
         ...filteredTimeline.map((j) {
           final stockKey = '${j.market}:${j.ticker}';
           final linkedSellsForCard = j.action == '매수'
@@ -5530,15 +5541,17 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
         } else if (_ticker.trim().isNotEmpty) {
           final allJournals = await widget.firestoreService
               .getMyJournalsByUidOnce(widget.uid);
-          final buysAsc = allJournals
-              .where(
-                (j) =>
-                    j.action == '매수' &&
-                    j.ticker == _ticker.toUpperCase() &&
-                    j.market == (_rawMarket.isNotEmpty ? _rawMarket : _market),
-              )
-              .toList()
-            ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+          final buysAsc =
+              allJournals
+                  .where(
+                    (j) =>
+                        j.action == '매수' &&
+                        j.ticker == _ticker.toUpperCase() &&
+                        j.market ==
+                            (_rawMarket.isNotEmpty ? _rawMarket : _market),
+                  )
+                  .toList()
+                ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
           sellBuyPrice = _avgBuyPriceAt(buysAsc, _tradeDate);
         }
       }

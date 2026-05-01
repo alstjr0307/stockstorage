@@ -981,63 +981,65 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                               ),
                                             ],
                                             const SizedBox(height: 12),
-                                            const SizedBox(height: 10),
-                                            SizedBox(
-                                              width: double.infinity,
-                                              child: OutlinedButton.icon(
-                                                onPressed: () => Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (_) =>
-                                                        StockCompareScreen(
-                                                          basePick: widget.pick,
-                                                        ),
-                                                  ),
-                                                ),
-                                                icon: const Icon(
-                                                  Icons.compare_arrows,
-                                                  size: 18,
-                                                ),
-                                                label: const Text(
-                                                  '다른 종목이랑 비교하기',
-                                                ),
-                                                style:
-                                                    OutlinedButton.styleFrom(
-                                                      foregroundColor: cs
-                                                          .onSurface
-                                                          .withValues(
-                                                            alpha: 0.78,
+                                            if (!_showCaptureWatermark) ...[
+                                              const SizedBox(height: 10),
+                                              SizedBox(
+                                                width: double.infinity,
+                                                child: OutlinedButton.icon(
+                                                  onPressed: () => Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (_) =>
+                                                          StockCompareScreen(
+                                                            basePick: widget.pick,
                                                           ),
-                                                      backgroundColor:
-                                                          cs.onSurface
-                                                              .withValues(
-                                                                alpha: 0.04,
-                                                              ),
-                                                      side: BorderSide(
-                                                        color: cs.onSurface
-                                                            .withValues(
-                                                              alpha: 0.14,
-                                                            ),
-                                                      ),
-                                                      minimumSize:
-                                                          const Size.fromHeight(
-                                                            44,
-                                                          ),
-                                                      textStyle:
-                                                          const TextStyle(
-                                                            fontSize: 14,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                          ),
-                                                      shape: RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              12,
-                                                            ),
-                                                      ),
                                                     ),
+                                                  ),
+                                                  icon: const Icon(
+                                                    Icons.compare_arrows,
+                                                    size: 18,
+                                                  ),
+                                                  label: const Text(
+                                                    '다른 종목이랑 비교하기',
+                                                  ),
+                                                  style:
+                                                      OutlinedButton.styleFrom(
+                                                        foregroundColor: cs
+                                                            .onSurface
+                                                            .withValues(
+                                                              alpha: 0.78,
+                                                            ),
+                                                        backgroundColor:
+                                                            cs.onSurface
+                                                                .withValues(
+                                                                  alpha: 0.04,
+                                                                ),
+                                                        side: BorderSide(
+                                                          color: cs.onSurface
+                                                              .withValues(
+                                                                alpha: 0.14,
+                                                              ),
+                                                        ),
+                                                        minimumSize:
+                                                            const Size.fromHeight(
+                                                              44,
+                                                            ),
+                                                        textStyle:
+                                                            const TextStyle(
+                                                              fontSize: 14,
+                                                              fontWeight:
+                                                                  FontWeight.w600,
+                                                            ),
+                                                        shape: RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              BorderRadius.circular(
+                                                                12,
+                                                              ),
+                                                        ),
+                                                      ),
+                                                ),
                                               ),
-                                            ),
+                                            ],
                                             const SizedBox(height: 2),
                                             Divider(
                                               height: 16,

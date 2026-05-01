@@ -737,7 +737,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             SliverToBoxAdapter(
                               child: Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
                                 decoration: BoxDecoration(
                                   color: cs.onSurface.withValues(alpha: 0.045),
                                   border: Border(
@@ -755,9 +755,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                       TextSpan(
                                         text: '댓글',
                                         style: TextStyle(
-                                          color: cs.onSurface,
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w700,
+                                          color: cs.onSurface.withValues(alpha: 0.9),
+                                          fontSize: 15,
+                                          height: 1.55,
                                         ),
                                       ),
                                       const TextSpan(text: ' '),
