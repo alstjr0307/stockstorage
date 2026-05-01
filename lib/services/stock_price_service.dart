@@ -152,6 +152,20 @@ class StockPriceService {
   static const _domesticRealtimeCacheDuration = Duration(seconds: 5);
   static const _ohlcCacheDuration = Duration(minutes: 3);
 
+  static double _applyNaverDirection(double value, dynamic compareInfo) {
+    if (value == 0) return 0.0;
+    final info = compareInfo is Map ? compareInfo : null;
+    final code = (info?['code'] as String? ?? '').trim();
+    final name = (info?['name'] as String? ?? '').toUpperCase().trim();
+    final text = (info?['text'] as String? ?? '').trim();
+    final isDown =
+        code == '5' ||
+        name == 'FALLING' ||
+        name == 'LOWER' ||
+        text.contains('하락');
+    return isDown ? -value.abs() : value.abs();
+  }
+
   static void invalidateCache(String symbol) {
     _cache.remove(symbol);
     _ohlcCache.removeWhere((k, _) => k.startsWith('$symbol:'));
@@ -352,8 +366,12 @@ class StockPriceService {
       final price = parse(item['closePrice'] as String? ?? '');
       if (price == 0) return null;
 
-      final change = parse(
+      final rawChange = parse(
         item['compareToPreviousClosePrice'] as String? ?? '',
+      );
+      final change = _applyNaverDirection(
+        rawChange,
+        item['compareToPreviousPrice'],
       );
       final changeRate =
           double.tryParse(
@@ -400,8 +418,12 @@ class StockPriceService {
           double.tryParse((s ?? '').replaceAll(',', '')) ?? 0.0;
       final over = item['overMarketPriceInfo'] as Map?;
       final overPrice = parse(over?['overPrice'] as String?);
-      final overChange = parse(
+      final overRawChange = parse(
         over?['compareToPreviousClosePrice'] as String?,
+      );
+      final overChange = _applyNaverDirection(
+        overRawChange,
+        over?['compareToPreviousPrice'],
       );
       final overRate =
           double.tryParse(
@@ -418,13 +440,16 @@ class StockPriceService {
       final price = overPrice > 0 ? overPrice : regularPrice;
       if (price == 0) return null;
 
-      final change = overPrice > 0
+      final rawChange = overPrice > 0
           ? overChange
           : parse(
               item['compareToPreviousClosePriceRaw'] as String? ??
                   item['compareToPreviousClosePrice'] as String? ??
                   '',
             );
+      final change = overPrice > 0
+          ? rawChange
+          : _applyNaverDirection(rawChange, item['compareToPreviousPrice']);
       final changeRate =
           overPrice > 0
               ? overRate
@@ -774,8 +799,6 @@ class StockPriceService {
       }
 
       if (!isIndex && out.isNotEmpty) {
-        final today = DateTime.now();
-        final todayDate = DateTime(today.year, today.month, today.day);
         try {
           final rtUri = Uri.parse(
             'https://polling.finance.naver.com/api/realtime/domestic/stock/$naverSymbol',
@@ -806,8 +829,7 @@ class StockPriceService {
               final tradedDate = tradedAt == null
                   ? null
                   : DateTime(tradedAt.year, tradedAt.month, tradedAt.day);
-              if (tradedDate != null &&
-                  tradedDate.isAtSameMomentAs(todayDate)) {
+              if (tradedDate != null) {
                 double parse(String? s) =>
                     double.tryParse((s ?? '').replaceAll(',', '')) ?? 0.0;
                 final overClose = parse(over?['overPrice'] as String?);
@@ -839,7 +861,7 @@ class StockPriceService {
                       );
                 if (o > 0 && h > 0 && l > 0 && c > 0) {
                   final candle = (
-                    date: todayDate,
+                    date: tradedDate,
                     open: o,
                     high: h,
                     low: l,
@@ -850,9 +872,9 @@ class StockPriceService {
                     out.last.date.month,
                     out.last.date.day,
                   );
-                  if (lastDate.isAtSameMomentAs(todayDate)) {
+                  if (lastDate.isAtSameMomentAs(tradedDate)) {
                     out[out.length - 1] = candle;
-                  } else if (lastDate.isBefore(todayDate)) {
+                  } else if (lastDate.isBefore(tradedDate)) {
                     out.add(candle);
                   }
                 }

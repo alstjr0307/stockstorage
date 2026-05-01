@@ -1,4 +1,4 @@
-﻿rules_version = '2';
+rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -90,6 +90,14 @@ service cloud.firestore {
       }
 
       match /post_comment_subscriptions/{postId} {
+        allow read, write: if isLoggedIn() && request.auth.uid == uid;
+      }
+
+      match /post_author_follows/{targetUid} {
+        allow read, write: if isLoggedIn() && request.auth.uid == uid;
+      }
+
+      match /notification_history/{docId} {
         allow read, write: if isLoggedIn() && request.auth.uid == uid;
       }
     }

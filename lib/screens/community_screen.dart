@@ -794,6 +794,11 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
                   if (mounted) _refresh();
                 }
               : null,
+          onEdited: isOwn
+              ? () {
+                  if (mounted) _refresh();
+                }
+              : null,
           onReport: (!isOwn && auth.isLoggedIn)
               ? () => _handleReport(post, auth.user!.uid)
               : null,
@@ -1386,6 +1391,7 @@ class _JournalCardState extends State<_JournalCard>
                 ),
               ),
             ),
+            const SizedBox(width: 8),
           ],
         ),
       ],
@@ -1485,7 +1491,7 @@ class _JournalCardState extends State<_JournalCard>
                             children: [
                               UserLevelAvatar(
                                 uid: journal.uid,
-                                radius: 14,
+                                radius: 12,
                                 backgroundColor: tone.withValues(alpha: 0.12),
                                 textStyle: TextStyle(
                                   color: tone,
@@ -2015,7 +2021,7 @@ class _JournalCardState extends State<_JournalCard>
                           children: [
                             UserLevelAvatar(
                               uid: journal.uid,
-                              radius: 14,
+                              radius: 12,
                               backgroundColor: const Color(
                                 0xFF94A3B8,
                               ).withValues(alpha: 0.12),
@@ -2169,6 +2175,7 @@ class _JournalCardState extends State<_JournalCard>
                   onTap: () => _openComments(context),
                   count: widget.commentCount,
                 ),
+                const SizedBox(width: 8),
                 const Spacer(),
                 if (widget.isOwn && widget.onTogglePrivate != null)
                   GestureDetector(
@@ -2280,7 +2287,7 @@ class _PostCardState extends State<_PostCard> {
                   children: [
                     UserLevelAvatar(
                       uid: post.uid,
-                      radius: 20,
+                      radius: 12,
                       backgroundColor: cs.onSurface.withValues(alpha: 0.08),
                       textStyle: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.6),
@@ -2409,6 +2416,7 @@ class _PostCardState extends State<_PostCard> {
 
                 // ⑤ 인터랙션 바
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
                     InkWell(
                       borderRadius: BorderRadius.circular(999),

@@ -96,9 +96,11 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   final _commentController = TextEditingController();
   final _memoController = TextEditingController();
   final _firestoreService = FirestoreService();
+  late final Stream<List<Comment>> _commentsStream;
   bool _submitting = false;
   bool _memoSaving = false;
   bool _memoChanged = false;
+  bool _adminCommentsOnly = false;
   final Set<String> _deletingCommentIds = {};
   bool _revealReady = false;
 
@@ -119,6 +121,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   @override
   void initState() {
     super.initState();
+    _commentsStream = _firestoreService.getComments(widget.pick.id);
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) return;
@@ -754,7 +757,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                 RepaintBoundary(
                                   key: _captureKey,
                                   child: Container(
-                                    color: _capturing ? cs.surface : null,
+                                    color: _capturing ? Colors.black : null,
                                     padding: _capturing
                                         ? const EdgeInsets.symmetric(
                                             horizontal: 20,
@@ -774,15 +777,17 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                   crossAxisAlignment:
                                                       CrossAxisAlignment.start,
                                                   children: [
-                                                    Text(
-                                                      pick.name,
-                                                      style: TextStyle(
-                                                        color: cs.onSurface,
-                                                        fontSize: 20,
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                      ),
-                                                    ),
+                                                     Text(
+                                                       pick.name,
+                                                       style: TextStyle(
+                                                         color: _capturing
+                                                             ? Colors.white
+                                                             : cs.onSurface,
+                                                         fontSize: 20,
+                                                         fontWeight:
+                                                             FontWeight.w800,
+                                                       ),
+                                                     ),
                                                     const SizedBox(height: 4),
                                                     Row(
                                                       children: [
@@ -799,10 +804,17 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                             pick.createdAt,
                                                           ),
                                                           style: TextStyle(
-                                                            color: cs.onSurface
-                                                                .withValues(
-                                                                  alpha: 0.38,
-                                                                ),
+                                                            color: _capturing
+                                                                ? Colors.white
+                                                                      .withValues(
+                                                                        alpha:
+                                                                            0.72,
+                                                                      )
+                                                                : cs.onSurface
+                                                                      .withValues(
+                                                                        alpha:
+                                                                            0.38,
+                                                                      ),
                                                             fontSize: 11,
                                                           ),
                                                         ),
@@ -1146,7 +1158,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                   const SizedBox(height: 20),
                                 ],
                                 // 댓글
-                                _commentSection(),
+                                _commentSectionV2(),
                                 const SizedBox(height: 8),
                               ],
                             ),
@@ -2262,6 +2274,133 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           },
         ),
       ],
+    );
+  }
+
+  Widget _commentSectionV2() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        StreamBuilder<List<Comment>>(
+          stream: _commentsStream,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _sectionLabel('댓글'),
+                  const SizedBox(height: 10),
+                  const SizedBox(
+                    height: 48,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Color(0xFF10B981),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+            final comments = snapshot.data ?? [];
+            final adminComments = comments
+                .where((c) => AuthService.adminUids.contains(c.uid))
+                .toList();
+            final visibleComments = _adminCommentsOnly ? adminComments : comments;
+            final cs = Theme.of(context).colorScheme;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    _sectionLabel('댓글'),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${visibleComments.length}',
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.38),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _commentFilterChip(
+                      label: '전체',
+                      selected: !_adminCommentsOnly,
+                      onTap: () => setState(() => _adminCommentsOnly = false),
+                    ),
+                    const SizedBox(width: 8),
+                    _commentFilterChip(
+                      label: '운영자',
+                      selected: _adminCommentsOnly,
+                      onTap: () => setState(() => _adminCommentsOnly = true),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                if (visibleComments.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      _adminCommentsOnly
+                          ? '운영자 댓글이 아직 없습니다.'
+                          : '첫 번째 댓글을 남겨보세요.',
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.24),
+                        fontSize: 13,
+                      ),
+                    ),
+                  )
+                else
+                  ...visibleComments.map((c) => _commentItem(c)),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _commentFilterChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? const Color(0xFF10B981).withValues(alpha: 0.18)
+              : cs.onSurface.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFF10B981).withValues(alpha: 0.45)
+                : cs.onSurface.withValues(alpha: 0.14),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected
+                ? const Color(0xFF10B981)
+                : cs.onSurface.withValues(alpha: 0.65),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
     );
   }
 

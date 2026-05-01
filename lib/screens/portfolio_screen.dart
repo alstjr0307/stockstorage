@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -72,7 +72,7 @@ class _PortfolioScreenState extends State<PortfolioScreen>
                 fontWeight: FontWeight.w500,
               ),
               tabs: const [
-                Tab(text: '전체'),
+                Tab(text: '날짜별'),
                 Tab(text: '종목별'),
               ],
             ),
@@ -1345,3 +1345,4 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
     );
   }
 }
+

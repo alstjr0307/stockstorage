@@ -20,9 +20,11 @@ class _TextBlock {
 }
 
 class _ImageBlock {
-  final XFile file;
+  final XFile? file;
+  final String? existingUrl;
   String? uploadedUrl;
-  _ImageBlock(this.file);
+  _ImageBlock.local(this.file) : existingUrl = null;
+  _ImageBlock.remote(this.existingUrl) : file = null, uploadedUrl = existingUrl;
 }
 
 // ─── Screen ──────────────────────────────────────────────────────────────────
@@ -30,8 +32,14 @@ class _ImageBlock {
 class WritePostScreen extends StatefulWidget {
   final String uid;
   final String nickname;
+  final Post? editingPost;
 
-  const WritePostScreen({super.key, required this.uid, required this.nickname});
+  const WritePostScreen({
+    super.key,
+    required this.uid,
+    required this.nickname,
+    this.editingPost,
+  });
 
   @override
   State<WritePostScreen> createState() => _WritePostScreenState();
@@ -45,11 +53,47 @@ class _WritePostScreenState extends State<WritePostScreen> {
   _TextBlock? _lastFocused;
   bool _saving = false;
   static const _maxImages = 5;
+  static final RegExp _imageRegex = RegExp(r'!\[[^\]]*\]\(([^)]+)\)');
 
   @override
   void initState() {
     super.initState();
-    _blocks.add(_listenedTextBlock());
+    _initBlocks();
+  }
+
+  void _initBlocks() {
+    final editingPost = widget.editingPost;
+    if (editingPost == null) {
+      _blocks.add(_listenedTextBlock());
+      return;
+    }
+    _titleCtrl.text = editingPost.title;
+    final content = editingPost.content;
+    final matches = _imageRegex.allMatches(content).toList();
+    if (matches.isEmpty) {
+      _blocks.add(_listenedTextBlock(content));
+      return;
+    }
+
+    int cursor = 0;
+    for (final m in matches) {
+      final textPart = content.substring(cursor, m.start).trim();
+      if (textPart.isNotEmpty) {
+        _blocks.add(_listenedTextBlock(textPart));
+      }
+      final url = (m.group(1) ?? '').trim();
+      if (url.isNotEmpty) {
+        _blocks.add(_ImageBlock.remote(url));
+      }
+      cursor = m.end;
+    }
+    final tail = content.substring(cursor).trim();
+    if (tail.isNotEmpty) {
+      _blocks.add(_listenedTextBlock(tail));
+    }
+    if (_blocks.isEmpty || _blocks.last is _ImageBlock) {
+      _blocks.add(_listenedTextBlock());
+    }
   }
 
   @override
@@ -152,7 +196,7 @@ class _WritePostScreenState extends State<WritePostScreen> {
     if (picked.isEmpty || !mounted) return;
     setState(() {
       for (final f in picked) {
-        _insertImage(_ImageBlock(f));
+        _insertImage(_ImageBlock.local(f));
       }
     });
   }
@@ -164,7 +208,7 @@ class _WritePostScreenState extends State<WritePostScreen> {
     }
     final f = await StorageService.pickFromCamera();
     if (f == null || !mounted) return;
-    setState(() => _insertImage(_ImageBlock(f)));
+    setState(() => _insertImage(_ImageBlock.local(f)));
   }
 
   void _insertImage(_ImageBlock img) {
@@ -301,11 +345,12 @@ class _WritePostScreenState extends State<WritePostScreen> {
     setState(() => _saving = true);
 
     final imgBlocks = _blocks.whereType<_ImageBlock>().toList();
-    if (imgBlocks.isNotEmpty) {
+    final localImgBlocks = imgBlocks.where((b) => b.file != null).toList();
+    if (localImgBlocks.isNotEmpty) {
       try {
-        for (int i = 0; i < imgBlocks.length; i++) {
-          imgBlocks[i].uploadedUrl = await StorageService.uploadImage(
-            file: imgBlocks[i].file,
+        for (int i = 0; i < localImgBlocks.length; i++) {
+          localImgBlocks[i].uploadedUrl = await StorageService.uploadImage(
+            file: localImgBlocks[i].file!,
             folder: 'posts',
             uid: widget.uid,
           );
@@ -336,7 +381,7 @@ class _WritePostScreenState extends State<WritePostScreen> {
           if (mounted) setState(() => _saving = false);
           return;
         }
-        for (final b in imgBlocks) {
+        for (final b in localImgBlocks) {
           b.uploadedUrl = null;
         }
       }
@@ -358,18 +403,26 @@ class _WritePostScreenState extends State<WritePostScreen> {
     }
 
     try {
-      await _fs.createPost(
-        Post(
-          id: '',
-          uid: widget.uid,
-          nickname: widget.nickname,
+      if (widget.editingPost == null) {
+        await _fs.createPost(
+          Post(
+            id: '',
+            uid: widget.uid,
+            nickname: widget.nickname,
+            title: title,
+            content: sb.toString(),
+            likes: 0,
+            createdAt: DateTime.now(),
+            imageUrls: const [],
+          ),
+        );
+      } else {
+        await _fs.updatePost(
+          widget.editingPost!.id,
           title: title,
           content: sb.toString(),
-          likes: 0,
-          createdAt: DateTime.now(),
-          imageUrls: const [],
-        ),
-      );
+        );
+      }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
@@ -591,11 +644,21 @@ class _WritePostScreenState extends State<WritePostScreen> {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Image.file(
-              File(block.file.path),
-              width: double.infinity,
-              fit: BoxFit.cover,
-            ),
+            child: block.file != null
+                ? Image.file(
+                    File(block.file!.path),
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  )
+                : Image.network(
+                    block.existingUrl ?? '',
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 120,
+                      color: Colors.black12,
+                    ),
+                  ),
           ),
           Positioned(
             top: 8,

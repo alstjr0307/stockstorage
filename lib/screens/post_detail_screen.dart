@@ -223,6 +223,16 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
   }
 
+  Future<void> _togglePostAuthorFollow(bool enabled) async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isLoggedIn || auth.user!.uid == widget.post.uid) return;
+    await _firestoreService.setPostAuthorFollowEnabled(
+      auth.user!.uid,
+      widget.post.uid,
+      enabled,
+    );
+  }
+
   Future<void> _openEdit() async {
     final edited = await Navigator.push<bool>(
       context,
@@ -475,6 +485,81 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
+                              if (auth.isLoggedIn &&
+                                  auth.user!.uid != widget.post.uid) ...[
+                                const SizedBox(width: 8),
+                                StreamBuilder<bool>(
+                                  stream: _firestoreService
+                                      .watchPostAuthorFollowEnabled(
+                                        auth.user!.uid,
+                                        widget.post.uid,
+                                      ),
+                                  builder: (context, snap) {
+                                    final enabled = snap.data ?? false;
+                                    return InkWell(
+                                      borderRadius: BorderRadius.circular(999),
+                                      onTap: () =>
+                                          _togglePostAuthorFollow(!enabled),
+                                      child: AnimatedContainer(
+                                        duration:
+                                            const Duration(milliseconds: 140),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 4,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: enabled
+                                              ? const Color(
+                                                  0xFF10B981,
+                                                ).withValues(alpha: 0.14)
+                                              : cs.onSurface.withValues(
+                                                  alpha: 0.05,
+                                                ),
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
+                                          border: Border.all(
+                                            color: enabled
+                                                ? const Color(0xFF10B981)
+                                                : cs.onSurface.withValues(
+                                                    alpha: 0.12,
+                                                  ),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              enabled
+                                                  ? Icons.check
+                                                  : Icons.person_add_alt_1,
+                                              size: 12,
+                                              color: enabled
+                                                  ? const Color(0xFF10B981)
+                                                  : cs.onSurface.withValues(
+                                                      alpha: 0.62,
+                                                    ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              enabled ? '팔로우중' : '팔로우',
+                                              style: TextStyle(
+                                                color: enabled
+                                                    ? const Color(0xFF10B981)
+                                                    : cs.onSurface.withValues(
+                                                        alpha: 0.72,
+                                                      ),
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
                               const Spacer(),
                               Text(
                                 DateFormat(
@@ -620,11 +705,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 10),
-                          Divider(
-                            color: cs.onSurface.withValues(alpha: 0.08),
-                            height: 1,
-                          ),
+                          const SizedBox(height: 12),
                         ],
                       ),
                     ),
@@ -654,12 +735,19 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         return SliverMainAxisGroup(
                           slivers: [
                             SliverToBoxAdapter(
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  20,
-                                  16,
-                                  20,
-                                  8,
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                                decoration: BoxDecoration(
+                                  color: cs.onSurface.withValues(alpha: 0.045),
+                                  border: Border(
+                                    top: BorderSide(
+                                      color: cs.onSurface.withValues(alpha: 0.12),
+                                    ),
+                                    bottom: BorderSide(
+                                      color: cs.onSurface.withValues(alpha: 0.12),
+                                    ),
+                                  ),
                                 ),
                                 child: RichText(
                                   text: TextSpan(

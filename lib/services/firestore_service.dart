@@ -42,6 +42,7 @@ class FirestoreService {
     'pickComment': true,
     'postComment': true,
     'journalComment': true,
+    'journalWriteReminder': false,
   };
 
   int calculateUserLevel({
@@ -920,6 +921,50 @@ class FirestoreService {
     }, SetOptions(merge: true));
   }
 
+  Future<void> saveNotificationHistory({
+    required String uid,
+    required String title,
+    required String body,
+    String? messageId,
+    String source = 'push',
+    DateTime? sentAt,
+  }) async {
+    final safeTitle = title.trim();
+    final safeBody = body.trim();
+    if (safeTitle.isEmpty && safeBody.isEmpty) return;
+
+    final docId =
+        (messageId != null && messageId.trim().isNotEmpty)
+        ? messageId.trim()
+        : _db.collection('tmp').doc().id;
+
+    await _db
+        .collection('users')
+        .doc(uid)
+        .collection('notification_history')
+        .doc(docId)
+        .set({
+          'title': safeTitle,
+          'body': safeBody,
+          'source': source,
+          'sentAt': Timestamp.fromDate(sentAt ?? DateTime.now()),
+          'updatedAt': Timestamp.fromDate(DateTime.now()),
+        }, SetOptions(merge: true));
+  }
+
+  Stream<QuerySnapshot<Map<String, dynamic>>> watchNotificationHistory(
+    String uid, {
+    int limit = 100,
+  }) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('notification_history')
+        .orderBy('sentAt', descending: true)
+        .limit(limit)
+        .snapshots();
+  }
+
   Map<String, bool> _parseNotificationSettings(Map<String, dynamic>? data) {
     final raw = (data?['notificationSettings'] as Map<String, dynamic>?) ?? {};
     return {
@@ -934,6 +979,9 @@ class FirestoreService {
       'journalComment':
           (raw['journalComment'] as bool?) ??
           _defaultNotificationSettings['journalComment']!,
+      'journalWriteReminder':
+          (raw['journalWriteReminder'] as bool?) ??
+          _defaultNotificationSettings['journalWriteReminder']!,
     };
   }
 
@@ -950,9 +998,50 @@ class FirestoreService {
 
   Future<void> updateNotificationSetting(String uid, String key, bool enabled) {
     return _db.collection('users').doc(uid).set({
-      'notificationSettings': {key: enabled},
+      'notificationSettings': {key: enabled, '_userTouched': true},
       'lastActiveAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+  }
+
+  Future<Map<String, bool>> ensureNotificationSettingsInitialized(String uid) async {
+    final ref = _db.collection('users').doc(uid);
+    final snap = await ref.get();
+    final data = snap.data() ?? <String, dynamic>{};
+    final raw = (data['notificationSettings'] as Map<String, dynamic>?) ?? {};
+
+    final current = _parseNotificationSettings(data);
+    final userTouched = raw['_userTouched'] == true;
+
+    final hasAllKeys = _defaultNotificationSettings.keys.every(raw.containsKey);
+    final allCoreOff =
+        (raw['newPick'] as bool?) == false &&
+        (raw['pickComment'] as bool?) == false &&
+        (raw['postComment'] as bool?) == false &&
+        (raw['journalComment'] as bool?) == false;
+
+    final shouldRepairLegacyAllOff = allCoreOff && !userTouched;
+    final shouldInitializeMissingKeys = !hasAllKeys;
+
+    if (shouldRepairLegacyAllOff || shouldInitializeMissingKeys) {
+      final next = <String, dynamic>{
+        ..._defaultNotificationSettings,
+        ...raw,
+        '_userTouched': userTouched,
+      };
+      if (shouldRepairLegacyAllOff) {
+        next['newPick'] = true;
+        next['pickComment'] = true;
+        next['postComment'] = true;
+        next['journalComment'] = true;
+        if (raw['journalWriteReminder'] == null) {
+          next['journalWriteReminder'] = false;
+        }
+      }
+      await ref.set({'notificationSettings': next}, SetOptions(merge: true));
+      return _parseNotificationSettings({'notificationSettings': next});
+    }
+
+    return current;
   }
 
   Future<bool> getPickCommentNotificationEnabled(
@@ -1366,6 +1455,17 @@ class FirestoreService {
     await recordPostCreated(post.uid);
   }
 
+  Future<void> updatePost(
+    String id, {
+    required String title,
+    required String content,
+  }) async {
+    await _db.collection('posts').doc(id).update({
+      'title': title,
+      'content': content,
+    });
+  }
+
   Future<void> deletePost(String id) async {
     final ref = _db.collection('posts').doc(id);
     final snap = await ref.get();
@@ -1413,6 +1513,43 @@ class FirestoreService {
   }
 
   // ─── 자유게시판 댓글 ──────────────────────────────────────────────────────
+
+  Stream<bool> watchPostAuthorFollowEnabled(String uid, String targetUid) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('post_author_follows')
+        .doc(targetUid)
+        .snapshots()
+        .map((doc) => (doc.data()?['enabled'] as bool?) ?? false);
+  }
+
+  Future<bool> getPostAuthorFollowEnabled(String uid, String targetUid) async {
+    final doc = await _db
+        .collection('users')
+        .doc(uid)
+        .collection('post_author_follows')
+        .doc(targetUid)
+        .get();
+    return (doc.data()?['enabled'] as bool?) ?? false;
+  }
+
+  Future<void> setPostAuthorFollowEnabled(
+    String uid,
+    String targetUid,
+    bool enabled,
+  ) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('post_author_follows')
+        .doc(targetUid)
+        .set({
+          'targetUid': targetUid,
+          'enabled': enabled,
+          'updatedAt': Timestamp.fromDate(DateTime.now()),
+        }, SetOptions(merge: true));
+  }
 
   Stream<List<Comment>> getPostComments(String postId) {
     return _db

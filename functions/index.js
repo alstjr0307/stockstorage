@@ -39,8 +39,51 @@ async function getTokensByUids(db, uidSet) {
   return Array.from(tokens);
 }
 
+async function writeNotificationHistoryForUids(db, uidSet, payload) {
+  const uids = Array.from(uidSet).filter(
+    (uid) => typeof uid === 'string' && uid.length > 0
+  );
+  if (uids.length === 0) return;
+
+  const sentAt = new Date();
+  for (let i = 0; i < uids.length; i += 400) {
+    const chunk = uids.slice(i, i + 400);
+    const batch = db.batch();
+    chunk.forEach((uid) => {
+      const ref = db
+        .collection('users')
+        .doc(uid)
+        .collection('notification_history')
+        .doc();
+      batch.set(ref, {
+        title: payload.title || '',
+        body: payload.body || '',
+        source: payload.source || 'server_push',
+        sentAt,
+        updatedAt: sentAt,
+      });
+    });
+    await batch.commit();
+  }
+}
+
 function isNotificationEnabled(userData, key) {
   const settings = userData?.notificationSettings || {};
+  const userTouched = settings?._userTouched === true;
+  const legacyAllCoreOff =
+    settings?.newPick === false &&
+    settings?.pickComment === false &&
+    settings?.postComment === false &&
+    settings?.journalComment === false;
+
+  // Legacy bug guard:
+  // If all core notifications are false but user never explicitly touched settings,
+  // treat missing/false as default-on to avoid globally silencing push.
+  if (!userTouched && legacyAllCoreOff) {
+    if (key === 'journalWriteReminder') return false;
+    return true;
+  }
+
   const value = settings?.[key];
   return typeof value === 'boolean' ? value : true;
 }
@@ -65,18 +108,48 @@ async function filterUsersByGlobalSetting(db, uidSet, key) {
   return allowed;
 }
 
-async function getPickSubscriptionMap(db, pickId) {
-  const snap = await db
-    .collectionGroup('pick_comment_subscriptions')
-    .where('pickId', '==', pickId)
-    .get();
-  const map = new Map();
+async function getAllUserUidsByGlobalSetting(db, key, excludeUid) {
+  const snap = await db.collection('users').get();
+  const allowed = new Set();
   snap.docs.forEach((d) => {
-    const uid = d.ref.parent.parent?.id;
-    if (!uid) return;
-    map.set(uid, { enabled: d.data()?.enabled !== false });
+    if (d.id === excludeUid) return;
+    if (isNotificationEnabled(d.data(), key)) allowed.add(d.id);
   });
-  return map;
+  return allowed;
+}
+
+async function getFollowerUids(db, followCollection, targetUid) {
+  try {
+    const snap = await db
+      .collectionGroup(followCollection)
+      .where('targetUid', '==', targetUid)
+      .where('enabled', '==', true)
+      .get();
+    const uids = new Set();
+    snap.docs.forEach((d) => {
+      const uid = d.ref.parent.parent?.id;
+      if (uid && uid !== targetUid) uids.add(uid);
+    });
+    return uids;
+  } catch (e) {
+    // Safety fallback: keep notifications working even if index/query precondition fails.
+    console.warn(`getFollowerUids fallback (${followCollection}):`, e?.message || e);
+    const uids = new Set();
+    const usersSnap = await db.collection('users').get();
+    for (const userDoc of usersSnap.docs) {
+      const uid = userDoc.id;
+      if (!uid || uid === targetUid) continue;
+      const followDoc = await db
+        .collection('users')
+        .doc(uid)
+        .collection(followCollection)
+        .doc(targetUid)
+        .get();
+      if (!followDoc.exists) continue;
+      if (followDoc.data()?.enabled === true) uids.add(uid);
+    }
+    return uids;
+  }
 }
 
 exports.crawlDailyInvestorFlow = crawlDailyInvestorFlow;
@@ -151,29 +224,28 @@ exports.sendCommentNotification = onDocumentCreated(
         .filter((u) => u && u !== commenterUid)
     );
 
-    // explicit subscribers for this pick
-    const subscriptionMap = await getPickSubscriptionMap(db, pickId);
-    const explicitOnUids = new Set();
-    subscriptionMap.forEach((value, uid) => {
-      if (value.enabled && uid !== commenterUid) explicitOnUids.add(uid);
-    });
-
-    const candidateUids = new Set([...commenterUids, ...explicitOnUids]);
-    if (candidateUids.size === 0) return;
+    // 댓글 알림 대상: 해당 추천주에 댓글을 작성한 사용자만 (작성자 제외)
+    if (commenterUids.size === 0) return;
 
     const globalAllowed = await filterUsersByGlobalSetting(
       db,
-      candidateUids,
+      commenterUids,
       'pickComment'
     );
     if (globalAllowed.size === 0) return;
 
     // apply per-pick off
     const recipientUids = new Set();
-    globalAllowed.forEach((uid) => {
-      const sub = subscriptionMap.get(uid);
-      if (!sub || sub.enabled) recipientUids.add(uid);
-    });
+    for (const uid of globalAllowed) {
+      const subDoc = await db
+        .collection('users')
+        .doc(uid)
+        .collection('pick_comment_subscriptions')
+        .doc(pickId)
+        .get();
+      const enabled = subDoc.exists ? (subDoc.data()?.enabled !== false) : true;
+      if (enabled) recipientUids.add(uid);
+    }
     if (recipientUids.size === 0) return;
 
     const tokens = await getTokensByUids(db, recipientUids);
@@ -211,6 +283,12 @@ exports.sendCommentNotification = onDocumentCreated(
         invalidTokens.map((t) => db.collection('fcm_tokens').doc(t).delete())
       );
     }
+
+    await writeNotificationHistoryForUids(db, recipientUids, {
+      title: `💬 ${pickName} 새 댓글`,
+      body: `${senderName}: ${preview}`,
+      source: 'server_pick_comment',
+    });
   }
 );
 
@@ -291,6 +369,53 @@ exports.sendPostCommentNotification = onDocumentCreated(
         invalidTokens.map((t) => db.collection('fcm_tokens').doc(t).delete())
       );
     }
+
+    await writeNotificationHistoryForUids(db, new Set([authorUid]), {
+      title: '💬 내 글에 댓글이 달렸어요',
+      body: `${senderName}: ${preview}`,
+      source: 'server_post_comment',
+    });
+  }
+);
+
+exports.notifyPostAuthorFollowers = onDocumentCreated(
+  { document: 'posts/{postId}', region: 'asia-northeast3' },
+  async (event) => {
+    const post = event.data?.data();
+    if (!post) return;
+
+    const authorUid = post.uid;
+    if (!authorUid) return;
+
+    const db = getFirestore();
+    const followerUids = await getFollowerUids(
+      db,
+      'post_author_follows',
+      authorUid
+    );
+    if (followerUids.size === 0) return;
+
+    const tokens = await getTokensByUids(db, followerUids);
+    if (tokens.length === 0) return;
+
+    const title = post.title || '새 자유게시글';
+    const nickname = post.nickname || '작성자';
+    await getMessaging().sendEachForMulticast({
+      notification: {
+        title: `${nickname}님의 새 글`,
+        body: title,
+      },
+      data: { postId: event.params.postId },
+      android: { notification: { sound: 'default', channelId: 'stockstorage_alerts' } },
+      apns: { payload: { aps: { sound: 'default' } } },
+      tokens,
+    });
+
+    await writeNotificationHistoryForUids(db, followerUids, {
+      title: `${nickname}님의 새 글`,
+      body: title,
+      source: 'server_post_author_follow',
+    });
   }
 );
 
@@ -360,6 +485,12 @@ exports.sendJournalCommentNotification = onDocumentCreated(
         invalidTokens.map((t) => db.collection('fcm_tokens').doc(t).delete())
       );
     }
+
+    await writeNotificationHistoryForUids(db, new Set([authorUid]), {
+      title: '\uD83D\uDCDD \uB9E4\uB9E4\uC77C\uC9C0\uC5D0 \uB313\uAE00\uC774 \uB2EC\uB838\uC5B4\uC694',
+      body: `${senderName}: ${preview}`,
+      source: 'server_journal_comment',
+    });
   }
 );
 
@@ -873,8 +1004,6 @@ exports.getKospiNightFutures = onCall(
     };
   }
 );
-
-
 
 // ── 펨코 주갤 크롤링 공통 로직 ──────────────────────────────────────────────
 async function _scrapeFmkoreaIndex() {

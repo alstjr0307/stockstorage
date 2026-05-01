@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show setEquals;
+﻿import 'package:flutter/foundation.dart' show setEquals;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -943,8 +943,6 @@ class _StockHoldingStatusCard extends StatelessWidget {
                   last: true,
                 ),
               ] else ...[
-                statRow('총 매수금액', fmtP(metrics.totalBuyAmount)),
-                statRow('총 매도금액', fmtP(metrics.totalSellAmount)),
                 statRow(
                   '실현수익률',
                   metrics.realizedPnlRate == null
@@ -1960,6 +1958,24 @@ class _JournalDateSectionState extends State<_JournalDateSection> {
     final filteredTimeline = widget.timeline
         .where((j) => _isSameDay(j.tradeDate, selectedDate))
         .toList();
+    final dayBuyKrw = filteredTimeline
+        .where((j) => j.action == '매수' && j.market != 'US')
+        .fold<double>(0, (sum, j) => sum + (j.price * j.quantity));
+    final daySellKrw = filteredTimeline
+        .where((j) => j.action == '매도' && j.market != 'US')
+        .fold<double>(0, (sum, j) => sum + (j.price * j.quantity));
+    final dayBuyUsd = filteredTimeline
+        .where((j) => j.action == '매수' && j.market == 'US')
+        .fold<double>(0, (sum, j) => sum + (j.price * j.quantity));
+    final daySellUsd = filteredTimeline
+        .where((j) => j.action == '매도' && j.market == 'US')
+        .fold<double>(0, (sum, j) => sum + (j.price * j.quantity));
+    String fmtDayAmount(double krw, double usd) {
+      final parts = <String>[];
+      if (krw > 0) parts.add('₩${NumberFormat('#,###').format(krw.toInt())}');
+      if (usd > 0) parts.add('\$${usd.toStringAsFixed(2)}');
+      return parts.isEmpty ? '-' : parts.join(' / ');
+    }
 
     return Column(
       children: [
@@ -1982,16 +1998,81 @@ class _JournalDateSectionState extends State<_JournalDateSection> {
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              '총 거래 ${filteredTimeline.length}건',
-              style: TextStyle(
-                color: cs.onSurface.withValues(alpha: 0.45),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '총 거래 ${filteredTimeline.length}건',
+                style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.45),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: cs.onSurface.withValues(alpha: 0.03),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: cs.onSurface.withValues(alpha: 0.06)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          '매수',
+                          style: TextStyle(
+                            color: Color(0xFF10B981),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          fmtDayAmount(dayBuyKrw, dayBuyUsd),
+                          style: const TextStyle(
+                            color: Color(0xFF10B981),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Divider(
+                        height: 1,
+                        color: cs.onSurface.withValues(alpha: 0.08),
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        const Text(
+                          '매도',
+                          style: TextStyle(
+                            color: Color(0xFFF04452),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          fmtDayAmount(daySellKrw, daySellUsd),
+                          style: const TextStyle(
+                            color: Color(0xFFF04452),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
         ...filteredTimeline.map((j) {
