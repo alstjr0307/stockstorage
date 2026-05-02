@@ -595,6 +595,28 @@ class _ManageCard extends StatelessWidget {
                     fontSize: 11,
                   ),
                 ),
+                const SizedBox(height: 8),
+                Text(
+                  '본문',
+                  style: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.45),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  pick.reason.trim().isEmpty ? '(본문 없음)' : pick.reason.trim(),
+                  style: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withValues(alpha: 0.72),
+                    fontSize: 12,
+                    height: 1.35,
+                  ),
+                ),
               ],
             ),
           ),

@@ -1103,3 +1103,114 @@ exports.fetchFmkoreaIndexNow = onRequest(
     }
   }
 );
+
+function formatKstDate(date = new Date()) {
+  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+  const y = kst.getUTCFullYear();
+  const m = String(kst.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(kst.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function formatSignedPercent(rate) {
+  const sign = rate >= 0 ? '+' : '';
+  return `${sign}${rate.toFixed(2)}%`;
+}
+
+// ── 평일 16:00 KST 추천주 상승률 순위 자동 게시 ─────────────────────────────
+exports.postDailyPickReturnRanking = onSchedule(
+  {
+    schedule: '0 16 * * 1-5',
+    timeZone: 'Asia/Seoul',
+    region: 'asia-northeast3',
+    timeoutSeconds: 120,
+  },
+  async () => {
+    const db = getFirestore();
+    const dateKey = formatKstDate();
+    const runRef = db.collection('_automation_runs').doc(`pick_return_ranking_${dateKey}`);
+
+    // 스케줄러 재시도/중복 실행 방지: 날짜별 1회만 게시
+    const lockAcquired = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(runRef);
+      if (snap.exists) return false;
+      tx.set(runRef, {
+        type: 'daily_pick_return_ranking',
+        dateKey,
+        createdAt: new Date(),
+      });
+      return true;
+    });
+    if (!lockAcquired) return;
+
+    const picksSnap = await db
+      .collection('stock_picks')
+      .orderBy('createdAt', 'desc')
+      .get();
+    if (picksSnap.empty) return;
+
+    const activePicks = picksSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((p) => {
+        const status = String(p.status || 'active').toLowerCase();
+        const market = String(p.market || '').toUpperCase();
+        const isKoreanMarket = market === 'KS' || market === 'KQ';
+        return (status === 'active' || status === 'open') && isKoreanMarket;
+      });
+    if (activePicks.length === 0) return;
+
+    const ranked = activePicks
+      .map((p) => {
+        const buyPrice = Number(p.buyPrice || 0);
+        const currentPrice = Number(
+          p.currentPrice != null ? p.currentPrice : p.buyPrice || 0
+        );
+        if (!Number.isFinite(buyPrice) || buyPrice <= 0) return null;
+        if (!Number.isFinite(currentPrice) || currentPrice <= 0) return null;
+
+        const rate = ((currentPrice - buyPrice) / buyPrice) * 100;
+        return {
+          name: p.name || '이름없음',
+          ticker: p.ticker || '-',
+          market: p.market || '-',
+          buyPrice,
+          currentPrice,
+          rate,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.rate - a.rate);
+
+    if (ranked.length === 0) return;
+
+    const lines = ranked.map((item, idx) => {
+      return `${idx + 1}. ${item.name} (${item.ticker}/${item.market}) ${formatSignedPercent(item.rate)}`;
+    });
+
+    const title = `📊 ${dateKey} 추천주 상승률 순위`;
+    const content = [
+      `안녕하세요, 주식저장소입니다 😊`,
+      `오늘 장 마감(16:00) 기준으로 국내 추천주 상승률 순위를 정리했어요.`,
+      `하루 흐름 한 번에 확인해보세요 📈`,
+      '',
+      `기준: ${dateKey} 16:00 KST`,
+      `대상: 진행 중 국내 추천주 ${ranked.length}개 (KOSPI/KOSDAQ)`,
+      '',
+      ...lines,
+    ].join('\n');
+
+    const adminSnap = await db.collection('config').doc('admin').get();
+    const adminUid = adminSnap.data()?.uid || 'system';
+    const adminNickname = adminSnap.data()?.nickname || '주식저장소봇';
+
+    await db.collection('posts').add({
+      uid: adminUid,
+      nickname: adminNickname,
+      title,
+      content,
+      likes: 0,
+      imageUrls: [],
+      createdAt: new Date(),
+    });
+  }
+);
