@@ -5,12 +5,18 @@
 ## 수집 대상
 - `fmkorea_scraper.js`: 펨코 지수 (`fmkorea_index`, `fmkorea_index_meta`)
 - `fmkorea_yesterday_mentions_scraper.js`: HOT 종목 (`fmkorea_stock_mentions_daily`, `fmkorea_stock_mentions_realtime/today`)
+- `premarket_briefing.js`: 평일 아침 장전 뉴스 브리핑 (`premarket_briefings`, `premarket_briefings_meta/latest`)
+- `auto_stock_picker.js`: 네이버 일봉 기반 자동 추천 후보 선별 및 `stock_picks` 업로드
 
 ## GitHub Actions 워크플로우
 - 파일: `.github/workflows/fmkorea-scraper.yml`
+- 장전 브리핑 파일: `.github/workflows/premarket-briefing.yml`
+- 자동 추천주 파일: `.github/workflows/auto-stock-picker.yml`
 - 스케줄:
   - HOT 종목: 매시 5분(UTC)
   - 펨코 지수: 00:00, 04:00, 09:00, 14:00 UTC (KST 09:00, 13:00, 18:00, 23:00)
+  - 장전 브리핑: 일-목 22:30 UTC (KST 평일 07:30)
+  - 자동 추천주: 월-금 07:30 UTC (KST 평일 16:30)
 - `workflow_dispatch`로 수동 실행 가능
 
 ## 필수 Secrets
@@ -19,6 +25,21 @@
 - `FIREBASE_SERVICE_ACCOUNT`
   - Firebase 서비스 계정 JSON 전체 문자열
   - 예시: `{"type":"service_account",...}`
+- `OPENAI_API_KEY` (선택)
+  - 있으면 OpenAI Responses API로 브리핑 문장을 다듬습니다.
+  - 없으면 수집 기사 기반 기본 템플릿으로 생성합니다.
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` (선택)
+  - 설정하면 브리핑 전문을 텔레그램으로 보냅니다.
+
+## 선택 Variables
+- `OPENAI_MODEL`: 기본값 `gpt-4.1-mini`
+- `SEND_PREMARKET_FCM`: `1`이면 FCM 토픽 알림 발송
+- `PREMARKET_FCM_TOPIC`: 기본값 `stock_alerts`
+- `AUTO_PICK_MIN_SCORE`: 자동 추천 최소 점수, 기본값 `65`
+- `AUTO_PICK_MAX_PICKS`: 하루 최대 업로드 수, 기본값 `8`
+- `AUTO_PICK_MIN_AVG_TRADING_VALUE`: 20일 평균 거래대금 하한, 기본값 `1000000000`
+- `AUTO_PICK_SEND_FCM`: `1`이면 자동 추천 업로드 후 FCM 발송
+- `AUTO_PICK_FCM_TOPIC`: 기본값 `new_pick_alerts`
 
 ## 로컬 수동 실행(테스트용)
 ```bash
@@ -30,6 +51,15 @@ node fmkorea_scraper.js
 
 # HOT 종목(오늘 누적)
 TARGET_MODE=today node fmkorea_yesterday_mentions_scraper.js
+
+# 장전 브리핑
+npm run premarket
+
+# 자동 추천주 테스트(업로드 없음)
+DRY_RUN=1 MAX_STOCKS=50 npm run auto-picks
+
+# 자동 추천주 업로드
+npm run auto-picks
 ```
 
 ## 참고

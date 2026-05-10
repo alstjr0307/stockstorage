@@ -5,7 +5,10 @@
   "scripts": {
     "start": "node fmkorea_scraper.js",
     "mentions": "node fmkorea_yesterday_mentions_scraper.js",
-    "aliases:krx": "node generate_krx_aliases.js"
+    "aliases:krx": "node generate_krx_aliases.js",
+    "premarket": "node premarket_briefing.js",
+    "auto-picks": "node auto_stock_picker.js",
+    "market-features": "node -e \"process.env.MARKET_FEATURES='1'; require('./auto_stock_picker')\""
   },
   "dependencies": {
     "firebase-admin": "^12.0.0",

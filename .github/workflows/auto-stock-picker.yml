@@ -1,0 +1,46 @@
+name: Auto Stock Picker
+
+on:
+  schedule:
+    # Weekdays 16:30 KST = 07:30 UTC.
+    - cron: '30 7 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  pick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: scraper/package-lock.json
+
+      - name: Install dependencies
+        working-directory: scraper
+        run: npm ci
+
+      - name: Generate and upload auto picks
+        working-directory: scraper
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          MIN_SCORE: ${{ vars.AUTO_PICK_MIN_SCORE }}
+          MAX_PICKS: ${{ vars.AUTO_PICK_MAX_PICKS }}
+          MIN_AVG_TRADING_VALUE: ${{ vars.AUTO_PICK_MIN_AVG_TRADING_VALUE }}
+          SEND_FCM: ${{ vars.AUTO_PICK_SEND_FCM }}
+          FCM_TOPIC: ${{ vars.AUTO_PICK_FCM_TOPIC }}
+        run: npm run auto-picks
+
+      - name: Generate and upload market feature stocks
+        working-directory: scraper
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FEATURE_MAX_PER_GROUP: ${{ vars.FEATURE_MAX_PER_GROUP }}
+          FEATURE_MIN_TRADING_VALUE: ${{ vars.FEATURE_MIN_TRADING_VALUE }}
+          FEATURE_VALUE_SPIKE_RATIO: ${{ vars.FEATURE_VALUE_SPIKE_RATIO }}
+        run: npm run market-features

@@ -52,6 +52,7 @@ functions/node_modules/
 functions/serviceAccountKey.json
 scraper/service-account.json
 scraper/node_modules/
+scraper/out/
 android/key.properties
 android/app/upload-keystore.jks
 android/play-service-account.json

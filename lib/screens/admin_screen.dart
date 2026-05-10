@@ -1630,12 +1630,16 @@ class _UsersTabState extends State<_UsersTab> {
   final _scrollController = ScrollController();
   final _searchController = TextEditingController();
   final List<Map<String, dynamic>> _users = [];
+  final List<Map<String, dynamic>> _searchResults = [];
   DocumentSnapshot? _lastDoc;
+  Timer? _searchDebounce;
   bool _loading = false;
   bool _initialLoading = true;
   bool _hasMore = true;
+  bool _searchLoading = false;
   String? _error;
   String _query = '';
+  int _searchRequestId = 0;
   int _totalUsers = 0;
   int _todayUsers = 0;
 
@@ -1656,6 +1660,7 @@ class _UsersTabState extends State<_UsersTab> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _scrollController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -1673,7 +1678,7 @@ class _UsersTabState extends State<_UsersTab> {
   }
 
   Future<void> _loadMore() async {
-    if (_loading || !_hasMore) return;
+    if (_query.trim().isNotEmpty || _loading || !_hasMore) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -1702,30 +1707,92 @@ class _UsersTabState extends State<_UsersTab> {
   }
 
   Future<void> _refresh() async {
+    _searchDebounce?.cancel();
+    _searchRequestId++;
     setState(() {
       _users.clear();
+      _searchResults.clear();
       _lastDoc = null;
       _hasMore = true;
       _initialLoading = true;
+      _searchLoading = false;
       _error = null;
+      _query = '';
     });
+    _searchController.clear();
     await _loadSummary();
     await _loadMore();
+  }
+
+  void _onSearchChanged(String value) {
+    _searchDebounce?.cancel();
+    final query = value.trim();
+    setState(() {
+      _query = value;
+      _searchResults.clear();
+      _searchLoading = query.isNotEmpty;
+      _error = null;
+    });
+
+    if (query.isEmpty) {
+      _searchRequestId++;
+      setState(() => _searchLoading = false);
+      return;
+    }
+
+    final requestId = ++_searchRequestId;
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () async {
+      try {
+        final results = await _firestoreService.searchAdminUsers(query);
+        if (!mounted || requestId != _searchRequestId) return;
+        setState(() {
+          _searchResults
+            ..clear()
+            ..addAll(results);
+          _searchLoading = false;
+        });
+      } catch (e) {
+        if (!mounted || requestId != _searchRequestId) return;
+        setState(() {
+          _searchLoading = false;
+          _error = '$e';
+        });
+      }
+    });
+  }
+
+  void _clearSearch() {
+    _searchDebounce?.cancel();
+    _searchRequestId++;
+    _searchController.clear();
+    setState(() {
+      _query = '';
+      _searchResults.clear();
+      _searchLoading = false;
+      _error = null;
+    });
+  }
+
+  void _openUserDetail(Map<String, dynamic> user) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _AdminUserDetailScreen(
+          uid: user['uid'] as String,
+          initialUser: user,
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final q = _query.trim().toLowerCase();
-    final filteredUsers = q.isEmpty
-        ? _users
-        : _users.where((u) {
-            final uid = (u['uid'] as String? ?? '').toLowerCase();
-            final nickname = (u['nickname'] as String? ?? '').toLowerCase();
-            return uid.contains(q) || nickname.contains(q);
-          }).toList();
     final isSearching = q.isNotEmpty;
-    final showEmptySearch = isSearching && filteredUsers.isEmpty;
+    final visibleUsers = isSearching ? _searchResults : _users;
+    final showEmptySearch =
+        isSearching && !_searchLoading && _searchResults.isEmpty;
     if (_initialLoading && _users.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFF10B981)),
@@ -1744,9 +1811,10 @@ class _UsersTabState extends State<_UsersTab> {
         controller: _scrollController,
         padding: const EdgeInsets.all(16),
         itemCount:
-            filteredUsers.length +
+            visibleUsers.length +
             2 +
             (showEmptySearch ? 1 : 0) +
+            (_searchLoading ? 1 : 0) +
             (!isSearching && (_loading || _hasMore) ? 1 : 0),
         itemBuilder: (context, i) {
           if (i == 0) {
@@ -1818,7 +1886,7 @@ class _UsersTabState extends State<_UsersTab> {
               margin: const EdgeInsets.only(bottom: 12),
               child: TextField(
                 controller: _searchController,
-                onChanged: (v) => setState(() => _query = v),
+                onChanged: _onSearchChanged,
                 style: TextStyle(color: cs.onSurface, fontSize: 14),
                 decoration: InputDecoration(
                   hintText: '닉네임 또는 UID 검색',
@@ -1834,10 +1902,7 @@ class _UsersTabState extends State<_UsersTab> {
                   suffixIcon: _query.isEmpty
                       ? null
                       : IconButton(
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() => _query = '');
-                          },
+                          onPressed: _clearSearch,
                           icon: Icon(
                             Icons.close,
                             size: 18,
@@ -1863,6 +1928,18 @@ class _UsersTabState extends State<_UsersTab> {
             );
           }
 
+          if (_searchLoading && i == 2) {
+            return const Padding(
+              padding: EdgeInsets.only(top: 8, bottom: 16),
+              child: Center(
+                child: CircularProgressIndicator(
+                  color: Color(0xFF10B981),
+                  strokeWidth: 2,
+                ),
+              ),
+            );
+          }
+
           if (showEmptySearch && i == 2) {
             return Padding(
               padding: const EdgeInsets.only(top: 8, bottom: 16),
@@ -1878,8 +1955,9 @@ class _UsersTabState extends State<_UsersTab> {
             );
           }
 
-          final index = i - 2 - (showEmptySearch ? 1 : 0);
-          if (index >= filteredUsers.length) {
+          final index =
+              i - 2 - (showEmptySearch ? 1 : 0) - (_searchLoading ? 1 : 0);
+          if (index >= visibleUsers.length) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Center(
@@ -1899,7 +1977,7 @@ class _UsersTabState extends State<_UsersTab> {
             );
           }
 
-          final u = filteredUsers[index];
+          final u = visibleUsers[index];
           final uid = u['uid'] as String;
           final nickname = u['nickname'] as String;
           final level = (u['level'] as num?)?.toInt() ?? 1;
@@ -1913,70 +1991,73 @@ class _UsersTabState extends State<_UsersTab> {
           final lastActiveText = lastActiveAt != null
               ? DateFormat('yyyy.MM.dd HH:mm').format(lastActiveAt.toDate())
               : '-';
-          return Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          return GestureDetector(
+            onTap: () => _openUserDetail(u),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          nickname.isNotEmpty ? nickname : '(닉네임 없음)',
+                          style: TextStyle(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          uid,
+                          style: TextStyle(
+                            color: cs.onSurface.withValues(alpha: 0.4),
+                            fontSize: 11,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        nickname.isNotEmpty ? nickname : '(닉네임 없음)',
+                        'Lv.$level · 글/일지 $postCount · 댓글 $commentCount',
                         style: TextStyle(
-                          color: cs.onSurface,
+                          color: const Color(0xFF10B981),
                           fontWeight: FontWeight.w600,
-                          fontSize: 14,
+                          fontSize: 13,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        uid,
+                        '가입 $joinDate',
                         style: TextStyle(
-                          color: cs.onSurface.withValues(alpha: 0.4),
-                          fontSize: 11,
+                          color: cs.onSurface.withValues(alpha: 0.5),
+                          fontSize: 12,
                         ),
-                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '최근 접속 $lastActiveText',
+                        style: TextStyle(
+                          color: cs.onSurface.withValues(alpha: 0.5),
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      'Lv.$level · 글/일지 $postCount · 댓글 $commentCount',
-                      style: TextStyle(
-                        color: const Color(0xFF10B981),
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '가입 $joinDate',
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.5),
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '최근 접속 $lastActiveText',
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.5),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },
@@ -1986,6 +2067,271 @@ class _UsersTabState extends State<_UsersTab> {
 }
 
 // ─── 신고 관리 탭 ──────────────────────────────────────────────────────────────
+
+class _AdminUserDetailScreen extends StatefulWidget {
+  const _AdminUserDetailScreen({required this.uid, required this.initialUser});
+
+  final String uid;
+  final Map<String, dynamic> initialUser;
+
+  @override
+  State<_AdminUserDetailScreen> createState() => _AdminUserDetailScreenState();
+}
+
+class _AdminUserDetailScreenState extends State<_AdminUserDetailScreen> {
+  final _firestoreService = FirestoreService();
+  late Future<Map<String, dynamic>?> _userFuture;
+  late Future<({int postCount, int journalCount, int reportCount})>
+  _activityFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _userFuture = _firestoreService.getAdminUserDetail(widget.uid);
+    _activityFuture = _firestoreService.getAdminUserActivitySummary(widget.uid);
+  }
+
+  String _formatTimestamp(dynamic value, {bool withTime = true}) {
+    if (value is! Timestamp) return '-';
+    final pattern = withTime ? 'yyyy.MM.dd HH:mm' : 'yyyy.MM.dd';
+    return DateFormat(pattern).format(value.toDate());
+  }
+
+  String _valueText(dynamic value) {
+    if (value == null) return '-';
+    if (value is Timestamp) return _formatTimestamp(value);
+    if (value is Map) return value.isEmpty ? '-' : value.toString();
+    if (value is List) return value.isEmpty ? '-' : value.join(', ');
+    final text = value.toString();
+    return text.isEmpty ? '-' : text;
+  }
+
+  Widget _section(
+    BuildContext context, {
+    required String title,
+    required List<Widget> children,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _row(BuildContext context, String label, String value) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 96,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.48),
+                fontSize: 13,
+              ),
+            ),
+          ),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: TextStyle(color: cs.onSurface, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stat(BuildContext context, String label, String value) {
+    final cs = Theme.of(context).colorScheme;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: cs.onSurface.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: const TextStyle(
+                color: Color(0xFF10B981),
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.55),
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        elevation: 0,
+        title: Text(
+          '유저 상세',
+          style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700),
+        ),
+      ),
+      body: FutureBuilder<Map<String, dynamic>?>(
+        future: _userFuture,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF10B981)),
+            );
+          }
+          if (snap.hasError) {
+            return Center(
+              child: Text(
+                '불러오기 실패: ${snap.error}',
+                style: TextStyle(color: cs.onSurface),
+              ),
+            );
+          }
+          final user = snap.data ?? widget.initialUser;
+          final nickname = _valueText(user['nickname']);
+          final level = ((user['level'] as num?)?.toInt() ?? 1).toString();
+          final uid = user['uid'] as String? ?? widget.uid;
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _section(
+                context,
+                title: '기본 정보',
+                children: [
+                  _row(context, '닉네임', nickname),
+                  _row(context, 'UID', uid),
+                  _row(context, '레벨', 'Lv.$level'),
+                  _row(context, '가입일', _formatTimestamp(user['createdAt'])),
+                  _row(
+                    context,
+                    '최근 접속',
+                    _formatTimestamp(user['lastActiveAt']),
+                  ),
+                ],
+              ),
+              _section(
+                context,
+                title: '활동 지표',
+                children: [
+                  Row(
+                    children: [
+                      _stat(context, '글', _valueText(user['postCount'])),
+                      const SizedBox(width: 8),
+                      _stat(context, '댓글', _valueText(user['commentCount'])),
+                      const SizedBox(width: 8),
+                      _stat(context, '출석', _valueText(user['attendanceCount'])),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      _stat(context, '보너스 XP', _valueText(user['bonusXp'])),
+                      const SizedBox(width: 8),
+                      FutureBuilder<
+                        ({int postCount, int journalCount, int reportCount})
+                      >(
+                        future: _activityFuture,
+                        builder: (context, activitySnap) => _stat(
+                          context,
+                          '일지',
+                          activitySnap.hasData
+                              ? '${activitySnap.data!.journalCount}'
+                              : '-',
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FutureBuilder<
+                        ({int postCount, int journalCount, int reportCount})
+                      >(
+                        future: _activityFuture,
+                        builder: (context, activitySnap) => _stat(
+                          context,
+                          '신고',
+                          activitySnap.hasData
+                              ? '${activitySnap.data!.reportCount}'
+                              : '-',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              _section(
+                context,
+                title: '상태 및 설정',
+                children: [
+                  _row(
+                    context,
+                    '마지막 출석',
+                    _valueText(user['lastAttendanceDate']),
+                  ),
+                  _row(
+                    context,
+                    '리워드 광고일',
+                    _valueText(user['lastRewardAdDate']),
+                  ),
+                  _row(
+                    context,
+                    '오늘 광고 수',
+                    _valueText(user['rewardAdCountToday']),
+                  ),
+                  _row(
+                    context,
+                    '알림 설정',
+                    _valueText(user['notificationSettings']),
+                  ),
+                  _row(context, 'FCM 토큰', _valueText(user['fcmToken'])),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
 
 class _ReportsTab extends StatefulWidget {
   const _ReportsTab();
@@ -2008,26 +2354,29 @@ class _ReportsTabState extends State<_ReportsTab> {
   Future<void> _load() async {
     setState(() => _loading = true);
     final reports = await _firestoreService.getReports();
-    if (mounted)
+    if (mounted) {
       setState(() {
         _reports = reports;
         _loading = false;
       });
+    }
   }
 
   Future<void> _delete(String reportId) async {
     await _firestoreService.deleteReport(reportId);
-    if (mounted)
+    if (mounted) {
       setState(() => _reports.removeWhere((r) => r['id'] == reportId));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    if (_loading)
+    if (_loading) {
       return const Center(
         child: CircularProgressIndicator(color: Color(0xFF10B981)),
       );
+    }
     if (_reports.isEmpty) {
       return Center(
         child: Text(

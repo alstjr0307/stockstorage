@@ -3,6 +3,7 @@ import '../models/announcement.dart';
 import '../models/comment.dart';
 import '../models/fmkorea_stock_mention.dart';
 import '../models/market_analysis.dart';
+import '../models/market_feature_stock.dart';
 import '../models/post.dart';
 import '../models/stock_pick.dart';
 import '../models/trading_journal.dart';
@@ -520,6 +521,29 @@ class FirestoreService {
     return _db.collection('market_analyses').doc(id).delete();
   }
 
+  Stream<List<MarketFeatureStock>> getMarketFeatureStocks({
+    String? group,
+    String? pattern,
+    int limit = 80,
+  }) {
+    Query<Map<String, dynamic>> query = _db.collection('market_feature_stocks');
+    if (group != null && group.isNotEmpty) {
+      query = query.where('group', isEqualTo: group);
+    }
+    if (pattern != null && pattern.isNotEmpty) {
+      query = query.where('pattern', isEqualTo: pattern);
+    }
+    return query
+        .orderBy('sourceDate', descending: true)
+        .orderBy('score', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map(
+          (s) =>
+              s.docs.map((d) => MarketFeatureStock.fromFirestore(d)).toList(),
+        );
+  }
+
   // ── 코멘트 ────────────────────────────────────────────────────────────
   Stream<List<Comment>> getComments(String pickId) {
     return _db
@@ -744,6 +768,37 @@ class FirestoreService {
     return MarketAnalysis.fromFirestore(doc);
   }
 
+  Map<String, dynamic> _adminUserFromDoc(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data() ?? <String, dynamic>{};
+    final postCount = (data['postCount'] as num?)?.toInt() ?? 0;
+    final attendanceCount = (data['attendanceCount'] as num?)?.toInt() ?? 0;
+    final commentCount = (data['commentCount'] as num?)?.toInt() ?? 0;
+    final bonusXp = (data['bonusXp'] as num?)?.toInt() ?? 0;
+    final level =
+        (data['level'] as num?)?.toInt() ??
+        calculateUserLevel(
+          postCount: postCount,
+          commentCount: commentCount,
+          attendanceCount: attendanceCount,
+          bonusXp: bonusXp,
+        );
+
+    return {
+      ...data,
+      'uid': doc.id,
+      'nickname': data['nickname'] as String? ?? '',
+      'createdAt': data['createdAt'] as Timestamp?,
+      'lastActiveAt': data['lastActiveAt'] as Timestamp?,
+      'level': level,
+      'postCount': postCount,
+      'commentCount': commentCount,
+      'attendanceCount': attendanceCount,
+      'bonusXp': bonusXp,
+    };
+  }
+
   // ── 관리자: 유저 목록 (페이지네이션) ─────────────────────────────────────
   Future<
     ({
@@ -760,30 +815,7 @@ class FirestoreService {
     if (startAfter != null) q = q.startAfterDocument(startAfter);
 
     final snap = await q.get();
-    final users = snap.docs.map((doc) {
-      final data = doc.data();
-      final postCount = (data['postCount'] as num?)?.toInt() ?? 0;
-      final attendanceCount = (data['attendanceCount'] as num?)?.toInt() ?? 0;
-      final commentCount = (data['commentCount'] as num?)?.toInt() ?? 0;
-      final bonusXp = (data['bonusXp'] as num?)?.toInt() ?? 0;
-      final level =
-          (data['level'] as num?)?.toInt() ??
-          calculateUserLevel(
-            postCount: postCount,
-            commentCount: commentCount,
-            attendanceCount: attendanceCount,
-            bonusXp: bonusXp,
-          );
-      return {
-        'uid': doc.id,
-        'nickname': data['nickname'] as String? ?? '',
-        'createdAt': data['createdAt'] as Timestamp?,
-        'lastActiveAt': data['lastActiveAt'] as Timestamp?,
-        'level': level,
-        'postCount': postCount,
-        'commentCount': commentCount,
-      };
-    }).toList();
+    final users = snap.docs.map(_adminUserFromDoc).toList();
 
     return (
       users: users,
@@ -805,6 +837,79 @@ class FirestoreService {
         .get();
 
     return (totalUsers: totalSnap.count ?? 0, todayUsers: todaySnap.count ?? 0);
+  }
+
+  Future<List<Map<String, dynamic>>> searchAdminUsers(
+    String query, {
+    int limit = 200,
+  }) async {
+    final normalized = query.trim().toLowerCase();
+    if (normalized.isEmpty) return [];
+
+    final matches = <String, Map<String, dynamic>>{};
+    final exactUidDoc = await _db.collection('users').doc(query.trim()).get();
+    if (exactUidDoc.exists) {
+      matches[exactUidDoc.id] = _adminUserFromDoc(exactUidDoc);
+    }
+
+    DocumentSnapshot<Map<String, dynamic>>? cursor;
+    var hasMore = true;
+    while (hasMore && matches.length < limit) {
+      Query<Map<String, dynamic>> q = _db
+          .collection('users')
+          .orderBy('createdAt', descending: true)
+          .limit(500);
+      if (cursor != null) q = q.startAfterDocument(cursor);
+
+      final snap = await q.get();
+      if (snap.docs.isEmpty) break;
+
+      for (final doc in snap.docs) {
+        final user = _adminUserFromDoc(doc);
+        final uid = (user['uid'] as String? ?? '').toLowerCase();
+        final nickname = (user['nickname'] as String? ?? '').toLowerCase();
+        if (uid.contains(normalized) || nickname.contains(normalized)) {
+          matches[doc.id] = user;
+          if (matches.length >= limit) break;
+        }
+      }
+
+      cursor = snap.docs.last;
+      hasMore = snap.docs.length == 500;
+    }
+
+    return matches.values.toList();
+  }
+
+  Future<Map<String, dynamic>?> getAdminUserDetail(String uid) async {
+    final doc = await _db.collection('users').doc(uid).get();
+    if (!doc.exists) return null;
+    return _adminUserFromDoc(doc);
+  }
+
+  Future<({int postCount, int journalCount, int reportCount})>
+  getAdminUserActivitySummary(String uid) async {
+    final postsSnap = await _db
+        .collection('posts')
+        .where('uid', isEqualTo: uid)
+        .count()
+        .get();
+    final journalsSnap = await _db
+        .collection('trading_journal')
+        .where('uid', isEqualTo: uid)
+        .count()
+        .get();
+    final reportsSnap = await _db
+        .collection('reports')
+        .where('targetUid', isEqualTo: uid)
+        .count()
+        .get();
+
+    return (
+      postCount: postsSnap.count ?? 0,
+      journalCount: journalsSnap.count ?? 0,
+      reportCount: reportsSnap.count ?? 0,
+    );
   }
 
   Stream<Map<String, int>> watchRewardAdStatus(String uid) {
@@ -933,8 +1038,7 @@ class FirestoreService {
     final safeBody = body.trim();
     if (safeTitle.isEmpty && safeBody.isEmpty) return;
 
-    final docId =
-        (messageId != null && messageId.trim().isNotEmpty)
+    final docId = (messageId != null && messageId.trim().isNotEmpty)
         ? messageId.trim()
         : _db.collection('tmp').doc().id;
 
@@ -1003,7 +1107,9 @@ class FirestoreService {
     }, SetOptions(merge: true));
   }
 
-  Future<Map<String, bool>> ensureNotificationSettingsInitialized(String uid) async {
+  Future<Map<String, bool>> ensureNotificationSettingsInitialized(
+    String uid,
+  ) async {
     final ref = _db.collection('users').doc(uid);
     final snap = await ref.get();
     final data = snap.data() ?? <String, dynamic>{};

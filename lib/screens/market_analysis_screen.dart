@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/fmkorea_stock_mention.dart';
 import '../models/market_analysis.dart';
+import '../models/market_feature_stock.dart';
 import '../services/ad_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
@@ -17,6 +18,14 @@ import '../widgets/banner_ad_widget.dart';
 import 'index_detail_screen.dart';
 import 'market_analysis_detail_screen.dart';
 import 'market_sentiment_screen.dart';
+
+class _FeatureStockFilter {
+  final String label;
+  final String? group;
+  final String? pattern;
+
+  const _FeatureStockFilter(this.label, {this.group, this.pattern});
+}
 
 class MarketAnalysisScreen extends StatefulWidget {
   const MarketAnalysisScreen({super.key});
@@ -132,7 +141,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Column(
         children: [
           _buildTopTabBar(context),
@@ -140,6 +149,7 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             child: TabBarView(
               children: [
                 _buildIndicatorsTab(context),
+                _buildFeatureStocksTab(context),
                 _buildAnalysisTab(context),
               ],
             ),
@@ -170,7 +180,8 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       indicatorSize: TabBarIndicatorSize.tab,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       tabs: const [
-        Tab(text: '지표'),
+        Tab(text: '지수'),
+        Tab(text: '특징주'),
         Tab(text: '시황분석'),
       ],
     );
@@ -1048,6 +1059,379 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       return NumberFormat('#,###').format(result.price.toInt());
     }
     return NumberFormat('#,##0.00').format(result.price);
+  }
+
+  static const _featureFilters = [
+    _FeatureStockFilter('거래대금 상위', group: 'top_trading_value'),
+    _FeatureStockFilter('급등주', group: 'gainers'),
+    _FeatureStockFilter('거래량 급증', group: 'volume_spike'),
+    _FeatureStockFilter('신고가/돌파', group: 'high_breakout'),
+    _FeatureStockFilter('차트 포착', group: 'chart_capture'),
+    _FeatureStockFilter(
+      '급등 후 눌림',
+      group: 'chart_capture',
+      pattern: 'volume_surge_pullback_tail',
+    ),
+    _FeatureStockFilter(
+      '거래량 감소 상승',
+      group: 'chart_capture',
+      pattern: 'volume_spike_breakout_dry_up_rise',
+    ),
+    _FeatureStockFilter(
+      '거래량 감소 눌림',
+      group: 'chart_capture',
+      pattern: 'volume_spike_dry_up_pullback_support',
+    ),
+  ];
+
+  Widget _buildFeatureStocksTab(BuildContext context) {
+    return DefaultTabController(
+      length: _featureFilters.length,
+      child: Column(
+        children: [
+          _buildFeatureTabBar(context),
+          Expanded(
+            child: TabBarView(
+              children: [
+                for (final filter in _featureFilters)
+                  _buildFeatureStockList(context, filter),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeatureTabBar(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: TabBar(
+        isScrollable: true,
+        tabAlignment: TabAlignment.start,
+        labelColor: cs.onSurface,
+        unselectedLabelColor: cs.onSurface.withValues(alpha: 0.42),
+        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+        unselectedLabelStyle: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+        ),
+        indicatorColor: const Color(0xFF3182F6),
+        dividerColor: cs.onSurface.withValues(alpha: 0.06),
+        tabs: [for (final filter in _featureFilters) Tab(text: filter.label)],
+      ),
+    );
+  }
+
+  Widget _buildFeatureStockList(
+    BuildContext context,
+    _FeatureStockFilter filter,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    return StreamBuilder<List<MarketFeatureStock>>(
+      stream: _firestoreService.getMarketFeatureStocks(
+        group: filter.group,
+        pattern: filter.pattern,
+      ),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFF3182F6)),
+          );
+        }
+        final list = snapshot.data ?? [];
+        if (list.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: Text(
+                '${filter.label}에 등록된 종목이 없습니다.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.42),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          );
+        }
+
+        final grouped = _groupFeatureStocksByDate(list);
+        final rows = <Object>[];
+        for (final entry in grouped.entries) {
+          rows.add(entry.key);
+          rows.addAll(entry.value);
+        }
+
+        return RefreshIndicator(
+          color: const Color(0xFF3182F6),
+          onRefresh: _refreshAll,
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
+            itemCount: rows.length,
+            separatorBuilder: (_, index) => index == 0
+                ? const SizedBox(height: 10)
+                : Container(
+                    margin: const EdgeInsets.only(left: 2),
+                    height: 1,
+                    color: cs.onSurface.withValues(alpha: 0.07),
+                  ),
+            itemBuilder: (context, index) {
+              final row = rows[index];
+              if (row is DateTime) {
+                return _buildFeatureDateHeader(
+                  context,
+                  row,
+                  grouped[row]?.length ?? 0,
+                );
+              }
+              return _buildFeatureStockCard(context, row as MarketFeatureStock);
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Map<DateTime, List<MarketFeatureStock>> _groupFeatureStocksByDate(
+    List<MarketFeatureStock> list,
+  ) {
+    final grouped = <DateTime, List<MarketFeatureStock>>{};
+    for (final item in list) {
+      final key = DateTime(
+        item.sourceDate.year,
+        item.sourceDate.month,
+        item.sourceDate.day,
+      );
+      grouped.putIfAbsent(key, () => []).add(item);
+    }
+
+    final entries = grouped.entries.toList()
+      ..sort((a, b) => b.key.compareTo(a.key));
+    return {
+      for (final entry in entries)
+        entry.key: entry.value
+          ..sort((a, b) {
+            final scoreCompare = b.score.compareTo(a.score);
+            if (scoreCompare != 0) return scoreCompare;
+            return b.tradingValue.compareTo(a.tradingValue);
+          }),
+    };
+  }
+
+  Widget _buildFeatureDateHeader(
+    BuildContext context,
+    DateTime date,
+    int count,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final target = DateTime(date.year, date.month, date.day);
+    final dayDiff = today.difference(target).inDays;
+    final label = dayDiff == 0
+        ? '오늘'
+        : dayDiff == 1
+        ? '어제'
+        : DateFormat('MM.dd').format(date);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 2),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            DateFormat('yyyy.MM.dd').format(date),
+            style: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.38),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            '$count개',
+            style: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.42),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFeatureStockCard(BuildContext context, MarketFeatureStock item) {
+    final cs = Theme.of(context).colorScheme;
+    final isUp = item.changeRate >= 0;
+    final moveColor = isUp ? const Color(0xFFF04452) : const Color(0xFF1677FF);
+    final valueLabel = _formatTradingValue(item.tradingValue);
+    final subtitle = item.reason.replaceAll('\n', ' ').trim();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: cs.onSurface.withValues(alpha: 0.06),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              item.market,
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.55),
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: cs.onSurface,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      item.ticker,
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.38),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  item.title.isNotEmpty ? item.title : _featureTitle(item),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.62),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                if (subtitle.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.46),
+                      fontSize: 12,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _buildMiniMetric(context, valueLabel),
+                    _buildMiniMetric(
+                      context,
+                      '거래량 ${item.volumeRatio.toStringAsFixed(1)}x',
+                    ),
+                    _buildMiniMetric(context, '점수 ${item.score}'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                NumberFormat('#,###').format(item.price.round()),
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              _buildChangeRateBadge(moveColor, isUp, item.changeRate),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniMetric(BuildContext context, String label) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: cs.onSurface.withValues(alpha: 0.52),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
+  String _featureTitle(MarketFeatureStock item) {
+    switch (item.pattern) {
+      case 'volume_surge_pullback_tail':
+        return '급등 후 U자 눌림';
+      case 'volume_spike_breakout_dry_up_rise':
+        return '거래량 감소 상승';
+      case 'volume_spike_dry_up_pullback_support':
+        return '거래량 감소 눌림 지지';
+      default:
+        return item.group;
+    }
+  }
+
+  String _formatTradingValue(int value) {
+    if (value >= 1000000000000) {
+      return '거래대금 ${(value / 1000000000000).toStringAsFixed(1)}조';
+    }
+    if (value >= 100000000) {
+      return '거래대금 ${(value / 100000000).round()}억';
+    }
+    return '거래대금 ${NumberFormat('#,###').format(value)}';
   }
 
   Widget _buildAnalysisTab(BuildContext context) {
