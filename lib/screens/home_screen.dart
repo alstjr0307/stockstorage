@@ -1488,7 +1488,7 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                 const SizedBox(height: 18),
                 _HomeReveal(
                   order: 3,
-                  child: _AIBriefCard(onTap: widget.openMarketAnalysis),
+                  child: const _AIBriefCard(),
                 ),
                 const SizedBox(height: 18),
                 _HomeReveal(
@@ -2540,9 +2540,7 @@ class _MarketLiveCard extends StatelessWidget {
 }
 
 class _AIBriefCard extends StatelessWidget {
-  const _AIBriefCard({required this.onTap});
-
-  final VoidCallback onTap;
+  const _AIBriefCard();
 
   String _formatSlotTime(String? slotLabel, dynamic generatedAt) {
     if (slotLabel != null) return 'AI 한 줄 시황 · 오늘 $slotLabel';
@@ -2576,7 +2574,6 @@ class _AIBriefCard extends StatelessWidget {
         // 데이터 없을 때 skeleton shimmer 느낌으로 로딩 표시
         if (!snapshot.hasData || data == null || brief == null) {
           return _DarkCard(
-            onTap: onTap,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2616,22 +2613,12 @@ class _AIBriefCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(6),
                   ),
                 ),
-                const SizedBox(height: 9),
-                Text(
-                  '전체 시황분석 보기',
-                  style: _homeText(
-                    color: _homeAccent,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
               ],
             ),
           );
         }
 
         return _DarkCard(
-          onTap: onTap,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2661,15 +2648,6 @@ class _AIBriefCard extends StatelessWidget {
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
                   height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 9),
-              Text(
-                '전체 시황분석 보기',
-                style: _homeText(
-                  color: _homeAccent,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],
