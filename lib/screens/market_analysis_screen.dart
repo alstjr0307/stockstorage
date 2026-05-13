@@ -1437,11 +1437,24 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   Widget _buildAnalysisTab(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return StreamBuilder<List<MarketAnalysis>>(
-      stream: FirestoreService().getMarketAnalyses(),
+      stream: _firestoreService.getMarketAnalyses(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
             child: CircularProgressIndicator(color: Color(0xFF3182F6)),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              '데이터를 불러오지 못했습니다.\n(${snapshot.error})',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.45),
+                fontSize: 13,
+              ),
+            ),
           );
         }
 
