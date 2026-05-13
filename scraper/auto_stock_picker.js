@@ -100,6 +100,7 @@ const SEND_FCM = String(process.env.SEND_FCM || '0') === '1';
 const FCM_TOPIC = process.env.FCM_TOPIC || 'new_pick_alerts';
 const DRY_RUN = String(process.env.DRY_RUN || '0') === '1';
 const MARKET_FEATURES = String(process.env.MARKET_FEATURES || '0') === '1';
+const FEATURE_GROUP = String(process.env.FEATURE_GROUP || '').trim();
 const FEATURE_MAX_PER_GROUP = numberEnv('FEATURE_MAX_PER_GROUP', 20);
 const FEATURE_MIN_TRADING_VALUE = numberEnv('FEATURE_MIN_TRADING_VALUE', 5000000000);
 const FEATURE_VALUE_SPIKE_RATIO = numberEnv('FEATURE_VALUE_SPIKE_RATIO', 2.5);
@@ -1733,7 +1734,11 @@ async function main() {
       const rows = await fetchHistory(stock.ticker, endDate);
       return buildMarketFeatureStocks(stock, rows);
     });
-    const selected = selectFeatureStocks(featureItems.flat());
+    const allFeatures = featureItems.flat();
+    const filteredFeatures = FEATURE_GROUP
+      ? allFeatures.filter((item) => item.group === FEATURE_GROUP)
+      : allFeatures;
+    const selected = selectFeatureStocks(filteredFeatures);
     console.log(`[done] featureCandidates=${featureItems.flat().length} selected=${selected.length}`);
     await uploadMarketFeatureStocks(selected, dateKey);
     return;
