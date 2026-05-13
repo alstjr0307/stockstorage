@@ -20,7 +20,6 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
   final MarketFeatureStock item;
 
   static final _dateFormat = DateFormat('yyyy.MM.dd');
-  static final _timeFormat = DateFormat('MM.dd HH:mm');
   static final _numberFormat = NumberFormat('#,###');
 
   static const _accent = Color(0xFF10B981);
@@ -107,9 +106,9 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
           _SectionHeader(title: '포착 정보'),
           const SizedBox(height: 6),
           _MetricRow(label: '분류', value: _groupLabel(item.group)),
+          _MetricRow(label: '특징 유형', value: _featureSpecificLabel(item)),
           _MetricRow(label: '패턴', value: _featureTitle(item)),
           _MetricRow(label: '기준일', value: _dateFormat.format(item.sourceDate)),
-          _MetricRow(label: '등록', value: _timeFormat.format(item.createdAt)),
           const SizedBox(height: 22),
           Text(
             '특징주는 시장 데이터 기반 포착 정보이며, 매수·매도 권유가 아닙니다.',
@@ -156,6 +155,24 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
   static String _featureTitle(MarketFeatureStock item) {
     if (item.title.isNotEmpty && !_looksEnglish(item.title)) return item.title;
     return _patternLabel(item.pattern) ?? _groupLabel(item.group);
+  }
+
+  static String _featureSpecificLabel(MarketFeatureStock item) {
+    final pattern = _patternLabel(item.pattern);
+    switch (item.group) {
+      case 'top_trading_value':
+        return '거래대금 상위 · ${_formatTradingValue(item.tradingValue)}';
+      case 'gainers':
+        return '급등주 · ${item.changeRate >= 0 ? '+' : ''}${item.changeRate.toStringAsFixed(2)}%';
+      case 'volume_spike':
+        return '거래량 급증 · 20일 평균 대비 ${item.volumeRatio.toStringAsFixed(1)}배';
+      case 'high_breakout':
+        return pattern ?? '신고가/돌파';
+      case 'chart_capture':
+        return pattern ?? '차트 포착';
+      default:
+        return pattern ?? _groupLabel(item.group);
+    }
   }
 
   static bool _showsScore(MarketFeatureStock item) {

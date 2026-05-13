@@ -16,14 +16,19 @@ class MarketFeatureStocksScreen extends StatefulWidget {
 class _MarketFeatureStocksScreenState extends State<MarketFeatureStocksScreen> {
   static const _filters = [
     _FeatureStockFilter(
-      '거래대금 상위',
-      group: 'top_trading_value',
-      description: '오늘 실제로 돈이 많이 몰린 종목입니다.',
+      '차트 포착',
+      group: 'chart_capture',
+      description: '거래량·이평선·눌림 패턴이 포착된 종목입니다.',
     ),
     _FeatureStockFilter(
       '급등주',
       group: 'gainers',
       description: '당일 상승률이 크게 나온 종목입니다.',
+    ),
+    _FeatureStockFilter(
+      '거래대금 상위',
+      group: 'top_trading_value',
+      description: '오늘 실제로 돈이 많이 몰린 종목입니다.',
     ),
     _FeatureStockFilter(
       '거래량 급증',
@@ -34,11 +39,6 @@ class _MarketFeatureStocksScreenState extends State<MarketFeatureStocksScreen> {
       '신고가/돌파',
       group: 'high_breakout',
       description: '최근 고점 또는 신고가 구간을 돌파한 종목입니다.',
-    ),
-    _FeatureStockFilter(
-      '차트 포착',
-      group: 'chart_capture',
-      description: '거래량·이평선·눌림 패턴이 포착된 종목입니다.',
     ),
   ];
 
@@ -370,7 +370,7 @@ class _FeatureStockRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    item.title.isNotEmpty ? item.title : _featureTitle(item),
+                    featureSpecificLabel(item),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -436,32 +436,6 @@ class _FeatureStockRow extends StatelessWidget {
     );
   }
 
-  String _featureTitle(MarketFeatureStock item) {
-    if (item.title.isNotEmpty && !featureLooksEnglish(item.title)) {
-      return item.title;
-    }
-    switch (item.pattern) {
-      case 'top_trading_value':
-        return '거래대금 상위';
-      case 'gainers':
-        return '급등주';
-      case 'trading_value_spike':
-        return '거래량/거래대금 급증';
-      case 'new_52w_high':
-        return '신고가 돌파';
-      case 'prior_high_breakout':
-        return '전고점 돌파';
-      case 'volume_surge_pullback_tail':
-        return '급등 후 U자 눌림';
-      case 'volume_spike_breakout_dry_up_rise':
-        return '거래량 감소 상승';
-      case 'volume_spike_dry_up_pullback_support':
-        return '거래량 감소 눌림 지지';
-      default:
-        return item.group;
-    }
-  }
-
   String _formatTradingValue(int value) {
     if (value >= 1000000000000) {
       return '거래대금 ${(value / 1000000000000).toStringAsFixed(1)}조';
@@ -475,7 +449,9 @@ class _FeatureStockRow extends StatelessWidget {
 
 String featureDisplayReason(MarketFeatureStock item) {
   final reason = item.reason.replaceAll('\n', ' ').trim();
-  if (reason.isNotEmpty && !featureLooksEnglish(reason)) return reason;
+  if (reason.isNotEmpty && !featureLooksEnglish(reason)) {
+    return '${featureSpecificLabel(item)} · $reason';
+  }
 
   final parts = <String>[];
   parts.add('${featureGroupLabel(item.group)} 기준으로 포착된 종목입니다.');
@@ -494,6 +470,24 @@ String featureDisplayReason(MarketFeatureStock item) {
   final pattern = featurePatternLabel(item.pattern);
   if (pattern != null) parts.add('$pattern 흐름이 함께 감지됐습니다.');
   return parts.join(' ');
+}
+
+String featureSpecificLabel(MarketFeatureStock item) {
+  final pattern = featurePatternLabel(item.pattern);
+  switch (item.group) {
+    case 'top_trading_value':
+      return '거래대금 상위 · ${formatFeatureTradingValue(item.tradingValue)}';
+    case 'gainers':
+      return '급등주 · ${item.changeRate >= 0 ? '+' : ''}${item.changeRate.toStringAsFixed(2)}%';
+    case 'volume_spike':
+      return '거래량 급증 · 20일 평균 대비 ${item.volumeRatio.toStringAsFixed(1)}배';
+    case 'high_breakout':
+      return pattern ?? '신고가/돌파';
+    case 'chart_capture':
+      return pattern ?? '차트 포착';
+    default:
+      return pattern ?? featureGroupLabel(item.group);
+  }
 }
 
 String featureGroupLabel(String group) {
