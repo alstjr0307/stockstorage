@@ -6,17 +6,17 @@
 - `fmkorea_scraper.js`: 펨코 지수 (`fmkorea_index`, `fmkorea_index_meta`)
 - `fmkorea_yesterday_mentions_scraper.js`: HOT 종목 (`fmkorea_stock_mentions_daily`, `fmkorea_stock_mentions_realtime/today`)
 - `premarket_briefing.js`: 평일 아침 장전 뉴스 브리핑 (`premarket_briefings`, `premarket_briefings_meta/latest`)
-- `auto_stock_picker.js`: 네이버 일봉 기반 자동 추천 후보 선별 및 `stock_picks` 업로드
+- `auto_stock_picker.js`: 네이버 일봉 기반 자동 추천 후보 선별 및 특징주 업로드
 
 ## GitHub Actions 워크플로우
 - 파일: `.github/workflows/fmkorea-scraper.yml`
 - 장전 브리핑 파일: `.github/workflows/premarket-briefing.yml`
-- 자동 추천주 파일: `.github/workflows/auto-stock-picker.yml`
+- 특징주 파일: `.github/workflows/auto-stock-picker.yml`
 - 스케줄:
   - HOT 종목: 매시 5분(UTC)
   - 펨코 지수: 00:00, 04:00, 09:00, 14:00 UTC (KST 09:00, 13:00, 18:00, 23:00)
   - 장전 브리핑: 일-목 22:30 UTC (KST 평일 07:30)
-  - 자동 추천주: 월-금 07:30 UTC (KST 평일 16:30)
+  - 특징주: 월-금 06:30 UTC (KST 평일 15:30)
 - `workflow_dispatch`로 수동 실행 가능
 
 ## 필수 Secrets
@@ -58,7 +58,10 @@ npm run premarket
 # 자동 추천주 테스트(업로드 없음)
 DRY_RUN=1 MAX_STOCKS=50 npm run auto-picks
 
-# 자동 추천주 업로드
+# 특징주 업로드
+npm run market-features
+
+# 자동 추천주 업로드(수동 실행용)
 npm run auto-picks
 ```
 

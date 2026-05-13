@@ -15,11 +15,31 @@ class MarketFeatureStocksScreen extends StatefulWidget {
 
 class _MarketFeatureStocksScreenState extends State<MarketFeatureStocksScreen> {
   static const _filters = [
-    _FeatureStockFilter('거래대금 상위', group: 'top_trading_value'),
-    _FeatureStockFilter('급등주', group: 'gainers'),
-    _FeatureStockFilter('거래량 급증', group: 'volume_spike'),
-    _FeatureStockFilter('신고가/돌파', group: 'high_breakout'),
-    _FeatureStockFilter('차트 포착', group: 'chart_capture'),
+    _FeatureStockFilter(
+      '거래대금 상위',
+      group: 'top_trading_value',
+      description: '오늘 실제로 돈이 많이 몰린 종목입니다.',
+    ),
+    _FeatureStockFilter(
+      '급등주',
+      group: 'gainers',
+      description: '당일 상승률이 크게 나온 종목입니다.',
+    ),
+    _FeatureStockFilter(
+      '거래량 급증',
+      group: 'volume_spike',
+      description: '평소보다 거래량과 거래대금이 동시에 튄 종목입니다.',
+    ),
+    _FeatureStockFilter(
+      '신고가/돌파',
+      group: 'high_breakout',
+      description: '최근 고점 또는 신고가 구간을 돌파한 종목입니다.',
+    ),
+    _FeatureStockFilter(
+      '차트 포착',
+      group: 'chart_capture',
+      description: '거래량·이평선·눌림 패턴이 포착된 종목입니다.',
+    ),
   ];
 
   @override
@@ -87,10 +107,15 @@ class _MarketFeatureStocksScreenState extends State<MarketFeatureStocksScreen> {
 }
 
 class _FeatureStockFilter {
-  const _FeatureStockFilter(this.label, {required this.group});
+  const _FeatureStockFilter(
+    this.label, {
+    required this.group,
+    required this.description,
+  });
 
   final String label;
   final String group;
+  final String description;
 }
 
 class _FeatureStockList extends StatelessWidget {
@@ -144,7 +169,7 @@ class _FeatureStockList extends StatelessWidget {
           },
           child: ListView.separated(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
-            itemCount: rows.length,
+            itemCount: rows.length + 1,
             separatorBuilder: (_, index) => index == 0
                 ? const SizedBox(height: 10)
                 : Container(
@@ -153,7 +178,10 @@ class _FeatureStockList extends StatelessWidget {
                     color: cs.onSurface.withValues(alpha: 0.07),
                   ),
             itemBuilder: (context, index) {
-              final row = rows[index];
+              if (index == 0) {
+                return _FeatureFilterHint(filter: filter);
+              }
+              final row = rows[index - 1];
               if (row is DateTime) {
                 return _FeatureDateHeader(
                   date: row,
@@ -192,6 +220,33 @@ class _FeatureStockList extends StatelessWidget {
             return b.tradingValue.compareTo(a.tradingValue);
           }),
     };
+  }
+}
+
+class _FeatureFilterHint extends StatelessWidget {
+  const _FeatureFilterHint({required this.filter});
+
+  final _FeatureStockFilter filter;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: 0.045),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        filter.description,
+        style: TextStyle(
+          color: cs.onSurface.withValues(alpha: 0.56),
+          fontSize: 12,
+          height: 1.4,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
   }
 }
 
@@ -258,7 +313,7 @@ class _FeatureStockRow extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final isUp = item.changeRate >= 0;
     final moveColor = isUp ? const Color(0xFFF04452) : const Color(0xFF1677FF);
-    final subtitle = item.reason.replaceAll('\n', ' ').trim();
+    final subtitle = featureDisplayReason(item);
 
     return InkWell(
       onTap: () {
@@ -389,7 +444,20 @@ class _FeatureStockRow extends StatelessWidget {
   }
 
   String _featureTitle(MarketFeatureStock item) {
+    if (item.title.isNotEmpty && !featureLooksEnglish(item.title)) {
+      return item.title;
+    }
     switch (item.pattern) {
+      case 'top_trading_value':
+        return '거래대금 상위';
+      case 'gainers':
+        return '급등주';
+      case 'trading_value_spike':
+        return '거래량/거래대금 급증';
+      case 'new_52w_high':
+        return '신고가 돌파';
+      case 'prior_high_breakout':
+        return '전고점 돌파';
       case 'volume_surge_pullback_tail':
         return '급등 후 U자 눌림';
       case 'volume_spike_breakout_dry_up_rise':
@@ -410,6 +478,86 @@ class _FeatureStockRow extends StatelessWidget {
     }
     return '거래대금 ${NumberFormat('#,###').format(value)}';
   }
+}
+
+String featureDisplayReason(MarketFeatureStock item) {
+  final reason = item.reason.replaceAll('\n', ' ').trim();
+  if (reason.isNotEmpty && !featureLooksEnglish(reason)) return reason;
+
+  final parts = <String>[];
+  parts.add('${featureGroupLabel(item.group)} 기준으로 포착된 종목입니다.');
+  if (item.changeRate != 0) {
+    final direction = item.changeRate > 0 ? '상승' : '하락';
+    parts.add(
+      '당일 등락률은 ${item.changeRate.abs().toStringAsFixed(2)}% $direction했습니다.',
+    );
+  }
+  if (item.tradingValue > 0) {
+    parts.add('거래대금은 ${formatFeatureTradingValue(item.tradingValue)} 수준입니다.');
+  }
+  if (item.volumeRatio > 0) {
+    parts.add('거래량은 20일 평균 대비 ${item.volumeRatio.toStringAsFixed(1)}배입니다.');
+  }
+  final pattern = featurePatternLabel(item.pattern);
+  if (pattern != null) parts.add('$pattern 흐름이 함께 감지됐습니다.');
+  return parts.join(' ');
+}
+
+String featureGroupLabel(String group) {
+  switch (group) {
+    case 'top_trading_value':
+      return '거래대금 상위';
+    case 'gainers':
+      return '급등주';
+    case 'volume_spike':
+      return '거래량 급증';
+    case 'high_breakout':
+      return '신고가/돌파';
+    case 'chart_capture':
+      return '차트 포착';
+    default:
+      return group.isEmpty ? '특징주' : group;
+  }
+}
+
+String? featurePatternLabel(String pattern) {
+  switch (pattern) {
+    case 'top_trading_value':
+      return '거래대금 상위';
+    case 'gainers':
+      return '급등';
+    case 'trading_value_spike':
+      return '거래량/거래대금 급증';
+    case 'new_52w_high':
+      return '신고가 돌파';
+    case 'prior_high_breakout':
+      return '전고점 돌파';
+    case 'volume_surge_pullback_tail':
+      return '급등 후 U자 눌림';
+    case 'volume_spike_breakout_dry_up_rise':
+      return '거래량 감소 후 재상승';
+    case 'volume_spike_dry_up_pullback_support':
+      return '거래량 감소 눌림 지지';
+    default:
+      return null;
+  }
+}
+
+String formatFeatureTradingValue(int value) {
+  if (value >= 1000000000000) {
+    return '${(value / 1000000000000).toStringAsFixed(1)}조';
+  }
+  if (value >= 100000000) {
+    return '${(value / 100000000).round()}억';
+  }
+  return NumberFormat('#,###').format(value);
+}
+
+bool featureLooksEnglish(String value) {
+  final text = value.trim();
+  if (text.isEmpty) return false;
+  if (RegExp(r'[가-힣]').hasMatch(text)) return false;
+  return RegExp(r'[A-Za-z]').hasMatch(text);
 }
 
 class _MiniMetric extends StatelessWidget {

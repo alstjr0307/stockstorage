@@ -1,13 +1,13 @@
-name: Auto Stock Picker
+name: Market Feature Stocks
 
 on:
   schedule:
-    # Weekdays 16:30 KST = 07:30 UTC.
-    - cron: '30 7 * * 1-5'
+    # Weekdays 15:30 KST = 06:30 UTC.
+    - cron: '30 6 * * 1-5'
   workflow_dispatch:
 
 jobs:
-  pick:
+  market-features:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -24,17 +24,6 @@ jobs:
       - name: Install dependencies
         working-directory: scraper
         run: npm ci
-
-      - name: Generate and upload auto picks
-        working-directory: scraper
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          MIN_SCORE: ${{ vars.AUTO_PICK_MIN_SCORE }}
-          MAX_PICKS: ${{ vars.AUTO_PICK_MAX_PICKS }}
-          MIN_AVG_TRADING_VALUE: ${{ vars.AUTO_PICK_MIN_AVG_TRADING_VALUE }}
-          SEND_FCM: ${{ vars.AUTO_PICK_SEND_FCM }}
-          FCM_TOPIC: ${{ vars.AUTO_PICK_FCM_TOPIC }}
-        run: npm run auto-picks
 
       - name: Generate and upload market feature stocks
         working-directory: scraper

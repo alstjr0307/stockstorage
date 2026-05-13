@@ -510,6 +510,10 @@ class _HomeScreenState extends State<HomeScreen> {
       }),
       openStockPicks: () =>
           _openStandalonePage(title: '추천주', child: _buildStockPicksPage(auth)),
+      openAnnouncements: () => _openStandalonePage(
+        title: '공지사항',
+        child: _AnnouncementsTab(firestoreService: _firestoreService),
+      ),
       openIndexList: _openIndexListPage,
       openMarketAnalysis: () => _openStandalonePage(
         title: '시황분석글',
@@ -1350,6 +1354,7 @@ class _DashboardHomePage extends StatefulWidget {
     required this.openCommunity,
     required this.openJournal,
     required this.openStockPicks,
+    required this.openAnnouncements,
     required this.openIndexList,
     required this.openMarketAnalysis,
     required this.openFeatureStocks,
@@ -1368,6 +1373,7 @@ class _DashboardHomePage extends StatefulWidget {
   final VoidCallback openCommunity;
   final VoidCallback openJournal;
   final VoidCallback openStockPicks;
+  final VoidCallback openAnnouncements;
   final VoidCallback openIndexList;
   final VoidCallback openMarketAnalysis;
   final VoidCallback openFeatureStocks;
@@ -1531,6 +1537,7 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                     openMarketSentiment: widget.openMarketSentiment,
                     openFmkoreaIndex: widget.openFmkoreaIndex,
                     openStockPicks: widget.openStockPicks,
+                    openAnnouncements: widget.openAnnouncements,
                     openStockCompare: widget.openStockCompare,
                   ),
                 ),
@@ -1597,6 +1604,8 @@ class _DarkCard extends StatelessWidget {
   const _DarkCard({required this.child, this.onTap});
 
   final Widget child;
+  // The home card keeps a shared tap affordance for cards that opt in.
+  // ignore: unused_element_parameter
   final VoidCallback? onTap;
 
   @override
@@ -2556,10 +2565,9 @@ class _AIBriefCard extends StatelessWidget {
           .doc('latest')
           .snapshots(),
       builder: (context, snapshot) {
-        final data =
-            snapshot.hasData && snapshot.data!.exists
-                ? snapshot.data!.data() as Map<String, dynamic>?
-                : null;
+        final data = snapshot.hasData && snapshot.data!.exists
+            ? snapshot.data!.data() as Map<String, dynamic>?
+            : null;
 
         final brief = data?['brief'] as String?;
         final slotLabel = data?['slotLabel'] as String?;
@@ -4007,6 +4015,7 @@ class _QuickMenu extends StatelessWidget {
     required this.openMarketSentiment,
     required this.openFmkoreaIndex,
     required this.openStockPicks,
+    required this.openAnnouncements,
     required this.openStockCompare,
   });
 
@@ -4017,6 +4026,7 @@ class _QuickMenu extends StatelessWidget {
   final VoidCallback openMarketSentiment;
   final VoidCallback openFmkoreaIndex;
   final VoidCallback openStockPicks;
+  final VoidCallback openAnnouncements;
   final VoidCallback openStockCompare;
 
   @override
@@ -4054,6 +4064,11 @@ class _QuickMenu extends StatelessWidget {
               label: '운영자 추천주',
               onTap: openStockPicks,
               emphasized: true,
+            ),
+            _QuickMenuTile(
+              icon: Icons.campaign_rounded,
+              label: '공지사항',
+              onTap: openAnnouncements,
             ),
             _QuickMenuTile(
               icon: Icons.bolt_rounded,
@@ -4205,7 +4220,7 @@ String _relativeTime(DateTime date) {
   return '${date.month}.${date.day}';
 }
 
-// ─── 주식저장소 서브탭 페이지 (추천주 + 공지사항) ─────────────────────────
+// ─── 주식저장소 서브탭 페이지 (추천주) ─────────────────────────
 
 class _StockStoragePage extends StatefulWidget {
   const _StockStoragePage({
@@ -4228,7 +4243,7 @@ class _StockStoragePageState extends State<_StockStoragePage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
   }
 
   @override
@@ -4276,7 +4291,6 @@ class _StockStoragePageState extends State<_StockStoragePage>
               tabs: const [
                 Tab(text: '추천주'),
                 Tab(text: '종료 추천주'),
-                Tab(text: '공지사항'),
               ],
             ),
           ),
@@ -4291,7 +4305,6 @@ class _StockStoragePageState extends State<_StockStoragePage>
                 firestoreService: widget.firestoreService,
               ),
               const LeaderboardScreen(),
-              _AnnouncementsTab(firestoreService: widget.firestoreService),
             ],
           ),
         ),
