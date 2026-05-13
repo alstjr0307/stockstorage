@@ -10,7 +10,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/fmkorea_stock_mention.dart';
 import '../models/market_analysis.dart';
-import '../models/market_feature_stock.dart';
 import '../services/ad_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
@@ -19,19 +18,502 @@ import 'index_detail_screen.dart';
 import 'market_analysis_detail_screen.dart';
 import 'market_sentiment_screen.dart';
 
-class _FeatureStockFilter {
-  final String label;
-  final String? group;
-  final String? pattern;
-
-  const _FeatureStockFilter(this.label, {this.group, this.pattern});
-}
-
 class MarketAnalysisScreen extends StatefulWidget {
-  const MarketAnalysisScreen({super.key});
+  const MarketAnalysisScreen({super.key, this.initialTabIndex = 1})
+    : _mode = _MarketAnalysisScreenMode.analysis;
+
+  const MarketAnalysisScreen.indicators({super.key})
+    : initialTabIndex = 0,
+      _mode = _MarketAnalysisScreenMode.indicators;
+
+  const MarketAnalysisScreen.legacyTabs({super.key, this.initialTabIndex = 0})
+    : _mode = _MarketAnalysisScreenMode.tabs;
+
+  final int initialTabIndex;
+  final _MarketAnalysisScreenMode _mode;
 
   @override
   State<MarketAnalysisScreen> createState() => _MarketAnalysisScreenState();
+}
+
+enum _MarketAnalysisScreenMode { indicators, analysis, tabs }
+
+class InvestorFlowDetailScreen extends StatelessWidget {
+  const InvestorFlowDetailScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const _InvestorFlowDetailScreen();
+  }
+}
+
+class FmkoreaIndexDetailScreen extends StatelessWidget {
+  const FmkoreaIndexDetailScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const _FmkoreaIndexDetailScreen();
+  }
+}
+
+class FmkoreaHotStocksScreen extends StatefulWidget {
+  const FmkoreaHotStocksScreen({super.key});
+
+  @override
+  State<FmkoreaHotStocksScreen> createState() => _FmkoreaHotStocksScreenState();
+}
+
+class _FmkoreaHotStocksScreenState extends State<FmkoreaHotStocksScreen> {
+  final _firestoreService = FirestoreService();
+  final GlobalKey _shareCardKey = GlobalKey();
+  late Future<FmkoreaStockMentionsSnapshot?> _previousDailyHotFuture;
+  int _tabIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _previousDailyHotFuture = _firestoreService
+        .getPreviousDailyFmkoreaStockMentions();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _previousDailyHotFuture = _firestoreService
+          .getPreviousDailyFmkoreaStockMentions();
+    });
+  }
+
+  Future<void> _openShareSheet(
+    BuildContext context,
+    FmkoreaStockMentionsSnapshot data,
+  ) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _FmkoreaHotShareSheet(shareCardKey: _shareCardKey, data: data),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
+    return Scaffold(
+      backgroundColor: bg,
+      appBar: AppBar(
+        title: Text(
+          '펨코 HOT 종목',
+          style: TextStyle(
+            color: cs.onSurface,
+            fontWeight: FontWeight.w800,
+            fontSize: 20,
+          ),
+        ),
+        backgroundColor: bg,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+      ),
+      body: RefreshIndicator(
+        color: const Color(0xFF10B981),
+        onRefresh: _refresh,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+          children: [
+            Text(
+              '커뮤니티에서 많이 언급되는 종목 흐름입니다.',
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.48),
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildTabs(cs),
+            const SizedBox(height: 14),
+            if (_tabIndex == 0) _buildRealtime() else _buildPreviousDaily(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabs(ColorScheme cs) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(9999),
+      ),
+      child: Row(
+        children: [
+          _HotTabButton(
+            label: '오늘 실시간',
+            selected: _tabIndex == 0,
+            onTap: () => setState(() => _tabIndex = 0),
+          ),
+          _HotTabButton(
+            label: '전일 HOT',
+            selected: _tabIndex == 1,
+            onTap: () => setState(() => _tabIndex = 1),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRealtime() {
+    return StreamBuilder<FmkoreaStockMentionsSnapshot?>(
+      stream: _firestoreService.getRealtimeOnlyFmkoreaStockMentions(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _FmkoreaHotLoading();
+        }
+        if (snapshot.hasError) {
+          return const _FmkoreaHotEmpty(text: '실시간 HOT 데이터를 불러오지 못했습니다.');
+        }
+        final data = snapshot.data;
+        if (data == null || data.topMentions.isEmpty) {
+          return const _FmkoreaHotEmpty(text: '오늘 실시간 HOT 데이터가 아직 없습니다.');
+        }
+        return _FmkoreaHotRows(
+          title: '펨코 오늘 실시간 HOT 종목',
+          data: data,
+          showShare: true,
+          onShare: () => _openShareSheet(context, data),
+        );
+      },
+    );
+  }
+
+  Widget _buildPreviousDaily() {
+    return FutureBuilder<FmkoreaStockMentionsSnapshot?>(
+      future: _previousDailyHotFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _FmkoreaHotLoading();
+        }
+        if (snapshot.hasError) {
+          return const _FmkoreaHotEmpty(text: '전일 HOT 데이터를 불러오지 못했습니다.');
+        }
+        final data = snapshot.data;
+        if (data == null || data.topMentions.isEmpty) {
+          return const _FmkoreaHotEmpty(text: '표시할 전일 HOT 데이터가 아직 없습니다.');
+        }
+        return _FmkoreaHotRows(title: '펨코 전일 HOT 종목', data: data);
+      },
+    );
+  }
+}
+
+class _HotTabButton extends StatelessWidget {
+  const _HotTabButton({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? cs.surface : Colors.transparent,
+            borderRadius: BorderRadius.circular(9999),
+          ),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: selected
+                  ? cs.onSurface
+                  : cs.onSurface.withValues(alpha: 0.5),
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FmkoreaHotLoading extends StatelessWidget {
+  const _FmkoreaHotLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 28),
+      child: Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFF10B981),
+          strokeWidth: 2,
+        ),
+      ),
+    );
+  }
+}
+
+class _FmkoreaHotEmpty extends StatelessWidget {
+  const _FmkoreaHotEmpty({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 28),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: cs.onSurface.withValues(alpha: 0.45),
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
+}
+
+class _FmkoreaHotRows extends StatelessWidget {
+  const _FmkoreaHotRows({
+    required this.title,
+    required this.data,
+    this.showShare = false,
+    this.onShare,
+  });
+
+  final String title;
+  final FmkoreaStockMentionsSnapshot data;
+  final bool showShare;
+  final VoidCallback? onShare;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final rows = data.topMentions.take(10).toList();
+    final updatedAt = data.updatedAt == null
+        ? null
+        : DateFormat('MM.dd HH:mm').format(data.updatedAt!);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Center(
+                child: Text('🔥', style: TextStyle(fontSize: 14)),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(child: _HotTitle(title: title)),
+            if (showShare && onShare != null)
+              IconButton(
+                tooltip: '공유',
+                visualDensity: VisualDensity.compact,
+                onPressed: onShare,
+                icon: const Icon(
+                  Icons.ios_share_rounded,
+                  color: Color(0xFF10B981),
+                  size: 20,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          updatedAt == null
+              ? '업데이트 시간 정보 없음 · 커뮤니티 열기 기준'
+              : '업데이트 $updatedAt · 게시글 ${data.totalPosts}개 집계',
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.45),
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            color: cs.surfaceContainerHighest.withValues(alpha: 0.28),
+            border: Border.all(color: cs.onSurface.withValues(alpha: 0.12)),
+          ),
+          child: Column(
+            children: [
+              for (var i = 0; i < rows.length; i++)
+                _StaggerReveal(
+                  key: ValueKey(
+                    'hot_page_${data.mode}_${data.dateKey}_${rows[i].ticker}_${rows[i].mentionCount}_$i',
+                  ),
+                  delay: Duration(milliseconds: 70 + (i * 55)),
+                  duration: const Duration(milliseconds: 360),
+                  beginOffset: const Offset(0.04, 0),
+                  child: _FmkoreaHotRow(
+                    rank: i + 1,
+                    name: rows[i].name.isEmpty ? rows[i].ticker : rows[i].name,
+                    ticker: rows[i].ticker,
+                    mentionCount: rows[i].mentionCount,
+                    isLast: i == rows.length - 1,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FmkoreaHotRow extends StatelessWidget {
+  const _FmkoreaHotRow({
+    required this.rank,
+    required this.name,
+    required this.ticker,
+    required this.mentionCount,
+    required this.isLast,
+  });
+
+  final int rank;
+  final String name;
+  final String ticker;
+  final int mentionCount;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          child: Row(
+            children: [
+              Container(
+                width: 24,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(
+                    0xFF10B981,
+                  ).withValues(alpha: rank <= 3 ? 0.2 : 0.12),
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Text(
+                  '$rank',
+                  style: const TextStyle(
+                    color: Color(0xFF10B981),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      ticker,
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.45),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '$mentionCount회',
+                style: const TextStyle(
+                  color: Color(0xFF10B981),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (!isLast)
+          Container(
+            margin: const EdgeInsets.only(left: 46, right: 12),
+            height: 1.2,
+            color: cs.onSurface.withValues(alpha: 0.12),
+          ),
+      ],
+    );
+  }
+}
+
+class _HotTitle extends StatelessWidget {
+  const _HotTitle({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final hotIdx = title.indexOf('HOT');
+    final baseStyle = TextStyle(
+      color: cs.onSurface,
+      fontSize: 22,
+      fontWeight: FontWeight.w700,
+      letterSpacing: -0.5,
+    );
+    if (hotIdx < 0) return Text(title, style: baseStyle);
+
+    return RichText(
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(
+        style: baseStyle,
+        children: [
+          TextSpan(text: title.substring(0, hotIdx)),
+          TextSpan(
+            text: 'HOT',
+            style: baseStyle.copyWith(
+              color: const Color(0xFFEF4444),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          TextSpan(text: title.substring(hotIdx + 3)),
+        ],
+      ),
+    );
+  }
 }
 
 class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
@@ -140,8 +622,17 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
 
   @override
   Widget build(BuildContext context) {
+    switch (widget._mode) {
+      case _MarketAnalysisScreenMode.indicators:
+        return _buildIndicatorsTab(context);
+      case _MarketAnalysisScreenMode.analysis:
+        return _buildAnalysisTab(context);
+      case _MarketAnalysisScreenMode.tabs:
+        break;
+    }
     return DefaultTabController(
-      length: 3,
+      length: 2,
+      initialIndex: widget.initialTabIndex.clamp(0, 1),
       child: Column(
         children: [
           _buildTopTabBar(context),
@@ -149,7 +640,6 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             child: TabBarView(
               children: [
                 _buildIndicatorsTab(context),
-                _buildFeatureStocksTab(context),
                 _buildAnalysisTab(context),
               ],
             ),
@@ -181,7 +671,6 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       tabs: const [
         Tab(text: '지수'),
-        Tab(text: '특징주'),
         Tab(text: '시황분석'),
       ],
     );
@@ -1059,379 +1548,6 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
       return NumberFormat('#,###').format(result.price.toInt());
     }
     return NumberFormat('#,##0.00').format(result.price);
-  }
-
-  static const _featureFilters = [
-    _FeatureStockFilter('거래대금 상위', group: 'top_trading_value'),
-    _FeatureStockFilter('급등주', group: 'gainers'),
-    _FeatureStockFilter('거래량 급증', group: 'volume_spike'),
-    _FeatureStockFilter('신고가/돌파', group: 'high_breakout'),
-    _FeatureStockFilter('차트 포착', group: 'chart_capture'),
-    _FeatureStockFilter(
-      '급등 후 눌림',
-      group: 'chart_capture',
-      pattern: 'volume_surge_pullback_tail',
-    ),
-    _FeatureStockFilter(
-      '거래량 감소 상승',
-      group: 'chart_capture',
-      pattern: 'volume_spike_breakout_dry_up_rise',
-    ),
-    _FeatureStockFilter(
-      '거래량 감소 눌림',
-      group: 'chart_capture',
-      pattern: 'volume_spike_dry_up_pullback_support',
-    ),
-  ];
-
-  Widget _buildFeatureStocksTab(BuildContext context) {
-    return DefaultTabController(
-      length: _featureFilters.length,
-      child: Column(
-        children: [
-          _buildFeatureTabBar(context),
-          Expanded(
-            child: TabBarView(
-              children: [
-                for (final filter in _featureFilters)
-                  _buildFeatureStockList(context, filter),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFeatureTabBar(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Material(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: TabBar(
-        isScrollable: true,
-        tabAlignment: TabAlignment.start,
-        labelColor: cs.onSurface,
-        unselectedLabelColor: cs.onSurface.withValues(alpha: 0.42),
-        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-        unselectedLabelStyle: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-        ),
-        indicatorColor: const Color(0xFF3182F6),
-        dividerColor: cs.onSurface.withValues(alpha: 0.06),
-        tabs: [for (final filter in _featureFilters) Tab(text: filter.label)],
-      ),
-    );
-  }
-
-  Widget _buildFeatureStockList(
-    BuildContext context,
-    _FeatureStockFilter filter,
-  ) {
-    final cs = Theme.of(context).colorScheme;
-    return StreamBuilder<List<MarketFeatureStock>>(
-      stream: _firestoreService.getMarketFeatureStocks(
-        group: filter.group,
-        pattern: filter.pattern,
-      ),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: CircularProgressIndicator(color: Color(0xFF3182F6)),
-          );
-        }
-        final list = snapshot.data ?? [];
-        if (list.isEmpty) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Text(
-                '${filter.label}에 등록된 종목이 없습니다.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: cs.onSurface.withValues(alpha: 0.42),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          );
-        }
-
-        final grouped = _groupFeatureStocksByDate(list);
-        final rows = <Object>[];
-        for (final entry in grouped.entries) {
-          rows.add(entry.key);
-          rows.addAll(entry.value);
-        }
-
-        return RefreshIndicator(
-          color: const Color(0xFF3182F6),
-          onRefresh: _refreshAll,
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
-            itemCount: rows.length,
-            separatorBuilder: (_, index) => index == 0
-                ? const SizedBox(height: 10)
-                : Container(
-                    margin: const EdgeInsets.only(left: 2),
-                    height: 1,
-                    color: cs.onSurface.withValues(alpha: 0.07),
-                  ),
-            itemBuilder: (context, index) {
-              final row = rows[index];
-              if (row is DateTime) {
-                return _buildFeatureDateHeader(
-                  context,
-                  row,
-                  grouped[row]?.length ?? 0,
-                );
-              }
-              return _buildFeatureStockCard(context, row as MarketFeatureStock);
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  Map<DateTime, List<MarketFeatureStock>> _groupFeatureStocksByDate(
-    List<MarketFeatureStock> list,
-  ) {
-    final grouped = <DateTime, List<MarketFeatureStock>>{};
-    for (final item in list) {
-      final key = DateTime(
-        item.sourceDate.year,
-        item.sourceDate.month,
-        item.sourceDate.day,
-      );
-      grouped.putIfAbsent(key, () => []).add(item);
-    }
-
-    final entries = grouped.entries.toList()
-      ..sort((a, b) => b.key.compareTo(a.key));
-    return {
-      for (final entry in entries)
-        entry.key: entry.value
-          ..sort((a, b) {
-            final scoreCompare = b.score.compareTo(a.score);
-            if (scoreCompare != 0) return scoreCompare;
-            return b.tradingValue.compareTo(a.tradingValue);
-          }),
-    };
-  }
-
-  Widget _buildFeatureDateHeader(
-    BuildContext context,
-    DateTime date,
-    int count,
-  ) {
-    final cs = Theme.of(context).colorScheme;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final target = DateTime(date.year, date.month, date.day);
-    final dayDiff = today.difference(target).inDays;
-    final label = dayDiff == 0
-        ? '오늘'
-        : dayDiff == 1
-        ? '어제'
-        : DateFormat('MM.dd').format(date);
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 6, bottom: 2),
-      child: Row(
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: cs.onSurface,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            DateFormat('yyyy.MM.dd').format(date),
-            style: TextStyle(
-              color: cs.onSurface.withValues(alpha: 0.38),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const Spacer(),
-          Text(
-            '$count개',
-            style: TextStyle(
-              color: cs.onSurface.withValues(alpha: 0.42),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFeatureStockCard(BuildContext context, MarketFeatureStock item) {
-    final cs = Theme.of(context).colorScheme;
-    final isUp = item.changeRate >= 0;
-    final moveColor = isUp ? const Color(0xFFF04452) : const Color(0xFF1677FF);
-    final valueLabel = _formatTradingValue(item.tradingValue);
-    final subtitle = item.reason.replaceAll('\n', ' ').trim();
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 38,
-            height: 38,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: cs.onSurface.withValues(alpha: 0.06),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              item.market,
-              style: TextStyle(
-                color: cs.onSurface.withValues(alpha: 0.55),
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        item.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: cs.onSurface,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      item.ticker,
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.38),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  item.title.isNotEmpty ? item.title : _featureTitle(item),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: cs.onSurface.withValues(alpha: 0.62),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                if (subtitle.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: cs.onSurface.withValues(alpha: 0.46),
-                      fontSize: 12,
-                      height: 1.45,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    _buildMiniMetric(context, valueLabel),
-                    _buildMiniMetric(
-                      context,
-                      '거래량 ${item.volumeRatio.toStringAsFixed(1)}x',
-                    ),
-                    _buildMiniMetric(context, '점수 ${item.score}'),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                NumberFormat('#,###').format(item.price.round()),
-                style: TextStyle(
-                  color: cs.onSurface,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 6),
-              _buildChangeRateBadge(moveColor, isUp, item.changeRate),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMiniMetric(BuildContext context, String label) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: cs.onSurface.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: cs.onSurface.withValues(alpha: 0.52),
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  String _featureTitle(MarketFeatureStock item) {
-    switch (item.pattern) {
-      case 'volume_surge_pullback_tail':
-        return '급등 후 U자 눌림';
-      case 'volume_spike_breakout_dry_up_rise':
-        return '거래량 감소 상승';
-      case 'volume_spike_dry_up_pullback_support':
-        return '거래량 감소 눌림 지지';
-      default:
-        return item.group;
-    }
-  }
-
-  String _formatTradingValue(int value) {
-    if (value >= 1000000000000) {
-      return '거래대금 ${(value / 1000000000000).toStringAsFixed(1)}조';
-    }
-    if (value >= 100000000) {
-      return '거래대금 ${(value / 100000000).round()}억';
-    }
-    return '거래대금 ${NumberFormat('#,###').format(value)}';
   }
 
   Widget _buildAnalysisTab(BuildContext context) {
@@ -2955,70 +3071,78 @@ class _InvestorFlowGroup extends StatelessWidget {
           else
             ...List.generate(items.length, (index) {
               final item = items[index];
-              return Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 24,
-                          height: 24,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: color.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '${item.rank}',
-                            style: TextStyle(
-                              color: color,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
+              return _StaggerReveal(
+                key: ValueKey(
+                  'investor_flow_${title}_${item.rank}_${item.name}_${item.amountEokText}',
+                ),
+                delay: Duration(milliseconds: 80 + (index * 55)),
+                duration: const Duration(milliseconds: 330),
+                beginOffset: const Offset(0.04, 0),
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 24,
+                            height: 24,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${item.rank}',
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            item.name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: cs.onSurface,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              item.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: cs.onSurface,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: cs.onSurface.withValues(alpha: 0.04),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            item.amountEokText,
-                            style: TextStyle(
-                              color: cs.onSurface.withValues(alpha: 0.74),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
+                          const SizedBox(width: 10),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.onSurface.withValues(alpha: 0.04),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              item.amountEokText,
+                              style: TextStyle(
+                                color: cs.onSurface.withValues(alpha: 0.74),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  if (index != items.length - 1)
-                    Container(
-                      height: 1,
-                      color: cs.onSurface.withValues(alpha: 0.06),
-                    ),
-                ],
+                    if (index != items.length - 1)
+                      Container(
+                        height: 1,
+                        color: cs.onSurface.withValues(alpha: 0.06),
+                      ),
+                  ],
+                ),
               );
             }),
         ],

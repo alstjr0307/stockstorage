@@ -41,10 +41,17 @@ class StockPick {
     this.earningsDate,
   });
 
-  double get returnRate => ((targetPrice - buyPrice) / buyPrice) * 100;
-  double get actualReturnRate => closedPrice != null
-      ? ((closedPrice! - buyPrice) / buyPrice) * 100
-      : returnRate;
+  double _rateFrom(double price) {
+    if (buyPrice <= 0) return 0;
+    return ((price - buyPrice) / buyPrice) * 100;
+  }
+
+  double get targetReturnRate => _rateFrom(targetPrice);
+  double get currentReturnRate =>
+      currentPrice != null ? _rateFrom(currentPrice!) : 0;
+  double get returnRate => targetReturnRate;
+  double get actualReturnRate =>
+      closedPrice != null ? _rateFrom(closedPrice!) : currentReturnRate;
   bool get isCompleted => status == 'completed';
 
   factory StockPick.fromFirestore(DocumentSnapshot doc) {

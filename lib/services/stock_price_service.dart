@@ -355,11 +355,14 @@ class StockPriceService {
       if (response.statusCode != 200) return null;
 
       final json = jsonDecode(response.body);
-      final item = (json['result']?['areas'] as List?)
+      final rootDatas = (json['datas'] as List?)?.whereType<Map>();
+      final areaDatas = (json['result']?['areas'] as List?)
           ?.whereType<Map>()
           .expand((a) => (a['datas'] as List?) ?? [])
-          .whereType<Map>()
-          .firstOrNull;
+          .whereType<Map>();
+      final item = (rootDatas == null || rootDatas.isEmpty)
+          ? areaDatas?.firstOrNull
+          : rootDatas.firstOrNull;
       if (item == null) return null;
 
       double parse(String s) => double.tryParse(s.replaceAll(',', '')) ?? 0.0;
@@ -450,16 +453,15 @@ class StockPriceService {
       final change = overPrice > 0
           ? rawChange
           : _applyNaverDirection(rawChange, item['compareToPreviousPrice']);
-      final changeRate =
-          overPrice > 0
-              ? overRate
-              : double.tryParse(
-                    (item['fluctuationsRatioRaw'] as String? ??
-                            item['fluctuationsRatio'] as String? ??
-                            '')
-                        .replaceAll(',', ''),
-                  ) ??
-                  0.0;
+      final changeRate = overPrice > 0
+          ? overRate
+          : double.tryParse(
+                  (item['fluctuationsRatioRaw'] as String? ??
+                          item['fluctuationsRatio'] as String? ??
+                          '')
+                      .replaceAll(',', ''),
+                ) ??
+                0.0;
       final regularTradedAt = DateTime.tryParse(
         item['localTradedAt'] as String? ?? '',
       )?.toLocal();
@@ -506,7 +508,7 @@ class StockPriceService {
 
   static Future<void> _patchDomesticMinuteCandle(
     List<({DateTime date, double open, double high, double low, double close})>
-        out,
+    out,
     String ticker,
     String interval,
   ) async {
@@ -542,10 +544,12 @@ class StockPriceService {
         if (v is num) return v.toDouble();
         return double.tryParse(v.toString().replaceAll(',', '')) ?? 0.0;
       }
+
       DateTime? parseTime(dynamic v) {
         if (v == null) return null;
         return DateTime.tryParse(v.toString())?.toLocal();
       }
+
       final over = item['overMarketPriceInfo'] as Map?;
       final integrated = item['integratedPriceInfo'] as Map?;
 
@@ -561,10 +565,10 @@ class StockPriceService {
             now.year == tradedAt.year &&
             now.month == tradedAt.month &&
             now.day == tradedAt.day;
-        final weekday = now.weekday >= DateTime.monday &&
-            now.weekday <= DateTime.friday;
-        final afterRegularClose = now.hour > 15 ||
-            (now.hour == 15 && now.minute >= 30);
+        final weekday =
+            now.weekday >= DateTime.monday && now.weekday <= DateTime.friday;
+        final afterRegularClose =
+            now.hour > 15 || (now.hour == 15 && now.minute >= 30);
         if (sameDay && weekday && afterRegularClose) {
           tradedAt = now;
         }
@@ -573,11 +577,7 @@ class StockPriceService {
 
       final close = overClose > 0
           ? overClose
-          : parseNum(
-              item['closePriceRaw'] ??
-                  item['closePrice'] ??
-                  '',
-            );
+          : parseNum(item['closePriceRaw'] ?? item['closePrice'] ?? '');
       if (close <= 0) return;
 
       final highCandidate = parseNum(
@@ -605,7 +605,13 @@ class StockPriceService {
       );
 
       if (out.isEmpty) {
-        out.add((date: bucket, open: close, high: high, low: low, close: close));
+        out.add((
+          date: bucket,
+          open: close,
+          high: high,
+          low: low,
+          close: close,
+        ));
         return;
       }
 
@@ -622,14 +628,20 @@ class StockPriceService {
       }
 
       if (last.date.isBefore(bucket)) {
-        out.add((date: bucket, open: close, high: high, low: low, close: close));
+        out.add((
+          date: bucket,
+          open: close,
+          high: high,
+          low: low,
+          close: close,
+        ));
       }
     } catch (_) {}
   }
 
   static Future<void> _forceAppendDomesticAfterHoursMinuteCandle(
     List<({DateTime date, double open, double high, double low, double close})>
-        out,
+    out,
     String ticker,
     String interval,
   ) async {
@@ -642,20 +654,33 @@ class StockPriceService {
     if (minuteUnit == 0) return;
 
     final now = DateTime.now();
-    final weekday = now.weekday >= DateTime.monday &&
-        now.weekday <= DateTime.friday;
-    final afterRegularClose = now.hour > 15 || (now.hour == 15 && now.minute >= 30);
+    final weekday =
+        now.weekday >= DateTime.monday && now.weekday <= DateTime.friday;
+    final afterRegularClose =
+        now.hour > 15 || (now.hour == 15 && now.minute >= 30);
     if (!weekday || !afterRegularClose) return;
 
     final price = await _fetchNaverStockPrice(ticker);
     if (price == null || price.price <= 0) return;
 
     final minuteBucket = (now.minute ~/ minuteUnit) * minuteUnit;
-    final bucket = DateTime(now.year, now.month, now.day, now.hour, minuteBucket);
+    final bucket = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      now.hour,
+      minuteBucket,
+    );
     final close = price.price;
 
     if (out.isEmpty) {
-      out.add((date: bucket, open: close, high: close, low: close, close: close));
+      out.add((
+        date: bucket,
+        open: close,
+        high: close,
+        low: close,
+        close: close,
+      ));
       return;
     }
 
@@ -668,7 +693,13 @@ class StockPriceService {
       (last.date.minute ~/ minuteUnit) * minuteUnit,
     );
     if (bucket.isAfter(lastBucket)) {
-      out.add((date: bucket, open: close, high: close, low: close, close: close));
+      out.add((
+        date: bucket,
+        open: close,
+        high: close,
+        low: close,
+        close: close,
+      ));
     } else if (bucket.isAtSameMomentAs(lastBucket)) {
       out[out.length - 1] = (
         date: last.date,
@@ -814,8 +845,9 @@ class StockPriceService {
               .timeout(const Duration(seconds: 5));
           if (rtRes.statusCode == 200) {
             final rtJson = jsonDecode(rtRes.body);
-            final item =
-                (rtJson['datas'] as List?)?.whereType<Map>().firstOrNull;
+            final item = (rtJson['datas'] as List?)
+                ?.whereType<Map>()
+                .firstOrNull;
             if (item != null) {
               final over = item['overMarketPriceInfo'] as Map?;
               final integrated = item['integratedPriceInfo'] as Map?;
@@ -906,7 +938,10 @@ class StockPriceService {
         isDomestic &&
         (interval == '1m' || interval == '5m' || interval == '60m');
     final fastDomesticInterval =
-        interval == '1m' || interval == '5m' || interval == '60m' || interval == '1d';
+        interval == '1m' ||
+        interval == '5m' ||
+        interval == '60m' ||
+        interval == '1d';
     final ohlcCacheDuration = isDomestic && fastDomesticInterval
         ? const Duration(seconds: 20)
         : _ohlcCacheDuration;

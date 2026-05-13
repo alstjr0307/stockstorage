@@ -1289,6 +1289,45 @@ function makeFeatureItem(stock, rows, group, pattern, title, reason, score) {
   };
 }
 
+function formatFeatureTradingValue(value) {
+  const rounded = Math.round(value || 0);
+  if (rounded >= 1000000000000) return `${(rounded / 1000000000000).toFixed(1)}조원`;
+  if (rounded >= 100000000) return `${Math.round(rounded / 100000000).toLocaleString('ko-KR')}억원`;
+  return `${rounded.toLocaleString('ko-KR')}원`;
+}
+
+function formatFeaturePct(value, digits = 1) {
+  return `${(value * 100).toFixed(digits)}%`;
+}
+
+function buildChartSetupReason(pattern, setup) {
+  if (pattern === 'volume_surge_pullback_tail') {
+    return [
+      `${setup.surgeDaysAgo}거래일 전 거래량이 평소보다 ${setup.surgeVolumeRatio.toFixed(1)}배 늘며 ${formatFeaturePct(setup.surgeGain)} 상승했습니다.`,
+      `이후 최대 눌림은 ${formatFeaturePct(setup.pullback)}였고 현재 눌림은 ${formatFeaturePct(setup.currentPullback)} 수준입니다.`,
+      `${setup.baseDays}거래일 동안 U자형 베이스를 만들며 아래꼬리 캔들이 ${setup.tailCount}회 확인됐습니다.`,
+      `눌림 구간 거래량은 급등일 대비 ${formatFeaturePct(setup.avgPullbackVolumeRatio, 0)} 수준으로 줄었고, ${Math.round(setup.support).toLocaleString('ko-KR')}원 부근 지지를 확인했습니다.`,
+    ].join(' ');
+  }
+  if (pattern === 'volume_spike_breakout_dry_up_rise') {
+    return [
+      `${setup.surgeDaysAgo}거래일 전 거래량이 ${setup.surgeVolumeRatio.toFixed(1)}배 늘며 ${formatFeaturePct(setup.surgeGain)} 상승했습니다.`,
+      `급등 이후 최대 눌림은 ${formatFeaturePct(setup.maxPullback)}였고, 이후 반등 폭은 ${formatFeaturePct(setup.runup)}입니다.`,
+      `급등 후 평균 거래량은 급등일 대비 ${formatFeaturePct(setup.postAvgVolumeRatio, 0)}, 최근 거래량은 ${formatFeaturePct(setup.recentVolumeRatio, 0)}로 줄었습니다.`,
+      `저점 안정도는 ${formatFeaturePct(setup.lowStability)}로 집계돼 거래량 감소 후 재상승 흐름으로 분류했습니다.`,
+    ].join(' ');
+  }
+  if (pattern === 'volume_spike_dry_up_pullback_support') {
+    return [
+      `${setup.surgeDaysAgo}거래일 전 거래량이 ${setup.surgeVolumeRatio.toFixed(1)}배 늘며 ${formatFeaturePct(setup.surgeGain)} 상승했습니다.`,
+      `이후 눌림 폭은 ${formatFeaturePct(setup.pullback)}이고, 급등 후 평균 거래량은 급등일 대비 ${formatFeaturePct(setup.postAvgVolumeRatio, 0)} 수준입니다.`,
+      `최근 거래량은 급등일 대비 ${formatFeaturePct(setup.recentVolumeRatio, 0)}로 줄었고 저점 변동폭은 ${formatFeaturePct(setup.recentLowSpread)}입니다.`,
+      `현재가는 20일선 대비 ${formatFeaturePct(setup.ma20Distance)}, 60일선 대비 ${formatFeaturePct(setup.ma60Distance)} 위치에 있어 눌림 지지 후보로 포착했습니다.`,
+    ].join(' ');
+  }
+  return `차트 패턴 점수 ${Math.round(setup.quality)}점으로 특징주에 포착됐습니다.`;
+}
+
 function buildMarketFeatureStocks(stock, rows) {
   if (rows.length < MIN_HISTORY_DAYS) return [];
   if (hasRecentTradingHaltOrAbnormalGap(rows)) return [];
@@ -1313,7 +1352,7 @@ function buildMarketFeatureStocks(stock, rows) {
       'top_trading_value',
       'top_trading_value',
       '거래대금 상위',
-      `Today trading value ${Math.round(tradingValue).toLocaleString('en-US')}, 20d value ratio ${valueRatio.toFixed(1)}x.`,
+      `오늘 거래대금은 ${formatFeatureTradingValue(tradingValue)}로 집계됐습니다. 최근 20거래일 평균 거래대금 대비 ${valueRatio.toFixed(1)}배 수준이라 거래대금 상위 종목으로 포착했습니다.`,
       Math.min(100, 45 + Math.log10(Math.max(1, tradingValue / 100000000)) * 12 + Math.min(20, valueRatio * 3)),
     ),
   );
@@ -1326,7 +1365,7 @@ function buildMarketFeatureStocks(stock, rows) {
         'gainers',
         'gainers',
         '급등주',
-        `One-day gain ${(oneDayRate * 100).toFixed(1)}%, trading value ${Math.round(tradingValue).toLocaleString('en-US')}.`,
+        `당일 주가가 ${formatFeaturePct(oneDayRate)} 상승했습니다. 거래대금은 ${formatFeatureTradingValue(tradingValue)}로 동반 증가해 급등주로 포착했습니다.`,
         45 + Math.min(35, oneDayRate * 220) + Math.min(20, valueRatio * 4),
       ),
     );
@@ -1340,7 +1379,7 @@ function buildMarketFeatureStocks(stock, rows) {
         'volume_spike',
         'trading_value_spike',
         '거래량/거래대금 급증',
-        `Trading value is ${valueRatio.toFixed(1)}x the 20d average, volume ${volumeRatio.toFixed(1)}x, gain ${(oneDayRate * 100).toFixed(1)}%.`,
+        `거래대금이 최근 20거래일 평균 대비 ${valueRatio.toFixed(1)}배로 늘었습니다. 거래량은 ${volumeRatio.toFixed(1)}배, 당일 등락률은 ${formatFeaturePct(oneDayRate)}로 거래량과 가격 움직임이 함께 포착됐습니다.`,
         42 + Math.min(32, valueRatio * 8) + Math.min(18, volumeRatio * 4) + Math.min(8, oneDayRate * 80),
       ),
     );
@@ -1359,7 +1398,7 @@ function buildMarketFeatureStocks(stock, rows) {
         'high_breakout',
         isYearHigh ? 'new_52w_high' : 'prior_high_breakout',
         isYearHigh ? '신고가 돌파' : '전고점 돌파',
-        `Close broke above the prior 60d high by ${(((last.close / previous60High) - 1) * 100).toFixed(1)}%, volume ${volumeRatio.toFixed(1)}x.`,
+        `종가가 최근 60거래일 고점을 ${(((last.close / previous60High) - 1) * 100).toFixed(1)}% 상회했습니다. 거래량도 20거래일 평균 대비 ${volumeRatio.toFixed(1)}배로 늘어 ${isYearHigh ? '신고가 돌파' : '전고점 돌파'} 흐름으로 포착했습니다.`,
         50 + (isYearHigh ? 15 : 5) + Math.min(20, volumeRatio * 5) + Math.min(15, oneDayRate * 100),
       ),
     );
@@ -1379,7 +1418,7 @@ function buildMarketFeatureStocks(stock, rows) {
         'chart_capture',
         pattern,
         title,
-        `Chart setup matched: ${pattern}, setup score ${Math.round(setup.quality)}.`,
+        buildChartSetupReason(pattern, setup),
         60 + Math.min(35, setup.quality / 2),
       ),
     );

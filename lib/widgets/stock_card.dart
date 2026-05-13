@@ -63,7 +63,7 @@ class _StockCardState extends State<StockCard>
     if (_priceResult != null) {
       return ((_priceResult!.price - pick.buyPrice) / pick.buyPrice) * 100;
     }
-    return pick.returnRate;
+    return pick.currentReturnRate;
   }
 
   String _mosaicText(String text) {

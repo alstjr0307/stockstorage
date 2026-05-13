@@ -1,28 +1,66 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/post.dart';
 import '../models/stock_pick.dart';
 import '../models/announcement.dart';
+import '../models/market_feature_stock.dart';
 import '../providers/auth_provider.dart';
 import '../providers/theme_provider.dart';
 import '../services/ad_service.dart';
 import '../services/analytics_service.dart';
 import '../services/firestore_service.dart';
+import '../services/stock_price_service.dart';
 import '../widgets/banner_ad_widget.dart';
 import '../widgets/stock_card.dart';
+import '../widgets/user_level_avatar.dart';
 import 'admin_screen.dart';
 import 'community_screen.dart';
 import 'leaderboard_screen.dart';
 import 'login_screen.dart';
 import 'market_analysis_screen.dart';
+import 'market_sentiment_screen.dart';
+import 'market_feature_stock_detail_screen.dart';
+import 'market_feature_stocks_screen.dart';
 import 'portfolio_screen.dart';
 import 'my_comments_screen.dart';
 import 'my_posts_screen.dart';
 import 'notification_history_screen.dart';
+import 'post_detail_screen.dart';
 import 'stock_compare_screen.dart';
 import 'stock_detail_screen.dart';
+import 'index_detail_screen.dart';
 import '../main.dart' show initAds;
+
+bool _homeLightMode = false;
+
+Color get _homeBg0 =>
+    _homeLightMode ? const Color(0xFFF6F8FB) : const Color(0xFF0A0E1A);
+Color get _homeBg2 =>
+    _homeLightMode ? const Color(0xFFFFFFFF) : const Color(0xFF111827);
+Color get _homeBg3 =>
+    _homeLightMode ? const Color(0xFFF0F4F8) : const Color(0xFF161E2E);
+Color get _homeCard =>
+    _homeLightMode ? const Color(0xFFFFFFFF) : const Color(0xFF0F1520);
+Color get _homeCardHi =>
+    _homeLightMode ? const Color(0xFFF8FBFF) : const Color(0xFF141B2A);
+Color get _homeBorder =>
+    _homeLightMode ? const Color(0x140F172A) : const Color(0x12FFFFFF);
+Color get _homeLabel =>
+    _homeLightMode ? const Color(0xFF172033) : const Color(0xFFEEF2FF);
+Color get _homeMuted =>
+    _homeLightMode ? const Color(0xA6172033) : const Color(0x8CEEF2FF);
+Color get _homeFaint =>
+    _homeLightMode ? const Color(0x75172033) : const Color(0x52EEF2FF);
+Color get _homeAccent => const Color(0xFF00B67A);
+Color get _homeUp => const Color(0xFFFF4E6A);
+Color get _homeDown => const Color(0xFF1677FF);
+Color get _homeGold => const Color(0xFFF5B547);
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -31,36 +69,24 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen>
-    with SingleTickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen> {
   final FirestoreService _firestoreService = FirestoreService();
-  late final AnimationController _rewardChipPulseController;
-  late final Animation<double> _rewardChipScale;
 
-  // 탭: 0=주식저장소, 1=매매일지, 2=커뮤니티, 3=종목비교, 4=시황분석
+  // 탭: 0=홈, 1=커뮤니티, 2=매매일지
   int _currentPage = 0;
+  int _communityInitialTabIndex = 0;
 
   // 검색
   bool _showSearch = false;
   final _searchController = TextEditingController();
   String _searchQuery = '';
   bool _rewardAdLoading = false;
-
-  static const _tabTitles = ['주식저장소', '매매일지', '커뮤니티', '종목 비교', '시황 분석'];
+  bool _homeAtTop = true;
+  static const _tabTitles = ['주식저장소', '커뮤니티', '매매일지'];
 
   @override
   void initState() {
     super.initState();
-    _rewardChipPulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
-    _rewardChipScale = Tween<double>(begin: 1.0, end: 1.06).animate(
-      CurvedAnimation(
-        parent: _rewardChipPulseController,
-        curve: Curves.easeInOut,
-      ),
-    );
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       initAds();
       BannerAdWidget.prewarm(
@@ -227,97 +253,8 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   void dispose() {
-    _rewardChipPulseController.dispose();
     _searchController.dispose();
     super.dispose();
-  }
-
-  Widget _buildRewardAdAppBarChip({
-    required AuthProvider auth,
-    required String uid,
-    required bool isDark,
-  }) {
-    return StreamBuilder<Map<String, int>>(
-      stream: _firestoreService.watchRewardAdStatus(uid),
-      builder: (context, snap) {
-        final status = snap.data;
-        final remaining = status?['remainingCount'] ?? 0;
-        final limit = status?['dailyLimit'] ?? 3;
-        if (remaining <= 0) return const SizedBox.shrink();
-
-        return GestureDetector(
-          onTap: () async {
-            final goWatch = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: Text(
-                  '리워드 광고 안내',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-                content: Text(
-                  '🎁 광고 시청을 완료하면 경험치 +5를 받을 수 있어요.\n'
-                  '보상은 시청 완료 후 지급됩니다.',
-                  style: TextStyle(fontSize: 13, height: 1.5),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: Text('닫기', style: TextStyle()),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: Text(
-                      '광고 보기',
-                      style: TextStyle(
-                        color: const Color(0xFF10B981),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-            if (goWatch == true) {
-              await _watchRewardAdAndClaimXp(auth);
-            }
-          },
-          child: AnimatedBuilder(
-            animation: _rewardChipScale,
-            builder: (context, child) =>
-                Transform.scale(scale: _rewardChipScale.value, child: child),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-              decoration: BoxDecoration(
-                color: const Color(0xFF10B981).withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.35),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.ondemand_video,
-                    size: 12,
-                    color: Color(0xFF10B981),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    '$remaining/$limit',
-                    style: TextStyle(
-                      color: isDark ? Colors.white : const Color(0xFF065F46),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
   }
 
   void _closeSearch() {
@@ -333,6 +270,44 @@ class _HomeScreenState extends State<HomeScreen>
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _confirmAndWatchRewardAd(AuthProvider auth) async {
+    if (_rewardAdLoading) return;
+
+    final shouldWatch = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text(
+          '리워드 광고 안내',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        content: const Text(
+          '광고 시청을 완료하면 경험치 +5를 받을 수 있어요.\n보상은 시청 완료 후 지급됩니다.',
+          style: TextStyle(fontSize: 13, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('닫기'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text(
+              '광고 보기',
+              style: TextStyle(
+                color: Color(0xFF10B981),
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldWatch == true) {
+      await _watchRewardAdAndClaimXp(auth);
+    }
   }
 
   Future<void> _watchRewardAdAndClaimXp(AuthProvider auth) async {
@@ -365,163 +340,152 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  List<Widget> _buildTopActions(
+    AuthProvider auth, {
+    required bool isDarkSurface,
+    required bool showSearchButton,
+  }) {
+    final iconColor = isDarkSurface ? Colors.white70 : Colors.black54;
+    return [
+      if (auth.isLoggedIn)
+        IconButton(
+          icon: Icon(Icons.notifications_none, color: iconColor),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const NotificationHistoryScreen(),
+              ),
+            );
+          },
+        ),
+      if (auth.isAdmin)
+        IconButton(
+          icon: const Icon(Icons.add_circle_outline, color: Color(0xFF10B981)),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AdminScreen()),
+          ),
+        ),
+      IconButton(
+        icon: Icon(
+          auth.isLoggedIn ? Icons.person : Icons.person_outline,
+          color: iconColor,
+        ),
+        onPressed: () {
+          if (auth.isLoggedIn) {
+            _showProfileMenu(context, auth);
+          } else {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
+            );
+          }
+        },
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = Theme.of(context).scaffoldBackgroundColor;
+    _homeLightMode = !isDark;
+    final isHome = _currentPage == 0;
+    final hideHomeAppBar = isHome && !_showSearch;
+    final bgColor = isHome
+        ? _homeBg0
+        : Theme.of(context).scaffoldBackgroundColor;
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        backgroundColor: bgColor,
-        elevation: 0,
-        title: _showSearch && _currentPage == 0
-            ? TextField(
-                controller: _searchController,
-                autofocus: true,
-                style: TextStyle(
-                  color: isDark ? Colors.white : Colors.black87,
-                  fontSize: 15,
-                ),
-                decoration: InputDecoration(
-                  hintText: '종목명 또는 티커 검색...',
-                  hintStyle: TextStyle(
-                    color: isDark ? Colors.white38 : Colors.black38,
-                    fontSize: 15,
-                  ),
-                  border: InputBorder.none,
-                ),
-                onChanged: (v) => setState(() => _searchQuery = v),
-                onSubmitted: (v) {
-                  if (v.trim().isNotEmpty) {
-                    AnalyticsService.instance.logSearch(v.trim());
-                  }
-                },
-              )
-            : Text(
-                _tabTitles[_currentPage],
-                style: TextStyle(
-                  color: isDark ? Colors.white : Colors.black87,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 20,
-                ),
-              ),
-        actions: [
-          if (auth.isLoggedIn && !(_showSearch && _currentPage == 0))
-            Padding(
-              padding: const EdgeInsets.only(right: 4),
-              child: Center(
-                child: _buildRewardAdAppBarChip(
-                  auth: auth,
-                  uid: auth.user!.uid,
-                  isDark: isDark,
-                ),
-              ),
-            ),
-          if (auth.isLoggedIn)
-            IconButton(
-              icon: Icon(
-                Icons.notifications_none,
-                color: isDark ? Colors.white70 : Colors.black54,
-              ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const NotificationHistoryScreen(),
-                  ),
-                );
-              },
-            ),
-          if (_currentPage == 0)
-            IconButton(
-              icon: Icon(
-                _showSearch ? Icons.close : Icons.search,
-                color: isDark ? Colors.white70 : Colors.black54,
-              ),
-              onPressed: () {
-                if (_showSearch) {
-                  _closeSearch();
-                } else {
-                  setState(() => _showSearch = true);
-                }
-              },
-            ),
-          if (auth.isAdmin)
-            IconButton(
-              icon: const Icon(
-                Icons.add_circle_outline,
-                color: Color(0xFF10B981),
-              ),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AdminScreen()),
+      appBar: hideHomeAppBar
+          ? null
+          : AppBar(
+              backgroundColor: bgColor,
+              surfaceTintColor: Colors.transparent,
+              shadowColor: Colors.transparent,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              titleSpacing: 16,
+              title: _showSearch && _currentPage == 0
+                  ? TextField(
+                      controller: _searchController,
+                      autofocus: true,
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black87,
+                        fontSize: 15,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: '종목명 또는 티커 검색...',
+                        hintStyle: TextStyle(
+                          color: isDark ? Colors.white38 : Colors.black38,
+                          fontSize: 15,
+                        ),
+                        border: InputBorder.none,
+                      ),
+                      onChanged: (v) => setState(() => _searchQuery = v),
+                      onSubmitted: (v) {
+                        if (v.trim().isNotEmpty) {
+                          AnalyticsService.instance.logSearch(v.trim());
+                        }
+                      },
+                    )
+                  : Text(
+                      _tabTitles[_currentPage],
+                      style: TextStyle(
+                        color: isHome || isDark ? Colors.white : Colors.black87,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 20,
+                      ),
+                    ),
+              actions: _buildTopActions(
+                auth,
+                isDarkSurface: isHome || isDark,
+                showSearchButton: true,
               ),
             ),
-          IconButton(
-            icon: Icon(
-              auth.isLoggedIn ? Icons.person : Icons.person_outline,
-              color: isDark ? Colors.white70 : Colors.black54,
-            ),
-            onPressed: () {
-              if (auth.isLoggedIn) {
-                _showProfileMenu(context, auth);
-              } else {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                );
-              }
-            },
-          ),
-        ],
-      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentPage,
         onTap: (i) {
           if (i != 0) _closeSearch();
-          setState(() => _currentPage = i);
-          const tabNames = ['추천주', '매매일지', '커뮤니티', '종목비교', '시황분석'];
+          setState(() {
+            _currentPage = i;
+            if (i == 1) _communityInitialTabIndex = 0;
+          });
+          const tabNames = ['홈', '커뮤니티', '매매일지'];
           AnalyticsService.instance.logTabChange(tabNames[i]);
         },
         backgroundColor: bgColor,
         selectedItemColor: const Color(0xFF10B981),
-        unselectedItemColor: isDark ? Colors.white38 : Colors.black38,
+        unselectedItemColor: isHome || isDark ? Colors.white38 : Colors.black38,
         type: BottomNavigationBarType.fixed,
         selectedLabelStyle: TextStyle(
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: FontWeight.w600,
         ),
-        unselectedLabelStyle: TextStyle(fontSize: 10),
+        unselectedLabelStyle: TextStyle(fontSize: 11),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.show_chart), label: '추천주'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            label: '매매일지',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: '홈'),
           BottomNavigationBarItem(
             icon: Icon(Icons.people_outline),
             label: '커뮤니티',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.compare_arrows),
-            label: '종목비교',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.analytics_outlined),
-            label: '시황 분석',
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            label: '매매일지',
           ),
         ],
       ),
       body: IndexedStack(
         index: _currentPage,
         children: [
-          _buildStockPicksPage(auth),
+          _buildDashboardPage(auth),
+          CommunityScreen(
+            key: ValueKey('community_$_communityInitialTabIndex'),
+            initialTabIndex: _communityInitialTabIndex,
+          ),
           _buildMyStocksPage(),
-          const CommunityScreen(),
-          const StockCompareScreen(),
-          const MarketAnalysisScreen(),
         ],
       ),
     );
@@ -530,6 +494,131 @@ class _HomeScreenState extends State<HomeScreen>
   // ─── 매매일지 페이지 ───────────────────────────────────────────────────
   Widget _buildMyStocksPage() {
     return const PortfolioScreen();
+  }
+
+  Widget _buildDashboardPage(AuthProvider auth) {
+    return _DashboardHomePage(
+      auth: auth,
+      firestoreService: _firestoreService,
+      openCommunity: () => setState(() {
+        _communityInitialTabIndex = 0;
+        _currentPage = 1;
+      }),
+      openJournal: () => setState(() {
+        _communityInitialTabIndex = 1;
+        _currentPage = 1;
+      }),
+      openStockPicks: () =>
+          _openStandalonePage(title: '추천주', child: _buildStockPicksPage(auth)),
+      openIndexList: _openIndexListPage,
+      openMarketAnalysis: () => _openStandalonePage(
+        title: '시황분석글',
+        child: const MarketAnalysisScreen(),
+      ),
+      openFeatureStocks: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MarketFeatureStocksScreen()),
+      ),
+      openFmkoreaHot: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const FmkoreaHotStocksScreen()),
+      ),
+      openInvestorFlow: () {
+        AdService.instance.showIndicatorDetailInterstitialIfReady();
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const InvestorFlowDetailScreen()),
+        );
+      },
+      openMarketSentiment: () {
+        AdService.instance.showIndicatorDetailInterstitialIfReady();
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MarketSentimentScreen()),
+        );
+      },
+      openFmkoreaIndex: () {
+        AdService.instance.showIndicatorDetailInterstitialIfReady();
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const FmkoreaIndexDetailScreen()),
+        );
+      },
+      openStockCompare: () => _openStandalonePage(
+        title: '종목 비교',
+        child: const StockCompareScreen(),
+      ),
+      watchRewardAd: () => _confirmAndWatchRewardAd(auth),
+      onTopStateChanged: (atTop) {
+        if (_homeAtTop == atTop) return;
+        setState(() => _homeAtTop = atTop);
+      },
+      topActions: _showSearch
+          ? const []
+          : _buildTopActions(auth, isDarkSurface: true, showSearchButton: true),
+    );
+  }
+
+  void _openStandalonePage({required String title, required Widget child}) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(
+            title: Text(
+              title,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontWeight: FontWeight.w800,
+                fontSize: 20,
+              ),
+            ),
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+          ),
+          body: child,
+        ),
+      ),
+    );
+  }
+
+  void _openIndexListPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          backgroundColor: _homeBg0,
+          body: Stack(
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 70),
+                child: MarketAnalysisScreen.indicators(),
+              ),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8, top: 4),
+                  child: IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: _homeLabel,
+                      size: 20,
+                    ),
+                    style: IconButton.styleFrom(
+                      backgroundColor: _homeCard.withValues(alpha: 0.78),
+                      side: BorderSide(color: _homeBorder),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   // ─── 주식저장소 페이지 ────────────────────────────────────────────────────
@@ -779,7 +868,7 @@ class _HomeScreenState extends State<HomeScreen>
                                                   canWatchToday &&
                                                       !_rewardAdLoading
                                                   ? () =>
-                                                        _watchRewardAdAndClaimXp(
+                                                        _confirmAndWatchRewardAd(
                                                           auth,
                                                         )
                                                   : null,
@@ -809,7 +898,7 @@ class _HomeScreenState extends State<HomeScreen>
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            '오늘 보상 광고: ${remainingCount}/${dailyLimit}회 남음',
+                                            '오늘 보상 광고: $remainingCount/$dailyLimit회 남음',
                                             style: TextStyle(
                                               color: isDark
                                                   ? Colors.white38
@@ -1250,6 +1339,2870 @@ class _HomeScreenState extends State<HomeScreen>
       ),
     );
   }
+}
+
+// ─── 홈 피드 ───────────────────────────────────────────────────────────────
+
+class _DashboardHomePage extends StatefulWidget {
+  const _DashboardHomePage({
+    required this.auth,
+    required this.firestoreService,
+    required this.openCommunity,
+    required this.openJournal,
+    required this.openStockPicks,
+    required this.openIndexList,
+    required this.openMarketAnalysis,
+    required this.openFeatureStocks,
+    required this.openFmkoreaHot,
+    required this.openInvestorFlow,
+    required this.openMarketSentiment,
+    required this.openFmkoreaIndex,
+    required this.openStockCompare,
+    required this.watchRewardAd,
+    required this.onTopStateChanged,
+    required this.topActions,
+  });
+
+  final AuthProvider auth;
+  final FirestoreService firestoreService;
+  final VoidCallback openCommunity;
+  final VoidCallback openJournal;
+  final VoidCallback openStockPicks;
+  final VoidCallback openIndexList;
+  final VoidCallback openMarketAnalysis;
+  final VoidCallback openFeatureStocks;
+  final VoidCallback openFmkoreaHot;
+  final VoidCallback openInvestorFlow;
+  final VoidCallback openMarketSentiment;
+  final VoidCallback openFmkoreaIndex;
+  final VoidCallback openStockCompare;
+  final VoidCallback watchRewardAd;
+  final ValueChanged<bool> onTopStateChanged;
+  final List<Widget> topActions;
+
+  @override
+  State<_DashboardHomePage> createState() => _DashboardHomePageState();
+}
+
+class _DashboardHomePageState extends State<_DashboardHomePage> {
+  late Future<(List<Post>, DocumentSnapshot?)> _postsFuture;
+  late Future<Map<String, PriceResult?>> _indicesFuture;
+
+  static const _homeIndices = [
+    ('KOSPI', '^KS11'),
+    ('KOSDAQ', '^KQ11'),
+    ('나스닥100 선물', 'NQ=F'),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _postsFuture = widget.firestoreService.getPostsPaged(limit: 40);
+    _indicesFuture = _loadIndices();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _postsFuture = widget.firestoreService.getPostsPaged(limit: 40);
+      for (final entry in _homeIndices) {
+        StockPriceService.invalidateCache(entry.$2);
+      }
+      _indicesFuture = _loadIndices();
+    });
+  }
+
+  Future<Map<String, PriceResult?>> _loadIndices() async {
+    final results = await Future.wait(
+      _homeIndices.map((entry) => StockPriceService.fetchPrice(entry.$2, 'US')),
+    );
+    return {
+      for (var i = 0; i < _homeIndices.length; i++)
+        _homeIndices[i].$1: results[i],
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      color: const Color(0xFF10B981),
+      onRefresh: _refresh,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification.metrics.axis == Axis.vertical) {
+            widget.onTopStateChanged(notification.metrics.pixels <= 12);
+          }
+          return false;
+        },
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: _homeBg0,
+            gradient: RadialGradient(
+              center: Alignment(0.7, -1.05),
+              radius: 1.2,
+              colors: [Color(0x1500D68F), _homeBg0],
+              stops: [0, 0.62],
+            ),
+          ),
+          child: SafeArea(
+            top: true,
+            bottom: false,
+            child: ListView(
+              cacheExtent: 900,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+              children: [
+                _HomeReveal(
+                  order: 0,
+                  child: _HomeHeroGreeting(
+                    auth: widget.auth,
+                    firestoreService: widget.firestoreService,
+                    topActions: widget.topActions,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _HomeReveal(
+                  order: 1,
+                  child: _DailyMissionCard(
+                    auth: widget.auth,
+                    firestoreService: widget.firestoreService,
+                    onWatchAd: widget.watchRewardAd,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _HomeReveal(
+                  order: 2,
+                  child: _DarkHomeSection(
+                    title: '실시간 시장',
+                    trailing: const _LiveStatusChip(),
+                    child: _MarketLiveCard(
+                      indicesFuture: _indicesFuture,
+                      onMore: widget.openIndexList,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _HomeReveal(
+                  order: 3,
+                  child: _AIBriefCard(onTap: widget.openMarketAnalysis),
+                ),
+                const SizedBox(height: 18),
+                _HomeReveal(
+                  order: 4,
+                  child: _TopMoversPreview(
+                    firestoreService: widget.firestoreService,
+                    openFeatureStocks: widget.openFeatureStocks,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _HomeReveal(
+                  order: 5,
+                  child: _DarkHomeSection(
+                    title: '내 관심 추천주',
+                    actionText: '더보기',
+                    onAction: widget.openStockPicks,
+                    child: _FavoritePicksPreview(
+                      firestoreService: widget.firestoreService,
+                      auth: widget.auth,
+                      openStockPicks: widget.openStockPicks,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _HomeReveal(
+                  order: 6,
+                  child: _DarkHomeSection(
+                    title: '지금 핫한 토론',
+                    actionText: '더보기',
+                    onAction: widget.openCommunity,
+                    child: _RecentPostsPreview(
+                      postsFuture: _postsFuture,
+                      auth: widget.auth,
+                      firestoreService: widget.firestoreService,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _HomeReveal(
+                  order: 7,
+                  child: _QuickMenu(
+                    openMarketAnalysis: widget.openMarketAnalysis,
+                    openFeatureStocks: widget.openFeatureStocks,
+                    openFmkoreaHot: widget.openFmkoreaHot,
+                    openInvestorFlow: widget.openInvestorFlow,
+                    openMarketSentiment: widget.openMarketSentiment,
+                    openFmkoreaIndex: widget.openFmkoreaIndex,
+                    openStockPicks: widget.openStockPicks,
+                    openStockCompare: widget.openStockCompare,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const _HomeReveal(order: 8, child: _HomeDisclaimerNote()),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DarkHomeSection extends StatelessWidget {
+  const _DarkHomeSection({
+    required this.title,
+    required this.child,
+    this.actionText,
+    this.onAction,
+    this.trailing,
+  });
+
+  final String title;
+  final Widget child;
+  final String? actionText;
+  final VoidCallback? onAction;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: _homeText(
+                    color: _homeLabel,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    height: 1.25,
+                  ),
+                ),
+              ),
+              if (trailing != null) ...[trailing!, const SizedBox(width: 8)],
+              if (actionText != null && onAction != null)
+                _DarkActionChip(label: actionText!, onTap: onAction!),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        _DarkCard(child: child),
+      ],
+    );
+  }
+}
+
+class _DarkCard extends StatelessWidget {
+  const _DarkCard({required this.child, this.onTap});
+
+  final Widget child;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final card = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _homeCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _homeBorder),
+      ),
+      child: child,
+    );
+    if (onTap == null) return card;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: card,
+    );
+  }
+}
+
+class _HomeReveal extends StatefulWidget {
+  const _HomeReveal({required this.order, required this.child});
+
+  final int order;
+  final Widget child;
+
+  @override
+  State<_HomeReveal> createState() => _HomeRevealState();
+}
+
+class _HomeRevealState extends State<_HomeReveal> {
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final delay = Duration(milliseconds: 55 * widget.order.clamp(0, 5));
+    Future<void>.delayed(delay, () {
+      if (mounted) setState(() => _visible = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      opacity: _visible ? 1 : 0.22,
+      duration: const Duration(milliseconds: 520),
+      curve: Curves.easeOutCubic,
+      child: AnimatedSlide(
+        offset: _visible ? Offset.zero : const Offset(0, 0.045),
+        duration: const Duration(milliseconds: 520),
+        curve: Curves.easeOutCubic,
+        child: AnimatedScale(
+          scale: _visible ? 1 : 0.985,
+          duration: const Duration(milliseconds: 520),
+          curve: Curves.easeOutCubic,
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
+class _Breathing extends StatefulWidget {
+  const _Breathing({
+    required this.child,
+    this.scale = 1.035,
+    this.duration = const Duration(milliseconds: 1450),
+  });
+
+  final Widget child;
+  final double scale;
+  final Duration duration;
+
+  @override
+  State<_Breathing> createState() => _BreathingState();
+}
+
+class _BreathingState extends State<_Breathing>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: widget.duration)
+      ..repeat(reverse: true);
+    _animation = Tween<double>(
+      begin: 1,
+      end: widget.scale,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(scale: _animation, child: widget.child);
+  }
+}
+
+class _PulseDot extends StatefulWidget {
+  const _PulseDot({required this.color, this.active = true});
+
+  final Color color;
+  final bool active;
+
+  @override
+  State<_PulseDot> createState() => _PulseDotState();
+}
+
+class _PulseDotState extends State<_PulseDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 980),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final t = widget.active ? _controller.value : 0.0;
+        return Transform.scale(
+          scale: 1 + (t * 0.55),
+          child: Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: widget.color.withValues(alpha: widget.active ? 1 : 0.55),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: widget.color.withValues(alpha: 0.18 + t * 0.32),
+                  blurRadius: 7 + t * 8,
+                  spreadRadius: t * 2,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AnimatedProgressBar extends StatelessWidget {
+  const _AnimatedProgressBar({
+    required this.value,
+    required this.color,
+    required this.backgroundColor,
+    required this.minHeight,
+    this.duration = const Duration(milliseconds: 780),
+  });
+
+  final double value;
+  final Color color;
+  final Color backgroundColor;
+  final double minHeight;
+  final Duration duration;
+
+  @override
+  Widget build(BuildContext context) {
+    final target = value.clamp(0.0, 1.0);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: 0, end: target),
+        duration: duration,
+        curve: Curves.easeOutCubic,
+        builder: (context, animatedValue, child) {
+          return LinearProgressIndicator(
+            value: animatedValue,
+            minHeight: minHeight,
+            backgroundColor: backgroundColor,
+            valueColor: AlwaysStoppedAnimation(color),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ShimmerText extends StatefulWidget {
+  const _ShimmerText({required this.text, required this.style});
+
+  final String text;
+  final TextStyle style;
+
+  @override
+  State<_ShimmerText> createState() => _ShimmerTextState();
+}
+
+class _ShimmerTextState extends State<_ShimmerText>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return ShaderMask(
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (rect) {
+            final width = rect.width == 0 ? 1.0 : rect.width;
+            final dx = rect.left - width + (width * 2 * _controller.value);
+            return LinearGradient(
+              colors: [_homeAccent, const Color(0xFFFFFFFF), _homeAccent],
+              stops: const [0, 0.48, 1],
+            ).createShader(Rect.fromLTWH(dx, rect.top, width, rect.height));
+          },
+          child: child,
+        );
+      },
+      child: Text(widget.text, style: widget.style),
+    );
+  }
+}
+
+class _DarkActionChip extends StatelessWidget {
+  const _DarkActionChip({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: _homeBg2,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: _homeBorder),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: _homeText(
+                color: _homeMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(Icons.chevron_right_rounded, size: 15, color: _homeFaint),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeHeroGreeting extends StatelessWidget {
+  const _HomeHeroGreeting({
+    required this.auth,
+    required this.firestoreService,
+    required this.topActions,
+  });
+
+  final AuthProvider auth;
+  final FirestoreService firestoreService;
+  final List<Widget> topActions;
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = auth.user?.uid;
+    if (uid == null || uid.isEmpty) {
+      return _HeroShell(
+        nickname: '주식저장소',
+        level: 1,
+        xpInLevel: 0,
+        xpForNext: 10,
+        streak: 0,
+        topActions: topActions,
+      );
+    }
+    return StreamBuilder<Map<String, int>>(
+      stream: firestoreService.watchUserLevelInfo(uid),
+      builder: (context, levelSnap) {
+        final data = levelSnap.data ?? const <String, int>{};
+        final progress = firestoreService.calculateLevelProgress(
+          postCount: data['postCount'] ?? 0,
+          commentCount: data['commentCount'] ?? 0,
+          attendanceCount: data['attendanceCount'] ?? 0,
+          bonusXp: data['bonusXp'] ?? 0,
+        );
+        return FutureBuilder<String?>(
+          future: firestoreService.getNickname(uid),
+          builder: (context, nickSnap) {
+            final nickname = nickSnap.data?.trim();
+            return _HeroShell(
+              nickname: nickname == null || nickname.isEmpty ? '투자자' : nickname,
+              level: progress['level']?.toInt() ?? 1,
+              xpInLevel: progress['currentXpInLevel']?.toInt() ?? 0,
+              xpForNext: progress['xpForNextLevel']?.toInt() ?? 10,
+              streak: data['attendanceCount'] ?? 0,
+              topActions: topActions,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _HeroShell extends StatelessWidget {
+  const _HeroShell({
+    required this.nickname,
+    required this.level,
+    required this.xpInLevel,
+    required this.xpForNext,
+    required this.streak,
+    required this.topActions,
+  });
+
+  final String nickname;
+  final int level;
+  final int xpInLevel;
+  final int xpForNext;
+  final int streak;
+  final List<Widget> topActions;
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = xpForNext <= 0 ? 0.0 : (xpInLevel / xpForNext).clamp(0.0, 1.0);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  '주식저장소',
+                  style: _homeText(
+                    color: _homeLabel,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    height: 1.12,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Transform.translate(
+                offset: const Offset(8, -10),
+                child: Wrap(
+                  spacing: 0,
+                  runSpacing: 0,
+                  alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: topActions,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_homeCardHi, _homeCard],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _homeBorder),
+          ),
+          child: Row(
+            children: [
+              _Breathing(
+                child: Container(
+                  width: 62,
+                  height: 62,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [_homeAccent, const Color(0xFF00A86F)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _homeAccent.withValues(alpha: 0.22),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.local_fire_department_rounded,
+                        color: Color(0xFF031A12),
+                        size: 19,
+                      ),
+                      Text(
+                        '$streak',
+                        style: _homeNumber(
+                          color: const Color(0xFF031A12),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        'DAYS',
+                        style: _homeText(
+                          color: const Color(0xB3031A12),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _ShimmerText(
+                      text: streak > 0 ? '$streak일 연속 접속 중' : '오늘부터 투자 루틴 시작',
+                      style: _homeText(
+                        color: _homeAccent,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '댓글, 기록, 출석으로 레벨을 올려보세요',
+                      style: _homeText(color: _homeFaint, fontSize: 13),
+                    ),
+                    const SizedBox(height: 9),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _homeGold.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'Lv.$level',
+                            style: _homeText(
+                              color: _homeGold,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '$xpInLevel/$xpForNext XP',
+                          style: _homeNumber(
+                            color: _homeFaint,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 5),
+                    _AnimatedProgressBar(
+                      value: pct,
+                      color: _homeAccent,
+                      backgroundColor: _homeBg3,
+                      minHeight: 5,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DailyMissionCard extends StatelessWidget {
+  const _DailyMissionCard({
+    required this.auth,
+    required this.firestoreService,
+    required this.onWatchAd,
+  });
+
+  final AuthProvider auth;
+  final FirestoreService firestoreService;
+  final VoidCallback onWatchAd;
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = auth.user?.uid;
+    final baseMissions =
+        <
+          ({
+            IconData icon,
+            String label,
+            String xp,
+            bool done,
+            VoidCallback? onTap,
+          })
+        >[
+          (
+            icon: Icons.check_rounded,
+            label: '출석 체크',
+            xp: '+5 XP',
+            done: true,
+            onTap: null,
+          ),
+          (
+            icon: Icons.mode_comment_outlined,
+            label: '댓글 1개 남기기',
+            xp: '+3 XP',
+            done: false,
+            onTap: null,
+          ),
+          (
+            icon: Icons.edit_note_rounded,
+            label: '매매일지 작성',
+            xp: '+10 XP',
+            done: false,
+            onTap: null,
+          ),
+        ];
+    return StreamBuilder<Map<String, int>>(
+      stream: uid == null || uid.isEmpty
+          ? Stream.value(const {'remainingCount': 0, 'dailyLimit': 3})
+          : firestoreService.watchRewardAdStatus(uid),
+      builder: (context, snapshot) {
+        final status =
+            snapshot.data ?? const {'remainingCount': 0, 'dailyLimit': 3};
+        final remaining = status['remainingCount'] ?? 0;
+        final limit = status['dailyLimit'] ?? 3;
+        final missions = [
+          baseMissions[0],
+          (
+            icon: Icons.ondemand_video_rounded,
+            label: '광고 보기 ($remaining/$limit)',
+            xp: '+5 XP',
+            done: remaining <= 0,
+            onTap: remaining > 0 ? onWatchAd : null,
+          ),
+          ...baseMissions.skip(1),
+        ];
+
+        return _DarkHomeSection(
+          title: '오늘의 미션',
+          trailing: Text(
+            '1/${missions.length}',
+            style: _homeNumber(
+              color: _homeAccent,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          child: Column(
+            children: [
+              for (var i = 0; i < missions.length; i++) ...[
+                _MissionRow(
+                  icon: missions[i].icon,
+                  label: missions[i].label,
+                  xp: missions[i].xp,
+                  done: missions[i].done,
+                  onTap: missions[i].onTap,
+                ),
+                if (i < missions.length - 1)
+                  Divider(height: 1, color: _homeBorder),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _MissionRow extends StatelessWidget {
+  const _MissionRow({
+    required this.icon,
+    required this.label,
+    required this.xp,
+    required this.done,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String xp;
+  final bool done;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final content = Opacity(
+      opacity: done ? 0.58 : 1,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 11),
+        child: Row(
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: done ? _homeAccent.withValues(alpha: 0.14) : _homeBg2,
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(
+                  color: done
+                      ? _homeAccent.withValues(alpha: 0.34)
+                      : _homeBorder,
+                ),
+              ),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0.82, end: 1),
+                duration: const Duration(milliseconds: 420),
+                curve: Curves.elasticOut,
+                builder: (context, scale, child) {
+                  return Transform.scale(scale: scale, child: child);
+                },
+                child: Icon(
+                  done ? Icons.check_rounded : icon,
+                  size: 16,
+                  color: _homeAccent,
+                ),
+              ),
+            ),
+            const SizedBox(width: 11),
+            Expanded(
+              child: Text(
+                label,
+                style: _homeText(
+                  color: _homeLabel,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              xp,
+              style: _homeNumber(
+                color: done ? _homeFaint : _homeAccent,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (onTap == null) return content;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: content,
+    );
+  }
+}
+
+class _LiveStatusChip extends StatelessWidget {
+  const _LiveStatusChip();
+
+  @override
+  Widget build(BuildContext context) {
+    return _MarketClock(
+      builder: (context, status) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _PulseDot(
+              color: status.isOpen ? _homeUp : _homeFaint,
+              active: status.isOpen,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              status.isOpen ? '${status.sessionName} 장중' : '장 대기',
+              style: _homeText(
+                color: status.isOpen ? _homeUp : _homeFaint,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _MarketClock extends StatefulWidget {
+  const _MarketClock({required this.builder});
+
+  final Widget Function(BuildContext context, _MarketSessionStatus status)
+  builder;
+
+  @override
+  State<_MarketClock> createState() => _MarketClockState();
+}
+
+class _MarketClockState extends State<_MarketClock> {
+  late Timer _timer;
+  late DateTime _now;
+
+  @override
+  void initState() {
+    super.initState();
+    _now = _nowInKst();
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() => _now = _nowInKst());
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.builder(context, _MarketSessionStatus.from(_now));
+  }
+
+  DateTime _nowInKst() {
+    return DateTime.now().toUtc().add(const Duration(hours: 9));
+  }
+}
+
+class _MarketSessionStatus {
+  const _MarketSessionStatus({
+    required this.isOpen,
+    required this.sessionName,
+    required this.target,
+    required this.remaining,
+  });
+
+  final bool isOpen;
+  final String sessionName;
+  final DateTime target;
+  final Duration remaining;
+
+  String get label => isOpen ? '$sessionName 마감까지' : '$sessionName 시작까지';
+
+  String get remainingText {
+    final totalMinutes = remaining.inMinutes <= 0 ? 0 : remaining.inMinutes;
+    final hours = totalMinutes ~/ 60;
+    final minutes = totalMinutes % 60;
+    if (hours <= 0) return '$minutes분';
+    return '$hours시간 ${minutes.toString().padLeft(2, '0')}분';
+  }
+
+  static _MarketSessionStatus from(DateTime now) {
+    final sessions = _buildSessions(now);
+    for (final session in sessions) {
+      if (!now.isBefore(session.start) && now.isBefore(session.end)) {
+        return _MarketSessionStatus(
+          isOpen: true,
+          sessionName: session.name,
+          target: session.end,
+          remaining: session.end.difference(now),
+        );
+      }
+    }
+
+    final next = sessions.firstWhere((session) => session.start.isAfter(now));
+    return _MarketSessionStatus(
+      isOpen: false,
+      sessionName: next.name,
+      target: next.start,
+      remaining: next.start.difference(now),
+    );
+  }
+
+  static List<({String name, DateTime start, DateTime end})> _buildSessions(
+    DateTime now,
+  ) {
+    final today = DateTime(now.year, now.month, now.day);
+    final sessions = <({String name, DateTime start, DateTime end})>[];
+    for (var offset = -1; offset <= 8; offset++) {
+      final day = today.add(Duration(days: offset));
+      if (day.weekday >= DateTime.monday && day.weekday <= DateTime.friday) {
+        sessions.add((
+          name: '국장',
+          start: DateTime(day.year, day.month, day.day, 9),
+          end: DateTime(day.year, day.month, day.day, 15, 30),
+        ));
+        sessions.add((
+          name: '미장',
+          start: DateTime(day.year, day.month, day.day, 22, 30),
+          end: DateTime(
+            day.year,
+            day.month,
+            day.day,
+          ).add(const Duration(days: 1, hours: 5)),
+        ));
+      }
+    }
+    sessions.sort((a, b) => a.start.compareTo(b.start));
+    return sessions;
+  }
+}
+
+class _MarketLiveCard extends StatelessWidget {
+  const _MarketLiveCard({required this.indicesFuture, required this.onMore});
+
+  final Future<Map<String, PriceResult?>> indicesFuture;
+  final VoidCallback onMore;
+
+  @override
+  Widget build(BuildContext context) {
+    return _MarketClock(
+      builder: (context, status) {
+        return Column(
+          children: [
+            Row(
+              children: [
+                Text(
+                  status.label,
+                  style: _homeText(
+                    color: _homeMuted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  status.remainingText,
+                  style: _homeNumber(
+                    color: _homeLabel,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Divider(height: 1, color: _homeBorder),
+            ),
+            _MajorIndicesPreview(
+              indicesFuture: indicesFuture,
+              maxItems: 3,
+              entries: const [
+                ('KOSPI', '^KS11'),
+                ('KOSDAQ', '^KQ11'),
+                ('나스닥100 선물', 'NQ=F'),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Divider(height: 1, color: _homeBorder),
+            ),
+            InkWell(
+              onTap: onMore,
+              borderRadius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Text(
+                      '지수 전체 보기',
+                      style: _homeText(
+                        color: _homeMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const Spacer(),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: _homeFaint,
+                      size: 18,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _AIBriefCard extends StatelessWidget {
+  const _AIBriefCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  String _formatSlotTime(String? slotLabel, dynamic generatedAt) {
+    if (slotLabel != null) return 'AI 한 줄 시황 · 오늘 $slotLabel';
+    if (generatedAt == null) return 'AI 한 줄 시황';
+    try {
+      final dt = (generatedAt as Timestamp).toDate().toLocal();
+      final h = dt.hour.toString().padLeft(2, '0');
+      final m = dt.minute.toString().padLeft(2, '0');
+      return 'AI 한 줄 시황 · 오늘 $h:$m';
+    } catch (_) {
+      return 'AI 한 줄 시황';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('ai_briefs')
+          .doc('latest')
+          .snapshots(),
+      builder: (context, snapshot) {
+        final data =
+            snapshot.hasData && snapshot.data!.exists
+                ? snapshot.data!.data() as Map<String, dynamic>?
+                : null;
+
+        final brief = data?['brief'] as String?;
+        final slotLabel = data?['slotLabel'] as String?;
+        final generatedAt = data?['generatedAt'];
+
+        // 데이터 없을 때 skeleton shimmer 느낌으로 로딩 표시
+        if (!snapshot.hasData || data == null || brief == null) {
+          return _DarkCard(
+            onTap: onTap,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.auto_awesome_rounded,
+                      size: 14,
+                      color: _homeAccent,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'AI 한 줄 시황',
+                      style: _homeText(
+                        color: _homeAccent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  height: 14,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: _homeBorder,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  height: 14,
+                  width: 200,
+                  decoration: BoxDecoration(
+                    color: _homeBorder,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                const SizedBox(height: 9),
+                Text(
+                  '전체 시황분석 보기',
+                  style: _homeText(
+                    color: _homeAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return _DarkCard(
+          onTap: onTap,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.auto_awesome_rounded,
+                    size: 14,
+                    color: _homeAccent,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _formatSlotTime(slotLabel, generatedAt),
+                    style: _homeText(
+                      color: _homeAccent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Text(
+                brief,
+                style: _homeText(
+                  color: _homeLabel,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 9),
+              Text(
+                '전체 시황분석 보기',
+                style: _homeText(
+                  color: _homeAccent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TopMoversPreview extends StatelessWidget {
+  const _TopMoversPreview({
+    required this.firestoreService,
+    required this.openFeatureStocks,
+  });
+
+  final FirestoreService firestoreService;
+  final VoidCallback openFeatureStocks;
+
+  @override
+  Widget build(BuildContext context) {
+    return _DarkHomeSection(
+      title: '특징주',
+      actionText: '더보기',
+      onAction: openFeatureStocks,
+      child: StreamBuilder<List<MarketFeatureStock>>(
+        stream: firestoreService.getMarketFeatureStocks(limit: 8),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const _PreviewLoading(height: 120);
+          }
+          final visible = (snapshot.data ?? <MarketFeatureStock>[])
+              .take(4)
+              .toList();
+          if (visible.isEmpty) {
+            return const _EmptyPreview(text: '표시할 특징주가 없습니다.');
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '거래대금·급등·거래량 포착 종목',
+                style: _homeText(
+                  color: _homeFaint,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 130,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: visible.length,
+                  separatorBuilder: (_, separatorIndex) =>
+                      const SizedBox(width: 10),
+                  itemBuilder: (context, index) {
+                    return _FeatureStockTile(
+                      item: visible[index],
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MarketFeatureStockDetailScreen(
+                            item: visible[index],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _FeatureStockTile extends StatelessWidget {
+  const _FeatureStockTile({required this.item, required this.onTap});
+
+  final MarketFeatureStock item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isUp = item.changeRate >= 0;
+    final moveColor = isUp ? _homeUp : _homeDown;
+    final title = item.title.isNotEmpty ? item.title : _featureTitle(item);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        width: 150,
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          color: _homeBg2,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _homeBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _homeAccent.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    item.market,
+                    style: _homeNumber(
+                      color: _homeAccent,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${isUp ? '+' : ''}${item.changeRate.toStringAsFixed(1)}%',
+                  style: _homeNumber(
+                    color: moveColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              item.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _homeText(
+                color: _homeLabel,
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              item.ticker,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _homeNumber(
+                color: _homeFaint,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: _homeText(
+                color: _homeMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              _formatFeatureMetric(item),
+              style: _homeNumber(
+                color: _homeFaint,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _featureTitle(MarketFeatureStock item) {
+    switch (item.pattern) {
+      case 'volume_surge_pullback_tail':
+        return '급등 후 U자 눌림';
+      case 'volume_spike_breakout_dry_up_rise':
+        return '거래량 감소 상승';
+      case 'volume_spike_dry_up_pullback_support':
+        return '거래량 감소 눌림 지지';
+      default:
+        return item.group;
+    }
+  }
+
+  String _formatFeatureMetric(MarketFeatureStock item) {
+    if (item.volumeRatio > 0) {
+      return '거래량 ${item.volumeRatio.toStringAsFixed(1)}x';
+    }
+    return '점수 ${item.score}';
+  }
+}
+
+class _HomeDisclaimerNote extends StatelessWidget {
+  const _HomeDisclaimerNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.02),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _homeBorder),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, size: 15, color: _homeFaint),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              '화면의 정보는 매수/매도 권유가 아닙니다. 투자 판단과 결과는 본인 책임입니다.',
+              style: _homeText(color: _homeFaint, fontSize: 11, height: 1.55),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+TextStyle _homeText({
+  required Color color,
+  required double fontSize,
+  FontWeight fontWeight = FontWeight.w400,
+  double? height,
+}) {
+  return TextStyle(
+    fontFamily: 'Pretendard',
+    color: color,
+    fontSize: fontSize,
+    fontWeight: fontWeight,
+    height: height,
+  );
+}
+
+TextStyle _homeNumber({
+  required Color color,
+  required double fontSize,
+  FontWeight fontWeight = FontWeight.w600,
+  double? height,
+}) {
+  return TextStyle(
+    fontFamily: 'RobotoMono',
+    color: color,
+    fontSize: fontSize,
+    fontWeight: fontWeight,
+    height: height,
+  );
+}
+
+class _MajorIndicesPreview extends StatelessWidget {
+  const _MajorIndicesPreview({
+    required this.indicesFuture,
+    this.maxItems,
+    this.entries,
+  });
+
+  final Future<Map<String, PriceResult?>> indicesFuture;
+  final int? maxItems;
+  final List<(String, String)>? entries;
+
+  static const indices = [
+    ('KOSPI', '^KS11'),
+    ('KOSDAQ', '^KQ11'),
+    ('S&P 500', '^GSPC'),
+    ('NASDAQ', '^IXIC'),
+    ('USD/KRW', 'KRW=X'),
+    ('나스닥100 선물', 'NQ=F'),
+    ('WTI 오일', 'CL=F'),
+  ];
+
+  static const _descriptions = {
+    'KOSPI': '한국 대형주 종합지수',
+    'KOSDAQ': '한국 성장주 중심 시장',
+    'S&P 500': '미국 대표 500대 기업',
+    'NASDAQ': '미국 기술주 중심 지수',
+    'USD/KRW': '원달러 환율',
+    '나스닥100 선물': '미국 장전 분위기',
+    'WTI 오일': '국제유가 선행 흐름',
+  };
+
+  static const _accentColors = {
+    'KOSPI': Color(0xFF3182F6),
+    'KOSDAQ': Color(0xFF00C4B4),
+    'S&P 500': Color(0xFF6366F1),
+    'NASDAQ': Color(0xFF8B5CF6),
+    'USD/KRW': Color(0xFFF59E0B),
+    '나스닥100 선물': Color(0xFFF97316),
+    'WTI 오일': Color(0xFFEF4444),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, PriceResult?>>(
+      future: indicesFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _PreviewLoading(height: 360);
+        }
+        final data = snapshot.data ?? {};
+        final source = entries ?? _MajorIndicesPreview.indices;
+        final visibleIndices = maxItems == null
+            ? source
+            : source.take(maxItems!).toList();
+        return Column(
+          children: [
+            for (var i = 0; i < visibleIndices.length; i++) ...[
+              _IndexPreviewRow(
+                name: visibleIndices[i].$1,
+                symbol: visibleIndices[i].$2,
+                description: _descriptions[visibleIndices[i].$1] ?? '',
+                accent:
+                    _accentColors[visibleIndices[i].$1] ??
+                    const Color(0xFF3182F6),
+                result: data[visibleIndices[i].$1],
+              ),
+              if (i < visibleIndices.length - 1) const _ListDivider(indent: 40),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _IndexPreviewRow extends StatelessWidget {
+  const _IndexPreviewRow({
+    required this.name,
+    required this.symbol,
+    required this.description,
+    required this.accent,
+    required this.result,
+  });
+
+  final String name;
+  final String symbol;
+  final String description;
+  final Color accent;
+  final PriceResult? result;
+
+  @override
+  Widget build(BuildContext context) {
+    final isUp = result?.isUp ?? true;
+    final moveColor = isUp ? _homeUp : _homeDown;
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => IndexDetailScreen(
+              name: name,
+              symbol: symbol,
+              initialPrice: result,
+            ),
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: _IndexBadgeGlyph(name: name, accent: accent, size: 16),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _homeText(
+                      color: _homeLabel,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      height: 1.25,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _homeText(color: _homeFaint, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            _IndexSparkline(symbol: symbol, color: moveColor),
+            const SizedBox(width: 18),
+            if (result == null)
+              Text(
+                '--',
+                style: _homeNumber(
+                  color: _homeFaint,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              )
+            else
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    _displayIndexValue(name, result!),
+                    style: _homeNumber(
+                      color: _homeLabel,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${isUp ? '+' : ''}${result!.changeRate.toStringAsFixed(2)}%',
+                    style: _homeNumber(
+                      color: moveColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IndexBadgeGlyph extends StatelessWidget {
+  const _IndexBadgeGlyph({
+    required this.name,
+    required this.accent,
+    required this.size,
+  });
+
+  final String name;
+  final Color accent;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    if (name == 'USD/KRW') {
+      return Center(
+        child: Text('💱', style: TextStyle(fontSize: size, height: 1)),
+      );
+    }
+    return Icon(_indexIconFor(name), color: accent, size: size);
+  }
+
+  IconData _indexIconFor(String name) {
+    switch (name) {
+      case 'KOSPI':
+      case 'KOSDAQ':
+        return Icons.show_chart_rounded;
+      case 'S&P 500':
+        return Icons.account_balance_rounded;
+      case 'NASDAQ':
+        return Icons.memory_rounded;
+      case 'WTI 오일':
+        return Icons.local_gas_station_rounded;
+      default:
+        return Icons.trending_up_rounded;
+    }
+  }
+}
+
+class _IndexSparkline extends StatefulWidget {
+  const _IndexSparkline({required this.symbol, required this.color});
+
+  final String symbol;
+  final Color color;
+
+  @override
+  State<_IndexSparkline> createState() => _IndexSparklineState();
+}
+
+class _IndexSparklineState extends State<_IndexSparkline> {
+  late Future<List<double>> _historyFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _historyFuture = _loadHistory();
+  }
+
+  @override
+  void didUpdateWidget(covariant _IndexSparkline oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.symbol != widget.symbol) {
+      _historyFuture = _loadHistory();
+    }
+  }
+
+  Future<List<double>> _loadHistory() {
+    return StockPriceService.fetchHistory(
+      widget.symbol,
+      'US',
+      range: '1d',
+      interval: '5m',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<double>>(
+      future: _historyFuture,
+      builder: (context, snapshot) {
+        final values = (snapshot.data ?? const <double>[])
+            .where((value) => value.isFinite && value > 0)
+            .toList();
+        return SizedBox(
+          width: 50,
+          height: 18,
+          child: values.length < 2
+              ? TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 620),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, progress, child) {
+                    return CustomPaint(
+                      painter: _SparklinePainter(
+                        values: const [1, 1],
+                        color: widget.color.withValues(alpha: 0.35),
+                        progress: progress,
+                      ),
+                    );
+                  },
+                )
+              : TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0, end: 1),
+                  duration: const Duration(milliseconds: 720),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, progress, child) {
+                    return CustomPaint(
+                      painter: _SparklinePainter(
+                        values: values,
+                        color: widget.color,
+                        progress: progress,
+                      ),
+                    );
+                  },
+                ),
+        );
+      },
+    );
+  }
+}
+
+class _SparklinePainter extends CustomPainter {
+  const _SparklinePainter({
+    required this.values,
+    required this.color,
+    this.progress = 1,
+  });
+
+  final List<double> values;
+  final Color color;
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.length < 2) return;
+    var minValue = values.first;
+    var maxValue = values.first;
+    for (final value in values) {
+      if (value < minValue) minValue = value;
+      if (value > maxValue) maxValue = value;
+    }
+    final span = (maxValue - minValue).abs() < 0.001
+        ? 1.0
+        : maxValue - minValue;
+    final points = <Offset>[
+      for (var i = 0; i < values.length; i++)
+        Offset(
+          size.width * i / (values.length - 1),
+          size.height - ((values[i] - minValue) / span * size.height),
+        ),
+    ];
+    final shownPoints = _visiblePoints(points);
+    if (shownPoints.length < 2) return;
+    final linePath = Path()..moveTo(shownPoints.first.dx, shownPoints.first.dy);
+    for (final point in shownPoints.skip(1)) {
+      linePath.lineTo(point.dx, point.dy);
+    }
+    final fillPath = Path.from(linePath)
+      ..lineTo(shownPoints.last.dx, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(
+      fillPath,
+      Paint()
+        ..color = color.withValues(alpha: 0.12)
+        ..style = PaintingStyle.fill,
+    );
+    canvas.drawPath(
+      linePath,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
+
+  List<Offset> _visiblePoints(List<Offset> points) {
+    final clamped = progress.clamp(0.0, 1.0);
+    if (clamped >= 1) return points;
+    final end = (points.length - 1) * clamped;
+    final whole = end.floor();
+    final fraction = end - whole;
+    final shown = <Offset>[points.first];
+    for (var i = 1; i <= whole && i < points.length; i++) {
+      shown.add(points[i]);
+    }
+    if (whole + 1 < points.length) {
+      final from = points[whole];
+      final to = points[whole + 1];
+      shown.add(Offset.lerp(from, to, fraction) ?? from);
+    }
+    return shown;
+  }
+
+  @override
+  bool shouldRepaint(covariant _SparklinePainter oldDelegate) {
+    return oldDelegate.values != values ||
+        oldDelegate.color != color ||
+        oldDelegate.progress != progress;
+  }
+}
+
+String _displayIndexValue(String name, PriceResult result) {
+  if (name == 'USD/KRW') {
+    return '₩${NumberFormat('#,###').format(result.price.toInt())}';
+  }
+  if (result.isKrw) {
+    return NumberFormat('#,###').format(result.price.toInt());
+  }
+  return NumberFormat('#,##0.00').format(result.price);
+}
+
+class _ListDivider extends StatelessWidget {
+  const _ListDivider({this.indent = 16});
+
+  final double indent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Divider(height: 1, indent: indent, color: _homeBorder);
+  }
+}
+
+class _RecentPostsPreview extends StatelessWidget {
+  const _RecentPostsPreview({
+    required this.postsFuture,
+    required this.auth,
+    required this.firestoreService,
+  });
+
+  final Future<(List<Post>, DocumentSnapshot?)> postsFuture;
+  final AuthProvider auth;
+  final FirestoreService firestoreService;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<(List<Post>, DocumentSnapshot?)>(
+      future: postsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _PreviewLoading(height: 160);
+        }
+        return FutureBuilder<List<_HotPostCandidate>>(
+          future: _loadHotPosts(snapshot.data?.$1 ?? const <Post>[]),
+          builder: (context, hotSnapshot) {
+            if (hotSnapshot.connectionState == ConnectionState.waiting) {
+              return const _PreviewLoading(height: 160);
+            }
+            final posts = hotSnapshot.data ?? const <_HotPostCandidate>[];
+            if (posts.isEmpty) {
+              return _EmptyPreview(text: '좋아요와 댓글 합산 5개 초과인 최신 토론이 없습니다.');
+            }
+            return Column(
+              children: [
+                for (var i = 0; i < posts.length; i++) ...[
+                  _PostPreviewRow(
+                    post: posts[i].post,
+                    commentCount: posts[i].commentCount,
+                    isOwn: auth.user?.uid == posts[i].post.uid,
+                    onTap: () => _openPost(context, posts[i].post),
+                  ),
+                  if (i < posts.length - 1) const _ListDivider(),
+                ],
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<List<_HotPostCandidate>> _loadHotPosts(List<Post> posts) async {
+    final candidates = await Future.wait(
+      posts.map((post) async {
+        final commentCount = await firestoreService.getPostCommentCount(
+          post.id,
+        );
+        return _HotPostCandidate(post: post, commentCount: commentCount);
+      }),
+    );
+    return candidates
+        .where((item) => item.post.likes + item.commentCount > 5)
+        .take(4)
+        .toList();
+  }
+
+  Future<void> _openPost(BuildContext context, Post post) async {
+    var isLiked = false;
+    final uid = auth.user?.uid;
+    if (uid != null && uid.isNotEmpty) {
+      isLiked = await firestoreService.hasLikedPost(post.id, uid);
+      if (!context.mounted) return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PostDetailScreen(
+          post: post,
+          isOwn: uid != null && uid == post.uid,
+          isLiked: isLiked,
+          likeCount: post.likes,
+        ),
+      ),
+    );
+  }
+}
+
+class _HotPostCandidate {
+  const _HotPostCandidate({required this.post, required this.commentCount});
+
+  final Post post;
+  final int commentCount;
+}
+
+class _PostPreviewRow extends StatelessWidget {
+  const _PostPreviewRow({
+    required this.post,
+    required this.commentCount,
+    required this.isOwn,
+    required this.onTap,
+  });
+
+  final Post post;
+  final int commentCount;
+  final bool isOwn;
+  final VoidCallback onTap;
+
+  static final _imgRegex = RegExp(r'!\[\]\(([^)]+)\)');
+
+  String get _textPreview => post.content
+      .replaceAll(_imgRegex, '')
+      .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+      .trim();
+
+  @override
+  Widget build(BuildContext context) {
+    final textContent = _textPreview;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                UserLevelAvatar(
+                  uid: post.uid,
+                  radius: 10,
+                  backgroundColor: _homeBg3,
+                  textStyle: _homeNumber(
+                    color: _homeFaint,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    post.nickname,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _homeText(
+                      color: _homeFaint,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                Text(
+                  _relativeTime(post.createdAt),
+                  style: _homeText(color: _homeFaint, fontSize: 11),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              post.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: _homeText(
+                color: _homeLabel,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                height: 1.4,
+              ),
+            ),
+            if (textContent.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                textContent,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _homeText(color: _homeFaint, fontSize: 13, height: 1.45),
+              ),
+            ],
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                _PostMetric(
+                  icon: Icons.mode_comment_outlined,
+                  label: '$commentCount',
+                ),
+                const SizedBox(width: 14),
+                _PostMetric(
+                  icon: Icons.favorite_rounded,
+                  label: '${post.likes}',
+                ),
+                const Spacer(),
+                Icon(Icons.chevron_right_rounded, color: _homeFaint, size: 18),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PostMetric extends StatelessWidget {
+  const _PostMetric({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: _homeFaint, size: 12),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: _homeNumber(
+            color: _homeMuted,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FavoritePicksPreview extends StatelessWidget {
+  const _FavoritePicksPreview({
+    required this.firestoreService,
+    required this.auth,
+    required this.openStockPicks,
+  });
+
+  final FirestoreService firestoreService;
+  final AuthProvider auth;
+  final VoidCallback openStockPicks;
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = auth.user?.uid;
+    if (uid == null || uid.isEmpty) {
+      return _EmptyPreview(text: '로그인하면 관심 추천주를 모아볼 수 있습니다.');
+    }
+
+    return StreamBuilder<List<String>>(
+      stream: firestoreService.getFavoriteIds(uid),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _PreviewLoading(height: 120);
+        }
+        final favoriteIds = (snapshot.data ?? []).toSet();
+        if (favoriteIds.isEmpty) {
+          return _EmptyPreview(text: '아직 관심 추천주가 없습니다.');
+        }
+
+        return StreamBuilder<List<StockPick>>(
+          stream: firestoreService.getStockPicks(),
+          builder: (context, picksSnapshot) {
+            if (picksSnapshot.connectionState == ConnectionState.waiting) {
+              return const _PreviewLoading(height: 120);
+            }
+            final picks = (picksSnapshot.data ?? [])
+                .where((pick) => favoriteIds.contains(pick.id))
+                .toList();
+            if (picks.isEmpty) {
+              return _EmptyPreview(text: '관심 추천주가 종료되었거나 표시할 항목이 없습니다.');
+            }
+            return _FavoritePerformanceList(picks: picks);
+          },
+        );
+      },
+    );
+  }
+}
+
+class _PerformanceMetric extends StatelessWidget {
+  const _PerformanceMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: _homeText(
+              color: _homeFaint,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            value,
+            style: _homeNumber(
+              color: color,
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FavoritePerformanceList extends StatefulWidget {
+  const _FavoritePerformanceList({required this.picks});
+
+  final List<StockPick> picks;
+
+  @override
+  State<_FavoritePerformanceList> createState() =>
+      _FavoritePerformanceListState();
+}
+
+class _FavoritePerformanceListState extends State<_FavoritePerformanceList> {
+  late Future<Map<String, PriceResult?>> _pricesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _pricesFuture = _loadPrices();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FavoritePerformanceList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldKey = oldWidget.picks.map((pick) => pick.id).join(',');
+    final newKey = widget.picks.map((pick) => pick.id).join(',');
+    if (oldKey != newKey) {
+      _pricesFuture = _loadPrices();
+    }
+  }
+
+  Future<Map<String, PriceResult?>> _loadPrices() async {
+    final results = await Future.wait(
+      widget.picks.map(
+        (pick) => StockPriceService.fetchPrice(pick.ticker, pick.market),
+      ),
+    );
+    return {
+      for (var i = 0; i < widget.picks.length; i++)
+        widget.picks[i].id: results[i],
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, PriceResult?>>(
+      future: _pricesFuture,
+      builder: (context, snapshot) {
+        final prices = snapshot.data ?? const <String, PriceResult?>{};
+        final loading = snapshot.connectionState == ConnectionState.waiting;
+        final returns = widget.picks.map((pick) {
+          final current = _currentPriceFor(pick, prices[pick.id]);
+          if (pick.buyPrice <= 0) return 0.0;
+          return ((current - pick.buyPrice) / pick.buyPrice) * 100;
+        }).toList();
+        final avgReturn =
+            returns.fold<double>(0, (total, value) => total + value) /
+            returns.length;
+        final hitTarget = widget.picks.where((pick) {
+          final current = _currentPriceFor(pick, prices[pick.id]);
+          return current >= pick.targetPrice;
+        }).length;
+        final avgColor = avgReturn >= 0 ? _homeUp : _homeDown;
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _PerformanceMetric(
+                      label: loading ? '평균 수익률 조회중' : '평균 수익률',
+                      value:
+                          '${avgReturn >= 0 ? '+' : ''}${avgReturn.toStringAsFixed(2)}%',
+                      color: avgColor,
+                    ),
+                  ),
+                  Container(width: 1, height: 42, color: _homeBorder),
+                  Expanded(
+                    child: _PerformanceMetric(
+                      label: '목표 도달',
+                      value: '$hitTarget/${widget.picks.length}',
+                      color: _homeAccent,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Divider(height: 1, color: _homeBorder),
+            for (var i = 0; i < widget.picks.length; i++) ...[
+              _FavoritePerformanceRow(
+                pick: widget.picks[i],
+                priceResult: prices[widget.picks[i].id],
+                loadingPrice: loading,
+              ),
+              if (i < widget.picks.length - 1) const _ListDivider(),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  double _currentPriceFor(StockPick pick, PriceResult? priceResult) {
+    return priceResult?.price ?? pick.currentPrice ?? pick.buyPrice;
+  }
+}
+
+class _FavoritePerformanceRow extends StatelessWidget {
+  const _FavoritePerformanceRow({
+    required this.pick,
+    required this.priceResult,
+    required this.loadingPrice,
+  });
+
+  final StockPick pick;
+  final PriceResult? priceResult;
+  final bool loadingPrice;
+
+  @override
+  Widget build(BuildContext context) {
+    final current = priceResult?.price ?? pick.currentPrice ?? pick.buyPrice;
+    final returnRate = pick.buyPrice > 0
+        ? ((current - pick.buyPrice) / pick.buyPrice) * 100
+        : 0.0;
+    final progress = _targetProgress(current);
+    final returnColor = returnRate >= 0 ? _homeUp : _homeDown;
+    final todayRate = priceResult?.changeRate;
+    final todayColor = (todayRate ?? 0) >= 0 ? _homeUp : _homeDown;
+    final todayChangeText = priceResult == null
+        ? '--'
+        : '${todayRate! >= 0 ? '+' : ''}${todayRate.toStringAsFixed(2)}%';
+    final currentText = loadingPrice && priceResult == null
+        ? '조회중'
+        : _formatHomePickPrice(current, pick.market);
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => StockDetailScreen(pick: pick)),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        pick.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _homeText(
+                          color: _homeLabel,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${pick.ticker} · ${pick.market}',
+                        style: _homeNumber(
+                          color: _homeFaint,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      currentText,
+                      style: _homeNumber(
+                        color: _homeLabel,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '현재가',
+                      style: _homeText(color: _homeFaint, fontSize: 11),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 11),
+            Row(
+              children: [
+                Expanded(
+                  child: _FavoriteMiniStat(
+                    label: '내 수익률',
+                    value:
+                        '${returnRate >= 0 ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
+                    color: returnColor,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _FavoriteMiniStat(
+                    label: priceResult == null ? '오늘 변동' : '오늘 변동',
+                    value: todayChangeText,
+                    subValue: priceResult == null
+                        ? null
+                        : _formatTodayChange(priceResult!, pick.market),
+                    color: priceResult == null ? _homeFaint : todayColor,
+                    emphasized: priceResult != null,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _AnimatedProgressBar(
+              value: progress,
+              color: returnColor,
+              backgroundColor: _homeBg3,
+              minHeight: 4,
+              duration: const Duration(milliseconds: 680),
+            ),
+            const SizedBox(height: 5),
+            Row(
+              children: [
+                Text('추천가', style: _homeText(color: _homeFaint, fontSize: 11)),
+                const Spacer(),
+                Text(
+                  '목표 ${(progress * 100).round()}%',
+                  style: _homeNumber(
+                    color: _homeAccent,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Spacer(),
+                Text('목표가', style: _homeText(color: _homeFaint, fontSize: 11)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  double _targetProgress(double currentPrice) {
+    final total = pick.targetPrice - pick.buyPrice;
+    if (total == 0) return 0;
+    return ((currentPrice - pick.buyPrice) / total).clamp(0.0, 1.0);
+  }
+}
+
+class _FavoriteMiniStat extends StatelessWidget {
+  const _FavoriteMiniStat({
+    required this.label,
+    required this.value,
+    required this.color,
+    this.subValue,
+    this.emphasized = false,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+  final String? subValue;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: emphasized
+            ? color.withValues(alpha: 0.11)
+            : Colors.white.withValues(alpha: 0.025),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: emphasized ? color.withValues(alpha: 0.24) : _homeBorder,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: _homeText(
+              color: _homeFaint,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _homeNumber(
+                    color: color,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              if (subValue != null) ...[
+                const SizedBox(width: 4),
+                Flexible(
+                  child: Text(
+                    subValue!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: _homeNumber(
+                      color: color.withValues(alpha: 0.8),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _formatHomePickPrice(double price, String market) {
+  if (market == 'US') return '\$${price.toStringAsFixed(2)}';
+  return '₩${NumberFormat('#,###').format(price.round())}';
+}
+
+String _formatTodayChange(PriceResult result, String market) {
+  final sign = result.change >= 0 ? '+' : '';
+  if (market == 'US') return '$sign${result.change.toStringAsFixed(2)}';
+  return '$sign${NumberFormat('#,###').format(result.change.round())}';
+}
+
+class _QuickMenu extends StatelessWidget {
+  const _QuickMenu({
+    required this.openMarketAnalysis,
+    required this.openFeatureStocks,
+    required this.openFmkoreaHot,
+    required this.openInvestorFlow,
+    required this.openMarketSentiment,
+    required this.openFmkoreaIndex,
+    required this.openStockPicks,
+    required this.openStockCompare,
+  });
+
+  final VoidCallback openMarketAnalysis;
+  final VoidCallback openFeatureStocks;
+  final VoidCallback openFmkoreaHot;
+  final VoidCallback openInvestorFlow;
+  final VoidCallback openMarketSentiment;
+  final VoidCallback openFmkoreaIndex;
+  final VoidCallback openStockPicks;
+  final VoidCallback openStockCompare;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            '둘러보기',
+            style: _homeText(
+              color: _homeLabel,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+          childAspectRatio: 2.35,
+          children: [
+            _QuickMenuTile(
+              icon: Icons.analytics_outlined,
+              label: '시황분석',
+              onTap: openMarketAnalysis,
+            ),
+            _QuickMenuTile(
+              icon: Icons.show_chart_rounded,
+              label: '운영자 추천주',
+              onTap: openStockPicks,
+              emphasized: true,
+            ),
+            _QuickMenuTile(
+              icon: Icons.bolt_rounded,
+              label: '오늘의 특징주',
+              onTap: openFeatureStocks,
+            ),
+            _QuickMenuTile(
+              icon: Icons.compare_arrows_rounded,
+              label: '종목 비교',
+              onTap: openStockCompare,
+            ),
+            _QuickMenuTile(
+              icon: Icons.local_fire_department_rounded,
+              label: '펨코 HOT 종목',
+              onTap: openFmkoreaHot,
+              animated: true,
+            ),
+            _QuickMenuTile(
+              icon: Icons.candlestick_chart_rounded,
+              label: '외인 · 기관 수급',
+              onTap: openInvestorFlow,
+            ),
+            _QuickMenuTile(
+              icon: Icons.psychology_alt_rounded,
+              label: '시장심리지표',
+              onTap: openMarketSentiment,
+            ),
+            _QuickMenuTile(
+              icon: Icons.forum_rounded,
+              label: '펨코지수',
+              onTap: openFmkoreaIndex,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _QuickMenuTile extends StatelessWidget {
+  const _QuickMenuTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.emphasized = false,
+    this.animated = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool emphasized;
+  final bool animated;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: emphasized ? _homeAccent.withValues(alpha: 0.12) : _homeBg3,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: emphasized
+                ? _homeAccent.withValues(alpha: 0.36)
+                : _homeBorder,
+          ),
+        ),
+        child: Row(
+          children: [
+            emphasized || animated
+                ? _Breathing(
+                    scale: emphasized ? 1.1 : 1.16,
+                    duration: Duration(milliseconds: emphasized ? 1050 : 850),
+                    child: Icon(icon, color: _homeAccent, size: 22),
+                  )
+                : Icon(icon, color: _homeAccent, size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _homeText(
+                  color: _homeLabel,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PreviewLoading extends StatelessWidget {
+  const _PreviewLoading({required this.height});
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: height,
+      child: const Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFF10B981),
+          strokeWidth: 2,
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyPreview extends StatelessWidget {
+  const _EmptyPreview({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        child: Text(
+          text,
+          style: _homeText(
+            color: _homeFaint,
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _relativeTime(DateTime date) {
+  final diff = DateTime.now().difference(date);
+  if (diff.inMinutes < 1) return '방금';
+  if (diff.inHours < 1) return '${diff.inMinutes}분 전';
+  if (diff.inDays < 1) return '${diff.inHours}시간 전';
+  if (diff.inDays < 7) return '${diff.inDays}일 전';
+  return '${date.month}.${date.day}';
 }
 
 // ─── 주식저장소 서브탭 페이지 (추천주 + 공지사항) ─────────────────────────

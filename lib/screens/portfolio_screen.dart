@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -909,7 +909,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
     final livePrice = priceResult?.price;
     final returnRate = livePrice != null
         ? ((livePrice - pick.buyPrice) / pick.buyPrice) * 100
-        : pick.returnRate;
+        : pick.currentReturnRate;
     final isPositive = returnRate >= 0;
     final isKrw = pick.market != 'US';
 
@@ -1206,7 +1206,7 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
                     final livePrice = priceResult?.price;
                     final returnRate = livePrice != null
                         ? ((livePrice - pick.buyPrice) / pick.buyPrice) * 100
-                        : pick.returnRate;
+                        : pick.currentReturnRate;
                     final isPos = returnRate >= 0;
                     final retColor = isPos
                         ? const Color(0xFFF04452)
@@ -1345,4 +1345,3 @@ class _ShareCardSheetState extends State<_ShareCardSheet> {
     );
   }
 }
-

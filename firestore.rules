@@ -190,6 +190,12 @@ service cloud.firestore {
       }
     }
 
+    // AI 시황 브리프 (누구나 읽기 가능, 쓰기는 Cloud Function만)
+    match /ai_briefs/{docId} {
+      allow read: if true;
+      allow write: if false; // Cloud Function admin SDK bypasses rules
+    }
+
     // Trading journal
     match /trading_journal/{journalId} {
       allow read: if resource.data.get('isPublic', false) == true || (isLoggedIn() && resource.data.uid == request.auth.uid);

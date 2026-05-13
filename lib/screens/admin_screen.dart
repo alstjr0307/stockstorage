@@ -5,7 +5,6 @@ import 'package:intl/intl.dart';
 import '../models/announcement.dart';
 import '../models/market_analysis.dart';
 import '../models/stock_pick.dart';
-import '../services/fcm_direct_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
 import '../widgets/stock_search_field.dart';
@@ -406,11 +405,13 @@ class _UploadTabState extends State<_UploadTab> {
         await _firestoreService.updateStockPick(pick);
       } else {
         await _firestoreService.addStockPick(pick);
-        FcmDirectService.sendTopicNotification(
-          title: '📈 새 추천 종목',
-          body: '새 추천 종목이 등록되었습니다. 지금 확인해보세요!',
-          topic: 'new_pick_alerts',
-        ).catchError((_) {});
+        _firestoreService
+            .sendPushNotification(
+              title: '📈 새 추천 종목',
+              body: '새 추천 종목이 등록되었습니다. 지금 확인해보세요!',
+              topic: 'new_pick_alerts',
+            )
+            .catchError((_) {});
       }
 
       if (mounted) {
@@ -1446,6 +1447,7 @@ class _PushNotificationTab extends StatefulWidget {
 }
 
 class _PushNotificationTabState extends State<_PushNotificationTab> {
+  final _firestoreService = FirestoreService();
   final _titleController = TextEditingController();
   final _bodyController = TextEditingController();
   bool _sending = false;
@@ -1469,8 +1471,7 @@ class _PushNotificationTabState extends State<_PushNotificationTab> {
     });
 
     try {
-      // FcmDirectService로 직접 발송 (Cloud Function 의존 없음)
-      await FcmDirectService.sendTopicNotification(
+      await _firestoreService.sendPushNotification(
         title: title,
         body: body,
         topic: 'new_pick_alerts',

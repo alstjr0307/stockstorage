@@ -2,6 +2,7 @@ const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { auth } = require('firebase-functions/v1');
+const { defineSecret } = require('firebase-functions/params');
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getMessaging } = require('firebase-admin/messaging');
@@ -10,6 +11,8 @@ const https = require('https');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const WebSocket = require('ws');
+
+const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 const {
   crawlDailyInvestorFlow,
   collectDailyInvestorFlow,
@@ -49,7 +52,32 @@ async function writeNotificationHistoryForUids(db, uidSet, payload) {
   for (let i = 0; i < uids.length; i += 400) {
     const chunk = uids.slice(i, i + 400);
     const batch = db.batch();
-    chunk.forEach((uid) => {
+    for (const uid of chunk) {
+      const historyRef = db
+        .collection('users')
+        .doc(uid)
+        .collection('notification_history');
+      const recentSnap = await historyRef
+        .orderBy('sentAt', 'desc')
+        .limit(12)
+        .get();
+      const dedupeSince = sentAt.getTime() - 5 * 60 * 1000;
+      const hasDuplicate = recentSnap.docs.some((doc) => {
+        const data = doc.data() || {};
+        const existingSentAt = data.sentAt?.toDate?.() || data.sentAt;
+        if (
+          existingSentAt instanceof Date &&
+          existingSentAt.getTime() < dedupeSince
+        ) {
+          return false;
+        }
+        return (
+          String(data.title || '').trim() === String(payload.title || '').trim() &&
+          String(data.body || '').trim() === String(payload.body || '').trim()
+        );
+      });
+      if (hasDuplicate) continue;
+
       const ref = db
         .collection('users')
         .doc(uid)
@@ -62,7 +90,7 @@ async function writeNotificationHistoryForUids(db, uidSet, payload) {
         sentAt,
         updatedAt: sentAt,
       });
-    });
+    }
     await batch.commit();
   }
 }
@@ -675,17 +703,34 @@ exports.sendPushOnNotificationQueue = onDocumentCreated(
     if (!data) return;
 
     const { title, body } = data;
+    const topic = data.topic || 'stock_alerts';
     if (!title && !body) return;
 
     const db = getFirestore();
 
-    // fcm_tokens 컬렉션에서 모든 토큰 수집
-    const tokensSnap = await db.collection('fcm_tokens').get();
-    const tokens = tokensSnap.docs
-      .map((d) => d.data().token)
-      .filter((t) => typeof t === 'string' && t.length > 0);
+    let recipientUids = new Set();
+    let tokens = [];
+    if (topic === 'new_pick_alerts') {
+      recipientUids = await getAllUserUidsByGlobalSetting(db, 'newPick');
+      tokens = await getTokensByUids(db, recipientUids);
+    } else {
+      const tokensSnap = await db.collection('fcm_tokens').get();
+      const tokenSet = new Set();
+      tokensSnap.docs.forEach((d) => {
+        const token = d.data().token;
+        const uid = d.data().uid;
+        if (typeof token === 'string' && token.length > 0) tokenSet.add(token);
+        if (typeof uid === 'string' && uid.length > 0) recipientUids.add(uid);
+      });
+      tokens = Array.from(tokenSet);
+    }
 
     if (tokens.length === 0) {
+      await writeNotificationHistoryForUids(db, recipientUids, {
+        title,
+        body,
+        source: topic === 'new_pick_alerts' ? 'server_new_pick' : 'server_push',
+      });
       await event.data.ref.delete();
       return;
     }
@@ -727,6 +772,12 @@ exports.sendPushOnNotificationQueue = onDocumentCreated(
         invalidTokens.map((t) => db.collection('fcm_tokens').doc(t).delete())
       );
     }
+
+    await writeNotificationHistoryForUids(db, recipientUids, {
+      title,
+      body,
+      source: topic === 'new_pick_alerts' ? 'server_new_pick' : 'server_push',
+    });
 
     // 처리 완료된 큐 문서 삭제
     await event.data.ref.delete();
@@ -1100,6 +1151,409 @@ exports.fetchFmkoreaIndexNow = onRequest(
       res.json({ status: testRes.status, timesFound: times.length, sample: times.slice(0, 5), htmlSnippet: testRes.data.substring(0, 500) });
     } catch(e) {
       res.json({ error: e.message, code: e.response?.status });
+    }
+  }
+);
+
+// ── AI 한 줄 시황 공통 로직 ──────────────────────────────────────────────────
+
+const NAVER_MOBILE_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+  'Referer': 'https://m.finance.naver.com/',
+  'Accept': 'application/json',
+};
+
+const NAVER_PC_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Referer': 'https://finance.naver.com/',
+  'Accept-Language': 'ko-KR,ko;q=0.9',
+};
+
+/** 네이버 금융 모바일 API에서 KOSPI / KOSDAQ 지수 가져오기 */
+async function fetchMarketData() {
+  const [kospiRes, kosdaqRes] = await Promise.all([
+    axios.get('https://m.stock.naver.com/api/index/KOSPI/basic', { headers: NAVER_MOBILE_HEADERS, timeout: 8000 }),
+    axios.get('https://m.stock.naver.com/api/index/KOSDAQ/basic', { headers: NAVER_MOBILE_HEADERS, timeout: 8000 }),
+  ]);
+
+  const parse = (d) => ({
+    price: Number(d.closePrice?.replace(/,/g, '') || 0),
+    change: Number(d.compareToPreviousClosePrice?.replace(/,/g, '') || 0),
+    changeRate: Number(d.fluctuationsRatio || 0),
+    isUp: d.compareToPreviousPrice?.code === '2' || Number(d.fluctuationsRatio || 0) >= 0,
+  });
+
+  return { kospi: parse(kospiRes.data), kosdaq: parse(kosdaqRes.data) };
+}
+
+/** 네이버 금융 업종별 시세 스크래핑 (상승/하락 top 4) */
+async function fetchSectorData() {
+  try {
+    const [kospiRes, kosdaqRes] = await Promise.all([
+      axios.get('https://finance.naver.com/sise/sise_group.nhn?type=upjong', {
+        headers: NAVER_PC_HEADERS, responseType: 'arraybuffer', timeout: 8000,
+      }),
+      axios.get('https://finance.naver.com/sise/sise_group.nhn?type=upjong&sosok=1', {
+        headers: NAVER_PC_HEADERS, responseType: 'arraybuffer', timeout: 8000,
+      }),
+    ]);
+
+    const decoder = new TextDecoder('euc-kr');
+    const parseSectors = (buffer) => {
+      const $ = cheerio.load(decoder.decode(buffer));
+      const sectors = [];
+      $('table.type_1 tbody tr').each((_, row) => {
+        const cells = $(row).find('td');
+        if (cells.length < 5) return;
+        const name = $(cells[0]).find('a').text().trim();
+        const rate = parseFloat($(cells[4]).text().trim().replace('%', '').replace(',', ''));
+        if (name && !isNaN(rate)) sectors.push({ name, rate });
+      });
+      return sectors;
+    };
+
+    const all = [...parseSectors(kospiRes.data), ...parseSectors(kosdaqRes.data)];
+    return {
+      up: all.filter(s => s.rate > 0).sort((a, b) => b.rate - a.rate).slice(0, 4),
+      down: all.filter(s => s.rate < 0).sort((a, b) => a.rate - b.rate).slice(0, 4),
+    };
+  } catch (e) {
+    console.warn('[AiBrief] 업종 데이터 실패:', e.message);
+    return null;
+  }
+}
+
+/** Firestore investor_flow에서 오늘 매매동향 가져오기 */
+async function fetchInvestorFlowSummary(db) {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+    });
+    const snap = await db.collection('investor_flow').doc(formatter.format(new Date())).get();
+    return snap.exists ? snap.data() : null;
+  } catch (_) { return null; }
+}
+
+/** 지수·업종·매매동향 데이터를 Claude에 넘겨 시황 생성 */
+async function generateBriefWithClaude(apiKey, marketData, sectorData, investorFlow, slot) {
+  const Anthropic = require('@anthropic-ai/sdk');
+  const client = new Anthropic({ apiKey });
+
+  const { kospi, kosdaq } = marketData;
+  const slotLabel = slot === '09' ? '장 시작 직후' : slot === '12' ? '점심 무렵' : '장 마감 직전';
+
+  let investorContext = '';
+  if (investorFlow) {
+    const fi = investorFlow;
+    investorContext = `
+- KOSPI 외국인 순매수: ${fi.kospi?.foreignNet ? (fi.kospi.foreignNet / 1e8).toFixed(0) + '억원' : '데이터 없음'}
+- KOSPI 기관 순매수: ${fi.kospi?.institutionNet ? (fi.kospi.institutionNet / 1e8).toFixed(0) + '억원' : '데이터 없음'}
+- KOSDAQ 외국인 순매수: ${fi.kosdaq?.foreignNet ? (fi.kosdaq.foreignNet / 1e8).toFixed(0) + '억원' : '데이터 없음'}`;
+  }
+
+  let sectorContext = '';
+  if (sectorData && (sectorData.up.length > 0 || sectorData.down.length > 0)) {
+    const upStr = sectorData.up.map(s => `${s.name}(+${s.rate.toFixed(1)}%)`).join(', ');
+    const downStr = sectorData.down.map(s => `${s.name}(${s.rate.toFixed(1)}%)`).join(', ');
+    sectorContext = `
+- 상승 업종 TOP: ${upStr || '없음'}
+- 하락 업종 TOP: ${downStr || '없음'}`;
+  }
+
+  const prompt = `지금은 한국 주식시장 ${slotLabel}입니다. 다음 시장 데이터를 바탕으로 투자자가 한눈에 파악할 수 있는 시황을 작성해주세요.
+
+[현재 시장 데이터]
+- 코스피: ${kospi.price.toLocaleString('ko-KR')}pt (${kospi.isUp ? '상승' : '하락'} ${Math.abs(kospi.changeRate).toFixed(2)}%, ${kospi.change >= 0 ? '+' : ''}${kospi.change.toFixed(2)}pt)
+- 코스닥: ${kosdaq.price.toLocaleString('ko-KR')}pt (${kosdaq.isUp ? '상승' : '하락'} ${Math.abs(kosdaq.changeRate).toFixed(2)}%, ${kosdaq.change >= 0 ? '+' : ''}${kosdaq.change.toFixed(2)}pt)${investorContext}${sectorContext}
+
+[작성 규칙]
+- 2~3문장, 총 60자 이상 120자 이하
+- 첫 문장: 지수 전체 흐름 요약
+- 둘째 문장: 두드러진 상승/하락 업종 언급 (데이터에 있는 실제 업종명 사용)
+- 셋째 문장(선택): 매수 주체 흐름이 뚜렷할 때만 추가
+- 투자 권유·예측 금지, 사실 기반 서술만
+- 구어체로 친근하게, 마침표로 끝낼 것
+- "오늘은", "현재" 등 군더더기 없이 바로 시황 내용으로 시작
+
+시황만 출력하세요 (다른 설명 없이):`;
+
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 300,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  return message.content[0].text.trim();
+}
+
+/**
+ * AI 시황 생성 → Firestore 저장
+ * slot: '09' | '12' | '15'
+ */
+async function runAiBriefGeneration(apiKey, slot) {
+  const db = getFirestore();
+
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+  });
+  const dateKey = formatter.format(new Date());
+
+  // 1) 시장 데이터·업종·매매동향 병렬 수집
+  const [marketData, sectorData, investorFlow] = await Promise.all([
+    fetchMarketData(),
+    fetchSectorData(),
+    fetchInvestorFlowSummary(db),
+  ]);
+
+  // 2) Claude로 시황 생성
+  const brief = await generateBriefWithClaude(apiKey, marketData, sectorData, investorFlow, slot);
+
+  // 3) Firestore에 저장
+  const slotLabel = slot === '09' ? '09:00' : slot === '12' ? '12:00' : '15:00';
+  const payload = {
+    brief, slot, slotLabel, date: dateKey,
+    kospi: marketData.kospi,
+    kosdaq: marketData.kosdaq,
+    sectors: sectorData ?? null,
+    generatedAt: new Date(),
+  };
+
+  const batch = db.batch();
+  batch.set(db.collection('ai_briefs').doc('latest'), payload);
+  batch.set(db.collection('ai_briefs').doc(dateKey), { [slot]: payload, updatedAt: new Date() }, { merge: true });
+  await batch.commit();
+
+  console.log(`[AiBrief] ${dateKey} ${slotLabel} 저장 완료: ${brief}`);
+  return brief;
+}
+
+// ── AI 시황 스케줄 (평일 09:00 KST) ─────────────────────────────────────────
+exports.generateAiBriefMorning = onSchedule(
+  {
+    schedule: '0 9 * * 1-5',
+    timeZone: 'Asia/Seoul',
+    region: 'asia-northeast3',
+    timeoutSeconds: 120,
+    secrets: [ANTHROPIC_API_KEY],
+  },
+  async () => {
+    await runAiBriefGeneration(ANTHROPIC_API_KEY.value(), '09');
+  }
+);
+
+// ── AI 시황 스케줄 (평일 12:00 KST) ─────────────────────────────────────────
+exports.generateAiBriefMidday = onSchedule(
+  {
+    schedule: '0 12 * * 1-5',
+    timeZone: 'Asia/Seoul',
+    region: 'asia-northeast3',
+    timeoutSeconds: 120,
+    secrets: [ANTHROPIC_API_KEY],
+  },
+  async () => {
+    await runAiBriefGeneration(ANTHROPIC_API_KEY.value(), '12');
+  }
+);
+
+// ── AI 시황 스케줄 (평일 15:00 KST) ─────────────────────────────────────────
+exports.generateAiBriefAfternoon = onSchedule(
+  {
+    schedule: '0 15 * * 1-5',
+    timeZone: 'Asia/Seoul',
+    region: 'asia-northeast3',
+    timeoutSeconds: 120,
+    secrets: [ANTHROPIC_API_KEY],
+  },
+  async () => {
+    await runAiBriefGeneration(ANTHROPIC_API_KEY.value(), '15');
+  }
+);
+
+// ── AI 시황 수동 트리거 (테스트용) ───────────────────────────────────────────
+exports.generateAiBriefNow = onRequest(
+  {
+    region: 'asia-northeast3',
+    timeoutSeconds: 120,
+    secrets: [ANTHROPIC_API_KEY],
+  },
+  async (req, res) => {
+    try {
+      // 관리자 인증 (간단 토큰 체크)
+      const db = getFirestore();
+      const adminSnap = await db.collection('config').doc('admin').get();
+      const adminUids = adminSnap.exists ? (adminSnap.data().uids || []) : [];
+      const authHeader = req.headers.authorization || '';
+      const idToken = authHeader.replace('Bearer ', '');
+      if (idToken) {
+        const decoded = await getAuth().verifyIdToken(idToken);
+        if (!adminUids.includes(decoded.uid)) {
+          return res.status(403).json({ error: '관리자만 실행 가능합니다.' });
+        }
+      } else {
+        return res.status(401).json({ error: '인증 토큰이 필요합니다.' });
+      }
+
+      const now = new Date();
+      const kstHour = new Intl.DateTimeFormat('en', {
+        timeZone: 'Asia/Seoul', hour: 'numeric', hour12: false,
+      }).format(now);
+      const h = Number(kstHour);
+      const slot = h < 11 ? '09' : h < 14 ? '12' : '15';
+
+      const brief = await runAiBriefGeneration(ANTHROPIC_API_KEY.value(), slot);
+      res.json({ ok: true, brief, slot });
+    } catch (e) {
+      console.error('[generateAiBriefNow]', e);
+      res.status(500).json({ error: e.message });
+    }
+  }
+);
+async function fetchMarketData() {
+  const [kospiRes, kosdaqRes] = await Promise.all([
+    axios.get('https://m.stock.naver.com/api/index/KOSPI/basic', { headers: NAVER_MOBILE_HEADERS, timeout: 8000 }),
+    axios.get('https://m.stock.naver.com/api/index/KOSDAQ/basic', { headers: NAVER_MOBILE_HEADERS, timeout: 8000 }),
+  ]);
+
+  const parse = (d) => ({
+    price: Number(d.closePrice?.replace(/,/g, '') || 0),
+    change: Number(d.compareToPreviousClosePrice?.replace(/,/g, '') || 0),
+    changeRate: Number(d.fluctuationsRatio || 0),
+    isUp: d.compareToPreviousPrice?.code === '2' || Number(d.fluctuationsRatio || 0) >= 0,
+  });
+
+  return { kospi: parse(kospiRes.data), kosdaq: parse(kosdaqRes.data) };
+}
+
+async function fetchInvestorFlowSummary(db) {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+    });
+    const dateKey = formatter.format(new Date());
+    const snap = await db.collection('investor_flow').doc(dateKey).get();
+    if (!snap.exists) return null;
+    return snap.data();
+  } catch (_) { return null; }
+}
+
+async function generateBriefWithClaude(apiKey, marketData, investorFlow, slot) {
+  const Anthropic = require('@anthropic-ai/sdk');
+  const client = new Anthropic({ apiKey });
+
+  const { kospi, kosdaq } = marketData;
+  const slotLabel = slot === '09' ? '장 시작 직후' : slot === '12' ? '점심 무렵' : '장 마감 직전';
+  const kospiDir = kospi.isUp ? '상승' : '하락';
+  const kosdaqDir = kosdaq.isUp ? '상승' : '하락';
+
+  let investorContext = '';
+  if (investorFlow) {
+    const fi = investorFlow;
+    investorContext = `
+- KOSPI 외국인 순매수: ${fi.kospi?.foreignNet ? (fi.kospi.foreignNet / 1e8).toFixed(0) + '억원' : '데이터 없음'}
+- KOSPI 기관 순매수: ${fi.kospi?.institutionNet ? (fi.kospi.institutionNet / 1e8).toFixed(0) + '억원' : '데이터 없음'}
+- KOSDAQ 외국인 순매수: ${fi.kosdaq?.foreignNet ? (fi.kosdaq.foreignNet / 1e8).toFixed(0) + '억원' : '데이터 없음'}`;
+  }
+
+  const prompt = `지금은 한국 주식시장 ${slotLabel}입니다. 다음 시장 데이터를 바탕으로 투자자가 한눈에 파악할 수 있는 한 줄 시황을 작성해주세요.
+
+[현재 시장 데이터]
+- 코스피: ${kospi.price.toLocaleString('ko-KR')}pt (${kospiDir} ${Math.abs(kospi.changeRate).toFixed(2)}%, ${kospi.change >= 0 ? '+' : ''}${kospi.change.toFixed(2)}pt)
+- 코스닥: ${kosdaq.price.toLocaleString('ko-KR')}pt (${kosdaqDir} ${Math.abs(kosdaq.changeRate).toFixed(2)}%, ${kosdaq.change >= 0 ? '+' : ''}${kosdaq.change.toFixed(2)}pt)${investorContext}
+
+[작성 규칙]
+- 딱 1~2 문장, 40자 이상 70자 이하
+- 지수 수치와 특징적인 흐름(매수주체, 업종 추정, 분위기)을 자연스럽게 담을 것
+- 투자 권유나 예측은 하지 말 것 (사실 기반 서술만)
+- 구어체로 친근하게, 마침표로 끝낼 것
+- 앞에 "오늘은", "현재" 같은 군더더기 없이 바로 시황 내용으로 시작할 것
+
+한 줄 시황만 출력하세요 (다른 설명 없이):`;
+
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 200,
+    messages: [{ role: 'user', content: prompt }],
+  });
+  return message.content[0].text.trim();
+}
+
+async function runAiBriefGeneration(apiKey, slot) {
+  const db = getFirestore();
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
+  });
+  const dateKey = formatter.format(new Date());
+
+  const [marketData, investorFlow] = await Promise.all([
+    fetchMarketData(),
+    fetchInvestorFlowSummary(db),
+  ]);
+
+  const brief = await generateBriefWithClaude(apiKey, marketData, investorFlow, slot);
+
+  const slotLabel = slot === '09' ? '09:00' : slot === '12' ? '12:00' : '15:00';
+  const payload = {
+    brief, slot, slotLabel, date: dateKey,
+    kospi: marketData.kospi, kosdaq: marketData.kosdaq,
+    generatedAt: new Date(),
+  };
+
+  const batch = db.batch();
+  batch.set(db.collection('ai_briefs').doc('latest'), payload);
+  batch.set(
+    db.collection('ai_briefs').doc(dateKey),
+    { [slot]: payload, updatedAt: new Date() },
+    { merge: true }
+  );
+  await batch.commit();
+
+  console.log(`[AiBrief] ${dateKey} ${slotLabel} 저장 완료: ${brief}`);
+  return brief;
+}
+
+// ── AI 시황 스케줄 (평일 09:00 KST) ─────────────────────────────────────────
+exports.generateAiBriefMorning = onSchedule(
+  { schedule: '0 9 * * 1-5', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 120, secrets: [ANTHROPIC_API_KEY] },
+  async () => { await runAiBriefGeneration(ANTHROPIC_API_KEY.value(), '09'); }
+);
+
+// ── AI 시황 스케줄 (평일 12:00 KST) ─────────────────────────────────────────
+exports.generateAiBriefMidday = onSchedule(
+  { schedule: '0 12 * * 1-5', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 120, secrets: [ANTHROPIC_API_KEY] },
+  async () => { await runAiBriefGeneration(ANTHROPIC_API_KEY.value(), '12'); }
+);
+
+// ── AI 시황 스케줄 (평일 15:00 KST) ─────────────────────────────────────────
+exports.generateAiBriefAfternoon = onSchedule(
+  { schedule: '0 15 * * 1-5', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 120, secrets: [ANTHROPIC_API_KEY] },
+  async () => { await runAiBriefGeneration(ANTHROPIC_API_KEY.value(), '15'); }
+);
+
+// ── AI 시황 수동 트리거 (테스트용, 관리자만) ─────────────────────────────────
+exports.generateAiBriefNow = onRequest(
+  { region: 'asia-northeast3', timeoutSeconds: 120, secrets: [ANTHROPIC_API_KEY] },
+  async (req, res) => {
+    try {
+      const db = getFirestore();
+      const adminSnap = await db.collection('config').doc('admin').get();
+      const adminUids = adminSnap.exists ? (adminSnap.data().uids || []) : [];
+      const authHeader = req.headers.authorization || '';
+      const idToken = authHeader.replace('Bearer ', '');
+      if (!idToken) return res.status(401).json({ error: '인증 토큰이 필요합니다.' });
+      const decoded = await getAuth().verifyIdToken(idToken);
+      if (!adminUids.includes(decoded.uid)) return res.status(403).json({ error: '관리자만 실행 가능합니다.' });
+
+      const now = new Date();
+      const kstHour = Number(new Intl.DateTimeFormat('en', {
+        timeZone: 'Asia/Seoul', hour: 'numeric', hour12: false,
+      }).format(now));
+      const slot = kstHour < 11 ? '09' : kstHour < 14 ? '12' : '15';
+
+      const brief = await runAiBriefGeneration(ANTHROPIC_API_KEY.value(), slot);
+      res.json({ ok: true, brief, slot });
+    } catch (e) {
+      console.error('[generateAiBriefNow]', e);
+      res.status(500).json({ error: e.message });
     }
   }
 );

@@ -994,10 +994,15 @@ class FirestoreService {
   }
 
   // ── 알림 큐 ───────────────────────────────────────────────────────────
-  Future<void> queueNotification(String title, String body) {
+  Future<void> queueNotification(
+    String title,
+    String body, {
+    String topic = 'stock_alerts',
+  }) {
     return _db.collection('notification_queue').add({
       'title': title,
       'body': body,
+      'topic': topic,
       'createdAt': Timestamp.fromDate(DateTime.now()),
     });
   }
@@ -1006,8 +1011,9 @@ class FirestoreService {
   Future<void> sendPushNotification({
     required String title,
     required String body,
+    String topic = 'stock_alerts',
   }) {
-    return queueNotification(title, body);
+    return queueNotification(title, body, topic: topic);
   }
 
   // ── FCM 토큰 ─────────────────────────────────────────────────────────
@@ -1038,22 +1044,35 @@ class FirestoreService {
     final safeBody = body.trim();
     if (safeTitle.isEmpty && safeBody.isEmpty) return;
 
+    final historyRef = _db
+        .collection('users')
+        .doc(uid)
+        .collection('notification_history');
+    final dedupeSince = DateTime.now().subtract(const Duration(minutes: 5));
+    final recent = await historyRef
+        .orderBy('sentAt', descending: true)
+        .limit(12)
+        .get();
+    final hasDuplicate = recent.docs.any((doc) {
+      final data = doc.data();
+      final sentAt = (data['sentAt'] as Timestamp?)?.toDate();
+      if (sentAt != null && sentAt.isBefore(dedupeSince)) return false;
+      return (data['title'] ?? '').toString().trim() == safeTitle &&
+          (data['body'] ?? '').toString().trim() == safeBody;
+    });
+    if (hasDuplicate) return;
+
     final docId = (messageId != null && messageId.trim().isNotEmpty)
         ? messageId.trim()
         : _db.collection('tmp').doc().id;
 
-    await _db
-        .collection('users')
-        .doc(uid)
-        .collection('notification_history')
-        .doc(docId)
-        .set({
-          'title': safeTitle,
-          'body': safeBody,
-          'source': source,
-          'sentAt': Timestamp.fromDate(sentAt ?? DateTime.now()),
-          'updatedAt': Timestamp.fromDate(DateTime.now()),
-        }, SetOptions(merge: true));
+    await historyRef.doc(docId).set({
+      'title': safeTitle,
+      'body': safeBody,
+      'source': source,
+      'sentAt': Timestamp.fromDate(sentAt ?? DateTime.now()),
+      'updatedAt': Timestamp.fromDate(DateTime.now()),
+    }, SetOptions(merge: true));
   }
 
   Stream<QuerySnapshot<Map<String, dynamic>>> watchNotificationHistory(

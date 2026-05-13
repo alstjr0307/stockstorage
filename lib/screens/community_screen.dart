@@ -17,7 +17,9 @@ import 'post_detail_screen.dart';
 import 'write_post_screen.dart';
 
 class CommunityScreen extends StatefulWidget {
-  const CommunityScreen({super.key});
+  const CommunityScreen({super.key, this.initialTabIndex = 0});
+
+  final int initialTabIndex;
 
   @override
   State<CommunityScreen> createState() => _CommunityScreenState();
@@ -30,7 +32,21 @@ class _CommunityScreenState extends State<CommunityScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 1),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant CommunityScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextIndex = widget.initialTabIndex.clamp(0, 1);
+    if (oldWidget.initialTabIndex != widget.initialTabIndex &&
+        _tabController.index != nextIndex) {
+      _tabController.animateTo(nextIndex);
+    }
   }
 
   @override
@@ -1068,19 +1084,22 @@ class _JournalCardState extends State<_JournalCard>
 
   Future<double?> _resolveSellAvgBuyPrice() async {
     final journal = widget.journal;
-    final items = await _firestoreService.getPublicJournalsByUidOnce(journal.uid);
-    final buys = items
-        .where(
-          (j) =>
-              j.action == '매수' &&
-              j.ticker == journal.ticker &&
-              j.market == journal.market &&
-              !j.tradeDate.isAfter(journal.tradeDate) &&
-              j.price > 0 &&
-              j.quantity > 0,
-        )
-        .toList()
-      ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+    final items = await _firestoreService.getPublicJournalsByUidOnce(
+      journal.uid,
+    );
+    final buys =
+        items
+            .where(
+              (j) =>
+                  j.action == '매수' &&
+                  j.ticker == journal.ticker &&
+                  j.market == journal.market &&
+                  !j.tradeDate.isAfter(journal.tradeDate) &&
+                  j.price > 0 &&
+                  j.quantity > 0,
+            )
+            .toList()
+          ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
     final sellsBefore = items
         .where(
           (j) =>
@@ -1096,7 +1115,10 @@ class _JournalCardState extends State<_JournalCard>
       return null;
     }
     // FIFO로 이전 매도 물량을 차감한 뒤, 현재 매도 시점의 보유 원가평균 계산
-    var sellQtyToConsume = sellsBefore.fold<double>(0.0, (acc, s) => acc + s.quantity);
+    var sellQtyToConsume = sellsBefore.fold<double>(
+      0.0,
+      (acc, s) => acc + s.quantity,
+    );
     final remainingLots = <(double price, double qty)>[];
     for (final b in buys) {
       var lotQty = b.quantity;
@@ -1978,8 +2000,9 @@ class _JournalCardState extends State<_JournalCard>
 
     return FutureBuilder<double?>(
       future: _sellAvgBuyPriceFuture ?? _resolveSellAvgBuyPrice(),
-      builder: (context, snap) =>
-          buildCard(snap.data ?? (journal.buyPrice > 0 ? journal.buyPrice : null)),
+      builder: (context, snap) => buildCard(
+        snap.data ?? (journal.buyPrice > 0 ? journal.buyPrice : null),
+      ),
     );
   }
 

@@ -233,6 +233,90 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     );
   }
 
+  Future<void> _toggleFavorite(bool isFavorite) async {
+    final user = _currentUser;
+    if (user == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('로그인 후 관심등록할 수 있습니다.')));
+      return;
+    }
+
+    await _firestoreService.toggleFavorite(
+      user.uid,
+      widget.pick.id,
+      isFavorite,
+    );
+    AnalyticsService.instance.logToggleFavorite(
+      ticker: widget.pick.ticker,
+      name: widget.pick.name,
+      added: !isFavorite,
+    );
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isFavorite ? '관심 추천주에서 해제했습니다.' : '관심 추천주에 등록했습니다.'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Widget _favoriteButton(ColorScheme cs) {
+    final user = _currentUser;
+    if (user == null) {
+      return OutlinedButton.icon(
+        onPressed: () => _toggleFavorite(false),
+        icon: const Icon(Icons.favorite_border_rounded, size: 16),
+        label: const Text('관심등록'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: cs.onSurface.withValues(alpha: 0.7),
+          side: BorderSide(color: cs.onSurface.withValues(alpha: 0.16)),
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+        ),
+      );
+    }
+
+    return StreamBuilder<List<String>>(
+      stream: _firestoreService.getFavoriteIds(user.uid),
+      builder: (context, snapshot) {
+        final favoriteIds = snapshot.data ?? const <String>[];
+        final isFavorite = favoriteIds.contains(widget.pick.id);
+        return OutlinedButton.icon(
+          onPressed: () => _toggleFavorite(isFavorite),
+          icon: Icon(
+            isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            size: 16,
+          ),
+          label: const Text('관심등록'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: isFavorite
+                ? Colors.redAccent
+                : cs.onSurface.withValues(alpha: 0.7),
+            side: BorderSide(
+              color: isFavorite
+                  ? Colors.redAccent.withValues(alpha: 0.42)
+                  : cs.onSurface.withValues(alpha: 0.16),
+            ),
+            backgroundColor: isFavorite
+                ? Colors.redAccent.withValues(alpha: 0.08)
+                : Colors.transparent,
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            textStyle: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _saveMemo() async {
     final user = _currentUser;
     if (user == null) return;
@@ -406,8 +490,8 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     final liveP = _livePrice?.price;
     final double currentReturn = liveP != null
         ? ((liveP - pick.buyPrice) / pick.buyPrice) * 100
-        : pick.returnRate;
-    final double targetReturn = pick.returnRate;
+        : pick.currentReturnRate;
+    final double targetReturn = pick.targetReturnRate;
     final isLiveUp = currentReturn >= 0;
     final isTargetUp = targetReturn >= 0;
     final divider = '━━━━━━━━━━━━━━━━━━';
@@ -482,7 +566,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         ? ((pick.closedPrice! - pick.buyPrice) / pick.buyPrice) * 100
         : livePrice != null
         ? ((livePrice - pick.buyPrice) / pick.buyPrice) * 100
-        : pick.returnRate;
+        : pick.currentReturnRate;
     final isPositive = returnRate >= 0;
     final isKorean = pick.market == 'KS' || pick.market == 'KQ';
 
@@ -534,16 +618,17 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                   return;
                 }
                 final current = await _firestoreService
-                    .getPickCommentNotificationEnabled(user.uid, widget.pick.id);
+                    .getPickCommentNotificationEnabled(
+                      user.uid,
+                      widget.pick.id,
+                    );
                 final next = !current;
                 await _togglePickCommentNotification(next);
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      next
-                          ? '이 추천주 댓글 알림이 켜졌습니다.'
-                          : '이 추천주 댓글 알림이 꺼졌습니다.',
+                      next ? '이 추천주 댓글 알림이 켜졌습니다.' : '이 추천주 댓글 알림이 꺼졌습니다.',
                     ),
                     duration: const Duration(seconds: 2),
                   ),
@@ -620,6 +705,8 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                   ),
                                 ],
                               ),
+                              const SizedBox(height: 8),
+                              _favoriteButton(cs),
                             ],
                           ),
                         ),
@@ -777,17 +864,17 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                   crossAxisAlignment:
                                                       CrossAxisAlignment.start,
                                                   children: [
-                                                     Text(
-                                                       pick.name,
-                                                       style: TextStyle(
-                                                         color: _capturing
-                                                             ? Colors.white
-                                                             : cs.onSurface,
-                                                         fontSize: 20,
-                                                         fontWeight:
-                                                             FontWeight.w800,
-                                                       ),
-                                                     ),
+                                                    Text(
+                                                      pick.name,
+                                                      style: TextStyle(
+                                                        color: _capturing
+                                                            ? Colors.white
+                                                            : cs.onSurface,
+                                                        fontSize: 20,
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                      ),
+                                                    ),
                                                     const SizedBox(height: 4),
                                                     Row(
                                                       children: [
@@ -986,15 +1073,17 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                               SizedBox(
                                                 width: double.infinity,
                                                 child: OutlinedButton.icon(
-                                                  onPressed: () => Navigator.push(
-                                                    context,
-                                                    MaterialPageRoute(
-                                                      builder: (_) =>
-                                                          StockCompareScreen(
-                                                            basePick: widget.pick,
-                                                          ),
-                                                    ),
-                                                  ),
+                                                  onPressed: () =>
+                                                      Navigator.push(
+                                                        context,
+                                                        MaterialPageRoute(
+                                                          builder: (_) =>
+                                                              StockCompareScreen(
+                                                                basePick:
+                                                                    widget.pick,
+                                                              ),
+                                                        ),
+                                                      ),
                                                   icon: const Icon(
                                                     Icons.compare_arrows,
                                                     size: 18,
@@ -1002,41 +1091,39 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                   label: const Text(
                                                     '다른 종목이랑 비교하기',
                                                   ),
-                                                  style:
-                                                      OutlinedButton.styleFrom(
-                                                        foregroundColor: cs
-                                                            .onSurface
-                                                            .withValues(
-                                                              alpha: 0.78,
-                                                            ),
-                                                        backgroundColor:
-                                                            cs.onSurface
-                                                                .withValues(
-                                                                  alpha: 0.04,
-                                                                ),
-                                                        side: BorderSide(
-                                                          color: cs.onSurface
-                                                              .withValues(
-                                                                alpha: 0.14,
-                                                              ),
+                                                  style: OutlinedButton.styleFrom(
+                                                    foregroundColor: cs
+                                                        .onSurface
+                                                        .withValues(
+                                                          alpha: 0.78,
                                                         ),
-                                                        minimumSize:
-                                                            const Size.fromHeight(
-                                                              44,
-                                                            ),
-                                                        textStyle:
-                                                            const TextStyle(
-                                                              fontSize: 14,
-                                                              fontWeight:
-                                                                  FontWeight.w600,
-                                                            ),
-                                                        shape: RoundedRectangleBorder(
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                12,
-                                                              ),
+                                                    backgroundColor: cs
+                                                        .onSurface
+                                                        .withValues(
+                                                          alpha: 0.04,
                                                         ),
-                                                      ),
+                                                    side: BorderSide(
+                                                      color: cs.onSurface
+                                                          .withValues(
+                                                            alpha: 0.14,
+                                                          ),
+                                                    ),
+                                                    minimumSize:
+                                                        const Size.fromHeight(
+                                                          44,
+                                                        ),
+                                                    textStyle: const TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                    shape: RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
                                             ],
@@ -2308,7 +2395,9 @@ class _StockDetailScreenState extends State<StockDetailScreen>
             final adminComments = comments
                 .where((c) => AuthService.adminUids.contains(c.uid))
                 .toList();
-            final visibleComments = _adminCommentsOnly ? adminComments : comments;
+            final visibleComments = _adminCommentsOnly
+                ? adminComments
+                : comments;
             final cs = Theme.of(context).colorScheme;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
