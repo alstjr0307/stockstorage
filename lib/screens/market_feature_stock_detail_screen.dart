@@ -543,7 +543,7 @@ class _FeatureCandleChartPainter extends CustomPainter {
     if (candles.length < 2) return;
 
     const leftPad = 0.0;
-    const rightPad = 56.0;
+    const rightPad = 40.0;
     const topPad = 8.0;
     const bottomPad = 24.0;
     final chartW = size.width - leftPad - rightPad;
@@ -649,7 +649,7 @@ class _FeatureCandleChartPainter extends CustomPainter {
       ),
       textDirection: ui.TextDirection.ltr,
     )..layout(maxWidth: 52);
-    painter.paint(canvas, Offset(size.width - 52, y));
+    painter.paint(canvas, Offset(size.width - 40, y));
   }
 
   void _drawDateLabel(Canvas canvas, DateTime date, Offset offset) {
@@ -705,7 +705,7 @@ class _FeatureLineChartPainter extends CustomPainter {
     if (data.length < 2) return;
 
     const leftPad = 0.0;
-    const rightPad = 56.0;
+    const rightPad = 40.0;
     const topPad = 8.0;
     const bottomPad = 24.0;
     final chartW = size.width - leftPad - rightPad;
@@ -836,7 +836,7 @@ class _FeatureLineChartPainter extends CustomPainter {
       ),
       textDirection: ui.TextDirection.ltr,
     )..layout(maxWidth: 52);
-    painter.paint(canvas, Offset(size.width - 52, y));
+    painter.paint(canvas, Offset(size.width - 40, y));
   }
 
   void _drawDateLabel(Canvas canvas, DateTime date, Offset offset) {
