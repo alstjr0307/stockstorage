@@ -147,6 +147,10 @@ function resolveEndDate() {
   return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 16, 0, 0);
 }
 
+function normalizeDateKey(value) {
+  return String(value || '').replace(/[^0-9]/g, '');
+}
+
 function fetchBuffer(url, headers = {}) {
   return new Promise((resolve, reject) => {
     https
@@ -1894,11 +1898,15 @@ async function main() {
       return buildMarketFeatureStocks(stock, rows);
     });
     const allFeatures = featureItems.flat();
+    const sameDateFeatures = allFeatures.filter((item) => normalizeDateKey(item.sourceDate) === normalizeDateKey(dateKey));
     const filteredFeatures = FEATURE_GROUP
-      ? allFeatures.filter((item) => item.group === FEATURE_GROUP)
-      : allFeatures;
+      ? sameDateFeatures.filter((item) => item.group === FEATURE_GROUP)
+      : sameDateFeatures;
+    const skippedByDate = allFeatures.length - sameDateFeatures.length;
     const selected = selectFeatureStocks(filteredFeatures);
-    console.log(`[done] featureCandidates=${featureItems.flat().length} selected=${selected.length}`);
+    console.log(
+      `[done] featureCandidates=${allFeatures.length} skippedByDate=${skippedByDate} selected=${selected.length}`,
+    );
     await uploadMarketFeatureStocks(selected, dateKey);
     return;
   }
