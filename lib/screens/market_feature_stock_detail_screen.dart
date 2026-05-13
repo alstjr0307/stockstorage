@@ -208,9 +208,9 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
       case 'volume_surge_pullback_tail':
         return '급등 뒤 조정 후 반등 시도';
       case 'volume_spike_breakout_dry_up_rise':
-        return '거래 줄어도 주가 재상승';
+        return '급등 후 거래량 감소 재상승';
       case 'volume_spike_dry_up_pullback_support':
-        return '조정 중 지지선 부근 버팀';
+        return '급등 후 거래량 감소';
       default:
         return null;
     }

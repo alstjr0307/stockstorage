@@ -1347,7 +1347,7 @@ function buildChartSetupReason(pattern, setup) {
       `${setup.surgeDaysAgo}거래일 전 거래량이 ${setup.surgeVolumeRatio.toFixed(1)}배 늘며 ${formatFeaturePct(setup.surgeGain)} 상승했습니다.`,
       `급등 이후 최대 눌림은 ${formatFeaturePct(setup.maxPullback)}였고, 이후 반등 폭은 ${formatFeaturePct(setup.runup)}입니다.`,
       `급등 후 평균 거래량은 급등일 대비 ${formatFeaturePct(setup.postAvgVolumeRatio, 0)}, 최근 거래량은 ${formatFeaturePct(setup.recentVolumeRatio, 0)}로 줄었습니다.`,
-      `저점 안정도는 ${formatFeaturePct(setup.lowStability)}로 집계돼 거래량 감소 후 재상승 흐름으로 분류했습니다.`,
+      `저점 안정도는 ${formatFeaturePct(setup.lowStability)}로 집계돼 급등 후 거래량 감소 뒤 재상승 흐름으로 분류했습니다.`,
     ].join(' ');
   }
   if (pattern === 'volume_spike_dry_up_pullback_support') {
@@ -1355,7 +1355,7 @@ function buildChartSetupReason(pattern, setup) {
       `${setup.surgeDaysAgo}거래일 전 거래량이 ${setup.surgeVolumeRatio.toFixed(1)}배 늘며 ${formatFeaturePct(setup.surgeGain)} 상승했습니다.`,
       `이후 눌림 폭은 ${formatFeaturePct(setup.pullback)}이고, 급등 후 평균 거래량은 급등일 대비 ${formatFeaturePct(setup.postAvgVolumeRatio, 0)} 수준입니다.`,
       `최근 거래량은 급등일 대비 ${formatFeaturePct(setup.recentVolumeRatio, 0)}로 줄었고 저점 변동폭은 ${formatFeaturePct(setup.recentLowSpread)}입니다.`,
-      `현재가는 20일선 대비 ${formatFeaturePct(setup.ma20Distance)}, 60일선 대비 ${formatFeaturePct(setup.ma60Distance)} 위치에 있어 눌림 지지 후보로 포착했습니다.`,
+      `현재가는 20일선 대비 ${formatFeaturePct(setup.ma20Distance)}, 60일선 대비 ${formatFeaturePct(setup.ma60Distance)} 위치에 있어 급등 후 거래량이 줄어든 조정 구간으로 포착했습니다.`,
     ].join(' ');
   }
   return `차트 패턴 점수 ${Math.round(setup.quality)}점으로 특징주에 포착됐습니다.`;
@@ -1570,8 +1570,8 @@ function buildMarketFeatureStocks(stock, rows) {
     ['volume_surge_cooldown', '거래량 이후 조정', detectVolumeSurgeCooldownFeature(rows)],
     ['box_upper_approach', '박스권 상단 접근', detectBoxUpperApproachFeature(rows)],
     ['volume_surge_pullback_tail', '급등 뒤 조정 후 반등 시도', detectVolumeSurgePullbackTail(rows)],
-    ['volume_spike_breakout_dry_up_rise', '거래 줄어도 주가 재상승', detectVolumeSpikeBreakoutDryUpRise(rows)],
-    ['volume_spike_dry_up_pullback_support', '조정 중 지지선 부근 버팀', detectVolumeSpikeDryUpPullbackSupport(rows)],
+    ['volume_spike_breakout_dry_up_rise', '급등 후 거래량 감소 재상승', detectVolumeSpikeBreakoutDryUpRise(rows)],
+    ['volume_spike_dry_up_pullback_support', '급등 후 거래량 감소', detectVolumeSpikeDryUpPullbackSupport(rows)],
   ];
   for (const [pattern, title, setup] of chartSetups) {
     if (!setup) continue;
