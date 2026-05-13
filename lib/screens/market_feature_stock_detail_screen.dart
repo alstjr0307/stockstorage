@@ -101,7 +101,8 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
                 ? '${item.volumeRatio.toStringAsFixed(1)}x'
                 : '-',
           ),
-          _MetricRow(label: '포착 점수', value: '${item.score}'),
+          if (_showsScore(item))
+            _MetricRow(label: '포착 점수', value: '${item.score}'),
           const SizedBox(height: 28),
           _SectionHeader(title: '포착 정보'),
           const SizedBox(height: 6),
@@ -155,6 +156,10 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
   static String _featureTitle(MarketFeatureStock item) {
     if (item.title.isNotEmpty && !_looksEnglish(item.title)) return item.title;
     return _patternLabel(item.pattern) ?? _groupLabel(item.group);
+  }
+
+  static bool _showsScore(MarketFeatureStock item) {
+    return item.group == 'chart_capture';
   }
 
   static String? _patternLabel(String pattern) {
@@ -243,8 +248,6 @@ class _Header extends StatelessWidget {
       children: [
         Row(
           children: [
-            _SmallPill(label: item.market),
-            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 featureTitle,
@@ -1033,27 +1036,3 @@ class _MetricRow extends StatelessWidget {
   }
 }
 
-class _SmallPill extends StatelessWidget {
-  const _SmallPill({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF10B981).withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(9999),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: Color(0xFF10B981),
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}

@@ -215,11 +215,21 @@ class _FeatureStockList extends StatelessWidget {
       for (final entry in entries)
         entry.key: entry.value
           ..sort((a, b) {
-            final scoreCompare = b.score.compareTo(a.score);
-            if (scoreCompare != 0) return scoreCompare;
-            return b.tradingValue.compareTo(a.tradingValue);
+            return _compareFeatureStocks(a, b);
           }),
     };
+  }
+
+  int _compareFeatureStocks(MarketFeatureStock a, MarketFeatureStock b) {
+    final primary = switch (filter.group) {
+      'top_trading_value' => b.tradingValue.compareTo(a.tradingValue),
+      'gainers' => b.changeRate.compareTo(a.changeRate),
+      'volume_spike' => b.volumeRatio.compareTo(a.volumeRatio),
+      'high_breakout' => b.changeRate.compareTo(a.changeRate),
+      _ => b.score.compareTo(a.score),
+    };
+    if (primary != 0) return primary;
+    return b.tradingValue.compareTo(a.tradingValue);
   }
 }
 
@@ -329,24 +339,6 @@ class _FeatureStockRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 38,
-              height: 38,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: cs.onSurface.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                item.market,
-                style: TextStyle(
-                  color: cs.onSurface.withValues(alpha: 0.55),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -411,7 +403,8 @@ class _FeatureStockRow extends StatelessWidget {
                       _MiniMetric(
                         label: '거래량 ${item.volumeRatio.toStringAsFixed(1)}x',
                       ),
-                      _MiniMetric(label: '점수 ${item.score}'),
+                      if (featureShowsScore(item))
+                        _MiniMetric(label: '점수 ${item.score}'),
                     ],
                   ),
                 ],
@@ -558,6 +551,10 @@ bool featureLooksEnglish(String value) {
   if (text.isEmpty) return false;
   if (RegExp(r'[가-힣]').hasMatch(text)) return false;
   return RegExp(r'[A-Za-z]').hasMatch(text);
+}
+
+bool featureShowsScore(MarketFeatureStock item) {
+  return item.group == 'chart_capture';
 }
 
 class _MiniMetric extends StatelessWidget {
