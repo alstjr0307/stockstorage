@@ -193,6 +193,14 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
         return '신고가 돌파';
       case 'prior_high_breakout':
         return '전고점 돌파';
+      case 'ma20_reclaim':
+        return '20일선 회복';
+      case 'prior_high_retest':
+        return '전고점 재도전';
+      case 'volume_surge_cooldown':
+        return '거래량 이후 조정';
+      case 'box_upper_approach':
+        return '박스권 상단 접근';
       case 'volume_surge_pullback_tail':
         return '급등 뒤 조정 후 반등 시도';
       case 'volume_spike_breakout_dry_up_rise':

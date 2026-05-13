@@ -1302,6 +1302,34 @@ function formatFeaturePct(value, digits = 1) {
 }
 
 function buildChartSetupReason(pattern, setup) {
+  if (pattern === 'ma20_reclaim') {
+    return [
+      `최근 ${setup.belowDays}거래일 동안 20일선 아래에 머문 뒤 종가가 20일선을 다시 회복했습니다.`,
+      `현재가는 20일선 대비 ${formatFeaturePct(setup.ma20Distance)} 위에 있고, 거래량은 20일 평균 대비 ${setup.volumeRatio.toFixed(1)}배입니다.`,
+      `단기 낙폭 이후 반등을 시도하는 관심 구간으로 포착했습니다.`,
+    ].join(' ');
+  }
+  if (pattern === 'prior_high_retest') {
+    return [
+      `최근 ${setup.lookbackDays}거래일 고점까지 남은 거리가 ${formatFeaturePct(setup.distanceToHigh)}입니다.`,
+      `당일 등락률은 ${formatFeaturePct(setup.oneDayRate)}이고 거래량은 20일 평균 대비 ${setup.volumeRatio.toFixed(1)}배입니다.`,
+      `전고점 돌파 전 재도전 구간으로 포착했습니다.`,
+    ].join(' ');
+  }
+  if (pattern === 'volume_surge_cooldown') {
+    return [
+      `${setup.surgeDaysAgo}거래일 전 거래량이 평소보다 ${setup.surgeVolumeRatio.toFixed(1)}배 늘며 ${formatFeaturePct(setup.surgeGain)} 상승했습니다.`,
+      `이후 최대 조정은 ${formatFeaturePct(setup.pullback)}였고 현재가는 급등일 종가 대비 ${formatFeaturePct(setup.currentFromSurgeClose)} 위치입니다.`,
+      `거래량이 터진 뒤 크게 무너지지 않고 쉬어가는 구간으로 포착했습니다.`,
+    ].join(' ');
+  }
+  if (pattern === 'box_upper_approach') {
+    return [
+      `최근 ${setup.lookbackDays}거래일 박스권 등락폭은 ${formatFeaturePct(setup.boxRange)}입니다.`,
+      `현재가는 박스권 상단까지 ${formatFeaturePct(setup.distanceToHigh)} 남았고, 거래량은 20일 평균 대비 ${setup.volumeRatio.toFixed(1)}배입니다.`,
+      `박스권 상단 재도전 구간으로 포착했습니다.`,
+    ].join(' ');
+  }
   if (pattern === 'volume_surge_pullback_tail') {
     return [
       `${setup.surgeDaysAgo}거래일 전 거래량이 평소보다 ${setup.surgeVolumeRatio.toFixed(1)}배 늘며 ${formatFeaturePct(setup.surgeGain)} 상승했습니다.`,
@@ -1327,6 +1355,133 @@ function buildChartSetupReason(pattern, setup) {
     ].join(' ');
   }
   return `차트 패턴 점수 ${Math.round(setup.quality)}점으로 특징주에 포착됐습니다.`;
+}
+
+function detectMa20ReclaimFeature(rows) {
+  if (rows.length < 45) return null;
+  const last = rows[rows.length - 1];
+  const prev = rows[rows.length - 2];
+  const ma20 = sma(rows, 20);
+  const prevMa20 = sma(rows, 20, 1);
+  const avgVolume20 = sma(rows, 20, 0, 'volume') || 0;
+  if (!ma20 || !prevMa20 || !avgVolume20) return null;
+  if (last.close <= ma20 || prev.close > prevMa20) return null;
+
+  const ma20Distance = (last.close - ma20) / ma20;
+  const oneDayRate = prev.close ? (last.close - prev.close) / prev.close : 0;
+  const volumeRatio = last.volume / avgVolume20;
+  const recent = rows.slice(-8, -1);
+  const belowDays = recent.filter((row, idx) => {
+    const offset = recent.length - idx;
+    const ma = sma(rows, 20, offset);
+    return ma && row.close < ma;
+  }).length;
+  if (belowDays < 2) return null;
+  if (ma20Distance > 0.08 || oneDayRate < 0.005 || oneDayRate > 0.11 || volumeRatio < 1.05) return null;
+
+  let quality = 48;
+  quality += Math.min(16, volumeRatio * 5);
+  quality += Math.max(0, 14 - Math.abs(ma20Distance - 0.025) * 220);
+  quality += Math.min(12, oneDayRate * 180);
+  quality += Math.min(10, belowDays * 2);
+  return { belowDays, ma20Distance, oneDayRate, volumeRatio, quality };
+}
+
+function detectPriorHighRetestFeature(rows) {
+  if (rows.length < 80) return null;
+  const last = rows[rows.length - 1];
+  const prev = rows[rows.length - 2];
+  const lookbackDays = 60;
+  const prior = rows.slice(-(lookbackDays + 1), -1);
+  const priorHigh = highest(prior, 'high');
+  const avgVolume20 = sma(rows, 20, 0, 'volume') || 0;
+  if (!priorHigh || !avgVolume20) return null;
+  const distanceToHigh = (priorHigh - last.close) / priorHigh;
+  const oneDayRate = prev.close ? (last.close - prev.close) / prev.close : 0;
+  const volumeRatio = last.volume / avgVolume20;
+  if (distanceToHigh < 0 || distanceToHigh > 0.06) return null;
+  if (oneDayRate < 0.01 || oneDayRate > 0.12 || volumeRatio < 1.0) return null;
+  if (prev.close > last.close) return null;
+
+  let quality = 46;
+  quality += Math.max(0, 20 - distanceToHigh * 260);
+  quality += Math.min(14, volumeRatio * 4);
+  quality += Math.min(12, oneDayRate * 160);
+  return { lookbackDays, priorHigh, distanceToHigh, oneDayRate, volumeRatio, quality };
+}
+
+function detectVolumeSurgeCooldownFeature(rows) {
+  if (rows.length < 70) return null;
+  const last = rows[rows.length - 1];
+  const start = Math.max(20, rows.length - 24);
+  let best = null;
+
+  for (let i = start; i < rows.length - 3; i += 1) {
+    const surge = rows[i];
+    const previous = rows[i - 1];
+    const avgVolBefore = average(rows.slice(Math.max(0, i - 20), i).map((row) => row.volume));
+    const surgeGain = previous.close ? (surge.close - previous.close) / previous.close : 0;
+    const surgeVolumeRatio = avgVolBefore ? surge.volume / avgVolBefore : 0;
+    const surgeTradingValue = surge.close * surge.volume;
+    if (surgeGain < 0.05 || surgeVolumeRatio < 2.2 || surgeTradingValue < FEATURE_MIN_TRADING_VALUE) continue;
+
+    const after = rows.slice(i + 1);
+    const afterLow = lowest(after, 'low');
+    const afterHigh = highest(after, 'high');
+    const pullback = (surge.high - afterLow) / surge.high;
+    const currentFromSurgeClose = surge.close ? (last.close - surge.close) / surge.close : 0;
+    if (pullback < 0.03 || pullback > 0.18) continue;
+    if (last.close < surge.close * 0.9 || last.close > surge.high * 1.02) continue;
+    if (afterHigh > surge.high * 1.05) continue;
+
+    const recentAvgVolume = average(after.slice(-3).map((row) => row.volume));
+    const recentVolumeRatio = recentAvgVolume / surge.volume;
+    if (recentVolumeRatio > 0.7) continue;
+
+    let quality = 45;
+    quality += Math.min(18, surgeVolumeRatio * 3);
+    quality += Math.max(0, 16 - Math.abs(pullback - 0.09) * 140);
+    quality += Math.max(0, 12 - Math.abs(currentFromSurgeClose) * 120);
+    quality += Math.max(0, 8 - recentVolumeRatio * 8);
+    const candidate = {
+      surgeDaysAgo: rows.length - 1 - i,
+      surgeGain,
+      surgeVolumeRatio,
+      pullback,
+      currentFromSurgeClose,
+      recentVolumeRatio,
+      quality,
+    };
+    if (!best || candidate.quality > best.quality) best = candidate;
+  }
+  return best;
+}
+
+function detectBoxUpperApproachFeature(rows) {
+  if (rows.length < 70) return null;
+  const last = rows[rows.length - 1];
+  const prev = rows[rows.length - 2];
+  const lookbackDays = 40;
+  const box = rows.slice(-(lookbackDays + 1), -1);
+  const boxHigh = highest(box, 'high');
+  const boxLow = lowest(box, 'low');
+  const avgVolume20 = sma(rows, 20, 0, 'volume') || 0;
+  if (!boxHigh || !boxLow || !avgVolume20) return null;
+  const boxRange = (boxHigh - boxLow) / boxLow;
+  const distanceToHigh = (boxHigh - last.close) / boxHigh;
+  const oneDayRate = prev.close ? (last.close - prev.close) / prev.close : 0;
+  const volumeRatio = last.volume / avgVolume20;
+  const position = (last.close - boxLow) / (boxHigh - boxLow);
+  if (boxRange < 0.08 || boxRange > 0.35) return null;
+  if (position < 0.72 || distanceToHigh < -0.01 || distanceToHigh > 0.07) return null;
+  if (oneDayRate < 0 || oneDayRate > 0.1 || volumeRatio < 0.9) return null;
+
+  let quality = 44;
+  quality += Math.max(0, 18 - distanceToHigh * 220);
+  quality += Math.min(12, volumeRatio * 4);
+  quality += Math.min(10, position * 10);
+  quality += Math.min(8, oneDayRate * 120);
+  return { lookbackDays, boxHigh, boxLow, boxRange, distanceToHigh, oneDayRate, volumeRatio, quality };
 }
 
 function buildMarketFeatureStocks(stock, rows) {
@@ -1406,6 +1561,10 @@ function buildMarketFeatureStocks(stock, rows) {
   }
 
   const chartSetups = [
+    ['ma20_reclaim', '20일선 회복', detectMa20ReclaimFeature(rows)],
+    ['prior_high_retest', '전고점 재도전', detectPriorHighRetestFeature(rows)],
+    ['volume_surge_cooldown', '거래량 이후 조정', detectVolumeSurgeCooldownFeature(rows)],
+    ['box_upper_approach', '박스권 상단 접근', detectBoxUpperApproachFeature(rows)],
     ['volume_surge_pullback_tail', '급등 뒤 조정 후 반등 시도', detectVolumeSurgePullbackTail(rows)],
     ['volume_spike_breakout_dry_up_rise', '거래 줄어도 주가 재상승', detectVolumeSpikeBreakoutDryUpRise(rows)],
     ['volume_spike_dry_up_pullback_support', '조정 중 지지선 부근 버팀', detectVolumeSpikeDryUpPullbackSupport(rows)],
