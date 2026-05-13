@@ -1315,7 +1315,7 @@ function buildChartSetupReason(pattern, setup) {
   }
   if (pattern === 'prior_high_retest') {
     return [
-      `당일 고가 기준 최근 ${setup.lookbackDays}거래일 고점까지 남은 거리가 ${formatFeaturePct(setup.distanceToHigh)}입니다.`,
+      `${setup.priorHighAge}거래일 전 고점까지 종가 기준 남은 거리가 ${formatFeaturePct(setup.distanceToHigh)}입니다.`,
       `당일 등락률은 ${formatFeaturePct(setup.oneDayRate)}이고 거래량은 20일 평균 대비 ${setup.volumeRatio.toFixed(1)}배입니다.`,
       `전고점 근처로 다시 접근하는 구간으로 포착했습니다.`,
     ].join(' ');
@@ -1397,21 +1397,25 @@ function detectPriorHighRetestFeature(rows) {
   const prev = rows[rows.length - 2];
   const lookbackDays = 60;
   const prior = rows.slice(-(lookbackDays + 1), -1);
-  const priorHigh = highest(prior, 'high');
+  const priorHighIndex = maxIndex(prior, 'high');
+  const priorHigh = prior[priorHighIndex]?.high;
+  const priorHighAge = prior.length - priorHighIndex;
   const avgVolume20 = sma(rows, 20, 0, 'volume') || 0;
   if (!priorHigh || !avgVolume20) return null;
-  const distanceToHigh = (priorHigh - last.high) / priorHigh;
+  const distanceToHigh = (priorHigh - last.close) / priorHigh;
   const oneDayRate = prev.close ? (last.close - prev.close) / prev.close : 0;
   const volumeRatio = last.volume / avgVolume20;
-  if (last.high >= priorHigh || distanceToHigh < 0.003 || distanceToHigh > 0.06) return null;
+  if (priorHighAge < 5) return null;
+  if (last.high >= priorHigh || distanceToHigh < 0.005 || distanceToHigh > 0.06) return null;
   if (oneDayRate < 0.01 || oneDayRate > 0.12 || volumeRatio < 1.0) return null;
   if (prev.close > last.close) return null;
+  if (closePositionRatio(last) < 0.65) return null;
 
   let quality = 46;
   quality += Math.max(0, 20 - distanceToHigh * 260);
   quality += Math.min(14, volumeRatio * 4);
   quality += Math.min(12, oneDayRate * 160);
-  return { lookbackDays, priorHigh, distanceToHigh, oneDayRate, volumeRatio, quality };
+  return { lookbackDays, priorHigh, priorHighAge, distanceToHigh, oneDayRate, volumeRatio, quality };
 }
 
 function detectVolumeSurgeCooldownFeature(rows) {
