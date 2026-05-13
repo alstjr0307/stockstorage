@@ -1405,9 +1405,9 @@ function buildMarketFeatureStocks(stock, rows) {
   }
 
   const chartSetups = [
-    ['volume_surge_pullback_tail', '급등 후 U자 눌림', detectVolumeSurgePullbackTail(rows)],
-    ['volume_spike_breakout_dry_up_rise', '거래량 감소 상승', detectVolumeSpikeBreakoutDryUpRise(rows)],
-    ['volume_spike_dry_up_pullback_support', '거래량 감소 눌림 지지', detectVolumeSpikeDryUpPullbackSupport(rows)],
+    ['volume_surge_pullback_tail', '급등 뒤 조정 후 반등 시도', detectVolumeSurgePullbackTail(rows)],
+    ['volume_spike_breakout_dry_up_rise', '거래 줄어도 주가 재상승', detectVolumeSpikeBreakoutDryUpRise(rows)],
+    ['volume_spike_dry_up_pullback_support', '조정 중 지지선 부근 버팀', detectVolumeSpikeDryUpPullbackSupport(rows)],
   ];
   for (const [pattern, title, setup] of chartSetups) {
     if (!setup) continue;

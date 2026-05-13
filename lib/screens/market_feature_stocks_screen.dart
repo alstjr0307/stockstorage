@@ -18,7 +18,7 @@ class _MarketFeatureStocksScreenState extends State<MarketFeatureStocksScreen> {
     _FeatureStockFilter(
       '차트 포착',
       group: 'chart_capture',
-      description: '거래량·이평선·눌림 패턴이 포착된 종목입니다.',
+      description: '급등 이후 쉬어가거나 지지선 부근에서 버티는 흐름이 포착된 종목입니다.',
     ),
     _FeatureStockFilter(
       '급등주',
@@ -520,11 +520,11 @@ String? featurePatternLabel(String pattern) {
     case 'prior_high_breakout':
       return '전고점 돌파';
     case 'volume_surge_pullback_tail':
-      return '급등 후 U자 눌림';
+      return '급등 뒤 조정 후 반등 시도';
     case 'volume_spike_breakout_dry_up_rise':
-      return '거래량 감소 후 재상승';
+      return '거래 줄어도 주가 재상승';
     case 'volume_spike_dry_up_pullback_support':
-      return '거래량 감소 눌림 지지';
+      return '조정 중 지지선 부근 버팀';
     default:
       return null;
   }

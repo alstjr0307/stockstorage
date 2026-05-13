@@ -153,8 +153,10 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
   }
 
   static String _featureTitle(MarketFeatureStock item) {
-    if (item.title.isNotEmpty && !_looksEnglish(item.title)) return item.title;
-    return _patternLabel(item.pattern) ?? _groupLabel(item.group);
+    return _patternLabel(item.pattern) ??
+        (item.title.isNotEmpty && !_looksEnglish(item.title)
+            ? item.title
+            : _groupLabel(item.group));
   }
 
   static String _featureSpecificLabel(MarketFeatureStock item) {
@@ -192,11 +194,11 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
       case 'prior_high_breakout':
         return '전고점 돌파';
       case 'volume_surge_pullback_tail':
-        return '급등 후 U자 눌림';
+        return '급등 뒤 조정 후 반등 시도';
       case 'volume_spike_breakout_dry_up_rise':
-        return '거래량 감소 상승';
+        return '거래 줄어도 주가 재상승';
       case 'volume_spike_dry_up_pullback_support':
-        return '거래량 감소 눌림 지지';
+        return '조정 중 지지선 부근 버팀';
       default:
         return null;
     }
