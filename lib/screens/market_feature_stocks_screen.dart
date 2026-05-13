@@ -454,7 +454,7 @@ String featureDisplayReason(MarketFeatureStock item) {
   }
 
   final parts = <String>[];
-  parts.add('${featureGroupLabel(item.group)} 기준으로 포착된 종목입니다.');
+  parts.add('${featureSpecificLabel(item)} 기준으로 포착된 종목입니다.');
   if (item.changeRate != 0) {
     final direction = item.changeRate > 0 ? '상승' : '하락';
     parts.add(

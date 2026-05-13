@@ -126,13 +126,17 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
 
   String get _localizedReason {
     final reason = item.reason.replaceAll('\n', ' ').trim();
-    if (reason.isNotEmpty && !_looksEnglish(reason)) return reason;
+    if (reason.isNotEmpty && !_looksEnglish(reason)) {
+      return '${_featureSpecificLabel(item)} 기준입니다. $reason';
+    }
 
     final title = item.title.trim();
-    if (title.isNotEmpty && !_looksEnglish(title)) return title;
+    if (title.isNotEmpty && !_looksEnglish(title)) {
+      return '${_featureSpecificLabel(item)} 기준으로 포착된 종목입니다.';
+    }
 
     final parts = <String>[];
-    parts.add('${_groupLabel(item.group)} 기준으로 포착된 종목입니다.');
+    parts.add('${_featureSpecificLabel(item)} 기준으로 포착된 종목입니다.');
     if (item.changeRate != 0) {
       final direction = item.changeRate > 0 ? '상승' : '하락';
       parts.add(
