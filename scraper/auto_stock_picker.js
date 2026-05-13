@@ -1315,9 +1315,9 @@ function buildChartSetupReason(pattern, setup) {
   }
   if (pattern === 'prior_high_retest') {
     return [
-      `최근 ${setup.lookbackDays}거래일 고점까지 남은 거리가 ${formatFeaturePct(setup.distanceToHigh)}입니다.`,
+      `당일 고가 기준 최근 ${setup.lookbackDays}거래일 고점까지 남은 거리가 ${formatFeaturePct(setup.distanceToHigh)}입니다.`,
       `당일 등락률은 ${formatFeaturePct(setup.oneDayRate)}이고 거래량은 20일 평균 대비 ${setup.volumeRatio.toFixed(1)}배입니다.`,
-      `전고점 돌파 전 재도전 구간으로 포착했습니다.`,
+      `전고점 근처로 다시 접근하는 구간으로 포착했습니다.`,
     ].join(' ');
   }
   if (pattern === 'volume_surge_cooldown') {
@@ -1330,8 +1330,8 @@ function buildChartSetupReason(pattern, setup) {
   if (pattern === 'box_upper_approach') {
     return [
       `최근 ${setup.lookbackDays}거래일 박스권 등락폭은 ${formatFeaturePct(setup.boxRange)}입니다.`,
-      `현재가는 박스권 상단까지 ${formatFeaturePct(setup.distanceToHigh)} 남았고, 거래량은 20일 평균 대비 ${setup.volumeRatio.toFixed(1)}배입니다.`,
-      `박스권 상단 재도전 구간으로 포착했습니다.`,
+      `당일 고가 기준 박스권 상단까지 ${formatFeaturePct(setup.distanceToHigh)} 남았고, 거래량은 20일 평균 대비 ${setup.volumeRatio.toFixed(1)}배입니다.`,
+      `박스권 상단 근처로 접근하는 구간으로 포착했습니다.`,
     ].join(' ');
   }
   if (pattern === 'volume_surge_pullback_tail') {
@@ -1400,10 +1400,10 @@ function detectPriorHighRetestFeature(rows) {
   const priorHigh = highest(prior, 'high');
   const avgVolume20 = sma(rows, 20, 0, 'volume') || 0;
   if (!priorHigh || !avgVolume20) return null;
-  const distanceToHigh = (priorHigh - last.close) / priorHigh;
+  const distanceToHigh = (priorHigh - last.high) / priorHigh;
   const oneDayRate = prev.close ? (last.close - prev.close) / prev.close : 0;
   const volumeRatio = last.volume / avgVolume20;
-  if (distanceToHigh < 0 || distanceToHigh > 0.06) return null;
+  if (last.high >= priorHigh || distanceToHigh < 0.003 || distanceToHigh > 0.06) return null;
   if (oneDayRate < 0.01 || oneDayRate > 0.12 || volumeRatio < 1.0) return null;
   if (prev.close > last.close) return null;
 
@@ -1472,12 +1472,12 @@ function detectBoxUpperApproachFeature(rows) {
   const avgVolume20 = sma(rows, 20, 0, 'volume') || 0;
   if (!boxHigh || !boxLow || !avgVolume20) return null;
   const boxRange = (boxHigh - boxLow) / boxLow;
-  const distanceToHigh = (boxHigh - last.close) / boxHigh;
+  const distanceToHigh = (boxHigh - last.high) / boxHigh;
   const oneDayRate = prev.close ? (last.close - prev.close) / prev.close : 0;
   const volumeRatio = last.volume / avgVolume20;
   const position = (last.close - boxLow) / (boxHigh - boxLow);
   if (boxRange < 0.08 || boxRange > 0.35) return null;
-  if (position < 0.72 || distanceToHigh < -0.01 || distanceToHigh > 0.07) return null;
+  if (last.high >= boxHigh || position < 0.72 || distanceToHigh < 0.003 || distanceToHigh > 0.07) return null;
   if (oneDayRate < 0 || oneDayRate > 0.1 || volumeRatio < 0.9) return null;
 
   let quality = 44;
