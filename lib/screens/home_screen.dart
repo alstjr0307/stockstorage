@@ -1486,10 +1486,7 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                   ),
                 ),
                 const SizedBox(height: 18),
-                _HomeReveal(
-                  order: 3,
-                  child: const _AIBriefCard(),
-                ),
+                _HomeReveal(order: 3, child: const _AIBriefCard()),
                 const SizedBox(height: 18),
                 _HomeReveal(
                   order: 4,
@@ -2039,31 +2036,30 @@ class _HeroShell extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.local_fire_department_rounded,
-                        color: Color(0xFF031A12),
-                        size: 19,
-                      ),
-                      Text(
-                        '$streak',
-                        style: _homeNumber(
-                          color: const Color(0xFF031A12),
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('🔥', style: TextStyle(fontSize: 18)),
+                        Text(
+                          '$streak',
+                          style: _homeNumber(
+                            color: const Color(0xFF031A12),
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
-                      Text(
-                        'DAYS',
-                        style: _homeText(
-                          color: const Color(0xB3031A12),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w800,
+                        Text(
+                          'DAYS',
+                          style: _homeText(
+                            color: const Color(0xB3031A12),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -2543,15 +2539,15 @@ class _AIBriefCard extends StatelessWidget {
   const _AIBriefCard();
 
   String _formatSlotTime(String? slotLabel, dynamic generatedAt) {
-    if (slotLabel != null) return 'AI 한 줄 시황 · 오늘 $slotLabel';
-    if (generatedAt == null) return 'AI 한 줄 시황';
+    if (slotLabel != null) return 'AI 간단 시황 · 오늘 $slotLabel';
+    if (generatedAt == null) return 'AI 간단 시황';
     try {
       final dt = (generatedAt as Timestamp).toDate().toLocal();
       final h = dt.hour.toString().padLeft(2, '0');
       final m = dt.minute.toString().padLeft(2, '0');
-      return 'AI 한 줄 시황 · 오늘 $h:$m';
+      return 'AI 간단 시황 · 오늘 $h:$m';
     } catch (_) {
-      return 'AI 한 줄 시황';
+      return 'AI 간단 시황';
     }
   }
 
@@ -2586,7 +2582,7 @@ class _AIBriefCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      'AI 한 줄 시황',
+                      'AI 간단 시황',
                       style: _homeText(
                         color: _homeAccent,
                         fontSize: 12,
@@ -2689,7 +2685,7 @@ class _TopMoversPreview extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '거래대금·급등·거래량 포착 종목',
+                '오늘의 AI포착 종목',
                 style: _homeText(
                   color: _homeFaint,
                   fontSize: 12,
@@ -2698,7 +2694,7 @@ class _TopMoversPreview extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               SizedBox(
-                height: 130,
+                height: 140,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: visible.length,

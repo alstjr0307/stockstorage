@@ -34,8 +34,8 @@ const HANDLE_MAX_DAYS = numberEnv('HANDLE_MAX_DAYS', 25);
 const CUP_MIN_DAYS = numberEnv('CUP_MIN_DAYS', 45);
 const CUP_MAX_DAYS = numberEnv('CUP_MAX_DAYS', 180);
 const SURGE_LOOKBACK_DAYS = numberEnv('SURGE_LOOKBACK_DAYS', 20);
-const SURGE_MIN_GAIN = numberEnv('SURGE_MIN_GAIN', 0.07);
-const SURGE_MIN_VOLUME_RATIO = numberEnv('SURGE_MIN_VOLUME_RATIO', 3);
+const SURGE_MIN_GAIN = numberEnv('SURGE_MIN_GAIN', 0.04);
+const SURGE_MIN_VOLUME_RATIO = numberEnv('SURGE_MIN_VOLUME_RATIO', 1.8);
 const PULLBACK_MIN = numberEnv('PULLBACK_MIN', 0.1);
 const PULLBACK_MAX = numberEnv('PULLBACK_MAX', 0.18);
 const PULLBACK_TARGET = numberEnv('PULLBACK_TARGET', 0.12);
@@ -79,13 +79,13 @@ const CLUSTER_BREAKOUT_MIN_VOLUME_RATIO = numberEnv('CLUSTER_BREAKOUT_MIN_VOLUME
 const CLUSTER_BREAKOUT_MIN_GAIN = numberEnv('CLUSTER_BREAKOUT_MIN_GAIN', 0.07);
 const CLUSTER_BREAKOUT_MAX_DISTANCE = numberEnv('CLUSTER_BREAKOUT_MAX_DISTANCE', 0.25);
 const DRYUP_LOOKBACK_DAYS = numberEnv('DRYUP_LOOKBACK_DAYS', 15);
-const DRYUP_MIN_SURGE_GAIN = numberEnv('DRYUP_MIN_SURGE_GAIN', 0.07);
-const DRYUP_MIN_SURGE_VOLUME_RATIO = numberEnv('DRYUP_MIN_SURGE_VOLUME_RATIO', 3);
+const DRYUP_MIN_SURGE_GAIN = numberEnv('DRYUP_MIN_SURGE_GAIN', 0.04);
+const DRYUP_MIN_SURGE_VOLUME_RATIO = numberEnv('DRYUP_MIN_SURGE_VOLUME_RATIO', 1.8);
 const DRYUP_MIN_SURGE_TRADING_VALUE = numberEnv('DRYUP_MIN_SURGE_TRADING_VALUE', 5000000000);
 const DRYUP_MAX_PULLBACK = numberEnv('DRYUP_MAX_PULLBACK', 0.06);
 const DRYUP_MAX_RUNUP = numberEnv('DRYUP_MAX_RUNUP', 0.3);
-const DRYUP_MAX_POST_AVG_VOLUME_RATIO = numberEnv('DRYUP_MAX_POST_AVG_VOLUME_RATIO', 0.55);
-const DRYUP_MAX_RECENT_VOLUME_RATIO = numberEnv('DRYUP_MAX_RECENT_VOLUME_RATIO', 0.35);
+const DRYUP_MAX_POST_AVG_VOLUME_RATIO = numberEnv('DRYUP_MAX_POST_AVG_VOLUME_RATIO', 0.7);
+const DRYUP_MAX_RECENT_VOLUME_RATIO = numberEnv('DRYUP_MAX_RECENT_VOLUME_RATIO', 0.5);
 const DRYUP_RISE_MIN_MA20_DISTANCE = numberEnv('DRYUP_RISE_MIN_MA20_DISTANCE', 0.03);
 const DRYUP_RISE_MAX_MA20_DISTANCE = numberEnv('DRYUP_RISE_MAX_MA20_DISTANCE', 0.22);
 const DRYUP_RISE_MIN_MA60_DISTANCE = numberEnv('DRYUP_RISE_MIN_MA60_DISTANCE', 0);
@@ -107,6 +107,7 @@ const FEATURE_VALUE_SPIKE_RATIO = numberEnv('FEATURE_VALUE_SPIKE_RATIO', 2.5);
 const FEATURE_GAINER_MIN_RETURN = numberEnv('FEATURE_GAINER_MIN_RETURN', 0.07);
 const FEATURE_VOLUME_SPIKE_MIN_RETURN = numberEnv('FEATURE_VOLUME_SPIKE_MIN_RETURN', 0.03);
 const FEATURE_HIGH_BREAKOUT_MIN_RETURN = numberEnv('FEATURE_HIGH_BREAKOUT_MIN_RETURN', 0.03);
+const FEATURE_COOLDOWN_DAYS = numberEnv('FEATURE_COOLDOWN_DAYS', 3);
 
 function pad2(value) {
   return String(value).padStart(2, '0');
@@ -482,6 +483,8 @@ function detectVolumeSurgePullbackTail(rows) {
     if (after.length < 3 || after.length > SURGE_LOOKBACK_DAYS) continue;
     if (highest(after, 'high') > surge.high * 1.003) continue;
     const afterLow = lowest(after, 'low');
+    const afterCloseLow = lowest(after, 'close');
+    if (afterCloseLow < previous.close) continue;
     const pullback = (surge.high - afterLow) / surge.high;
     const closePullback = (surge.close - afterLow) / surge.close;
     const targetPullbackMin = Math.max(PULLBACK_MIN, PULLBACK_TARGET - PULLBACK_TOLERANCE);
@@ -577,7 +580,13 @@ function detectVolumeSurgePullbackTail(rows) {
       baseDays: baseZone.length,
       quality,
     };
-    if (!best || candidate.quality > best.quality) best = candidate;
+    if (
+      !best ||
+      candidate.surgeDaysAgo > best.surgeDaysAgo ||
+      (candidate.surgeDaysAgo === best.surgeDaysAgo && candidate.quality > best.quality)
+    ) {
+      best = candidate;
+    }
   }
 
   return best;
@@ -850,7 +859,13 @@ function detectMa120ReclaimCompressionBreakout(rows) {
       boxDistance: boxHigh ? (last.close - boxHigh) / boxHigh : 0,
       quality,
     };
-    if (!best || candidate.quality > best.quality) best = candidate;
+    if (
+      !best ||
+      candidate.surgeDaysAgo > best.surgeDaysAgo ||
+      (candidate.surgeDaysAgo === best.surgeDaysAgo && candidate.quality > best.quality)
+    ) {
+      best = candidate;
+    }
   }
 
   return best;
@@ -939,7 +954,9 @@ function detectVolumeSpikeBreakoutDryUpRise(rows) {
     const after = rows.slice(i + 1);
     if (after.length < 4 || after.length > DRYUP_LOOKBACK_DAYS) continue;
     const afterLow = lowest(after, 'low');
+    const afterCloseLow = lowest(after, 'close');
     const afterHigh = highest(after, 'high');
+    if (afterCloseLow < previous.close) continue;
     const maxPullback = (surge.high - afterLow) / surge.high;
     if (maxPullback > DRYUP_MAX_PULLBACK) continue;
     if (last.close < surge.close * 0.995) continue;
@@ -1030,6 +1047,8 @@ function detectVolumeSpikeDryUpPullbackSupport(rows) {
     if (highest(after, 'high') > surge.high * 1.003) continue;
 
     const afterLow = lowest(after, 'low');
+    const afterCloseLow = lowest(after, 'close');
+    if (afterCloseLow < previous.close) continue;
     const pullback = (surge.high - afterLow) / surge.high;
     if (pullback < DRYUP_SUPPORT_MIN_PULLBACK || pullback > DRYUP_SUPPORT_MAX_PULLBACK) continue;
     if (afterLow < surge.low * 0.97) continue;
@@ -1042,7 +1061,10 @@ function detectVolumeSpikeDryUpPullbackSupport(rows) {
     const recentVolume = average(after.slice(-3).map((row) => row.volume));
     const postAvgVolumeRatio = postAvgVolume / surge.volume;
     const recentVolumeRatio = recentVolume / surge.volume;
-    if (postAvgVolumeRatio > 0.55 || recentVolumeRatio > 0.38) continue;
+    if (
+      postAvgVolumeRatio > DRYUP_MAX_POST_AVG_VOLUME_RATIO ||
+      recentVolumeRatio > DRYUP_MAX_RECENT_VOLUME_RATIO
+    ) continue;
 
     const recent = after.slice(-7);
     const recentLow = lowest(recent, 'low');
@@ -1089,7 +1111,13 @@ function detectVolumeSpikeDryUpPullbackSupport(rows) {
       ma60Distance,
       quality,
     };
-    if (!best || candidate.quality > best.quality) best = candidate;
+    if (
+      !best ||
+      candidate.surgeDaysAgo > best.surgeDaysAgo ||
+      (candidate.surgeDaysAgo === best.surgeDaysAgo && candidate.quality > best.quality)
+    ) {
+      best = candidate;
+    }
   }
 
   return best;
@@ -1294,6 +1322,65 @@ function makeFeatureItem(stock, rows, group, pattern, title, reason, score) {
   };
 }
 
+function mergeFeatureReasonTexts(reasons) {
+  const seen = new Set();
+  const merged = [];
+  for (const reason of reasons) {
+    const normalized = String(reason || '').replace(/\s+/g, ' ').trim();
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    merged.push(normalized);
+  }
+  return merged.join('\n\n');
+}
+
+function mergeFeatureItemsByTicker(items) {
+  const byTicker = new Map();
+  for (const item of items) {
+    const key = item.ticker;
+    if (!byTicker.has(key)) {
+      byTicker.set(key, {
+        ...item,
+        patterns: item.pattern ? [item.pattern] : [],
+        titles: item.title ? [item.title] : [],
+        reasonParts: item.reason ? [item.reason] : [],
+      });
+      continue;
+    }
+
+    const current = byTicker.get(key);
+    if (item.score > current.score) {
+      current.group = item.group;
+      current.pattern = item.pattern;
+      current.title = item.title;
+      current.price = item.price;
+      current.changeRate = item.changeRate;
+      current.tradingValue = item.tradingValue;
+      current.volumeRatio = item.volumeRatio;
+      current.sourceDate = item.sourceDate;
+    }
+    current.score = Math.max(current.score, item.score);
+    if (item.pattern && !current.patterns.includes(item.pattern)) current.patterns.push(item.pattern);
+    if (item.title && !current.titles.includes(item.title)) current.titles.push(item.title);
+    if (item.reason) current.reasonParts.push(item.reason);
+  }
+
+  return Array.from(byTicker.values()).map((item) => {
+    const mergedPatterns = item.patterns.filter(Boolean);
+    const mergedTitles = item.titles.filter(Boolean);
+    const header = mergedTitles.length > 1
+      ? `복합 포착: ${mergedTitles.join(', ')}`
+      : null;
+    const body = mergeFeatureReasonTexts(item.reasonParts);
+    return {
+      ...item,
+      pattern: mergedPatterns[0] || item.pattern,
+      title: mergedTitles[0] || item.title,
+      reason: header ? `${header}\n${body}` : body,
+    };
+  });
+}
+
 function formatFeatureTradingValue(value) {
   const rounded = Math.round(value || 0);
   if (rounded >= 1000000000000) return `${(rounded / 1000000000000).toFixed(1)}조원`;
@@ -1324,14 +1411,14 @@ function buildChartSetupReason(pattern, setup) {
     return [
       `${setup.surgeDaysAgo}거래일 전 거래량이 평소보다 ${setup.surgeVolumeRatio.toFixed(1)}배 늘며 ${formatFeaturePct(setup.surgeGain)} 상승했습니다.`,
       `이후 최대 조정은 ${formatFeaturePct(setup.pullback)}였고 현재가는 급등일 종가 대비 ${formatFeaturePct(setup.currentFromSurgeClose)} 위치입니다.`,
-      `거래량이 터진 뒤 크게 무너지지 않고 쉬어가는 구간으로 포착했습니다.`,
+      `급등 후 지지 패턴으로 포착했습니다.`,
     ].join(' ');
   }
   if (pattern === 'box_upper_approach') {
     return [
       `최근 ${setup.lookbackDays}거래일 박스권 등락폭은 ${formatFeaturePct(setup.boxRange)}입니다.`,
       `당일 고가 기준 박스권 상단까지 ${formatFeaturePct(setup.distanceToHigh)} 남았고, 거래량은 20일 평균 대비 ${setup.volumeRatio.toFixed(1)}배입니다.`,
-      `박스권 상단 근처로 접근하는 구간으로 포착했습니다.`,
+      `박스권 상단 테스트 가능성이 높아지는 구간으로 포착했습니다.`,
     ].join(' ');
   }
   if (pattern === 'volume_surge_pullback_tail') {
@@ -1347,7 +1434,7 @@ function buildChartSetupReason(pattern, setup) {
       `${setup.surgeDaysAgo}거래일 전 거래량이 ${setup.surgeVolumeRatio.toFixed(1)}배 늘며 ${formatFeaturePct(setup.surgeGain)} 상승했습니다.`,
       `급등 이후 최대 눌림은 ${formatFeaturePct(setup.maxPullback)}였고, 이후 반등 폭은 ${formatFeaturePct(setup.runup)}입니다.`,
       `급등 후 평균 거래량은 급등일 대비 ${formatFeaturePct(setup.postAvgVolumeRatio, 0)}, 최근 거래량은 ${formatFeaturePct(setup.recentVolumeRatio, 0)}로 줄었습니다.`,
-      `저점 안정도는 ${formatFeaturePct(setup.lowStability)}로 집계돼 급등 후 거래량 감소 뒤 재상승 흐름으로 분류했습니다.`,
+      `저점 안정도는 ${formatFeaturePct(setup.lowStability)}로 집계돼, 급등 후 거래량 감소하며 상승 패턴으로 포착했습니다.`,
     ].join(' ');
   }
   if (pattern === 'volume_spike_dry_up_pullback_support') {
@@ -1355,7 +1442,7 @@ function buildChartSetupReason(pattern, setup) {
       `${setup.surgeDaysAgo}거래일 전 거래량이 ${setup.surgeVolumeRatio.toFixed(1)}배 늘며 ${formatFeaturePct(setup.surgeGain)} 상승했습니다.`,
       `이후 눌림 폭은 ${formatFeaturePct(setup.pullback)}이고, 급등 후 평균 거래량은 급등일 대비 ${formatFeaturePct(setup.postAvgVolumeRatio, 0)} 수준입니다.`,
       `최근 거래량은 급등일 대비 ${formatFeaturePct(setup.recentVolumeRatio, 0)}로 줄었고 저점 변동폭은 ${formatFeaturePct(setup.recentLowSpread)}입니다.`,
-      `현재가는 20일선 대비 ${formatFeaturePct(setup.ma20Distance)}, 60일선 대비 ${formatFeaturePct(setup.ma60Distance)} 위치에 있어 급등 후 거래량이 줄어든 조정 구간으로 포착했습니다.`,
+      `현재가는 20일선 대비 ${formatFeaturePct(setup.ma20Distance)}, 60일선 대비 ${formatFeaturePct(setup.ma60Distance)} 위치에 있어 급등 후 거래량 감소하며 지지 패턴으로 포착했습니다.`,
     ].join(' ');
   }
   return `차트 패턴 점수 ${Math.round(setup.quality)}점으로 특징주에 포착됐습니다.`;
@@ -1431,20 +1518,26 @@ function detectVolumeSurgeCooldownFeature(rows) {
     const surgeGain = previous.close ? (surge.close - previous.close) / previous.close : 0;
     const surgeVolumeRatio = avgVolBefore ? surge.volume / avgVolBefore : 0;
     const surgeTradingValue = surge.close * surge.volume;
-    if (surgeGain < 0.05 || surgeVolumeRatio < 2.2 || surgeTradingValue < FEATURE_MIN_TRADING_VALUE) continue;
+    if (
+      surgeGain < SURGE_MIN_GAIN ||
+      surgeVolumeRatio < SURGE_MIN_VOLUME_RATIO ||
+      surgeTradingValue < FEATURE_MIN_TRADING_VALUE
+    ) continue;
 
     const after = rows.slice(i + 1);
     const afterLow = lowest(after, 'low');
+    const afterCloseLow = lowest(after, 'close');
     const afterHigh = highest(after, 'high');
+    if (afterCloseLow < previous.close) continue;
     const pullback = (surge.high - afterLow) / surge.high;
     const currentFromSurgeClose = surge.close ? (last.close - surge.close) / surge.close : 0;
-    if (pullback < 0.03 || pullback > 0.18) continue;
+    if (pullback < 0.02 || pullback > 0.22) continue;
     if (last.close < surge.close * 0.9 || last.close > surge.high * 1.02) continue;
     if (afterHigh > surge.high * 1.05) continue;
 
     const recentAvgVolume = average(after.slice(-3).map((row) => row.volume));
     const recentVolumeRatio = recentAvgVolume / surge.volume;
-    if (recentVolumeRatio > 0.7) continue;
+    if (recentVolumeRatio > 0.85) continue;
 
     let quality = 45;
     quality += Math.min(18, surgeVolumeRatio * 3);
@@ -1571,11 +1664,11 @@ function buildMarketFeatureStocks(stock, rows) {
   const chartSetups = [
     ['ma20_reclaim', '20일선 회복', detectMa20ReclaimFeature(rows)],
     ['prior_high_retest', '전고점 재도전', detectPriorHighRetestFeature(rows)],
-    ['volume_surge_cooldown', '거래량 이후 조정', detectVolumeSurgeCooldownFeature(rows)],
+    ['volume_surge_cooldown', '급등 후 재정비 구간', detectVolumeSurgeCooldownFeature(rows)],
     ['box_upper_approach', '박스권 상단 접근', detectBoxUpperApproachFeature(rows)],
     ['volume_surge_pullback_tail', '급등 뒤 조정 후 반등 시도', detectVolumeSurgePullbackTail(rows)],
-    ['volume_spike_breakout_dry_up_rise', '급등 후 거래량 감소 재상승', detectVolumeSpikeBreakoutDryUpRise(rows)],
-    ['volume_spike_dry_up_pullback_support', '급등 후 거래량 감소', detectVolumeSpikeDryUpPullbackSupport(rows)],
+    ['volume_spike_breakout_dry_up_rise', '급등 후 재정비 구간', detectVolumeSpikeBreakoutDryUpRise(rows)],
+    ['volume_spike_dry_up_pullback_support', '급등 후 재정비 구간', detectVolumeSpikeDryUpPullbackSupport(rows)],
   ];
   for (const [pattern, title, setup] of chartSetups) {
     if (!setup) continue;
@@ -1587,7 +1680,7 @@ function buildMarketFeatureStocks(stock, rows) {
         pattern,
         title,
         buildChartSetupReason(pattern, setup),
-        60 + Math.min(35, setup.quality / 2),
+        60 + Math.min(30, setup.quality / 5),
       ),
     );
   }
@@ -1731,7 +1824,8 @@ function selectFeatureStocks(items) {
     });
     selected.push(...sorted.slice(0, FEATURE_MAX_PER_GROUP));
   }
-  return selected.sort((a, b) => b.score - a.score || b.tradingValue - a.tradingValue);
+  const deduped = mergeFeatureItemsByTicker(selected);
+  return deduped.sort((a, b) => b.score - a.score || b.tradingValue - a.tradingValue);
 }
 
 function parseKstSourceDate(value) {
@@ -1782,7 +1876,27 @@ async function uploadMarketFeatureStocks(items, dateKey) {
   const db = initFirebase();
   const batch = db.batch();
   let writeCount = 0;
+  let cooldownSkipped = 0;
   for (const item of items) {
+    // Cooldown: prevent the same ticker/group from being repeatedly uploaded on consecutive days.
+    if (FEATURE_COOLDOWN_DAYS > 0) {
+      const sourceDate = parseKstSourceDate(item.sourceDate);
+      const cutoff = new Date(sourceDate);
+      cutoff.setDate(cutoff.getDate() - FEATURE_COOLDOWN_DAYS);
+      const recentSnap = await db
+        .collection('market_feature_stocks')
+        .where('ticker', '==', item.ticker)
+        .where('group', '==', item.group)
+        .where('sourceDate', '>=', admin.firestore.Timestamp.fromDate(cutoff))
+        .where('sourceDate', '<', admin.firestore.Timestamp.fromDate(sourceDate))
+        .limit(1)
+        .get();
+      if (!recentSnap.empty) {
+        cooldownSkipped += 1;
+        continue;
+      }
+    }
+
     const docId = `${dateKey}_${item.group}_${item.pattern}_${item.ticker}`;
     const ref = db.collection('market_feature_stocks').doc(docId);
     batch.set(
@@ -1797,7 +1911,7 @@ async function uploadMarketFeatureStocks(items, dateKey) {
     writeCount += 1;
   }
   if (writeCount > 0) await batch.commit();
-  console.log(`[done] uploaded ${writeCount} market feature stocks`);
+  console.log(`[done] uploaded ${writeCount} market feature stocks (cooldownSkipped=${cooldownSkipped})`);
 }
 
 async function main() {

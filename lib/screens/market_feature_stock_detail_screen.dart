@@ -127,7 +127,7 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
   String get _localizedReason {
     final reason = item.reason.replaceAll('\n', ' ').trim();
     if (reason.isNotEmpty && !_looksEnglish(reason)) {
-      return '${_featureSpecificLabel(item)} 기준입니다. $reason';
+      return reason;
     }
 
     final title = item.title.trim();
@@ -175,7 +175,7 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
       case 'high_breakout':
         return pattern ?? '신고가/돌파';
       case 'chart_capture':
-        return pattern ?? '차트 포착';
+        return pattern ?? 'AI포착';
       default:
         return pattern ?? _groupLabel(item.group);
     }
@@ -202,15 +202,15 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
       case 'prior_high_retest':
         return '전고점 재도전';
       case 'volume_surge_cooldown':
-        return '거래량 이후 조정';
+        return '급등 후 재정비 구간';
       case 'box_upper_approach':
         return '박스권 상단 접근';
       case 'volume_surge_pullback_tail':
         return '급등 뒤 조정 후 반등 시도';
       case 'volume_spike_breakout_dry_up_rise':
-        return '급등 후 거래량 감소 재상승';
+        return '급등 후 재정비 구간';
       case 'volume_spike_dry_up_pullback_support':
-        return '급등 후 거래량 감소';
+        return '급등 후 재정비 구간';
       default:
         return null;
     }
@@ -227,7 +227,7 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
       case 'high_breakout':
         return '신고가/돌파';
       case 'chart_capture':
-        return '차트 포착';
+        return 'AI포착';
       default:
         return group.isEmpty ? '-' : group;
     }
@@ -1066,4 +1066,3 @@ class _MetricRow extends StatelessWidget {
     );
   }
 }
-

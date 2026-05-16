@@ -538,10 +538,14 @@ class FirestoreService {
         .orderBy('score', descending: true)
         .limit(limit)
         .snapshots()
-        .map(
-          (s) =>
-              s.docs.map((d) => MarketFeatureStock.fromFirestore(d)).toList(),
-        );
+        .map((s) {
+          final items = s.docs.map((d) => MarketFeatureStock.fromFirestore(d));
+          final deduped = <String, MarketFeatureStock>{};
+          for (final item in items) {
+            deduped.putIfAbsent(item.ticker, () => item);
+          }
+          return deduped.values.toList();
+        });
   }
 
   // ── 코멘트 ────────────────────────────────────────────────────────────

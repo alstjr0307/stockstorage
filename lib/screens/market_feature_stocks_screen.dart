@@ -16,7 +16,7 @@ class MarketFeatureStocksScreen extends StatefulWidget {
 class _MarketFeatureStocksScreenState extends State<MarketFeatureStocksScreen> {
   static const _filters = [
     _FeatureStockFilter(
-      '차트 포착',
+      'AI포착',
       group: 'chart_capture',
       description: '급등 이후 쉬어가거나 지지선 부근에서 버티는 흐름이 포착된 종목입니다.',
     ),
@@ -67,6 +67,18 @@ class _MarketFeatureStocksScreenState extends State<MarketFeatureStocksScreen> {
               fontWeight: FontWeight.w800,
             ),
           ),
+          actions: [
+            IconButton(
+              tooltip: '설명',
+              onPressed: () => _showFeatureInfoDialog(context),
+              icon: Icon(
+                Icons.info_outline_rounded,
+                size: 21,
+                color: cs.onSurface.withValues(alpha: 0.72),
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(52),
             child: Align(
@@ -106,6 +118,80 @@ class _MarketFeatureStocksScreenState extends State<MarketFeatureStocksScreen> {
   }
 }
 
+void _showFeatureInfoDialog(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
+  showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text(
+        '특징주 설명',
+        style: TextStyle(fontWeight: FontWeight.w800),
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: const [
+            _InfoLine(
+              title: 'AI포착',
+              body: '급등 이후 쉬어가거나 지지선 부근에서 버티는 흐름이 포착된 종목입니다.',
+            ),
+            SizedBox(height: 10),
+            _InfoLine(title: '급등주', body: '당일 상승률이 크게 나온 종목입니다.'),
+            SizedBox(height: 10),
+            _InfoLine(title: '거래대금 상위', body: '오늘 실제로 돈이 많이 몰린 종목입니다.'),
+            SizedBox(height: 10),
+            _InfoLine(title: '거래량 급증', body: '평소보다 거래량과 거래대금이 동시에 튄 종목입니다.'),
+            SizedBox(height: 10),
+            _InfoLine(title: '신고가/돌파', body: '최근 고점 또는 신고가 구간을 돌파한 종목입니다.'),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text('닫기', style: TextStyle(color: cs.primary)),
+        ),
+      ],
+    ),
+  );
+}
+
+class _InfoLine extends StatelessWidget {
+  const _InfoLine({required this.title, required this.body});
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            color: cs.onSurface,
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          body,
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.72),
+            fontSize: 12,
+            height: 1.4,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _FeatureStockFilter {
   const _FeatureStockFilter(
     this.label, {
@@ -118,10 +204,41 @@ class _FeatureStockFilter {
   final String description;
 }
 
-class _FeatureStockList extends StatelessWidget {
+class _FeatureStockList extends StatefulWidget {
   const _FeatureStockList({required this.filter});
 
   final _FeatureStockFilter filter;
+
+  @override
+  State<_FeatureStockList> createState() => _FeatureStockListState();
+}
+
+class _FeatureStockListState extends State<_FeatureStockList> {
+  DateTime? _selectedDate;
+
+  Future<void> _pickDate(
+    BuildContext context,
+    List<DateTime> availableDates,
+  ) async {
+    if (availableDates.isEmpty) return;
+    final initial = _selectedDate ?? availableDates.first;
+    final first = availableDates.last;
+    final last = availableDates.first;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: first,
+      lastDate: last,
+      selectableDayPredicate: (day) {
+        final key = DateTime(day.year, day.month, day.day);
+        return availableDates.any((d) => d == key);
+      },
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _selectedDate = DateTime(picked.year, picked.month, picked.day);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -129,7 +246,9 @@ class _FeatureStockList extends StatelessWidget {
     final firestoreService = FirestoreService();
 
     return StreamBuilder<List<MarketFeatureStock>>(
-      stream: firestoreService.getMarketFeatureStocks(group: filter.group),
+      stream: firestoreService.getMarketFeatureStocks(
+        group: widget.filter.group,
+      ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
@@ -143,7 +262,7 @@ class _FeatureStockList extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 28),
               child: Text(
-                '${filter.label}에 등록된 종목이 없습니다.',
+                '${widget.filter.label}에 등록된 종목이 없습니다.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.42),
@@ -156,11 +275,25 @@ class _FeatureStockList extends StatelessWidget {
         }
 
         final grouped = _groupByDate(list);
-        final rows = <Object>[];
-        for (final entry in grouped.entries) {
-          rows.add(entry.key);
-          rows.addAll(entry.value);
+        final availableDates = grouped.keys.toList()
+          ..sort((a, b) => b.compareTo(a));
+        final fallbackDate = availableDates.first;
+        final selectedDate =
+            _selectedDate != null && availableDates.contains(_selectedDate)
+            ? _selectedDate!
+            : fallbackDate;
+        if (_selectedDate != selectedDate) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {
+              _selectedDate = selectedDate;
+            });
+          });
         }
+
+        final selectedItems = (grouped[selectedDate] ?? <MarketFeatureStock>[])
+          ..sort((a, b) => _compareFeatureStocks(a, b));
+        final rows = <Object>[...selectedItems];
 
         return RefreshIndicator(
           color: const Color(0xFF3182F6),
@@ -179,15 +312,33 @@ class _FeatureStockList extends StatelessWidget {
                   ),
             itemBuilder: (context, index) {
               if (index == 0) {
-                return _FeatureFilterHint(filter: filter);
-              }
-              final row = rows[index - 1];
-              if (row is DateTime) {
-                return _FeatureDateHeader(
-                  date: row,
-                  count: grouped[row]?.length ?? 0,
+                final currentIndex = availableDates.indexOf(selectedDate);
+                final canPrev = currentIndex < availableDates.length - 1;
+                final canNext = currentIndex > 0;
+                final label = DateFormat('yyyy.MM.dd').format(selectedDate);
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _FeatureDateNavigator(
+                      label: label,
+                      onPick: () => _pickDate(context, availableDates),
+                      onPrev: canPrev
+                          ? () {
+                              final nextDate = availableDates[currentIndex + 1];
+                              setState(() => _selectedDate = nextDate);
+                            }
+                          : null,
+                      onNext: canNext
+                          ? () {
+                              final nextDate = availableDates[currentIndex - 1];
+                              setState(() => _selectedDate = nextDate);
+                            }
+                          : null,
+                    ),
+                  ],
                 );
               }
+              final row = rows[index - 1];
               return _FeatureStockRow(item: row as MarketFeatureStock);
             },
           ),
@@ -221,7 +372,7 @@ class _FeatureStockList extends StatelessWidget {
   }
 
   int _compareFeatureStocks(MarketFeatureStock a, MarketFeatureStock b) {
-    final primary = switch (filter.group) {
+    final primary = switch (widget.filter.group) {
       'top_trading_value' => b.tradingValue.compareTo(a.tradingValue),
       'gainers' => b.changeRate.compareTo(a.changeRate),
       'volume_spike' => b.volumeRatio.compareTo(a.volumeRatio),
@@ -230,6 +381,73 @@ class _FeatureStockList extends StatelessWidget {
     };
     if (primary != 0) return primary;
     return b.tradingValue.compareTo(a.tradingValue);
+  }
+}
+
+class _FeatureDateNavigator extends StatelessWidget {
+  const _FeatureDateNavigator({
+    required this.label,
+    required this.onPick,
+    required this.onPrev,
+    required this.onNext,
+  });
+
+  final String label;
+  final VoidCallback onPick;
+  final VoidCallback? onPrev;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        IconButton(
+          onPressed: onPrev,
+          icon: const Icon(Icons.chevron_left_rounded),
+          visualDensity: VisualDensity.compact,
+          color: cs.onSurface.withValues(alpha: onPrev == null ? 0.24 : 0.76),
+        ),
+        Expanded(
+          child: InkWell(
+            onTap: onPick,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: cs.onSurface.withValues(alpha: 0.045),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    Icons.calendar_month_rounded,
+                    size: 16,
+                    color: cs.onSurface.withValues(alpha: 0.62),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        IconButton(
+          onPressed: onNext,
+          icon: const Icon(Icons.chevron_right_rounded),
+          visualDensity: VisualDensity.compact,
+          color: cs.onSurface.withValues(alpha: onNext == null ? 0.24 : 0.76),
+        ),
+      ],
+    );
   }
 }
 
@@ -450,7 +668,7 @@ class _FeatureStockRow extends StatelessWidget {
 String featureDisplayReason(MarketFeatureStock item) {
   final reason = item.reason.replaceAll('\n', ' ').trim();
   if (reason.isNotEmpty && !featureLooksEnglish(reason)) {
-    return '${featureSpecificLabel(item)} · $reason';
+    return reason;
   }
 
   final parts = <String>[];
@@ -484,7 +702,7 @@ String featureSpecificLabel(MarketFeatureStock item) {
     case 'high_breakout':
       return pattern ?? '신고가/돌파';
     case 'chart_capture':
-      return pattern ?? '차트 포착';
+      return pattern ?? 'AI포착';
     default:
       return pattern ?? featureGroupLabel(item.group);
   }
@@ -501,7 +719,7 @@ String featureGroupLabel(String group) {
     case 'high_breakout':
       return '신고가/돌파';
     case 'chart_capture':
-      return '차트 포착';
+      return 'AI포착';
     default:
       return group.isEmpty ? '특징주' : group;
   }
@@ -524,15 +742,15 @@ String? featurePatternLabel(String pattern) {
     case 'prior_high_retest':
       return '전고점 재도전';
     case 'volume_surge_cooldown':
-      return '거래량 이후 조정';
+      return '급등 후 재정비 구간';
     case 'box_upper_approach':
       return '박스권 상단 접근';
     case 'volume_surge_pullback_tail':
       return '급등 뒤 조정 후 반등 시도';
     case 'volume_spike_breakout_dry_up_rise':
-      return '급등 후 거래량 감소 재상승';
+      return '급등 후 재정비 구간';
     case 'volume_spike_dry_up_pullback_support':
-      return '급등 후 거래량 감소';
+      return '급등 후 재정비 구간';
     default:
       return null;
   }
