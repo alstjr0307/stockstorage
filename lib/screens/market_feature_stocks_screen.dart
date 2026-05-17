@@ -763,21 +763,35 @@ class _FeatureStockRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ① 시그널 pill + ticker
-                  Row(
-                    children: [
-                      _SignalPill(sig: sig),
-                      const SizedBox(width: 8),
-                      Text(
-                        item.ticker,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: cs.onSurface.withValues(alpha: 0.38),
-                        ),
+                  // 시그널 pill — 탭 내 종목마다 다를 때만 표시
+                  if (!const {'gainers', 'top_trading_value', 'volume_spike'}
+                      .contains(item.group))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        children: [
+                          _SignalPill(sig: sig),
+                          const SizedBox(width: 8),
+                          Text(
+                            item.ticker,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: cs.onSurface.withValues(alpha: 0.38),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    )
+                  else
+                    Text(
+                      item.ticker,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: cs.onSurface.withValues(alpha: 0.38),
+                      ),
+                    ),
                   const SizedBox(height: 6),
                   // 종목명
                   Text(
