@@ -1097,13 +1097,14 @@ Future<List<_NaverBoardPost>> _fetchNaverPosts(String ticker) async {
   );
   final response = await http.get(uri, headers: {
     'User-Agent':
-        'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 '
-        'Chrome/124.0 Mobile Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+        'Chrome/124.0 Safari/537.36',
     'Accept-Language': 'ko-KR,ko;q=0.9',
     'Accept': 'text/html,application/xhtml+xml',
+    'Referer': 'https://finance.naver.com/',
   }).timeout(const Duration(seconds: 10));
 
-  // Naver Finance는 EUC-KR 인코딩 사용 — UTF-8 시도 후 latin1 폴백
+  // Content-Type이 UTF-8이라고 해도 실제로는 EUC-KR인 경우가 있음
   String body;
   try {
     body = utf8.decode(response.bodyBytes, allowMalformed: false);
@@ -1111,13 +1112,15 @@ Future<List<_NaverBoardPost>> _fetchNaverPosts(String ticker) async {
     body = latin1.decode(response.bodyBytes, allowInvalid: true);
   }
 
+  // nid는 URL에 &page=N이 추가로 붙으므로 [^"]* 로 처리
+  // title 속성에서 제목 추출 (줄바꿈·이미지 태그와 무관하게 깔끔하게 파싱됨)
   final linkRe = RegExp(
-    r'href="[^"]*board_read\.naver\?code=[0-9]+&(?:amp;)?nid=([0-9]+)"[^>]*>'
-    r'\s*([^<]+?)\s*<',
+    r'board_read\.naver\?code=[0-9]+&(?:amp;)?nid=([0-9]+)[^"]*"'
+    r'[^>]*title="([^"]+)"',
   );
   final dateRe = RegExp(
-    r'class="(?:td_date|date)">\s*'
-    r'([0-9]{4}\.[0-9]{2}\.[0-9]{2}(?:\s+[0-9]{2}:[0-9]{2})?)',
+    r'<span class="tah p10 gray03">'
+    r'([0-9]{4}\.[0-9]{2}\.[0-9]{2}\s+[0-9]{2}:[0-9]{2})</span>',
   );
 
   final links = linkRe.allMatches(body).take(5).toList();
