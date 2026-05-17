@@ -39,9 +39,21 @@ _SigCfg _getSig(MarketFeatureStock s) {
     case 'box_upper_approach':
       return const _SigCfg(_kGold, '◈', '박스권 상단');
     default:
-      return s.changeRate >= 0
-          ? const _SigCfg(_kRed, '↑', '상승')
-          : const _SigCfg(_kBlue, '↓', '하락');
+      // 패턴 없는 종목 → 그룹 기반 폴백
+      switch (s.group) {
+        case 'gainers':
+          return const _SigCfg(_kRed, '↑', '급등주');
+        case 'top_trading_value':
+          return const _SigCfg(_kViolet, '💰', '거래대금 상위');
+        case 'volume_spike':
+          return const _SigCfg(_kViolet, '⚡', '거래량 급증');
+        case 'high_breakout':
+          return const _SigCfg(_kRed, '✦', '신고가/돌파');
+        default:
+          return s.changeRate >= 0
+              ? const _SigCfg(_kRed, '↑', '상승')
+              : const _SigCfg(_kBlue, '↓', '하락');
+      }
   }
 }
 
@@ -774,6 +786,20 @@ class _FeatureStockRow extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
+                  // 비 AI포착 탭: 그룹별 컨텍스트 서브타이틀 복원
+                  if (item.group != 'chart_capture') ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      featureSpecificLabel(item),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.55),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   // ④ 거래대금 + 거래량 바
                   Row(
