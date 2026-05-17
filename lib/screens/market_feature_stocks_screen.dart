@@ -5,6 +5,79 @@ import '../models/market_feature_stock.dart';
 import '../services/firestore_service.dart';
 import 'market_feature_stock_detail_screen.dart';
 
+// ── Design tokens ─────────────────────────────────────────────────────────
+const _kAccent = Color(0xFF00D68F); // 20일선 회복
+const _kGold   = Color(0xFFF5B547); // 급등 후 재정비
+const _kViolet = Color(0xFF9B7BFF); // 거래량 폭발
+const _kRed    = Color(0xFFFF4E6A); // 신고가 / 급등
+const _kBlue   = Color(0xFF4A9EFF); // 하락
+
+// ── Per-pattern signal config ─────────────────────────────────────────────
+class _SigCfg {
+  const _SigCfg(this.color, this.icon, this.label);
+  final Color  color;
+  final String icon;
+  final String label;
+}
+
+_SigCfg _getSig(MarketFeatureStock s) {
+  switch (s.pattern) {
+    case 'ma20_reclaim':
+      return const _SigCfg(_kAccent, '↗', '20일선 회복');
+    case 'volume_surge_cooldown':
+    case 'volume_spike_breakout_dry_up_rise':
+    case 'volume_spike_dry_up_pullback_support':
+    case 'volume_surge_pullback_tail':
+      return const _SigCfg(_kGold, '↻', '급등 후 재정비');
+    case 'trading_value_spike':
+      return const _SigCfg(_kViolet, '⚡', '거래량 폭발');
+    case 'new_52w_high':
+    case 'prior_high_breakout':
+      return const _SigCfg(_kRed, '✦', '신고가 돌파');
+    case 'prior_high_retest':
+      return const _SigCfg(_kBlue, '⟳', '전고점 재도전');
+    case 'box_upper_approach':
+      return const _SigCfg(_kGold, '◈', '박스권 상단');
+    default:
+      return s.changeRate >= 0
+          ? const _SigCfg(_kRed, '↑', '상승')
+          : const _SigCfg(_kBlue, '↓', '하락');
+  }
+}
+
+// ── Signal filter chips ───────────────────────────────────────────────────
+class _SigFilter {
+  const _SigFilter(this.key, this.label, this.color);
+  final String key;
+  final String label;
+  final Color  color;
+}
+
+const _kSigFilters = [
+  _SigFilter('all',           '전체',  Color(0xFF8B92A8)),
+  _SigFilter('ma20',          '20일선', _kAccent),
+  _SigFilter('consolidation', '재정비', _kGold),
+  _SigFilter('volume',        '거래량', _kViolet),
+  _SigFilter('high',          '신고가', _kRed),
+];
+
+bool _passFilter(MarketFeatureStock s, String key) {
+  switch (key) {
+    case 'all': return true;
+    case 'ma20': return s.pattern == 'ma20_reclaim';
+    case 'consolidation': return const {
+        'volume_surge_cooldown',
+        'volume_spike_breakout_dry_up_rise',
+        'volume_spike_dry_up_pullback_support',
+        'volume_surge_pullback_tail',
+      }.contains(s.pattern);
+    case 'volume': return s.pattern == 'trading_value_spike';
+    case 'high': return const {'new_52w_high', 'prior_high_breakout'}.contains(s.pattern);
+    default: return true;
+  }
+}
+
+// ── Main screen ───────────────────────────────────────────────────────────
 class MarketFeatureStocksScreen extends StatefulWidget {
   const MarketFeatureStocksScreen({super.key});
 
@@ -47,7 +120,6 @@ class _MarketFeatureStocksScreenState extends State<MarketFeatureStocksScreen> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final bg = theme.scaffoldBackgroundColor;
-    final isDark = theme.brightness == Brightness.dark;
 
     return DefaultTabController(
       length: _filters.length,
@@ -79,15 +151,16 @@ class _MarketFeatureStocksScreenState extends State<MarketFeatureStocksScreen> {
             ),
             const SizedBox(width: 6),
           ],
+          // ① 탭 underline 스타일
           bottom: PreferredSize(
-            preferredSize: const Size.fromHeight(52),
+            preferredSize: const Size.fromHeight(44),
             child: Align(
               alignment: Alignment.centerLeft,
               child: TabBar(
                 isScrollable: true,
                 tabAlignment: TabAlignment.start,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                labelColor: isDark ? const Color(0xFF0A0E1A) : cs.surface,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                labelColor: cs.onSurface,
                 unselectedLabelColor: cs.onSurface.withValues(alpha: 0.42),
                 labelStyle: const TextStyle(
                   fontSize: 13,
@@ -98,12 +171,13 @@ class _MarketFeatureStocksScreenState extends State<MarketFeatureStocksScreen> {
                   fontWeight: FontWeight.w600,
                 ),
                 indicatorSize: TabBarIndicatorSize.tab,
-                indicator: BoxDecoration(
-                  color: isDark ? Colors.white : cs.onSurface,
-                  borderRadius: BorderRadius.circular(9999),
+                indicator: const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: _kAccent, width: 2.5),
+                  ),
                 ),
                 dividerColor: Colors.transparent,
-                tabs: [for (final filter in _filters) Tab(text: filter.label)],
+                tabs: [for (final f in _filters) Tab(text: f.label)],
               ),
             ),
           ),
@@ -141,9 +215,15 @@ void _showFeatureInfoDialog(BuildContext context) {
             SizedBox(height: 10),
             _InfoLine(title: '거래대금 상위', body: '오늘 실제로 돈이 많이 몰린 종목입니다.'),
             SizedBox(height: 10),
-            _InfoLine(title: '거래량 급증', body: '평소보다 거래량과 거래대금이 동시에 튄 종목입니다.'),
+            _InfoLine(
+              title: '거래량 급증',
+              body: '평소보다 거래량과 거래대금이 동시에 튄 종목입니다.',
+            ),
             SizedBox(height: 10),
-            _InfoLine(title: '신고가/돌파', body: '최근 고점 또는 신고가 구간을 돌파한 종목입니다.'),
+            _InfoLine(
+              title: '신고가/돌파',
+              body: '최근 고점 또는 신고가 구간을 돌파한 종목입니다.',
+            ),
           ],
         ),
       ),
@@ -204,6 +284,7 @@ class _FeatureStockFilter {
   final String description;
 }
 
+// ── List widget per tab ───────────────────────────────────────────────────
 class _FeatureStockList extends StatefulWidget {
   const _FeatureStockList({required this.filter});
 
@@ -217,6 +298,7 @@ class _FeatureStockListState extends State<_FeatureStockList> {
   late final FirestoreService _firestoreService;
   late Stream<List<MarketFeatureStock>> _stocksStream;
   DateTime? _selectedDate;
+  String _signalFilter = 'all'; // ⑤ 시그널 필터 상태
 
   @override
   void initState() {
@@ -232,6 +314,7 @@ class _FeatureStockListState extends State<_FeatureStockList> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.filter.group == widget.filter.group) return;
     _selectedDate = null;
+    _signalFilter = 'all';
     _stocksStream = _firestoreService.getMarketFeatureStocks(
       group: widget.filter.group,
     );
@@ -264,6 +347,7 @@ class _FeatureStockListState extends State<_FeatureStockList> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isAiTab = widget.filter.group == 'chart_capture';
 
     return StreamBuilder<List<MarketFeatureStock>>(
       stream: _stocksStream,
@@ -303,55 +387,87 @@ class _FeatureStockListState extends State<_FeatureStockList> {
 
         final selectedItems = (grouped[selectedDate] ?? <MarketFeatureStock>[])
           ..sort((a, b) => _compareFeatureStocks(a, b));
-        final rows = <Object>[...selectedItems];
 
-        return RefreshIndicator(
-          color: const Color(0xFF3182F6),
-          onRefresh: () async {
-            await Future<void>.delayed(const Duration(milliseconds: 250));
-          },
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
-            itemCount: rows.length + 1,
-            separatorBuilder: (_, index) => index == 0
-                ? const SizedBox(height: 10)
-                : Container(
-                    margin: const EdgeInsets.only(left: 2),
-                    height: 1,
-                    color: cs.onSurface.withValues(alpha: 0.07),
-                  ),
-            itemBuilder: (context, index) {
-              if (index == 0) {
-                final currentIndex = availableDates.indexOf(selectedDate);
-                final canPrev = currentIndex < availableDates.length - 1;
-                final canNext = currentIndex > 0;
-                final label = DateFormat('yyyy.MM.dd').format(selectedDate);
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _FeatureDateNavigator(
-                      label: label,
-                      onPick: () => _pickDate(context, availableDates),
-                      onPrev: canPrev
-                          ? () {
-                              final nextDate = availableDates[currentIndex + 1];
-                              setState(() => _selectedDate = nextDate);
-                            }
-                          : null,
-                      onNext: canNext
-                          ? () {
-                              final nextDate = availableDates[currentIndex - 1];
-                              setState(() => _selectedDate = nextDate);
-                            }
-                          : null,
-                    ),
-                  ],
-                );
+        // ⑤ 시그널 필터 카운트 계산 (AI포착 탭)
+        final filterCounts = <String, int>{'all': selectedItems.length};
+        if (isAiTab) {
+          for (final s in selectedItems) {
+            for (final f in _kSigFilters.skip(1)) {
+              if (_passFilter(s, f.key)) {
+                filterCounts[f.key] = (filterCounts[f.key] ?? 0) + 1;
               }
-              final row = rows[index - 1];
-              return _FeatureStockRow(item: row as MarketFeatureStock);
-            },
-          ),
+            }
+          }
+        }
+
+        // ⑤ 필터 적용
+        final visibleItems = isAiTab
+            ? selectedItems.where((s) => _passFilter(s, _signalFilter)).toList()
+            : selectedItems;
+
+        final currentIndex = availableDates.indexOf(selectedDate);
+        final canPrev = currentIndex < availableDates.length - 1;
+        final canNext = currentIndex > 0;
+        final label = DateFormat('yyyy.MM.dd').format(selectedDate);
+
+        return Column(
+          children: [
+            // ⑦ 날짜 stepper + 결과 카운트 한 줄
+            _FeatureDateNavigator(
+              label: label,
+              count: visibleItems.length,
+              tabLabel: widget.filter.label,
+              onPick: () => _pickDate(context, availableDates),
+              onPrev: canPrev
+                  ? () => setState(
+                      () => _selectedDate = availableDates[currentIndex + 1])
+                  : null,
+              onNext: canNext
+                  ? () => setState(
+                      () => _selectedDate = availableDates[currentIndex - 1])
+                  : null,
+            ),
+            // ⑤ 시그널 필터 칩 (AI포착 탭만)
+            if (isAiTab)
+              _SignalFilterRow(
+                active: _signalFilter,
+                onChanged: (k) => setState(() => _signalFilter = k),
+                counts: filterCounts,
+              ),
+            Expanded(
+              child: RefreshIndicator(
+                color: const Color(0xFF3182F6),
+                onRefresh: () async =>
+                    Future<void>.delayed(const Duration(milliseconds: 250)),
+                child: visibleItems.isEmpty
+                    ? ListView(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 60,
+                              horizontal: 28,
+                            ),
+                            child: Text(
+                              '해당 시그널 종목이 없습니다.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: cs.onSurface.withValues(alpha: 0.42),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.only(bottom: 96),
+                        itemCount: visibleItems.length,
+                        itemBuilder: (context, i) =>
+                            _FeatureStockRow(item: visibleItems[i]),
+                      ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -369,15 +485,10 @@ class _FeatureStockListState extends State<_FeatureStockList> {
       );
       grouped.putIfAbsent(key, () => []).add(item);
     }
-
     final entries = grouped.entries.toList()
       ..sort((a, b) => b.key.compareTo(a.key));
     return {
-      for (final entry in entries)
-        entry.key: entry.value
-          ..sort((a, b) {
-            return _compareFeatureStocks(a, b);
-          }),
+      for (final entry in entries) entry.key: entry.value,
     };
   }
 
@@ -394,15 +505,20 @@ class _FeatureStockListState extends State<_FeatureStockList> {
   }
 }
 
+// ── ⑦ Date navigator + count ─────────────────────────────────────────────
 class _FeatureDateNavigator extends StatelessWidget {
   const _FeatureDateNavigator({
     required this.label,
+    required this.count,
+    required this.tabLabel,
     required this.onPick,
     required this.onPrev,
     required this.onNext,
   });
 
   final String label;
+  final int count;
+  final String tabLabel;
   final VoidCallback onPick;
   final VoidCallback? onPrev;
   final VoidCallback? onNext;
@@ -410,57 +526,192 @@ class _FeatureDateNavigator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        IconButton(
-          onPressed: onPrev,
-          icon: const Icon(Icons.chevron_left_rounded),
-          visualDensity: VisualDensity.compact,
-          color: cs.onSurface.withValues(alpha: onPrev == null ? 0.24 : 0.76),
-        ),
-        Expanded(
-          child: InkWell(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
+      child: Row(
+        children: [
+          // 결과 카운트
+          Container(
+            width: 7,
+            height: 7,
+            decoration: const BoxDecoration(
+              color: _kAccent,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            '$tabLabel ',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: cs.onSurface.withValues(alpha: 0.55),
+            ),
+          ),
+          Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: cs.onSurface,
+            ),
+          ),
+          Text(
+            '개',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: cs.onSurface.withValues(alpha: 0.55),
+            ),
+          ),
+          const Spacer(),
+          // Date stepper
+          IconButton(
+            onPressed: onPrev,
+            icon: const Icon(Icons.chevron_left_rounded),
+            visualDensity: VisualDensity.compact,
+            color: cs.onSurface.withValues(alpha: onPrev == null ? 0.24 : 0.72),
+          ),
+          InkWell(
             onTap: onPick,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(8),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
               decoration: BoxDecoration(
-                color: cs.onSurface.withValues(alpha: 0.045),
-                borderRadius: BorderRadius.circular(10),
+                color: cs.onSurface.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: cs.onSurface.withValues(alpha: 0.1),
+                ),
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     label,
                     style: TextStyle(
                       color: cs.onSurface,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 5),
                   Icon(
                     Icons.calendar_month_rounded,
-                    size: 16,
-                    color: cs.onSurface.withValues(alpha: 0.62),
+                    size: 14,
+                    color: cs.onSurface.withValues(alpha: 0.5),
                   ),
                 ],
               ),
             ),
           ),
-        ),
-        IconButton(
-          onPressed: onNext,
-          icon: const Icon(Icons.chevron_right_rounded),
-          visualDensity: VisualDensity.compact,
-          color: cs.onSurface.withValues(alpha: onNext == null ? 0.24 : 0.76),
-        ),
-      ],
+          IconButton(
+            onPressed: onNext,
+            icon: const Icon(Icons.chevron_right_rounded),
+            visualDensity: VisualDensity.compact,
+            color: cs.onSurface.withValues(alpha: onNext == null ? 0.24 : 0.72),
+          ),
+        ],
+      ),
     );
   }
 }
 
+// ── ⑤ Signal filter chips ────────────────────────────────────────────────
+class _SignalFilterRow extends StatelessWidget {
+  const _SignalFilterRow({
+    required this.active,
+    required this.onChanged,
+    required this.counts,
+  });
+
+  final String active;
+  final ValueChanged<String> onChanged;
+  final Map<String, int> counts;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 40,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        children: [
+          for (final f in _kSigFilters) ...[
+            _SigChip(
+              filter: f,
+              isActive: active == f.key,
+              count: counts[f.key] ?? 0,
+              onTap: () => onChanged(f.key),
+            ),
+            const SizedBox(width: 6),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _SigChip extends StatelessWidget {
+  const _SigChip({
+    required this.filter,
+    required this.isActive,
+    required this.count,
+    required this.onTap,
+  });
+
+  final _SigFilter filter;
+  final bool isActive;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final c = filter.color;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+        decoration: BoxDecoration(
+          color: isActive
+              ? c.withValues(alpha: 0.18)
+              : cs.onSurface.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: isActive
+                ? c.withValues(alpha: 0.4)
+                : cs.onSurface.withValues(alpha: 0.1),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              filter.label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: isActive ? c : cs.onSurface.withValues(alpha: 0.62),
+              ),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: isActive ? c : cs.onSurface.withValues(alpha: 0.4),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── ① ③ ④ Stock card ─────────────────────────────────────────────────────
 class _FeatureStockRow extends StatelessWidget {
   const _FeatureStockRow({required this.item});
 
@@ -469,19 +720,26 @@ class _FeatureStockRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final sig = _getSig(item);
     final isUp = item.changeRate >= 0;
-    final moveColor = isUp ? const Color(0xFFF04452) : const Color(0xFF1677FF);
+    final moveColor = isUp ? _kRed : _kBlue;
+
     return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => MarketFeatureStockDetailScreen(item: item),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MarketFeatureStockDetailScreen(item: item),
+        ),
+      ),
+      child: Container(
+        // ① 시그널 컬러 왼쪽 바
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(color: sig.color.withValues(alpha: 0.75), width: 3),
+            bottom: BorderSide(color: cs.onSurface.withValues(alpha: 0.07)),
           ),
-        );
-      },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        ),
+        padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -489,61 +747,57 @@ class _FeatureStockRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // ① 시그널 pill + ticker
                   Row(
                     children: [
-                      Expanded(
-                        child: Text(
-                          item.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: cs.onSurface,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
+                      _SignalPill(sig: sig),
                       const SizedBox(width: 8),
                       Text(
                         item.ticker,
                         style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
                           color: cs.onSurface.withValues(alpha: 0.38),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 5),
+                  const SizedBox(height: 6),
+                  // 종목명
                   Text(
-                    featureSpecificLabel(item),
+                    item.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: cs.onSurface.withValues(alpha: 0.62),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
+                  const SizedBox(height: 10),
+                  // ④ 거래대금 + 거래량 바
+                  Row(
                     children: [
-                      _MiniMetric(
-                        label: _formatTradingValue(item.tradingValue),
+                      Text(
+                        _fmtTradingValue(item.tradingValue),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: cs.onSurface.withValues(alpha: 0.62),
+                        ),
                       ),
-                      _MiniMetric(
-                        label: '거래량 ${item.volumeRatio.toStringAsFixed(1)}x',
+                      const SizedBox(width: 14),
+                      _VolumeBar(
+                        x: item.volumeRatio,
+                        color: item.volumeRatio >= 3 ? sig.color : cs.onSurface.withValues(alpha: 0.55),
                       ),
-                      if (featureShowsScore(item))
-                        _MiniMetric(label: '점수 ${item.score}'),
                     ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 12),
+            // 가격 + 등락률
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
@@ -569,7 +823,7 @@ class _FeatureStockRow extends StatelessWidget {
     );
   }
 
-  String _formatTradingValue(int value) {
+  String _fmtTradingValue(int value) {
     if (value >= 1000000000000) {
       return '거래대금 ${(value / 1000000000000).toStringAsFixed(1)}조';
     }
@@ -580,112 +834,96 @@ class _FeatureStockRow extends StatelessWidget {
   }
 }
 
-String featureSpecificLabel(MarketFeatureStock item) {
-  final pattern = featurePatternLabel(item.pattern);
-  switch (item.group) {
-    case 'top_trading_value':
-      return '거래대금 상위 · ${formatFeatureTradingValue(item.tradingValue)}';
-    case 'gainers':
-      return '급등주 · ${item.changeRate >= 0 ? '+' : ''}${item.changeRate.toStringAsFixed(2)}%';
-    case 'volume_spike':
-      return '거래량 급증 · 20일 평균 대비 ${item.volumeRatio.toStringAsFixed(1)}배';
-    case 'high_breakout':
-      return pattern ?? '신고가/돌파';
-    case 'chart_capture':
-      return pattern ?? 'AI포착';
-    default:
-      return pattern ?? featureGroupLabel(item.group);
-  }
-}
+// ── ① Signal pill badge ───────────────────────────────────────────────────
+class _SignalPill extends StatelessWidget {
+  const _SignalPill({required this.sig});
 
-String featureGroupLabel(String group) {
-  switch (group) {
-    case 'top_trading_value':
-      return '거래대금 상위';
-    case 'gainers':
-      return '급등주';
-    case 'volume_spike':
-      return '거래량 급증';
-    case 'high_breakout':
-      return '신고가/돌파';
-    case 'chart_capture':
-      return 'AI포착';
-    default:
-      return group.isEmpty ? '특징주' : group;
-  }
-}
-
-String? featurePatternLabel(String pattern) {
-  switch (pattern) {
-    case 'top_trading_value':
-      return '거래대금 상위';
-    case 'gainers':
-      return '급등';
-    case 'trading_value_spike':
-      return '거래량/거래대금 급증';
-    case 'new_52w_high':
-      return '신고가 돌파';
-    case 'prior_high_breakout':
-      return '전고점 돌파';
-    case 'ma20_reclaim':
-      return '20일선 회복';
-    case 'prior_high_retest':
-      return '전고점 재도전';
-    case 'volume_surge_cooldown':
-      return '급등 후 재정비 구간';
-    case 'box_upper_approach':
-      return '박스권 상단 접근';
-    case 'volume_surge_pullback_tail':
-      return '급등 뒤 조정 후 반등 시도';
-    case 'volume_spike_breakout_dry_up_rise':
-      return '급등 후 재정비 구간';
-    case 'volume_spike_dry_up_pullback_support':
-      return '급등 후 재정비 구간';
-    default:
-      return null;
-  }
-}
-
-String formatFeatureTradingValue(int value) {
-  if (value >= 1000000000000) {
-    return '${(value / 1000000000000).toStringAsFixed(1)}조';
-  }
-  if (value >= 100000000) {
-    return '${(value / 100000000).round()}억';
-  }
-  return NumberFormat('#,###').format(value);
-}
-
-bool featureShowsScore(MarketFeatureStock item) {
-  return item.group == 'chart_capture';
-}
-
-class _MiniMetric extends StatelessWidget {
-  const _MiniMetric({required this.label});
-
-  final String label;
+  final _SigCfg sig;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.fromLTRB(6, 3, 8, 3),
       decoration: BoxDecoration(
-        color: cs.onSurface.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(999),
+        color: sig.color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: sig.color.withValues(alpha: 0.22)),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: cs.onSurface.withValues(alpha: 0.52),
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            sig.icon,
+            style: TextStyle(
+              fontSize: 9,
+              color: sig.color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            sig.label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              color: sig.color,
+              letterSpacing: 0.1,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
+// ── ④ Volume bar ──────────────────────────────────────────────────────────
+class _VolumeBar extends StatelessWidget {
+  const _VolumeBar({required this.x, required this.color});
+
+  final double x;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    const max = 10.0;
+    final pct = (x / max).clamp(0.0, 1.0);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 40,
+          height: 3,
+          decoration: BoxDecoration(
+            color: cs.onSurface.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(2),
+          ),
+          alignment: Alignment.centerLeft,
+          child: FractionallySizedBox(
+            widthFactor: pct,
+            child: Container(
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(
+          '${x.toStringAsFixed(1)}x',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: cs.onSurface.withValues(alpha: 0.62),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Change rate badge ─────────────────────────────────────────────────────
 class _ChangeRateBadge extends StatelessWidget {
   const _ChangeRateBadge({
     required this.color,
@@ -716,3 +954,63 @@ class _ChangeRateBadge extends StatelessWidget {
     );
   }
 }
+
+// ── Exported helpers (used in detail screen / home) ───────────────────────
+String featureSpecificLabel(MarketFeatureStock item) {
+  final pattern = featurePatternLabel(item.pattern);
+  switch (item.group) {
+    case 'top_trading_value':
+      return '거래대금 상위 · ${formatFeatureTradingValue(item.tradingValue)}';
+    case 'gainers':
+      return '급등주 · ${item.changeRate >= 0 ? '+' : ''}${item.changeRate.toStringAsFixed(2)}%';
+    case 'volume_spike':
+      return '거래량 급증 · 20일 평균 대비 ${item.volumeRatio.toStringAsFixed(1)}배';
+    case 'high_breakout':
+      return pattern ?? '신고가/돌파';
+    case 'chart_capture':
+      return pattern ?? 'AI포착';
+    default:
+      return pattern ?? featureGroupLabel(item.group);
+  }
+}
+
+String featureGroupLabel(String group) {
+  switch (group) {
+    case 'top_trading_value': return '거래대금 상위';
+    case 'gainers':           return '급등주';
+    case 'volume_spike':      return '거래량 급증';
+    case 'high_breakout':     return '신고가/돌파';
+    case 'chart_capture':     return 'AI포착';
+    default: return group.isEmpty ? '특징주' : group;
+  }
+}
+
+String? featurePatternLabel(String pattern) {
+  switch (pattern) {
+    case 'top_trading_value':                   return '거래대금 상위';
+    case 'gainers':                             return '급등';
+    case 'trading_value_spike':                 return '거래량/거래대금 급증';
+    case 'new_52w_high':                        return '신고가 돌파';
+    case 'prior_high_breakout':                 return '전고점 돌파';
+    case 'ma20_reclaim':                        return '20일선 회복';
+    case 'prior_high_retest':                   return '전고점 재도전';
+    case 'volume_surge_cooldown':               return '급등 후 재정비 구간';
+    case 'box_upper_approach':                  return '박스권 상단 접근';
+    case 'volume_surge_pullback_tail':          return '급등 뒤 조정 후 반등 시도';
+    case 'volume_spike_breakout_dry_up_rise':   return '급등 후 재정비 구간';
+    case 'volume_spike_dry_up_pullback_support': return '급등 후 재정비 구간';
+    default: return null;
+  }
+}
+
+String formatFeatureTradingValue(int value) {
+  if (value >= 1000000000000) {
+    return '${(value / 1000000000000).toStringAsFixed(1)}조';
+  }
+  if (value >= 100000000) {
+    return '${(value / 100000000).round()}억';
+  }
+  return NumberFormat('#,###').format(value);
+}
+
+bool featureShowsScore(MarketFeatureStock item) => item.group == 'chart_capture';
