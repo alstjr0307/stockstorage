@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/announcement.dart';
@@ -1245,7 +1244,32 @@ class _BotPostTab extends StatefulWidget {
 }
 
 class _BotPostTabState extends State<_BotPostTab> {
-  static const _botNicknames = ['주식저장소 봇', '시황알림 봇', '시장체크 봇', '리서치 봇'];
+  // 일반 유저처럼 보이는 닉네임 풀
+  static const _fakeNicknames = [
+    '재테크고수',
+    '개미투자자',
+    '주식공부중',
+    '투자하는사람',
+    '코스피라이더',
+    '배당주좋아',
+    '장기투자중',
+    '차트분석러',
+    '퀀트공부',
+    '가치투자자',
+  ];
+
+  // Firebase uid 형식(28자 영숫자)처럼 보이는 가짜 uid 생성
+  static String _fakeBotUid() {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final rng = DateTime.now().millisecondsSinceEpoch;
+    final buf = StringBuffer();
+    var seed = rng;
+    for (var i = 0; i < 28; i++) {
+      seed = (seed * 6364136223846793005 + 1442695040888963407) & 0x7FFFFFFFFFFFFFFF;
+      buf.write(chars[seed % chars.length]);
+    }
+    return buf.toString();
+  }
 
   final _fs = FirestoreService();
   final _titleCtrl = TextEditingController();
@@ -1264,27 +1288,16 @@ class _BotPostTabState extends State<_BotPostTab> {
     final body = _bodyCtrl.text.trim();
     if (title.isEmpty || body.isEmpty || _saving) return;
 
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null || uid.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('로그인 정보가 없어 글을 등록할 수 없습니다.'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-      return;
-    }
-
-    final nickname =
-        _botNicknames[DateTime.now().millisecondsSinceEpoch %
-            _botNicknames.length];
+    final rng = DateTime.now().millisecondsSinceEpoch;
+    final nickname = _fakeNicknames[rng % _fakeNicknames.length];
+    final fakeUid = _fakeBotUid();
 
     setState(() => _saving = true);
     try {
-      await _fs.createPost(
+      await _fs.createBotPost(
         Post(
           id: '',
-          uid: uid,
+          uid: fakeUid,
           nickname: nickname,
           title: title,
           content: body,
