@@ -1016,8 +1016,6 @@ String featureGroupLabel(String group) {
 
 String? featurePatternLabel(String pattern) {
   switch (pattern) {
-    case 'top_trading_value':                   return '거래대금 상위';
-    case 'gainers':                             return '급등';
     case 'trading_value_spike':                 return '거래량/거래대금 급증';
     case 'new_52w_high':                        return '신고가 돌파';
     case 'prior_high_breakout':                 return '전고점 돌파';
