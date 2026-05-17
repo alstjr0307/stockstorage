@@ -1394,7 +1394,7 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
     _latestAnnouncementStream = widget.firestoreService.getLatestAnnouncement();
     _featureStocksStream = widget.firestoreService.getMarketFeatureStocks(
       group: 'chart_capture',
-      limit: 4,
+      limit: 40,
     );
     _stockPicksStream = widget.firestoreService.getAllStockPicks();
   }
@@ -2855,6 +2855,48 @@ class _TopMoversPreview extends StatelessWidget {
   final Stream<List<MarketFeatureStock>> stream;
   final VoidCallback openFeatureStocks;
 
+  List<MarketFeatureStock> _selectHomeFeatureStocks(
+    List<MarketFeatureStock> latestItems,
+    List<MarketFeatureStock> allItems,
+  ) {
+    final selected = <MarketFeatureStock>[];
+    final selectedIds = <String>{};
+    final selectedPatterns = <String>{};
+
+    void addIfPossible(MarketFeatureStock item, {required bool uniquePattern}) {
+      if (selected.length >= 4 || selectedIds.contains(item.id)) return;
+      final pattern = item.pattern.isEmpty ? item.group : item.pattern;
+      if (uniquePattern && selectedPatterns.contains(pattern)) return;
+      selected.add(item);
+      selectedIds.add(item.id);
+      selectedPatterns.add(pattern);
+    }
+
+    final sortedAll = allItems.toList()
+      ..sort((a, b) {
+        final dateCompare = b.sourceDate.compareTo(a.sourceDate);
+        if (dateCompare != 0) return dateCompare;
+        final scoreCompare = b.score.compareTo(a.score);
+        if (scoreCompare != 0) return scoreCompare;
+        return b.tradingValue.compareTo(a.tradingValue);
+      });
+
+    for (final item in latestItems) {
+      addIfPossible(item, uniquePattern: true);
+    }
+    for (final item in sortedAll) {
+      addIfPossible(item, uniquePattern: true);
+    }
+    for (final item in latestItems) {
+      addIfPossible(item, uniquePattern: false);
+    }
+    for (final item in sortedAll) {
+      addIfPossible(item, uniquePattern: false);
+    }
+
+    return selected;
+  }
+
   @override
   Widget build(BuildContext context) {
     return _DarkHomeSection(
@@ -2873,8 +2915,35 @@ class _TopMoversPreview extends StatelessWidget {
               child: _EmptyPreview(text: '특징주 오류: ${snapshot.error}'),
             );
           }
-          final visible = (snapshot.data ?? <MarketFeatureStock>[]).toList();
-          final topVisible = visible.take(4).toList();
+          final items = (snapshot.data ?? <MarketFeatureStock>[]).toList();
+          final latestDate = items.isEmpty
+              ? null
+              : items
+                    .map(
+                      (item) => DateTime(
+                        item.sourceDate.year,
+                        item.sourceDate.month,
+                        item.sourceDate.day,
+                      ),
+                    )
+                    .reduce((a, b) => a.isAfter(b) ? a : b);
+          final latestItems =
+              latestDate == null
+                    ? items
+                    : items.where((item) {
+                        final date = DateTime(
+                          item.sourceDate.year,
+                          item.sourceDate.month,
+                          item.sourceDate.day,
+                        );
+                        return date == latestDate;
+                      }).toList()
+                ..sort((a, b) {
+                  final scoreCompare = b.score.compareTo(a.score);
+                  if (scoreCompare != 0) return scoreCompare;
+                  return b.tradingValue.compareTo(a.tradingValue);
+                });
+          final topVisible = _selectHomeFeatureStocks(latestItems, items);
           if (topVisible.isEmpty) {
             return const _EmptyPreview(text: '표시할 특징주가 없습니다.');
           }

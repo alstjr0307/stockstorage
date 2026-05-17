@@ -6,17 +6,17 @@ import '../services/firestore_service.dart';
 import 'market_feature_stock_detail_screen.dart';
 
 // ── Design tokens ─────────────────────────────────────────────────────────
-const _kAccent  = Color(0xFF00D68F); // 20일선 회복
-const _kGold    = Color(0xFFF5B547); // 급등 후 재정비
-const _kViolet  = Color(0xFF9B7BFF); // 거래량 폭발
-const _kRed     = Color(0xFFFF4E6A); // 신고가 돌파 / 급등
-const _kOrange  = Color(0xFFFF8C42); // 전고점 돌파
-const _kBlue    = Color(0xFF4A9EFF); // 하락
+const _kAccent = Color(0xFF00D68F); // 20일선 회복
+const _kGold = Color(0xFFF5B547); // 급등 후 재정비
+const _kViolet = Color(0xFF9B7BFF); // 거래량 폭발
+const _kRed = Color(0xFFFF4E6A); // 신고가 돌파 / 급등
+const _kOrange = Color(0xFFFF8C42); // 전고점 돌파
+const _kBlue = Color(0xFF4A9EFF); // 하락
 
 // ── Per-pattern signal config ─────────────────────────────────────────────
 class _SigCfg {
   const _SigCfg(this.color, this.icon, this.label);
-  final Color  color;
+  final Color color;
   final String icon;
   final String label;
 }
@@ -64,32 +64,40 @@ class _SigFilter {
   const _SigFilter(this.key, this.label, this.color);
   final String key;
   final String label;
-  final Color  color;
+  final Color color;
 }
 
 const _kSigFilters = [
-  _SigFilter('all',           '전체',   Color(0xFF8B92A8)),
-  _SigFilter('ma20',          '20일선',  _kAccent),
-  _SigFilter('consolidation', '재정비',  _kGold),
-  _SigFilter('box',           '박스권 상단', _kGold),
-  _SigFilter('retest',        '전고점 근처', _kBlue),
+  _SigFilter('all', '전체', Color(0xFF8B92A8)),
+  _SigFilter('ma20', '20일선', _kAccent),
+  _SigFilter('consolidation', '재정비', _kGold),
+  _SigFilter('box', '박스권 상단', _kGold),
+  _SigFilter('retest', '전고점 근처', _kBlue),
 ];
 
 bool _passFilter(MarketFeatureStock s, String key) {
   switch (key) {
-    case 'all': return true;
-    case 'ma20': return s.pattern == 'ma20_reclaim';
-    case 'consolidation': return const {
+    case 'all':
+      return true;
+    case 'ma20':
+      return s.pattern == 'ma20_reclaim';
+    case 'consolidation':
+      return const {
         'volume_surge_cooldown',
         'volume_spike_breakout_dry_up_rise',
         'volume_spike_dry_up_pullback_support',
         'volume_surge_pullback_tail',
       }.contains(s.pattern);
-    case 'box':    return s.pattern == 'box_upper_approach';
-    case 'volume': return s.pattern == 'trading_value_spike';
-    case 'high':   return const {'new_52w_high', 'prior_high_breakout'}.contains(s.pattern);
-    case 'retest': return s.pattern == 'prior_high_retest';
-    default: return true;
+    case 'box':
+      return s.pattern == 'box_upper_approach';
+    case 'volume':
+      return s.pattern == 'trading_value_spike';
+    case 'high':
+      return const {'new_52w_high', 'prior_high_breakout'}.contains(s.pattern);
+    case 'retest':
+      return s.pattern == 'prior_high_retest';
+    default:
+      return true;
   }
 }
 
@@ -231,15 +239,9 @@ void _showFeatureInfoDialog(BuildContext context) {
             SizedBox(height: 10),
             _InfoLine(title: '거래대금 상위', body: '오늘 실제로 돈이 많이 몰린 종목입니다.'),
             SizedBox(height: 10),
-            _InfoLine(
-              title: '거래량 급증',
-              body: '평소보다 거래량과 거래대금이 동시에 튄 종목입니다.',
-            ),
+            _InfoLine(title: '거래량 급증', body: '평소보다 거래량과 거래대금이 동시에 튄 종목입니다.'),
             SizedBox(height: 10),
-            _InfoLine(
-              title: '신고가/전고점',
-              body: '최근 고점 또는 신고가 구간을 돌파한 종목입니다.',
-            ),
+            _InfoLine(title: '신고가/전고점', body: '최근 고점 또는 신고가 구간을 돌파한 종목입니다.'),
           ],
         ),
       ),
@@ -436,11 +438,13 @@ class _FeatureStockListState extends State<_FeatureStockList> {
               onPick: () => _pickDate(context, availableDates),
               onPrev: canPrev
                   ? () => setState(
-                      () => _selectedDate = availableDates[currentIndex + 1])
+                      () => _selectedDate = availableDates[currentIndex + 1],
+                    )
                   : null,
               onNext: canNext
                   ? () => setState(
-                      () => _selectedDate = availableDates[currentIndex - 1])
+                      () => _selectedDate = availableDates[currentIndex - 1],
+                    )
                   : null,
             ),
             // ⑤ 시그널 필터 칩 (AI포착 탭만)
@@ -503,9 +507,7 @@ class _FeatureStockListState extends State<_FeatureStockList> {
     }
     final entries = grouped.entries.toList()
       ..sort((a, b) => b.key.compareTo(a.key));
-    return {
-      for (final entry in entries) entry.key: entry.value,
-    };
+    return {for (final entry in entries) entry.key: entry.value};
   }
 
   int _compareFeatureStocks(MarketFeatureStock a, MarketFeatureStock b) {
@@ -596,9 +598,7 @@ class _FeatureDateNavigator extends StatelessWidget {
               decoration: BoxDecoration(
                 color: cs.onSurface.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: cs.onSurface.withValues(alpha: 0.1),
-                ),
+                border: Border.all(color: cs.onSurface.withValues(alpha: 0.1)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -748,14 +748,18 @@ class _FeatureStockRow extends StatelessWidget {
         ),
       ),
       child: Container(
+        constraints: const BoxConstraints(minHeight: 112),
         // ① 시그널 컬러 왼쪽 바
         decoration: BoxDecoration(
           border: Border(
-            left: BorderSide(color: sig.color.withValues(alpha: 0.75), width: 3),
+            left: BorderSide(
+              color: sig.color.withValues(alpha: 0.75),
+              width: 3,
+            ),
             bottom: BorderSide(color: cs.onSurface.withValues(alpha: 0.07)),
           ),
         ),
-        padding: const EdgeInsets.fromLTRB(14, 14, 16, 14),
+        padding: const EdgeInsets.fromLTRB(16, 18, 18, 18),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -764,8 +768,11 @@ class _FeatureStockRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 시그널 pill — 탭 내 종목마다 다를 때만 표시
-                  if (!const {'gainers', 'top_trading_value', 'volume_spike'}
-                      .contains(item.group))
+                  if (!const {
+                    'gainers',
+                    'top_trading_value',
+                    'volume_spike',
+                  }.contains(item.group))
                     Padding(
                       padding: const EdgeInsets.only(bottom: 6),
                       child: Row(
@@ -806,7 +813,7 @@ class _FeatureStockRow extends StatelessWidget {
                   ),
                   // 비 AI포착 탭: 그룹별 컨텍스트 서브타이틀 복원
                   if (item.group != 'chart_capture') ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
                       featureSpecificLabel(item),
                       maxLines: 1,
@@ -818,7 +825,7 @@ class _FeatureStockRow extends StatelessWidget {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   // ④ 거래대금 + 거래량 바
                   Row(
                     children: [
@@ -833,14 +840,16 @@ class _FeatureStockRow extends StatelessWidget {
                       const SizedBox(width: 14),
                       _VolumeBar(
                         x: item.volumeRatio,
-                        color: item.volumeRatio >= 3 ? sig.color : cs.onSurface.withValues(alpha: 0.55),
+                        color: item.volumeRatio >= 3
+                            ? sig.color
+                            : cs.onSurface.withValues(alpha: 0.55),
                       ),
                     ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             // 가격 + 등락률
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -1020,28 +1029,45 @@ String featureSpecificLabel(MarketFeatureStock item) {
 
 String featureGroupLabel(String group) {
   switch (group) {
-    case 'top_trading_value': return '거래대금 상위';
-    case 'gainers':           return '급등주';
-    case 'volume_spike':      return '거래량 급증';
-    case 'high_breakout':     return '신고가/전고점';
-    case 'chart_capture':     return 'AI포착';
-    default: return group.isEmpty ? '특징주' : group;
+    case 'top_trading_value':
+      return '거래대금 상위';
+    case 'gainers':
+      return '급등주';
+    case 'volume_spike':
+      return '거래량 급증';
+    case 'high_breakout':
+      return '신고가/전고점';
+    case 'chart_capture':
+      return 'AI포착';
+    default:
+      return group.isEmpty ? '특징주' : group;
   }
 }
 
 String? featurePatternLabel(String pattern) {
   switch (pattern) {
-    case 'trading_value_spike':                 return '거래량/거래대금 급증';
-    case 'new_52w_high':                        return '신고가 돌파';
-    case 'prior_high_breakout':                 return '전고점 돌파';
-    case 'ma20_reclaim':                        return '20일선 회복';
-    case 'prior_high_retest':                   return '전고점 재도전';
-    case 'volume_surge_cooldown':               return '급등 후 재정비 구간';
-    case 'box_upper_approach':                  return '박스권 상단 접근';
-    case 'volume_surge_pullback_tail':          return '급등 뒤 조정 후 반등 시도';
-    case 'volume_spike_breakout_dry_up_rise':   return '급등 후 재정비 구간';
-    case 'volume_spike_dry_up_pullback_support': return '급등 후 재정비 구간';
-    default: return null;
+    case 'trading_value_spike':
+      return '거래량/거래대금 급증';
+    case 'new_52w_high':
+      return '신고가 돌파';
+    case 'prior_high_breakout':
+      return '전고점 돌파';
+    case 'ma20_reclaim':
+      return '20일선 회복';
+    case 'prior_high_retest':
+      return '전고점 재도전';
+    case 'volume_surge_cooldown':
+      return '급등 후 재정비 구간';
+    case 'box_upper_approach':
+      return '박스권 상단 접근';
+    case 'volume_surge_pullback_tail':
+      return '급등 뒤 조정 후 반등 시도';
+    case 'volume_spike_breakout_dry_up_rise':
+      return '급등 후 재정비 구간';
+    case 'volume_spike_dry_up_pullback_support':
+      return '급등 후 재정비 구간';
+    default:
+      return null;
   }
 }
 
@@ -1055,4 +1081,5 @@ String formatFeatureTradingValue(int value) {
   return NumberFormat('#,###').format(value);
 }
 
-bool featureShowsScore(MarketFeatureStock item) => item.group == 'chart_capture';
+bool featureShowsScore(MarketFeatureStock item) =>
+    item.group == 'chart_capture';
