@@ -165,7 +165,7 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
       case 'volume_spike':
         return '거래량 급증 · 20일 평균 대비 ${item.volumeRatio.toStringAsFixed(1)}배';
       case 'high_breakout':
-        return pattern ?? '신고가/돌파';
+        return pattern ?? '신고가/전고점';
       case 'chart_capture':
         return pattern ?? 'AI포착';
       default:
@@ -217,7 +217,7 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
       case 'volume_spike':
         return '거래량 급증';
       case 'high_breakout':
-        return '신고가/돌파';
+        return '신고가/전고점';
       case 'chart_capture':
         return 'AI포착';
       default:

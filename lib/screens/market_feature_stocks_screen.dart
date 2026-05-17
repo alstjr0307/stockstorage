@@ -49,7 +49,7 @@ _SigCfg _getSig(MarketFeatureStock s) {
         case 'volume_spike':
           return const _SigCfg(_kViolet, '⚡', '거래량 급증');
         case 'high_breakout':
-          return const _SigCfg(_kRed, '✦', '신고가/돌파');
+          return const _SigCfg(_kRed, '✦', '신고가/전고점');
         default:
           return s.changeRate >= 0
               ? const _SigCfg(_kRed, '↑', '상승')
@@ -124,7 +124,7 @@ class _MarketFeatureStocksScreenState extends State<MarketFeatureStocksScreen> {
       description: '평소보다 거래량과 거래대금이 동시에 튄 종목입니다.',
     ),
     _FeatureStockFilter(
-      '신고가/돌파',
+      '신고가/전고점',
       group: 'high_breakout',
       description: '최근 고점 또는 신고가 구간을 돌파한 종목입니다.',
     ),
@@ -236,7 +236,7 @@ void _showFeatureInfoDialog(BuildContext context) {
             ),
             SizedBox(height: 10),
             _InfoLine(
-              title: '신고가/돌파',
+              title: '신고가/전고점',
               body: '최근 고점 또는 신고가 구간을 돌파한 종목입니다.',
             ),
           ],
@@ -995,7 +995,7 @@ String featureSpecificLabel(MarketFeatureStock item) {
     case 'volume_spike':
       return '거래량 급증 · 20일 평균 대비 ${item.volumeRatio.toStringAsFixed(1)}배';
     case 'high_breakout':
-      return pattern ?? '신고가/돌파';
+      return pattern ?? '신고가/전고점';
     case 'chart_capture':
       return pattern ?? 'AI포착';
     default:
@@ -1008,7 +1008,7 @@ String featureGroupLabel(String group) {
     case 'top_trading_value': return '거래대금 상위';
     case 'gainers':           return '급등주';
     case 'volume_spike':      return '거래량 급증';
-    case 'high_breakout':     return '신고가/돌파';
+    case 'high_breakout':     return '신고가/전고점';
     case 'chart_capture':     return 'AI포착';
     default: return group.isEmpty ? '특징주' : group;
   }
