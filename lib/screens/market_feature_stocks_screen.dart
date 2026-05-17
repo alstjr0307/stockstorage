@@ -32,8 +32,9 @@ _SigCfg _getSig(MarketFeatureStock s) {
     case 'trading_value_spike':
       return const _SigCfg(_kViolet, '⚡', '거래량 폭발');
     case 'new_52w_high':
-    case 'prior_high_breakout':
       return const _SigCfg(_kRed, '✦', '신고가 돌파');
+    case 'prior_high_breakout':
+      return const _SigCfg(_kRed, '↑', '전고점 돌파');
     case 'prior_high_retest':
       return const _SigCfg(_kBlue, '⟳', '전고점 재도전');
     case 'box_upper_approach':
