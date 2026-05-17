@@ -5,7 +5,9 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../services/analytics_service.dart';
+import '../services/ad_service.dart';
 import '../services/stock_price_service.dart';
+import '../widgets/banner_ad_widget.dart';
 import 'chart_visible_range.dart';
 
 typedef _OHLC = ({
@@ -222,6 +224,12 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
         child: Column(
           children: [
             _buildHeroCard(context, moveColor, price),
+            const SizedBox(height: 12),
+            BannerAdWidget(
+              slotId: 'index_detail_${widget.symbol}',
+              adUnitId: AdService.marketAnalysisMidBannerAdUnitId,
+              fallbackAdUnitId: AdService.bannerAdUnitId,
+            ),
             const SizedBox(height: 24),
             _buildChartCard(context),
           ],
@@ -637,6 +645,7 @@ class _IndexDetailScreenState extends State<IndexDetailScreen> {
     );
   }
 
+  // ignore: unused_element
   Widget _summaryStat(
     BuildContext context, {
     required String label,

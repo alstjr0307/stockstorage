@@ -19,7 +19,6 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
 
   final MarketFeatureStock item;
 
-  static final _dateFormat = DateFormat('yyyy.MM.dd');
   static final _numberFormat = NumberFormat('#,###');
 
   static const _accent = Color(0xFF10B981);
@@ -79,8 +78,6 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
           ),
           const SizedBox(height: 28),
           _FeaturePriceChart(item: item, lineColor: moveColor),
-          const SizedBox(height: 28),
-          _ReasonBlock(reason: _localizedReason, accent: _accent),
           const SizedBox(height: 30),
           _SectionHeader(title: '핵심 지표'),
           const SizedBox(height: 6),
@@ -104,11 +101,8 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
             _MetricRow(label: '포착 점수', value: '${item.score}'),
           const SizedBox(height: 28),
           _SectionHeader(title: '포착 정보'),
-          const SizedBox(height: 6),
-          _MetricRow(label: '분류', value: _groupLabel(item.group)),
-          _MetricRow(label: '특징 유형', value: _featureSpecificLabel(item)),
-          _MetricRow(label: '패턴', value: _featureTitle(item)),
-          _MetricRow(label: '기준일', value: _dateFormat.format(item.sourceDate)),
+          const SizedBox(height: 10),
+          _ReasonText(reason: _localizedReason),
           const SizedBox(height: 22),
           Text(
             '특징주는 시장 데이터 기반 포착 정보이며, 매수·매도 권유가 아닙니다.',
@@ -125,7 +119,7 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
   }
 
   String get _localizedReason {
-    final reason = item.reason.replaceAll('\n', ' ').trim();
+    final reason = item.reason.trim();
     if (reason.isNotEmpty && !_looksEnglish(reason)) {
       return reason;
     }
@@ -153,7 +147,7 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
     if (pattern != null) {
       parts.add('$pattern 흐름이 함께 감지됐습니다.');
     }
-    return parts.join(' ');
+    return parts.join('\n\n');
   }
 
   static String _featureTitle(MarketFeatureStock item) {
@@ -940,46 +934,60 @@ void _drawFeatureMarker(
   painter.paint(canvas, Offset(labelX, top + 11));
 }
 
-class _ReasonBlock extends StatelessWidget {
-  const _ReasonBlock({required this.reason, required this.accent});
+class _ReasonText extends StatelessWidget {
+  const _ReasonText({required this.reason});
 
   final String reason;
-  final Color accent;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: cs.onSurface.withValues(alpha: 0.045),
-        borderRadius: BorderRadius.circular(10),
-        border: Border(left: BorderSide(color: accent, width: 3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    final paragraphs = _splitReasonSentences(reason)
+        .map((paragraph) => paragraph.trim())
+        .where((paragraph) => paragraph.isNotEmpty)
+        .toList();
+
+    if (paragraphs.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < paragraphs.length; i++) ...[
           Text(
-            '포착 사유',
+            paragraphs[i],
             style: TextStyle(
-              color: accent,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            reason,
-            style: TextStyle(
-              color: cs.onSurface.withValues(alpha: 0.82),
-              fontSize: 15,
-              height: 1.65,
+              color: cs.onSurface.withValues(alpha: 0.78),
+              fontSize: 14,
+              height: 1.62,
               fontWeight: FontWeight.w400,
             ),
           ),
+          if (i != paragraphs.length - 1) const SizedBox(height: 10),
         ],
-      ),
+      ],
     );
+  }
+
+  List<String> _splitReasonSentences(String value) {
+    final normalized = value
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .trim();
+    if (normalized.isEmpty) return const [];
+
+    final lineSeparated = normalized
+        .split(RegExp(r'\n+'))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+    if (lineSeparated.length > 1) return lineSeparated;
+
+    final text = lineSeparated.isEmpty ? normalized : lineSeparated.first;
+    return text
+        .split(RegExp(r'(?<=[.!?。]|다\.|요\.|니다\.|습니다\.)\s+'))
+        .map((sentence) => sentence.trim())
+        .where((sentence) => sentence.isNotEmpty)
+        .toList();
   }
 }
 

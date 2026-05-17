@@ -330,20 +330,23 @@ class FirestoreService {
         attendanceCount: currentAttendance,
         bonusXp: currentBonusXp,
       );
-      tx.set(userRef, {
+      final updates = <String, dynamic>{
         'postCount': currentPostCount,
         'commentCount': nextCommentCount,
         'attendanceCount': currentAttendance,
         'bonusXp': currentBonusXp,
         'level': nextLevel,
         'lastActiveAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+        if (delta > 0) 'lastCommentDate': _kstDayKey(),
+      };
+      tx.set(userRef, updates, SetOptions(merge: true));
       tx.set(publicRef, {'level': nextLevel}, SetOptions(merge: true));
     });
   }
 
-  Future<void> recordCommentCreated(String uid) {
-    return _adjustCommentCount(uid, 1);
+  Future<void> recordCommentCreated(String uid) async {
+    await _adjustCommentCount(uid, 1);
+    await _markDailyMissionDate(uid, 'lastCommentMissionDate');
   }
 
   Future<void> recordCommentRemoved(String uid) {
@@ -365,6 +368,18 @@ class FirestoreService {
           .where((p) => !p.isCompleted)
           .toList(),
     );
+  }
+
+  Stream<List<StockPick>> getAllStockPicks() {
+    return _db
+        .collection('stock_picks')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snapshot) {
+          return snapshot.docs
+              .map((doc) => StockPick.fromFirestore(doc))
+              .toList();
+        });
   }
 
   Future<void> addStockPick(StockPick pick) {
@@ -398,6 +413,18 @@ class FirestoreService {
           });
           return list;
         });
+  }
+
+  Stream<Announcement?> getLatestAnnouncement() {
+    return _db
+        .collection('announcements')
+        .orderBy('createdAt', descending: true)
+        .limit(1)
+        .snapshots()
+        .map(
+          (s) =>
+              s.docs.isEmpty ? null : Announcement.fromFirestore(s.docs.first),
+        );
   }
 
   Future<void> addAnnouncement(Announcement a) {
@@ -448,6 +475,25 @@ class FirestoreService {
         .doc(uid)
         .snapshots()
         .map((doc) => List<String>.from(doc.data()?['favorites'] ?? []));
+  }
+
+  Future<List<StockPick>> getFavoriteStockPicksPreview(
+    Set<String> favoriteIds, {
+    int limit = 4,
+  }) async {
+    if (favoriteIds.isEmpty || limit <= 0) return [];
+
+    final ids = favoriteIds.take(20).toList(growable: false);
+    final docs = await Future.wait(
+      ids.map((id) => _db.collection('stock_picks').doc(id).get()),
+    );
+
+    return docs
+        .where((doc) => doc.exists)
+        .map((doc) => StockPick.fromFirestore(doc))
+        .where((pick) => !pick.isCompleted)
+        .take(limit)
+        .toList();
   }
 
   Future<void> toggleFavorite(String uid, String pickId, bool isCurrentlyFav) {
@@ -945,10 +991,90 @@ class FirestoreService {
     });
   }
 
+  Stream<({bool commentDone, bool memoDone, int adRemaining, int adLimit})>
+  watchDailyMissions(String uid) {
+    if (uid.isEmpty) {
+      return Stream.value((
+        commentDone: false,
+        memoDone: false,
+        adRemaining: _rewardAdDailyLimit,
+        adLimit: _rewardAdDailyLimit,
+      ));
+    }
+    return _db.collection('users').doc(uid).snapshots().map((doc) {
+      final data = doc.data() ?? <String, dynamic>{};
+      final today = _kstDayKey();
+      final lastAdDate = data['lastRewardAdDate'] as String?;
+      final rawCount = (data['rewardAdCountToday'] as num?)?.toInt() ?? 0;
+      final watchedCount = lastAdDate == today
+          ? rawCount.clamp(0, _rewardAdDailyLimit).toInt()
+          : 0;
+      return (
+        commentDone:
+            (data['lastCommentMissionDate'] as String?) == today ||
+            (data['lastCommentDate'] as String?) == today,
+        memoDone:
+            (data['lastJournalMissionDate'] as String?) == today ||
+            (data['lastMemoDate'] as String?) == today,
+        adRemaining: _rewardAdDailyLimit - watchedCount,
+        adLimit: _rewardAdDailyLimit,
+      );
+    });
+  }
+
   Stream<bool> watchCanWatchRewardAdToday(String uid) {
     return watchRewardAdStatus(
       uid,
     ).map((status) => status['canWatchToday'] == 1);
+  }
+
+  Stream<Map<String, int>> watchDailyMissionStatus(String uid) {
+    if (uid.isEmpty) {
+      return Stream.value({
+        'attendanceDone': 0,
+        'adDone': 0,
+        'commentDone': 0,
+        'journalDone': 0,
+        'remainingCount': _rewardAdDailyLimit,
+        'watchedCount': 0,
+        'dailyLimit': _rewardAdDailyLimit,
+      });
+    }
+    return _db.collection('users').doc(uid).snapshots().map((doc) {
+      final data = doc.data() ?? <String, dynamic>{};
+      final todayKey = _kstDayKey();
+      final rewardSameDay = (data['lastRewardAdDate'] as String?) == todayKey;
+      final rawRewardCount = (data['rewardAdCountToday'] as num?)?.toInt() ?? 0;
+      final watchedCount = rewardSameDay
+          ? rawRewardCount.clamp(0, _rewardAdDailyLimit).toInt()
+          : 0;
+      final remainingCount = (_rewardAdDailyLimit - watchedCount)
+          .clamp(0, _rewardAdDailyLimit)
+          .toInt();
+      return {
+        'attendanceDone': (data['lastAttendanceDate'] as String?) == todayKey
+            ? 1
+            : 0,
+        'adDone': watchedCount > 0 ? 1 : 0,
+        'commentDone': (data['lastCommentMissionDate'] as String?) == todayKey
+            ? 1
+            : 0,
+        'journalDone': (data['lastJournalMissionDate'] as String?) == todayKey
+            ? 1
+            : 0,
+        'remainingCount': remainingCount,
+        'watchedCount': watchedCount,
+        'dailyLimit': _rewardAdDailyLimit,
+      };
+    });
+  }
+
+  Future<void> _markDailyMissionDate(String uid, String field) {
+    if (uid.isEmpty) return Future.value();
+    return _db.collection('users').doc(uid).set({
+      field: _kstDayKey(),
+      'lastActiveAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<bool> grantDailyRewardAdXp(
@@ -1043,6 +1169,7 @@ class FirestoreService {
     String? messageId,
     String source = 'push',
     DateTime? sentAt,
+    Map<String, dynamic> data = const {},
   }) async {
     final safeTitle = title.trim();
     final safeBody = body.trim();
@@ -1070,10 +1197,19 @@ class FirestoreService {
         ? messageId.trim()
         : _db.collection('tmp').doc().id;
 
+    final routeData = <String, dynamic>{};
+    for (final key in ['postId', 'pickId', 'journalId']) {
+      final value = data[key];
+      if (value is String && value.trim().isNotEmpty) {
+        routeData[key] = value.trim();
+      }
+    }
+
     await historyRef.doc(docId).set({
       'title': safeTitle,
       'body': safeBody,
       'source': source,
+      ...routeData,
       'sentAt': Timestamp.fromDate(sentAt ?? DateTime.now()),
       'updatedAt': Timestamp.fromDate(DateTime.now()),
     }, SetOptions(merge: true));
@@ -1287,10 +1423,16 @@ class FirestoreService {
     return doc.data()?['text'] as String?;
   }
 
-  Future<void> saveMemo(String uid, String pickId, String text) {
-    return _db.collection('users').doc(uid).collection('memos').doc(pickId).set(
+  Future<void> saveMemo(String uid, String pickId, String text) async {
+    final batch = _db.batch();
+    batch.set(
+      _db.collection('users').doc(uid).collection('memos').doc(pickId),
       {'text': text, 'updatedAt': Timestamp.fromDate(DateTime.now())},
     );
+    batch.set(_db.collection('users').doc(uid), {
+      'lastMemoDate': _kstDayKey(),
+    }, SetOptions(merge: true));
+    return batch.commit();
   }
 
   // ── pick 실시간 스트림 (투표 카운트 반영) ──────────────────────────────────
@@ -1458,6 +1600,7 @@ class FirestoreService {
         'publishedAt': Timestamp.fromDate(journal.publishedAt ?? now),
     };
     await _db.collection('trading_journal').add(payload);
+    await _markDailyMissionDate(journal.uid, 'lastJournalMissionDate');
     if (journal.isPublic) {
       await recordPostCreated(journal.uid);
     }

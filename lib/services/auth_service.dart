@@ -7,7 +7,7 @@ import 'analytics_service.dart';
 
 class AuthService {
   final _auth = FirebaseAuth.instance;
-  final _googleSignIn = GoogleSignIn();
+  final GoogleSignIn? _googleSignIn = kIsWeb ? null : GoogleSignIn();
 
   // 관리자 UID 목록
   static const List<String> adminUids = [
@@ -49,7 +49,7 @@ class AuthService {
       return result;
     }
 
-    await _googleSignIn.signOut();
+    await _googleSignIn!.signOut();
     final googleUser = await _googleSignIn.signIn();
     if (googleUser == null) return null;
 
@@ -135,7 +135,9 @@ class AuthService {
   Future<void> signOut() async {
     AnalyticsService.instance.logLogout();
     AnalyticsService.instance.clearUserId();
-    await _googleSignIn.signOut();
+    if (!kIsWeb) {
+      await _googleSignIn?.signOut();
+    }
     // 카카오 로그아웃 (카카오로 로그인한 경우만)
     try {
       await kakao.UserApi.instance.logout();
@@ -175,7 +177,9 @@ class AuthService {
     // 3. FCM 토큰 삭제는 토큰을 알아야 하므로 생략 (만료됨으로 자동 처리)
 
     // 4. 소셜 로그아웃
-    await _googleSignIn.signOut();
+    if (!kIsWeb) {
+      await _googleSignIn?.signOut();
+    }
     try {
       await kakao.UserApi.instance.unlink();
     } catch (_) {}

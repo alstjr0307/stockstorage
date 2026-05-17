@@ -5,13 +5,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+import '../models/trading_journal.dart';
+import '../screens/home_screen.dart';
+import '../screens/journal_chart_screen.dart';
+import '../screens/post_detail_screen.dart';
 import '../utils/globals.dart';
 import 'firestore_service.dart';
 
 @pragma('vm:entry-point')
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // 백그라운드 메시지는 시스템 알림으로 자동 표시되므로 별도 처리 불필요
-}
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {}
 
 class NotificationService {
   NotificationService._();
@@ -20,6 +22,7 @@ class NotificationService {
   bool _initialized = false;
   static final _localNotifications = FlutterLocalNotificationsPlugin();
   static const _journalReminderBaseId = 18000;
+  final FirestoreService _firestoreService = FirestoreService();
 
   Future<void> _saveRemoteMessageHistory(
     RemoteMessage message, {
@@ -32,20 +35,21 @@ class NotificationService {
     final body = (message.notification?.body ?? message.data['body'] ?? '')
         .toString();
     if (title.trim().isEmpty && body.trim().isEmpty) return;
-    await FirestoreService().saveNotificationHistory(
+    await _firestoreService.saveNotificationHistory(
       uid: uid,
       title: title,
       body: body,
       messageId: message.messageId,
       source: source,
       sentAt: message.sentTime,
+      data: message.data,
     );
   }
 
   Future<void> _applyNewPickTopicSubscription() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final settings = await FirestoreService()
+    final settings = await _firestoreService
         .ensureNotificationSettingsInitialized(user.uid);
     final enabled = settings['newPick'] ?? true;
     if (enabled) {
@@ -58,7 +62,7 @@ class NotificationService {
   Future<void> _applyJournalWriteReminderSchedule() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    final settings = await FirestoreService()
+    final settings = await _firestoreService
         .ensureNotificationSettingsInitialized(user.uid);
     final enabled = settings['journalWriteReminder'] ?? false;
     if (enabled) {
@@ -70,13 +74,7 @@ class NotificationService {
 
   static tz.TZDateTime _nextWeekdayAt18(int weekday) {
     final now = tz.TZDateTime.now(tz.local);
-    var scheduled = tz.TZDateTime(
-      tz.local,
-      now.year,
-      now.month,
-      now.day,
-      18,
-    );
+    var scheduled = tz.TZDateTime(tz.local, now.year, now.month, now.day, 18);
     while (scheduled.weekday != weekday || !scheduled.isAfter(now)) {
       scheduled = scheduled.add(const Duration(days: 1));
     }
@@ -136,7 +134,6 @@ class NotificationService {
       sound: true,
     );
 
-    // 로컬 알림 초기화
     const androidSettings = AndroidInitializationSettings(
       '@mipmap/ic_launcher',
     );
@@ -148,7 +145,6 @@ class NotificationService {
     await _localNotifications.initialize(initSettings);
     tzdata.initializeTimeZones();
 
-    // FCM 토큰 저장: iOS는 APNS 토큰 준비까지 최대 5초 대기
     try {
       if (Platform.isIOS) {
         String? apnsToken;
@@ -158,27 +154,26 @@ class NotificationService {
             await Future.delayed(const Duration(seconds: 1));
           }
         }
-        final db = FirestoreService();
         if (apnsToken == null) {
-          db.logFcmDebug('apns_token_null');
-          // APNS 토큰이 아직 없어도 나머지 초기화(토픽/리스너)는 계속 진행
+          _firestoreService.logFcmDebug('apns_token_null');
+          // APNS 토큰이 아직 없어도 초기화와 리스너 등록은 계속 진행
         }
         final token = await messaging.getToken();
         if (token != null) {
           final uid = FirebaseAuth.instance.currentUser?.uid;
-          FirestoreService().saveFcmToken(token, uid: uid).catchError((_) {});
+          _firestoreService.saveFcmToken(token, uid: uid).catchError((_) {});
         } else {
-          db.logFcmDebug('fcm_token_null, apns=$apnsToken');
+          _firestoreService.logFcmDebug('fcm_token_null, apns=$apnsToken');
         }
       } else {
         final token = await messaging.getToken();
         if (token != null) {
           final uid = FirebaseAuth.instance.currentUser?.uid;
-          FirestoreService().saveFcmToken(token, uid: uid).catchError((_) {});
+          _firestoreService.saveFcmToken(token, uid: uid).catchError((_) {});
         }
       }
     } catch (e) {
-      FirestoreService().logFcmDebug('exception: $e');
+      _firestoreService.logFcmDebug('exception: $e');
     }
 
     // 종목 알림 토픽 구독
@@ -186,19 +181,20 @@ class NotificationService {
     _applyNewPickTopicSubscription().catchError((_) {});
     _applyJournalWriteReminderSchedule().catchError((_) {});
 
-    // 토큰 갱신 시 저장
     messaging.onTokenRefresh.listen((t) {
       final uid = FirebaseAuth.instance.currentUser?.uid;
-      FirestoreService().saveFcmToken(t, uid: uid).catchError((_) {});
+      _firestoreService.saveFcmToken(t, uid: uid).catchError((_) {});
     });
 
-    // 로그인 시점에도 토큰 저장 (앱 시작 후 지연 로그인 대비)
+    // 로그인 시점에도 토큰 저장
     FirebaseAuth.instance.authStateChanges().listen((user) async {
       if (user == null) return;
       try {
         final token = await messaging.getToken();
         if (token != null) {
-          FirestoreService().saveFcmToken(token, uid: user.uid).catchError((_) {});
+          _firestoreService
+              .saveFcmToken(token, uid: user.uid)
+              .catchError((_) {});
         }
         _applyNewPickTopicSubscription().catchError((_) {});
         _applyJournalWriteReminderSchedule().catchError((_) {});
@@ -210,28 +206,184 @@ class NotificationService {
       final title = message.notification?.title ?? '';
       final body = message.notification?.body ?? '';
       if (title.isEmpty && body.isEmpty) return;
-      _saveRemoteMessageHistory(message, source: 'foreground').catchError((_) {});
+      _saveRemoteMessageHistory(
+        message,
+        source: 'foreground',
+      ).catchError((_) {});
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final context = navigatorKey.currentContext;
         if (context == null) return;
-        _showSnackBar(context, title, body);
+        _showSnackBar(context, title, body, message);
       });
     });
 
-    // 백그라운드에서 알림 탭해 앱 진입
+    // 백그라운드에서 알림을 눌러 진입
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      _saveRemoteMessageHistory(message, source: 'opened_app').catchError((_) {});
+      _saveRemoteMessageHistory(
+        message,
+        source: 'opened_app',
+      ).catchError((_) {});
+      _handleNotificationTap(message);
     });
 
-    // 종료 상태에서 알림 탭해 앱 진입
+    // 종료 상태에서 알림을 눌러 진입
     final initialMessage = await messaging.getInitialMessage();
     if (initialMessage != null) {
       _saveRemoteMessageHistory(
         initialMessage,
         source: 'opened_from_terminated',
       ).catchError((_) {});
+      _handleNotificationTap(initialMessage);
     }
+  }
+
+  Future<BuildContext?> _waitForNavigatorContext() async {
+    for (var i = 0; i < 20; i++) {
+      final context = navigatorKey.currentContext;
+      if (context != null) return context;
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    return null;
+  }
+
+  Future<void> _handleNotificationTap(RemoteMessage message) async {
+    final data = message.data;
+    final postId = (data['postId'] ?? '').toString();
+    final pickId = (data['pickId'] ?? '').toString();
+    final journalId = (data['journalId'] ?? '').toString();
+
+    if (postId.isNotEmpty) {
+      await _openPost(postId);
+      return;
+    }
+    if (pickId.isNotEmpty) {
+      await _openPickList();
+      return;
+    }
+    if (journalId.isNotEmpty) {
+      await _openJournal(journalId);
+    }
+  }
+
+  Future<void> _openPost(String postId) async {
+    final context = await _waitForNavigatorContext();
+    if (context == null) return;
+    final post = await _firestoreService.getPostOnce(postId);
+    if (post == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('게시글을 찾을 수 없습니다.')));
+      }
+      return;
+    }
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final isLiked = uid == null || uid.isEmpty
+        ? false
+        : await _firestoreService.hasLikedPost(post.id, uid);
+    navigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (_) => PostDetailScreen(
+          post: post,
+          isOwn: uid != null && uid == post.uid,
+          isLiked: isLiked,
+          likeCount: post.likes,
+          onDelete: uid != null && uid == post.uid
+              ? () => _firestoreService.deletePost(post.id)
+              : null,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openPickList() async {
+    await _waitForNavigatorContext();
+    navigatorKey.currentState?.push(
+      MaterialPageRoute(builder: (_) => const StockPicksListScreen()),
+    );
+  }
+
+  Future<void> _openJournal(String journalId) async {
+    final context = await _waitForNavigatorContext();
+    if (context == null) return;
+    final journal = await _firestoreService.getJournalById(journalId);
+    if (journal == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('매매일지를 찾을 수 없습니다.')));
+      }
+      return;
+    }
+    final publicByAuthor = await _firestoreService.getPublicJournalsByUidOnce(
+      journal.uid,
+    );
+    final relatedBuys =
+        publicByAuthor
+            .where(
+              (j) =>
+                  j.action == '\uB9E4\uC218' &&
+                  j.ticker == journal.ticker &&
+                  j.market == journal.market,
+            )
+            .toList()
+          ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+    final relatedSells =
+        publicByAuthor
+            .where(
+              (j) =>
+                  j.action == '\uB9E4\uB3C4' &&
+                  j.ticker == journal.ticker &&
+                  j.market == journal.market,
+            )
+            .toList()
+          ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+
+    final chartBaseBuy = journal.action == '\uB9E4\uC218'
+        ? journal
+        : _selectChartBaseBuy(journal, relatedBuys);
+    navigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (_) => JournalChartScreen(
+          buy: chartBaseBuy,
+          linkedSells: const <TradingJournal>[],
+          relatedBuys: relatedBuys,
+          relatedSells: relatedSells,
+          showBuyMarker: relatedBuys.isNotEmpty,
+          firestoreService: _firestoreService,
+        ),
+      ),
+    );
+  }
+
+  TradingJournal _selectChartBaseBuy(
+    TradingJournal journal,
+    List<TradingJournal> relatedBuys,
+  ) {
+    TradingJournal? latestBefore;
+    for (final buy in relatedBuys) {
+      if (!buy.tradeDate.isAfter(journal.tradeDate)) latestBefore = buy;
+    }
+    if (latestBefore != null) return latestBefore;
+    if (relatedBuys.isNotEmpty) return relatedBuys.first;
+    return TradingJournal(
+      id: 'synthetic_buy_${journal.id}',
+      uid: journal.uid,
+      nickname: journal.nickname,
+      stockName: journal.stockName,
+      ticker: journal.ticker,
+      market: journal.market,
+      action: '\uB9E4\uC218',
+      price: journal.buyPrice > 0 ? journal.buyPrice : journal.price,
+      quantity: journal.quantity,
+      tradeDate: journal.tradeDate,
+      note: '',
+      isPublic: false,
+      likes: 0,
+      createdAt: journal.createdAt,
+    );
   }
 
   /// 포트폴리오 10% 구간 도달 로컬 알림
@@ -260,25 +412,40 @@ class NotificationService {
     );
   }
 
-  void _showSnackBar(BuildContext context, String title, String body) {
+  void _showSnackBar(
+    BuildContext context,
+    String title,
+    String body,
+    RemoteMessage message,
+  ) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (title.isNotEmpty)
-              Text(
-                title,
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                  fontSize: 13,
+        content: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            _handleNotificationTap(message);
+          },
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (title.isNotEmpty)
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    fontSize: 13,
+                  ),
                 ),
-              ),
-            if (body.isNotEmpty)
-              Text(body, style: TextStyle(color: Colors.white70, fontSize: 12)),
-          ],
+              if (body.isNotEmpty)
+                Text(
+                  body,
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+            ],
+          ),
         ),
         backgroundColor: const Color(0xFF1A2035),
         behavior: SnackBarBehavior.floating,

@@ -26,6 +26,10 @@ class MarketAnalysisScreen extends StatefulWidget {
     : initialTabIndex = 0,
       _mode = _MarketAnalysisScreenMode.indicators;
 
+  const MarketAnalysisScreen.indicesOnly({super.key})
+    : initialTabIndex = 0,
+      _mode = _MarketAnalysisScreenMode.indicesOnly;
+
   const MarketAnalysisScreen.legacyTabs({super.key, this.initialTabIndex = 0})
     : _mode = _MarketAnalysisScreenMode.tabs;
 
@@ -36,7 +40,7 @@ class MarketAnalysisScreen extends StatefulWidget {
   State<MarketAnalysisScreen> createState() => _MarketAnalysisScreenState();
 }
 
-enum _MarketAnalysisScreenMode { indicators, analysis, tabs }
+enum _MarketAnalysisScreenMode { indicesOnly, indicators, analysis, tabs }
 
 class InvestorFlowDetailScreen extends StatelessWidget {
   const InvestorFlowDetailScreen({super.key});
@@ -123,15 +127,6 @@ class _FmkoreaHotStocksScreenState extends State<FmkoreaHotStocksScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
           children: [
-            Text(
-              '커뮤니티에서 많이 언급되는 종목 흐름입니다.',
-              style: TextStyle(
-                color: cs.onSurface.withValues(alpha: 0.48),
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 16),
             _buildTabs(cs),
             const SizedBox(height: 14),
             if (_tabIndex == 0) _buildRealtime() else _buildPreviousDaily(),
@@ -623,6 +618,8 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
   @override
   Widget build(BuildContext context) {
     switch (widget._mode) {
+      case _MarketAnalysisScreenMode.indicesOnly:
+        return _buildIndicesOnlyTab(context);
       case _MarketAnalysisScreenMode.indicators:
         return _buildIndicatorsTab(context);
       case _MarketAnalysisScreenMode.analysis:
@@ -708,6 +705,29 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
             onceKey: 'indicator_shortcuts_section_once_v4',
             delay: const Duration(milliseconds: 140),
             child: _buildIndicatorShortcuts(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIndicesOnlyTab(BuildContext context) {
+    return RefreshIndicator(
+      color: const Color(0xFF3182F6),
+      onRefresh: () => _fetchIndices(forceRefresh: true),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
+        children: [
+          _StaggerReveal(
+            onceKey: 'major_indices_only_section_once_v1',
+            delay: const Duration(milliseconds: 40),
+            child: _buildIndicesPanel(context),
+          ),
+          const SizedBox(height: 12),
+          BannerAdWidget(
+            slotId: 'market_analysis_indices_only',
+            adUnitId: AdService.marketAnalysisMidBannerAdUnitId,
+            fallbackAdUnitId: AdService.bannerAdUnitId,
           ),
         ],
       ),

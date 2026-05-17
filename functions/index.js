@@ -21,6 +21,20 @@ const {
 
 initializeApp();
 
+const PUSH_TEXT = Object.freeze({
+  newUserTitle: '\uD83D\uDC64 \uC2E0\uADDC \uAC00\uC785\uC790',
+  stockFallback: '\uC885\uBAA9',
+  newCommentSuffix: '\uC0C8 \uB313\uAE00',
+  someone: '\uB204\uAD70\uAC00',
+  myPostCommentTitle:
+    '\uD83D\uDCAC \uB0B4 \uAE00\uC5D0 \uB313\uAE00\uC774 \uB2EC\uB838\uC5B4\uC694',
+  authorFallback: '\uC791\uC131\uC790',
+  newFreePost: '\uC0C8 \uC790\uC720\uAC8C\uC2DC\uAE00',
+  newPostSuffix: '\uB2D8\uC758 \uC0C8 \uAE00',
+  journalCommentTitle:
+    '\uD83D\uDCDD \uB9E4\uB9E4\uC77C\uC9C0\uC5D0 \uB313\uAE00\uC774 \uB2EC\uB838\uC5B4\uC694',
+});
+
 async function getTokensByUids(db, uidSet) {
   const uids = Array.from(uidSet).filter(
     (uid) => typeof uid === 'string' && uid.length > 0
@@ -87,6 +101,9 @@ async function writeNotificationHistoryForUids(db, uidSet, payload) {
         title: payload.title || '',
         body: payload.body || '',
         source: payload.source || 'server_push',
+        ...(payload.postId ? { postId: payload.postId } : {}),
+        ...(payload.pickId ? { pickId: payload.pickId } : {}),
+        ...(payload.journalId ? { journalId: payload.journalId } : {}),
         sentAt,
         updatedAt: sentAt,
       });
@@ -219,7 +236,7 @@ exports.notifyAdminOnNewUser = auth.user().onCreate(async (user) => {
 
   await getMessaging().sendEachForMulticast({
     notification: {
-      title: '👤 신규 가입자',
+      title: PUSH_TEXT.newUserTitle,
       body: `${displayName} (${provider})`,
     },
     android: { notification: { sound: 'default', channelId: 'stockstorage_alerts' } },
@@ -241,7 +258,7 @@ exports.sendCommentNotification = onDocumentCreated(
 
     // 종목 이름 조회
     const pickSnap = await db.collection('stock_picks').doc(pickId).get();
-    const pickName = pickSnap.data()?.name ?? '종목';
+    const pickName = pickSnap.data()?.name ?? PUSH_TEXT.stockFallback;
 
     // same pick commenters
     const commentsSnap = await db
@@ -279,7 +296,7 @@ exports.sendCommentNotification = onDocumentCreated(
     const tokens = await getTokensByUids(db, recipientUids);
     if (tokens.length === 0) return;
 
-    const senderName = nickname || '누군가';
+    const senderName = nickname || PUSH_TEXT.someone;
     const preview = content?.length > 30 ? content.slice(0, 30) + '…' : content;
 
     // FCM 발송
@@ -289,9 +306,10 @@ exports.sendCommentNotification = onDocumentCreated(
       const chunk = tokens.slice(i, i + chunkSize);
       const response = await getMessaging().sendEachForMulticast({
         notification: {
-          title: `💬 ${pickName} 새 댓글`,
+          title: `\uD83D\uDCAC ${pickName} ${PUSH_TEXT.newCommentSuffix}`,
           body: `${senderName}: ${preview}`,
         },
+        data: { pickId },
         android: { notification: { sound: 'default', channelId: 'stockstorage_alerts' } },
         apns: { payload: { aps: { sound: 'default' } } },
         tokens: chunk,
@@ -313,9 +331,10 @@ exports.sendCommentNotification = onDocumentCreated(
     }
 
     await writeNotificationHistoryForUids(db, recipientUids, {
-      title: `💬 ${pickName} 새 댓글`,
+      title: `\uD83D\uDCAC ${pickName} ${PUSH_TEXT.newCommentSuffix}`,
       body: `${senderName}: ${preview}`,
       source: 'server_pick_comment',
+      pickId,
     });
   }
 );
@@ -366,7 +385,7 @@ exports.sendPostCommentNotification = onDocumentCreated(
       .filter((t) => typeof t === 'string' && t.length > 0);
     if (tokens.length === 0) return;
 
-    const senderName = nickname || '누군가';
+    const senderName = nickname || PUSH_TEXT.someone;
     const preview = content?.length > 30 ? content.slice(0, 30) + '…' : content;
 
     const invalidTokens = [];
@@ -375,7 +394,7 @@ exports.sendPostCommentNotification = onDocumentCreated(
       const chunk = tokens.slice(i, i + chunkSize);
       const response = await getMessaging().sendEachForMulticast({
         notification: {
-          title: `💬 내 글에 댓글이 달렸어요`,
+          title: PUSH_TEXT.myPostCommentTitle,
           body: `${senderName}: ${preview}`,
         },
         data: { postId },
@@ -399,9 +418,10 @@ exports.sendPostCommentNotification = onDocumentCreated(
     }
 
     await writeNotificationHistoryForUids(db, new Set([authorUid]), {
-      title: '💬 내 글에 댓글이 달렸어요',
+      title: PUSH_TEXT.myPostCommentTitle,
       body: `${senderName}: ${preview}`,
       source: 'server_post_comment',
+      postId,
     });
   }
 );
@@ -426,11 +446,11 @@ exports.notifyPostAuthorFollowers = onDocumentCreated(
     const tokens = await getTokensByUids(db, followerUids);
     if (tokens.length === 0) return;
 
-    const title = post.title || '새 자유게시글';
-    const nickname = post.nickname || '작성자';
+    const title = post.title || PUSH_TEXT.newFreePost;
+    const nickname = post.nickname || PUSH_TEXT.authorFallback;
     await getMessaging().sendEachForMulticast({
       notification: {
-        title: `${nickname}님의 새 글`,
+        title: `${nickname}${PUSH_TEXT.newPostSuffix}`,
         body: title,
       },
       data: { postId: event.params.postId },
@@ -440,9 +460,10 @@ exports.notifyPostAuthorFollowers = onDocumentCreated(
     });
 
     await writeNotificationHistoryForUids(db, followerUids, {
-      title: `${nickname}님의 새 글`,
+      title: `${nickname}${PUSH_TEXT.newPostSuffix}`,
       body: title,
       source: 'server_post_author_follow',
+      postId: event.params.postId,
     });
   }
 );
@@ -480,7 +501,7 @@ exports.sendJournalCommentNotification = onDocumentCreated(
       .filter((t) => typeof t === 'string' && t.length > 0);
     if (tokens.length === 0) return;
 
-    const senderName = nickname || '\uB204\uAD70\uAC00';
+    const senderName = nickname || PUSH_TEXT.someone;
     const previewRaw = typeof content === 'string' ? content : '';
     const preview = previewRaw.length > 30 ? `${previewRaw.slice(0, 30)}...` : previewRaw;
 
@@ -490,7 +511,7 @@ exports.sendJournalCommentNotification = onDocumentCreated(
       const chunk = tokens.slice(i, i + chunkSize);
       const response = await getMessaging().sendEachForMulticast({
         notification: {
-          title: '\uD83D\uDCDD \uB9E4\uB9E4\uC77C\uC9C0\uC5D0 \uB313\uAE00\uC774 \uB2EC\uB838\uC5B4\uC694',
+          title: PUSH_TEXT.journalCommentTitle,
           body: `${senderName}: ${preview}`,
         },
         data: { journalId },
@@ -515,9 +536,10 @@ exports.sendJournalCommentNotification = onDocumentCreated(
     }
 
     await writeNotificationHistoryForUids(db, new Set([authorUid]), {
-      title: '\uD83D\uDCDD \uB9E4\uB9E4\uC77C\uC9C0\uC5D0 \uB313\uAE00\uC774 \uB2EC\uB838\uC5B4\uC694',
+      title: PUSH_TEXT.journalCommentTitle,
       body: `${senderName}: ${preview}`,
       source: 'server_journal_comment',
+      journalId,
     });
   }
 );
@@ -804,6 +826,70 @@ async function getKisToken(appKey, appSecret) {
 }
 
 // 해당 연/월의 두 번째 목요일(선물 최종거래일) 날짜 반환
+exports.getKisDomesticQuote = onCall(
+  { region: 'asia-northeast3', timeoutSeconds: 10 },
+  async (request) => {
+    const ticker = String(request.data?.ticker || '').replace(/\D/g, '');
+    if (!/^\d{6}$/.test(ticker)) {
+      throw new HttpsError('invalid-argument', 'Valid 6-digit ticker is required.');
+    }
+
+    const db = getFirestore();
+    const snap = await db.collection('_admin').doc('kis').get();
+    if (!snap.exists) throw new HttpsError('not-found', 'KIS config not found');
+
+    const { appKey, appSecret } = snap.data() || {};
+    if (!appKey || !appSecret) {
+      throw new HttpsError('failed-precondition', 'KIS appKey/appSecret is missing');
+    }
+
+    try {
+      const token = await getKisToken(appKey, appSecret);
+      const res = await axios.get(
+        'https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price',
+        {
+          headers: {
+            authorization: `Bearer ${token}`,
+            appkey: appKey,
+            appsecret: appSecret,
+            tr_id: 'FHKST01010100',
+            custtype: 'P',
+          },
+          params: {
+            FID_COND_MRKT_DIV_CODE: 'J',
+            FID_INPUT_ISCD: ticker,
+          },
+          timeout: 8000,
+        }
+      );
+
+      const output = res.data?.output || {};
+      const price = Number(String(output.stck_prpr || '').replace(/,/g, ''));
+      if (!Number.isFinite(price) || price <= 0) {
+        return { hasData: false };
+      }
+
+      const rawChange = Number(String(output.prdy_vrss || '0').replace(/,/g, '')) || 0;
+      const rawRate = Number(String(output.prdy_ctrt || '0').replace(/,/g, '')) || 0;
+      const sign = String(output.prdy_vrss_sign || '');
+      const direction = sign === '4' || sign === '5' ? -1 : 1;
+      const change = rawChange === 0 ? 0 : Math.abs(rawChange) * direction;
+      const changeRate = rawRate === 0 ? 0 : Math.abs(rawRate) * direction;
+
+      return {
+        hasData: true,
+        ticker,
+        price,
+        change,
+        changeRate,
+      };
+    } catch (e) {
+      console.error('[getKisDomesticQuote] failed:', e.response?.data || e.message);
+      return { hasData: false };
+    }
+  }
+);
+
 function getSecondThursday(year, month) {
   const firstDay = new Date(Date.UTC(year, month - 1, 1));
   const dow = firstDay.getUTCDay(); // 0=일, 4=목

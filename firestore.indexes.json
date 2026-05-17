@@ -51,6 +51,15 @@
         { "fieldPath": "sourceDate", "order": "DESCENDING" },
         { "fieldPath": "score", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "market_feature_stocks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "group", "order": "ASCENDING" },
+        { "fieldPath": "ticker", "order": "ASCENDING" },
+        { "fieldPath": "sourceDate", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

@@ -81,7 +81,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
   bool _rewardAdLoading = false;
-  bool _homeAtTop = true;
   static const _tabTitles = ['주식저장소', '커뮤니티', '매매일지'];
 
   @override
@@ -91,6 +90,11 @@ class _HomeScreenState extends State<HomeScreen> {
       initAds();
       BannerAdWidget.prewarm(
         slotId: 'market_analysis_between_indices_hot',
+        adUnitId: AdService.marketAnalysisMidBannerAdUnitId,
+        fallbackAdUnitId: AdService.bannerAdUnitId,
+      );
+      BannerAdWidget.prewarm(
+        slotId: 'market_analysis_indices_only',
         adUnitId: AdService.marketAnalysisMidBannerAdUnitId,
         fallbackAdUnitId: AdService.bannerAdUnitId,
       );
@@ -508,6 +512,10 @@ class _HomeScreenState extends State<HomeScreen> {
         _communityInitialTabIndex = 1;
         _currentPage = 1;
       }),
+      openFavoritePicks: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const FavoritesPicksScreen()),
+      ),
       openStockPicks: () =>
           _openStandalonePage(title: '추천주', child: _buildStockPicksPage(auth)),
       openAnnouncements: () => _openStandalonePage(
@@ -527,6 +535,13 @@ class _HomeScreenState extends State<HomeScreen> {
         context,
         MaterialPageRoute(builder: (_) => const FmkoreaHotStocksScreen()),
       ),
+      openFmkoreaIndex: () {
+        AdService.instance.showIndicatorDetailInterstitialIfReady();
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const FmkoreaIndexDetailScreen()),
+        );
+      },
       openInvestorFlow: () {
         AdService.instance.showIndicatorDetailInterstitialIfReady();
         Navigator.push(
@@ -541,22 +556,12 @@ class _HomeScreenState extends State<HomeScreen> {
           MaterialPageRoute(builder: (_) => const MarketSentimentScreen()),
         );
       },
-      openFmkoreaIndex: () {
-        AdService.instance.showIndicatorDetailInterstitialIfReady();
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const FmkoreaIndexDetailScreen()),
-        );
-      },
       openStockCompare: () => _openStandalonePage(
         title: '종목 비교',
         child: const StockCompareScreen(),
       ),
       watchRewardAd: () => _confirmAndWatchRewardAd(auth),
-      onTopStateChanged: (atTop) {
-        if (_homeAtTop == atTop) return;
-        setState(() => _homeAtTop = atTop);
-      },
+      onTopStateChanged: (_) {},
       topActions: _showSearch
           ? const []
           : _buildTopActions(auth, isDarkSurface: true, showSearchButton: true),
@@ -592,36 +597,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _openIndexListPage() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => Scaffold(
-          backgroundColor: _homeBg0,
-          body: Stack(
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(top: 70),
-                child: MarketAnalysisScreen.indicators(),
-              ),
-              SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 8, top: 4),
-                  child: IconButton(
-                    onPressed: () => Navigator.pop(context),
-                    icon: Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      color: _homeLabel,
-                      size: 20,
-                    ),
-                    style: IconButton.styleFrom(
-                      backgroundColor: _homeCard.withValues(alpha: 0.78),
-                      side: BorderSide(color: _homeBorder),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      MaterialPageRoute(builder: (_) => const _IndexListPage()),
     );
   }
 
@@ -1353,15 +1329,16 @@ class _DashboardHomePage extends StatefulWidget {
     required this.firestoreService,
     required this.openCommunity,
     required this.openJournal,
+    required this.openFavoritePicks,
     required this.openStockPicks,
     required this.openAnnouncements,
     required this.openIndexList,
     required this.openMarketAnalysis,
     required this.openFeatureStocks,
     required this.openFmkoreaHot,
+    required this.openFmkoreaIndex,
     required this.openInvestorFlow,
     required this.openMarketSentiment,
-    required this.openFmkoreaIndex,
     required this.openStockCompare,
     required this.watchRewardAd,
     required this.onTopStateChanged,
@@ -1372,15 +1349,16 @@ class _DashboardHomePage extends StatefulWidget {
   final FirestoreService firestoreService;
   final VoidCallback openCommunity;
   final VoidCallback openJournal;
+  final VoidCallback openFavoritePicks;
   final VoidCallback openStockPicks;
   final VoidCallback openAnnouncements;
   final VoidCallback openIndexList;
   final VoidCallback openMarketAnalysis;
   final VoidCallback openFeatureStocks;
   final VoidCallback openFmkoreaHot;
+  final VoidCallback openFmkoreaIndex;
   final VoidCallback openInvestorFlow;
   final VoidCallback openMarketSentiment;
-  final VoidCallback openFmkoreaIndex;
   final VoidCallback openStockCompare;
   final VoidCallback watchRewardAd;
   final ValueChanged<bool> onTopStateChanged;
@@ -1399,6 +1377,11 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
     ('KOSDAQ', '^KQ11'),
     ('나스닥100 선물', 'NQ=F'),
   ];
+
+  static Widget _fixedH(double height, Widget child) => SizedBox(
+    height: height,
+    child: ClipRect(child: child),
+  );
 
   @override
   void initState() {
@@ -1454,92 +1437,122 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
             bottom: false,
             child: ListView(
               cacheExtent: 900,
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 88),
               children: [
-                _HomeReveal(
-                  order: 0,
-                  child: _HomeHeroGreeting(
-                    auth: widget.auth,
-                    firestoreService: widget.firestoreService,
-                    topActions: widget.topActions,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                _HomeReveal(
-                  order: 1,
-                  child: _DailyMissionCard(
-                    auth: widget.auth,
-                    firestoreService: widget.firestoreService,
-                    onWatchAd: widget.watchRewardAd,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                _HomeReveal(
-                  order: 2,
-                  child: _DarkHomeSection(
-                    title: '실시간 시장',
-                    trailing: const _LiveStatusChip(),
-                    child: _MarketLiveCard(
-                      indicesFuture: _indicesFuture,
-                      onMore: widget.openIndexList,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                _HomeReveal(order: 3, child: const _AIBriefCard()),
-                const SizedBox(height: 18),
-                _HomeReveal(
-                  order: 4,
-                  child: _TopMoversPreview(
-                    firestoreService: widget.firestoreService,
-                    openFeatureStocks: widget.openFeatureStocks,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                _HomeReveal(
-                  order: 5,
-                  child: _DarkHomeSection(
-                    title: '내 관심 추천주',
-                    actionText: '더보기',
-                    onAction: widget.openStockPicks,
-                    child: _FavoritePicksPreview(
-                      firestoreService: widget.firestoreService,
-                      auth: widget.auth,
-                      openStockPicks: widget.openStockPicks,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                _HomeReveal(
-                  order: 6,
-                  child: _DarkHomeSection(
-                    title: '지금 핫한 토론',
-                    actionText: '더보기',
-                    onAction: widget.openCommunity,
-                    child: _RecentPostsPreview(
-                      postsFuture: _postsFuture,
+                _fixedH(
+                  180,
+                  _HomeReveal(
+                    order: 0,
+                    child: _HomeHeroGreeting(
                       auth: widget.auth,
                       firestoreService: widget.firestoreService,
+                      topActions: widget.topActions,
                     ),
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
+                _fixedH(
+                  52,
+                  _HomeReveal(
+                    order: 1,
+                    child: _LatestAnnouncementStrip(
+                      firestoreService: widget.firestoreService,
+                      onTap: widget.openAnnouncements,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _fixedH(
+                  292,
+                  _HomeReveal(
+                    order: 2,
+                    child: _DailyMissionCard(
+                      auth: widget.auth,
+                      firestoreService: widget.firestoreService,
+                      onWatchAd: widget.watchRewardAd,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _fixedH(
+                  360,
+                  _HomeReveal(
+                    order: 3,
+                    child: _DarkHomeSection(
+                      title: '실시간 시장',
+                      trailing: const _LiveStatusChip(),
+                      child: _MarketLiveCard(
+                        indicesFuture: _indicesFuture,
+                        onMore: widget.openIndexList,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _fixedH(
+                  220,
+                  _HomeReveal(order: 4, child: const _AIBriefCard()),
+                ),
+                const SizedBox(height: 14),
+                _fixedH(
+                  220,
+                  _HomeReveal(
+                    order: 5,
+                    child: _TopMoversPreview(
+                      firestoreService: widget.firestoreService,
+                      openFeatureStocks: widget.openFeatureStocks,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _fixedH(
+                  452,
+                  _HomeReveal(
+                    order: 6,
+                    child: _DarkHomeSection(
+                      title: '지금 핫한토론',
+                      actionText: '더보기',
+                      onAction: widget.openCommunity,
+                      child: _RecentPostsPreview(
+                        postsFuture: _postsFuture,
+                        auth: widget.auth,
+                        firestoreService: widget.firestoreService,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _fixedH(
+                  414,
+                  _HomeReveal(
+                    order: 7,
+                    child: _DarkHomeSection(
+                      title: '내 관심 추천주',
+                      child: _FavoritePicksPreview(
+                        firestoreService: widget.firestoreService,
+                        auth: widget.auth,
+                        openStockPicks: widget.openFavoritePicks,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
                 _HomeReveal(
-                  order: 7,
+                  order: 8,
                   child: _QuickMenu(
                     openMarketAnalysis: widget.openMarketAnalysis,
                     openFeatureStocks: widget.openFeatureStocks,
                     openFmkoreaHot: widget.openFmkoreaHot,
+                    openFmkoreaIndex: widget.openFmkoreaIndex,
                     openInvestorFlow: widget.openInvestorFlow,
                     openMarketSentiment: widget.openMarketSentiment,
-                    openFmkoreaIndex: widget.openFmkoreaIndex,
                     openStockPicks: widget.openStockPicks,
                     openAnnouncements: widget.openAnnouncements,
                     openStockCompare: widget.openStockCompare,
                   ),
                 ),
-                const SizedBox(height: 14),
-                const _HomeReveal(order: 8, child: _HomeDisclaimerNote()),
+                const SizedBox(height: 12),
+                const _HomeReveal(order: 9, child: _HomeDisclaimerNote()),
               ],
             ),
           ),
@@ -1590,7 +1603,7 @@ class _DarkHomeSection extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         _DarkCard(child: child),
       ],
     );
@@ -1598,30 +1611,86 @@ class _DarkHomeSection extends StatelessWidget {
 }
 
 class _DarkCard extends StatelessWidget {
-  const _DarkCard({required this.child, this.onTap});
+  const _DarkCard({required this.child});
 
   final Widget child;
-  // The home card keeps a shared tap affordance for cards that opt in.
-  // ignore: unused_element_parameter
-  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final card = Container(
+    return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _homeCard,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _homeBorder),
       ),
       child: child,
     );
-    if (onTap == null) return card;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: card,
+  }
+}
+
+class _LatestAnnouncementStrip extends StatelessWidget {
+  const _LatestAnnouncementStrip({
+    required this.firestoreService,
+    required this.onTap,
+  });
+
+  final FirestoreService firestoreService;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<Announcement?>(
+      stream: firestoreService.getLatestAnnouncement(),
+      builder: (context, snapshot) {
+        final announcement = snapshot.data;
+        final title = announcement?.title.trim();
+        return InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(13),
+          child: Container(
+            height: 52,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: _homeCard,
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: _homeBorder),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.campaign_rounded, color: _homeAccent, size: 18),
+                const SizedBox(width: 9),
+                Text(
+                  '공지',
+                  style: _homeText(
+                    color: _homeAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title == null || title.isEmpty ? '등록된 공지사항이 없습니다' : title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _homeText(
+                      color: title == null || title.isEmpty
+                          ? _homeFaint
+                          : _homeLabel,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(Icons.chevron_right_rounded, color: _homeFaint, size: 18),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1651,20 +1720,10 @@ class _HomeRevealState extends State<_HomeReveal> {
   @override
   Widget build(BuildContext context) {
     return AnimatedOpacity(
-      opacity: _visible ? 1 : 0.22,
-      duration: const Duration(milliseconds: 520),
-      curve: Curves.easeOutCubic,
-      child: AnimatedSlide(
-        offset: _visible ? Offset.zero : const Offset(0, 0.045),
-        duration: const Duration(milliseconds: 520),
-        curve: Curves.easeOutCubic,
-        child: AnimatedScale(
-          scale: _visible ? 1 : 0.985,
-          duration: const Duration(milliseconds: 520),
-          curve: Curves.easeOutCubic,
-          child: widget.child,
-        ),
-      ),
+      opacity: _visible ? 1 : 0,
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOut,
+      child: widget.child,
     );
   }
 }
@@ -1747,21 +1806,23 @@ class _PulseDotState extends State<_PulseDot>
       animation: _controller,
       builder: (context, child) {
         final t = widget.active ? _controller.value : 0.0;
-        return Transform.scale(
-          scale: 1 + (t * 0.55),
+        return Opacity(
+          opacity: 0.55 + t * 0.45,
           child: Container(
             width: 6,
             height: 6,
             decoration: BoxDecoration(
-              color: widget.color.withValues(alpha: widget.active ? 1 : 0.55),
+              color: widget.color,
               shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: widget.color.withValues(alpha: 0.18 + t * 0.32),
-                  blurRadius: 7 + t * 8,
-                  spreadRadius: t * 2,
-                ),
-              ],
+              boxShadow: widget.active
+                  ? [
+                      BoxShadow(
+                        color: widget.color.withValues(alpha: 0.5),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
             ),
           ),
         );
@@ -2017,48 +2078,50 @@ class _HeroShell extends StatelessWidget {
           ),
           child: Row(
             children: [
-              _Breathing(
-                child: Container(
-                  width: 62,
-                  height: 62,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [_homeAccent, const Color(0xFF00A86F)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _homeAccent.withValues(alpha: 0.22),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
+              RepaintBoundary(
+                child: _Breathing(
+                  child: Container(
+                    width: 62,
+                    height: 62,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [_homeAccent, const Color(0xFF00A86F)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                    ],
-                  ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text('🔥', style: TextStyle(fontSize: 18)),
-                        Text(
-                          '$streak',
-                          style: _homeNumber(
-                            color: const Color(0xFF031A12),
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        Text(
-                          'DAYS',
-                          style: _homeText(
-                            color: const Color(0xB3031A12),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                          ),
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _homeAccent.withValues(alpha: 0.22),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
                         ),
                       ],
+                    ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('🔥', style: TextStyle(fontSize: 18)),
+                          Text(
+                            '$streak',
+                            style: _homeNumber(
+                              color: const Color(0xFF031A12),
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            'DAYS',
+                            style: _homeText(
+                              color: const Color(0xB3031A12),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -2145,63 +2208,66 @@ class _DailyMissionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final uid = auth.user?.uid;
-    final baseMissions =
-        <
-          ({
-            IconData icon,
-            String label,
-            String xp,
-            bool done,
-            VoidCallback? onTap,
-          })
-        >[
-          (
-            icon: Icons.check_rounded,
-            label: '출석 체크',
-            xp: '+5 XP',
-            done: true,
-            onTap: null,
-          ),
-          (
-            icon: Icons.mode_comment_outlined,
-            label: '댓글 1개 남기기',
-            xp: '+3 XP',
-            done: false,
-            onTap: null,
-          ),
-          (
-            icon: Icons.edit_note_rounded,
-            label: '매매일지 작성',
-            xp: '+10 XP',
-            done: false,
-            onTap: null,
-          ),
-        ];
-    return StreamBuilder<Map<String, int>>(
+    return StreamBuilder<
+      ({bool commentDone, bool memoDone, int adRemaining, int adLimit})
+    >(
       stream: uid == null || uid.isEmpty
-          ? Stream.value(const {'remainingCount': 0, 'dailyLimit': 3})
-          : firestoreService.watchRewardAdStatus(uid),
+          ? Stream.value((
+              commentDone: false,
+              memoDone: false,
+              adRemaining: 3,
+              adLimit: 3,
+            ))
+          : firestoreService.watchDailyMissions(uid),
       builder: (context, snapshot) {
         final status =
-            snapshot.data ?? const {'remainingCount': 0, 'dailyLimit': 3};
-        final remaining = status['remainingCount'] ?? 0;
-        final limit = status['dailyLimit'] ?? 3;
-        final missions = [
-          baseMissions[0],
-          (
-            icon: Icons.ondemand_video_rounded,
-            label: '광고 보기 ($remaining/$limit)',
-            xp: '+5 XP',
-            done: remaining <= 0,
-            onTap: remaining > 0 ? onWatchAd : null,
-          ),
-          ...baseMissions.skip(1),
-        ];
+            snapshot.data ??
+            (commentDone: false, memoDone: false, adRemaining: 3, adLimit: 3);
+        final missions =
+            <
+              ({
+                IconData icon,
+                String label,
+                String xp,
+                bool done,
+                VoidCallback? onTap,
+              })
+            >[
+              (
+                icon: Icons.check_rounded,
+                label: '출석 체크',
+                xp: '+5 XP',
+                done: true,
+                onTap: null,
+              ),
+              (
+                icon: Icons.ondemand_video_rounded,
+                label: '광고 보기 (${status.adRemaining}/${status.adLimit})',
+                xp: '+5 XP',
+                done: status.adRemaining <= 0,
+                onTap: status.adRemaining > 0 ? onWatchAd : null,
+              ),
+              (
+                icon: Icons.mode_comment_outlined,
+                label: '댓글 1개 남기기',
+                xp: '+3 XP',
+                done: status.commentDone,
+                onTap: null,
+              ),
+              (
+                icon: Icons.edit_note_rounded,
+                label: '매매일지 작성',
+                xp: '+10 XP',
+                done: status.memoDone,
+                onTap: null,
+              ),
+            ];
+        final doneCount = missions.where((m) => m.done).length;
 
         return _DarkHomeSection(
           title: '오늘의 미션',
           trailing: Text(
-            '1/${missions.length}',
+            '$doneCount/${missions.length}',
             style: _homeNumber(
               color: _homeAccent,
               fontSize: 12,
@@ -2320,9 +2386,11 @@ class _LiveStatusChip extends StatelessWidget {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _PulseDot(
-              color: status.isOpen ? _homeUp : _homeFaint,
-              active: status.isOpen,
+            RepaintBoundary(
+              child: _PulseDot(
+                color: status.isOpen ? _homeUp : _homeFaint,
+                active: status.isOpen,
+              ),
             ),
             const SizedBox(width: 5),
             Text(
@@ -2538,6 +2606,8 @@ class _MarketLiveCard extends StatelessWidget {
 class _AIBriefCard extends StatelessWidget {
   const _AIBriefCard();
 
+  static const double _contentHeight = 188;
+
   String _formatSlotTime(String? slotLabel, dynamic generatedAt) {
     if (slotLabel != null) return 'AI 간단 시황 · 오늘 $slotLabel';
     if (generatedAt == null) return 'AI 간단 시황';
@@ -2570,6 +2640,66 @@ class _AIBriefCard extends StatelessWidget {
         // 데이터 없을 때 skeleton shimmer 느낌으로 로딩 표시
         if (!snapshot.hasData || data == null || brief == null) {
           return _DarkCard(
+            child: SizedBox(
+              height: _contentHeight,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.auto_awesome_rounded,
+                        size: 14,
+                        color: _homeAccent,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'AI 간단 시황',
+                        style: _homeText(
+                          color: _homeAccent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    height: 14,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: _homeBorder,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Container(
+                    height: 14,
+                    width: 240,
+                    decoration: BoxDecoration(
+                      color: _homeBorder,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Container(
+                    height: 14,
+                    width: 180,
+                    decoration: BoxDecoration(
+                      color: _homeBorder,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                  const Spacer(),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return _DarkCard(
+          child: SizedBox(
+            height: _contentHeight,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -2581,75 +2711,125 @@ class _AIBriefCard extends StatelessWidget {
                       color: _homeAccent,
                     ),
                     const SizedBox(width: 6),
-                    Text(
-                      'AI 간단 시황',
-                      style: _homeText(
-                        color: _homeAccent,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
+                    Expanded(
+                      child: Text(
+                        _formatSlotTime(slotLabel, generatedAt),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _homeText(
+                          color: _homeAccent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 10),
-                Container(
-                  height: 14,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: _homeBorder,
-                    borderRadius: BorderRadius.circular(6),
+                Expanded(
+                  child: Text(
+                    brief,
+                    maxLines: 5,
+                    overflow: TextOverflow.ellipsis,
+                    style: _homeText(
+                      color: _homeLabel,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      height: 1.55,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 6),
-                Container(
-                  height: 14,
-                  width: 200,
-                  decoration: BoxDecoration(
-                    color: _homeBorder,
-                    borderRadius: BorderRadius.circular(6),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: _TextMoreButton(
+                    label: '더보기',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const _AIBriefDetailScreen(),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ],
             ),
-          );
-        }
-
-        return _DarkCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.auto_awesome_rounded,
-                    size: 14,
-                    color: _homeAccent,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _formatSlotTime(slotLabel, generatedAt),
-                    style: _homeText(
-                      color: _homeAccent,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                brief,
-                style: _homeText(
-                  color: _homeLabel,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  height: 1.5,
-                ),
-              ),
-            ],
           ),
         );
       },
+    );
+  }
+}
+
+class _TextMoreButton extends StatelessWidget {
+  const _TextMoreButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: _homeText(
+                color: _homeAccent,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(width: 2),
+            Icon(Icons.chevron_right_rounded, size: 16, color: _homeAccent),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AIBriefDetailScreen extends StatelessWidget {
+  const _AIBriefDetailScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('AI 간단 시황')),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('ai_briefs')
+            .doc('latest')
+            .snapshots(),
+        builder: (context, snapshot) {
+          final data = snapshot.hasData && snapshot.data!.exists
+              ? snapshot.data!.data() as Map<String, dynamic>?
+              : null;
+          final brief = data?['brief'] as String?;
+          if (!snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+            children: [
+              Text(
+                brief ?? '표시할 AI 시황이 없습니다.',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  height: 1.55,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -2670,52 +2850,50 @@ class _TopMoversPreview extends StatelessWidget {
       actionText: '더보기',
       onAction: openFeatureStocks,
       child: StreamBuilder<List<MarketFeatureStock>>(
-        stream: firestoreService.getMarketFeatureStocks(limit: 8),
+        stream: firestoreService.getMarketFeatureStocks(limit: 40),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const _PreviewLoading(height: 120);
           }
-          final visible = (snapshot.data ?? <MarketFeatureStock>[])
-              .take(4)
-              .toList();
-          if (visible.isEmpty) {
+          if (snapshot.hasError) {
+            return SizedBox(
+              height: 120,
+              child: _EmptyPreview(text: '특징주 오류: ${snapshot.error}'),
+            );
+          }
+          final visible = (snapshot.data ?? <MarketFeatureStock>[]).toList()
+            ..sort((a, b) {
+              final aAi = a.group == 'chart_capture';
+              final bAi = b.group == 'chart_capture';
+              if (aAi != bAi) return aAi ? -1 : 1;
+              final dateCompare = b.sourceDate.compareTo(a.sourceDate);
+              if (dateCompare != 0) return dateCompare;
+              return b.score.compareTo(a.score);
+            });
+          final topVisible = visible.take(4).toList();
+          if (topVisible.isEmpty) {
             return const _EmptyPreview(text: '표시할 특징주가 없습니다.');
           }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '오늘의 AI포착 종목',
-                style: _homeText(
-                  color: _homeFaint,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+          return SizedBox(
+            height: 140,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: topVisible.length,
+              separatorBuilder: (context, index) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Container(width: 1, color: _homeBorder),
+              ),
+              itemBuilder: (context, index) => _FeatureStockTile(
+                item: topVisible[index],
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        MarketFeatureStockDetailScreen(item: topVisible[index]),
+                  ),
                 ),
               ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 140,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: visible.length,
-                  separatorBuilder: (_, separatorIndex) =>
-                      const SizedBox(width: 10),
-                  itemBuilder: (context, index) {
-                    return _FeatureStockTile(
-                      item: visible[index],
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => MarketFeatureStockDetailScreen(
-                            item: visible[index],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
+            ),
           );
         },
       ),
@@ -2736,93 +2914,90 @@ class _FeatureStockTile extends StatelessWidget {
     final title = item.title.isNotEmpty ? item.title : _featureTitle(item);
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Container(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
         width: 150,
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(
-          color: _homeBg2,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _homeBorder),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _homeAccent.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      item.market,
+                      style: _homeNumber(
+                        color: _homeAccent,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
-                  decoration: BoxDecoration(
-                    color: _homeAccent.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    item.market,
+                  const Spacer(),
+                  Text(
+                    '${isUp ? '+' : ''}${item.changeRate.toStringAsFixed(1)}%',
                     style: _homeNumber(
-                      color: _homeAccent,
-                      fontSize: 11,
+                      color: moveColor,
+                      fontSize: 12,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                item.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _homeText(
+                  color: _homeLabel,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
                 ),
-                const Spacer(),
-                Text(
-                  '${isUp ? '+' : ''}${item.changeRate.toStringAsFixed(1)}%',
-                  style: _homeNumber(
-                    color: moveColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                item.ticker,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _homeNumber(
+                  color: _homeFaint,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              item.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: _homeText(
-                color: _homeLabel,
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
               ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              item.ticker,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: _homeNumber(
-                color: _homeFaint,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+              const SizedBox(height: 8),
+              Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: _homeText(
+                  color: _homeMuted,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  height: 1.35,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: _homeText(
-                color: _homeMuted,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                height: 1.35,
+              const SizedBox(height: 6),
+              Text(
+                _formatFeatureMetric(item),
+                style: _homeNumber(
+                  color: _homeFaint,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
-            const Spacer(),
-            Text(
-              _formatFeatureMetric(item),
-              style: _homeNumber(
-                color: _homeFaint,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -3096,6 +3271,69 @@ class _IndexPreviewRow extends StatelessWidget {
   }
 }
 
+class _IndexListPage extends StatefulWidget {
+  const _IndexListPage();
+
+  @override
+  State<_IndexListPage> createState() => _IndexListPageState();
+}
+
+class _IndexListPageState extends State<_IndexListPage> {
+  late Future<Map<String, PriceResult?>> _indicesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _indicesFuture = _loadIndices();
+  }
+
+  Future<Map<String, PriceResult?>> _loadIndices() async {
+    final results = await Future.wait(
+      _MajorIndicesPreview.indices.map(
+        (entry) => StockPriceService.fetchPrice(entry.$2, 'US'),
+      ),
+    );
+    return {
+      for (var i = 0; i < _MajorIndicesPreview.indices.length; i++)
+        _MajorIndicesPreview.indices[i].$1: results[i],
+    };
+  }
+
+  Future<void> _refresh() async {
+    for (final entry in _MajorIndicesPreview.indices) {
+      StockPriceService.invalidateCache(entry.$2);
+    }
+    setState(() => _indicesFuture = _loadIndices());
+    await _indicesFuture;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _homeBg0,
+      appBar: AppBar(title: const Text('지수 전체')),
+      body: RefreshIndicator(
+        color: const Color(0xFF10B981),
+        onRefresh: _refresh,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          children: [
+            _DarkCard(
+              child: _MajorIndicesPreview(indicesFuture: _indicesFuture),
+            ),
+            const SizedBox(height: 14),
+            BannerAdWidget(
+              slotId: 'market_analysis_indices_only',
+              adUnitId: AdService.marketAnalysisMidBannerAdUnitId,
+              fallbackAdUnitId: AdService.bannerAdUnitId,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _IndexBadgeGlyph extends StatelessWidget {
   const _IndexBadgeGlyph({
     required this.name,
@@ -3320,7 +3558,7 @@ class _ListDivider extends StatelessWidget {
   }
 }
 
-class _RecentPostsPreview extends StatelessWidget {
+class _RecentPostsPreview extends StatefulWidget {
   const _RecentPostsPreview({
     required this.postsFuture,
     required this.auth,
@@ -3332,64 +3570,32 @@ class _RecentPostsPreview extends StatelessWidget {
   final FirestoreService firestoreService;
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<(List<Post>, DocumentSnapshot?)>(
-      future: postsFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const _PreviewLoading(height: 160);
-        }
-        return FutureBuilder<List<_HotPostCandidate>>(
-          future: _loadHotPosts(snapshot.data?.$1 ?? const <Post>[]),
-          builder: (context, hotSnapshot) {
-            if (hotSnapshot.connectionState == ConnectionState.waiting) {
-              return const _PreviewLoading(height: 160);
-            }
-            final posts = hotSnapshot.data ?? const <_HotPostCandidate>[];
-            if (posts.isEmpty) {
-              return _EmptyPreview(text: '좋아요와 댓글 합산 5개 초과인 최신 토론이 없습니다.');
-            }
-            return Column(
-              children: [
-                for (var i = 0; i < posts.length; i++) ...[
-                  _PostPreviewRow(
-                    post: posts[i].post,
-                    commentCount: posts[i].commentCount,
-                    isOwn: auth.user?.uid == posts[i].post.uid,
-                    onTap: () => _openPost(context, posts[i].post),
-                  ),
-                  if (i < posts.length - 1) const _ListDivider(),
-                ],
-              ],
-            );
-          },
-        );
-      },
-    );
+  State<_RecentPostsPreview> createState() => _RecentPostsPreviewState();
+}
+
+class _RecentPostsPreviewState extends State<_RecentPostsPreview> {
+  late final Future<List<Post>> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _load();
   }
 
-  Future<List<_HotPostCandidate>> _loadHotPosts(List<Post> posts) async {
-    final candidates = await Future.wait(
-      posts.map((post) async {
-        final commentCount = await firestoreService.getPostCommentCount(
-          post.id,
-        );
-        return _HotPostCandidate(post: post, commentCount: commentCount);
-      }),
-    );
-    return candidates
-        .where((item) => item.post.likes + item.commentCount > 5)
-        .take(4)
-        .toList();
+  Future<List<Post>> _load() async {
+    final (posts, _) = await widget.postsFuture;
+    final sorted = posts.toList()..sort((a, b) => b.likes.compareTo(a.likes));
+    return sorted.where((p) => p.likes > 0).take(4).toList();
   }
 
-  Future<void> _openPost(BuildContext context, Post post) async {
+  Future<void> _openPost(Post post) async {
+    final uid = widget.auth.user?.uid;
     var isLiked = false;
-    final uid = auth.user?.uid;
     if (uid != null && uid.isNotEmpty) {
-      isLiked = await firestoreService.hasLikedPost(post.id, uid);
-      if (!context.mounted) return;
+      isLiked = await widget.firestoreService.hasLikedPost(post.id, uid);
+      if (!mounted) return;
     }
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -3402,62 +3608,101 @@ class _RecentPostsPreview extends StatelessWidget {
       ),
     );
   }
-}
 
-class _HotPostCandidate {
-  const _HotPostCandidate({required this.post, required this.commentCount});
-
-  final Post post;
-  final int commentCount;
-}
-
-class _PostPreviewRow extends StatelessWidget {
-  const _PostPreviewRow({
-    required this.post,
-    required this.commentCount,
-    required this.isOwn,
-    required this.onTap,
-  });
-
-  final Post post;
-  final int commentCount;
-  final bool isOwn;
-  final VoidCallback onTap;
-
-  static final _imgRegex = RegExp(r'!\[\]\(([^)]+)\)');
-
-  String get _textPreview => post.content
-      .replaceAll(_imgRegex, '')
-      .replaceAll(RegExp(r'\n{3,}'), '\n\n')
-      .trim();
+  static const _tileH = 92.0;
+  static const _maxCount = 4;
+  static const _sectionH = _tileH * _maxCount + (_maxCount - 1);
 
   @override
   Widget build(BuildContext context) {
-    final textContent = _textPreview;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
+    return SizedBox(
+      height: _sectionH,
+      child: FutureBuilder<List<Post>>(
+        future: _future,
+        builder: (context, snap) {
+          if (snap.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFF10B981),
+                strokeWidth: 2,
+              ),
+            );
+          }
+          final posts = snap.data ?? [];
+          if (posts.isEmpty) {
+            return Center(
+              child: Text(
+                '아직 인기 토론이 없습니다.',
+                style: _homeText(color: _homeFaint, fontSize: 13),
+              ),
+            );
+          }
+          return Column(
+            children: [
+              for (var i = 0; i < posts.length; i++) ...[
+                SizedBox(
+                  height: _tileH,
+                  child: _HotPostTile(
+                    post: posts[i],
+                    onTap: () => _openPost(posts[i]),
+                  ),
+                ),
+                if (i < posts.length - 1) const _ListDivider(),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _HotPostTile extends StatefulWidget {
+  const _HotPostTile({required this.post, required this.onTap});
+
+  final Post post;
+  final VoidCallback onTap;
+
+  @override
+  State<_HotPostTile> createState() => _HotPostTileState();
+}
+
+class _HotPostTileState extends State<_HotPostTile> {
+  Offset? _tapDown;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (e) => _tapDown = e.position,
+      onPointerUp: (e) {
+        final d = _tapDown;
+        _tapDown = null;
+        if (d != null && (e.position - d).distance < 20) widget.onTap();
+      },
+      onPointerCancel: (_) => _tapDown = null,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 13),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Row(
               children: [
                 UserLevelAvatar(
-                  uid: post.uid,
+                  uid: widget.post.uid,
                   radius: 10,
                   backgroundColor: _homeBg3,
                   textStyle: _homeNumber(
                     color: _homeFaint,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    post.nickname,
+                    widget.post.nickname,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: _homeText(
@@ -3467,78 +3712,43 @@ class _PostPreviewRow extends StatelessWidget {
                     ),
                   ),
                 ),
+                const SizedBox(width: 8),
                 Text(
-                  _relativeTime(post.createdAt),
+                  _relativeTime(widget.post.createdAt),
                   style: _homeText(color: _homeFaint, fontSize: 11),
                 ),
               ],
             ),
-            const SizedBox(height: 6),
             Text(
-              post.title,
+              widget.post.title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: _homeText(
                 color: _homeLabel,
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: FontWeight.w700,
-                height: 1.4,
+                height: 1.35,
               ),
             ),
-            if (textContent.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                textContent,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: _homeText(color: _homeFaint, fontSize: 13, height: 1.45),
-              ),
-            ],
-            const SizedBox(height: 8),
             Row(
               children: [
-                _PostMetric(
-                  icon: Icons.mode_comment_outlined,
-                  label: '$commentCount',
-                ),
-                const SizedBox(width: 14),
-                _PostMetric(
-                  icon: Icons.favorite_rounded,
-                  label: '${post.likes}',
+                Icon(Icons.favorite_rounded, size: 11, color: _homeFaint),
+                const SizedBox(width: 3),
+                Text(
+                  '${widget.post.likes}',
+                  style: _homeNumber(
+                    color: _homeMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const Spacer(),
-                Icon(Icons.chevron_right_rounded, color: _homeFaint, size: 18),
+                Icon(Icons.chevron_right_rounded, color: _homeFaint, size: 15),
               ],
             ),
           ],
         ),
       ),
-    );
-  }
-}
-
-class _PostMetric extends StatelessWidget {
-  const _PostMetric({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: _homeFaint, size: 12),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: _homeNumber(
-            color: _homeMuted,
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -3558,33 +3768,47 @@ class _FavoritePicksPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     final uid = auth.user?.uid;
     if (uid == null || uid.isEmpty) {
-      return _EmptyPreview(text: '로그인하면 관심 추천주를 모아볼 수 있습니다.');
+      return const SizedBox(
+        height: _FavoritePerformanceList.height,
+        child: _EmptyPreview(text: '로그인하면 관심 추천주를 모아볼 수 있습니다.'),
+      );
     }
 
     return StreamBuilder<List<String>>(
       stream: firestoreService.getFavoriteIds(uid),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const _PreviewLoading(height: 120);
+          return const _PreviewLoading(height: _FavoritePerformanceList.height);
         }
         final favoriteIds = (snapshot.data ?? []).toSet();
         if (favoriteIds.isEmpty) {
-          return _EmptyPreview(text: '아직 관심 추천주가 없습니다.');
+          return const SizedBox(
+            height: _FavoritePerformanceList.height,
+            child: _EmptyPreview(text: '아직 관심 추천주가 없습니다.'),
+          );
         }
 
         return StreamBuilder<List<StockPick>>(
           stream: firestoreService.getStockPicks(),
           builder: (context, picksSnapshot) {
             if (picksSnapshot.connectionState == ConnectionState.waiting) {
-              return const _PreviewLoading(height: 120);
+              return const _PreviewLoading(
+                height: _FavoritePerformanceList.height,
+              );
             }
             final picks = (picksSnapshot.data ?? [])
                 .where((pick) => favoriteIds.contains(pick.id))
                 .toList();
             if (picks.isEmpty) {
-              return _EmptyPreview(text: '관심 추천주가 종료되었거나 표시할 항목이 없습니다.');
+              return const SizedBox(
+                height: _FavoritePerformanceList.height,
+                child: _EmptyPreview(text: '관심 추천주가 종료되었거나 표시할 항목이 없습니다.'),
+              );
             }
-            return _FavoritePerformanceList(picks: picks);
+            return _FavoritePerformanceList(
+              picks: picks.take(4).toList(),
+              onMore: openStockPicks,
+            );
           },
         );
       },
@@ -3634,9 +3858,16 @@ class _PerformanceMetric extends StatelessWidget {
 }
 
 class _FavoritePerformanceList extends StatefulWidget {
-  const _FavoritePerformanceList({required this.picks});
+  const _FavoritePerformanceList({required this.picks, required this.onMore});
+
+  static const double height = 336;
+  static const double _summaryHeight = 70;
+  static const double _rowHeight = 54;
+  static const double _moreHeight = 42;
+  static const int _maxRows = 4;
 
   final List<StockPick> picks;
+  final VoidCallback onMore;
 
   @override
   State<_FavoritePerformanceList> createState() =>
@@ -3694,41 +3925,59 @@ class _FavoritePerformanceListState extends State<_FavoritePerformanceList> {
           return current >= pick.targetPrice;
         }).length;
         final avgColor = avgReturn >= 0 ? _homeUp : _homeDown;
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _PerformanceMetric(
-                      label: loading ? '평균 수익률 조회중' : '평균 수익률',
-                      value:
-                          '${avgReturn >= 0 ? '+' : ''}${avgReturn.toStringAsFixed(2)}%',
-                      color: avgColor,
-                    ),
+        final visiblePicks = widget.picks
+            .take(_FavoritePerformanceList._maxRows)
+            .toList();
+        return SizedBox(
+          height: _FavoritePerformanceList.height,
+          child: Column(
+            children: [
+              SizedBox(
+                height: _FavoritePerformanceList._summaryHeight,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _PerformanceMetric(
+                          label: loading ? '평균 수익률 조회중' : '평균 수익률',
+                          value:
+                              '${avgReturn >= 0 ? '+' : ''}${avgReturn.toStringAsFixed(2)}%',
+                          color: avgColor,
+                        ),
+                      ),
+                      Container(width: 1, height: 42, color: _homeBorder),
+                      Expanded(
+                        child: _PerformanceMetric(
+                          label: '목표 도달',
+                          value: '$hitTarget/${widget.picks.length}',
+                          color: _homeAccent,
+                        ),
+                      ),
+                    ],
                   ),
-                  Container(width: 1, height: 42, color: _homeBorder),
-                  Expanded(
-                    child: _PerformanceMetric(
-                      label: '목표 도달',
-                      value: '$hitTarget/${widget.picks.length}',
-                      color: _homeAccent,
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
-            Divider(height: 1, color: _homeBorder),
-            for (var i = 0; i < widget.picks.length; i++) ...[
-              _FavoritePerformanceRow(
-                pick: widget.picks[i],
-                priceResult: prices[widget.picks[i].id],
-                loadingPrice: loading,
+              Divider(height: 1, color: _homeBorder),
+              for (var i = 0; i < _FavoritePerformanceList._maxRows; i++) ...[
+                SizedBox(
+                  height: _FavoritePerformanceList._rowHeight,
+                  child: i < visiblePicks.length
+                      ? _FavoriteCompactRow(
+                          pick: visiblePicks[i],
+                          priceResult: prices[visiblePicks[i].id],
+                          loadingPrice: loading,
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                const _ListDivider(indent: 0),
+              ],
+              SizedBox(
+                height: _FavoritePerformanceList._moreHeight,
+                child: _FavoriteMoreRow(onTap: widget.onMore),
               ),
-              if (i < widget.picks.length - 1) const _ListDivider(),
             ],
-          ],
+          ),
         );
       },
     );
@@ -3739,8 +3988,8 @@ class _FavoritePerformanceListState extends State<_FavoritePerformanceList> {
   }
 }
 
-class _FavoritePerformanceRow extends StatelessWidget {
-  const _FavoritePerformanceRow({
+class _FavoriteCompactRow extends StatelessWidget {
+  const _FavoriteCompactRow({
     required this.pick,
     required this.priceResult,
     required this.loadingPrice,
@@ -3756,6 +4005,140 @@ class _FavoritePerformanceRow extends StatelessWidget {
     final returnRate = pick.buyPrice > 0
         ? ((current - pick.buyPrice) / pick.buyPrice) * 100
         : 0.0;
+    final returnColor = returnRate >= 0 ? _homeUp : _homeDown;
+    final currentText = loadingPrice && priceResult == null
+        ? '조회중'
+        : _formatHomePickPrice(current, pick.market);
+
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => StockDetailScreen(pick: pick)),
+        );
+      },
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    pick.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _homeText(
+                      color: _homeLabel,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${pick.ticker} · ${pick.market}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _homeNumber(
+                      color: _homeFaint,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  '${returnRate >= 0 ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
+                  style: _homeNumber(
+                    color: returnColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  currentText,
+                  style: _homeNumber(
+                    color: _homeMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FavoriteMoreRow extends StatelessWidget {
+  const _FavoriteMoreRow({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            '더보기',
+            style: _homeText(
+              color: _homeAccent,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(Icons.chevron_right_rounded, size: 18, color: _homeAccent),
+        ],
+      ),
+    );
+  }
+}
+
+class _FavoritePerformanceRow extends StatefulWidget {
+  const _FavoritePerformanceRow({
+    required this.pick,
+    required this.priceResult,
+    required this.loadingPrice,
+  });
+
+  final StockPick pick;
+  final PriceResult? priceResult;
+  final bool loadingPrice;
+
+  @override
+  State<_FavoritePerformanceRow> createState() =>
+      _FavoritePerformanceRowState();
+}
+
+class _FavoritePerformanceRowState extends State<_FavoritePerformanceRow> {
+  Offset? _tapDown;
+
+  @override
+  Widget build(BuildContext context) {
+    final pick = widget.pick;
+    final priceResult = widget.priceResult;
+    final loadingPrice = widget.loadingPrice;
+    final current = priceResult?.price ?? pick.currentPrice ?? pick.buyPrice;
+    final returnRate = pick.buyPrice > 0
+        ? ((current - pick.buyPrice) / pick.buyPrice) * 100
+        : 0.0;
     final progress = _targetProgress(current);
     final returnColor = returnRate >= 0 ? _homeUp : _homeDown;
     final todayRate = priceResult?.changeRate;
@@ -3766,13 +4149,19 @@ class _FavoritePerformanceRow extends StatelessWidget {
     final currentText = loadingPrice && priceResult == null
         ? '조회중'
         : _formatHomePickPrice(current, pick.market);
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => StockDetailScreen(pick: pick)),
-        );
+    return Listener(
+      onPointerDown: (e) => _tapDown = e.position,
+      onPointerUp: (e) {
+        final d = _tapDown;
+        _tapDown = null;
+        if (d != null && (e.position - d).distance < 20) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => StockDetailScreen(pick: pick)),
+          );
+        }
       },
+      onPointerCancel: (_) => _tapDown = null,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 13),
         child: Column(
@@ -3846,7 +4235,7 @@ class _FavoritePerformanceRow extends StatelessWidget {
                     value: todayChangeText,
                     subValue: priceResult == null
                         ? null
-                        : _formatTodayChange(priceResult!, pick.market),
+                        : _formatTodayChange(priceResult, pick.market),
                     color: priceResult == null ? _homeFaint : todayColor,
                     emphasized: priceResult != null,
                   ),
@@ -3885,9 +4274,9 @@ class _FavoritePerformanceRow extends StatelessWidget {
   }
 
   double _targetProgress(double currentPrice) {
-    final total = pick.targetPrice - pick.buyPrice;
+    final total = widget.pick.targetPrice - widget.pick.buyPrice;
     if (total == 0) return 0;
-    return ((currentPrice - pick.buyPrice) / total).clamp(0.0, 1.0);
+    return ((currentPrice - widget.pick.buyPrice) / total).clamp(0.0, 1.0);
   }
 }
 
@@ -3985,9 +4374,9 @@ class _QuickMenu extends StatelessWidget {
     required this.openMarketAnalysis,
     required this.openFeatureStocks,
     required this.openFmkoreaHot,
+    required this.openFmkoreaIndex,
     required this.openInvestorFlow,
     required this.openMarketSentiment,
-    required this.openFmkoreaIndex,
     required this.openStockPicks,
     required this.openAnnouncements,
     required this.openStockCompare,
@@ -3996,9 +4385,9 @@ class _QuickMenu extends StatelessWidget {
   final VoidCallback openMarketAnalysis;
   final VoidCallback openFeatureStocks;
   final VoidCallback openFmkoreaHot;
+  final VoidCallback openFmkoreaIndex;
   final VoidCallback openInvestorFlow;
   final VoidCallback openMarketSentiment;
-  final VoidCallback openFmkoreaIndex;
   final VoidCallback openStockPicks;
   final VoidCallback openAnnouncements;
   final VoidCallback openStockCompare;
@@ -4026,13 +4415,8 @@ class _QuickMenu extends StatelessWidget {
           physics: const NeverScrollableScrollPhysics(),
           mainAxisSpacing: 8,
           crossAxisSpacing: 8,
-          childAspectRatio: 2.35,
+          childAspectRatio: 2.18,
           children: [
-            _QuickMenuTile(
-              icon: Icons.analytics_outlined,
-              label: '시황분석',
-              onTap: openMarketAnalysis,
-            ),
             _QuickMenuTile(
               icon: Icons.show_chart_rounded,
               label: '운영자 추천주',
@@ -4040,9 +4424,9 @@ class _QuickMenu extends StatelessWidget {
               emphasized: true,
             ),
             _QuickMenuTile(
-              icon: Icons.campaign_rounded,
-              label: '공지사항',
-              onTap: openAnnouncements,
+              icon: Icons.analytics_outlined,
+              label: '시황분석',
+              onTap: openMarketAnalysis,
             ),
             _QuickMenuTile(
               icon: Icons.bolt_rounded,
@@ -4050,15 +4434,15 @@ class _QuickMenu extends StatelessWidget {
               onTap: openFeatureStocks,
             ),
             _QuickMenuTile(
-              icon: Icons.compare_arrows_rounded,
-              label: '종목 비교',
-              onTap: openStockCompare,
-            ),
-            _QuickMenuTile(
               icon: Icons.local_fire_department_rounded,
               label: '펨코 HOT 종목',
               onTap: openFmkoreaHot,
               animated: true,
+            ),
+            _QuickMenuTile(
+              icon: Icons.forum_rounded,
+              label: '펨코지수',
+              onTap: openFmkoreaIndex,
             ),
             _QuickMenuTile(
               icon: Icons.candlestick_chart_rounded,
@@ -4071,9 +4455,14 @@ class _QuickMenu extends StatelessWidget {
               onTap: openMarketSentiment,
             ),
             _QuickMenuTile(
-              icon: Icons.forum_rounded,
-              label: '펨코지수',
-              onTap: openFmkoreaIndex,
+              icon: Icons.compare_arrows_rounded,
+              label: '종목 비교',
+              onTap: openStockCompare,
+            ),
+            _QuickMenuTile(
+              icon: Icons.campaign_rounded,
+              label: '공지사항',
+              onTap: openAnnouncements,
             ),
           ],
         ),
@@ -4082,7 +4471,7 @@ class _QuickMenu extends StatelessWidget {
   }
 }
 
-class _QuickMenuTile extends StatelessWidget {
+class _QuickMenuTile extends StatefulWidget {
   const _QuickMenuTile({
     required this.icon,
     required this.label,
@@ -4098,39 +4487,57 @@ class _QuickMenuTile extends StatelessWidget {
   final bool animated;
 
   @override
+  State<_QuickMenuTile> createState() => _QuickMenuTileState();
+}
+
+class _QuickMenuTileState extends State<_QuickMenuTile> {
+  Offset? _tapDown;
+
+  @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+    return Listener(
+      onPointerDown: (e) => _tapDown = e.position,
+      onPointerUp: (e) {
+        final d = _tapDown;
+        _tapDown = null;
+        if (d != null && (e.position - d).distance < 20) widget.onTap();
+      },
+      onPointerCancel: (_) => _tapDown = null,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
         decoration: BoxDecoration(
-          color: emphasized ? _homeAccent.withValues(alpha: 0.12) : _homeBg3,
-          borderRadius: BorderRadius.circular(14),
+          color: widget.emphasized
+              ? _homeAccent.withValues(alpha: 0.12)
+              : _homeBg3,
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: emphasized
+            color: widget.emphasized
                 ? _homeAccent.withValues(alpha: 0.36)
                 : _homeBorder,
           ),
         ),
         child: Row(
           children: [
-            emphasized || animated
-                ? _Breathing(
-                    scale: emphasized ? 1.1 : 1.16,
-                    duration: Duration(milliseconds: emphasized ? 1050 : 850),
-                    child: Icon(icon, color: _homeAccent, size: 22),
+            widget.emphasized || widget.animated
+                ? RepaintBoundary(
+                    child: _Breathing(
+                      scale: widget.emphasized ? 1.1 : 1.16,
+                      duration: Duration(
+                        milliseconds: widget.emphasized ? 1050 : 850,
+                      ),
+                      child: Icon(widget.icon, color: _homeAccent, size: 23),
+                    ),
                   )
-                : Icon(icon, color: _homeAccent, size: 22),
+                : Icon(widget.icon, color: _homeAccent, size: 23),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                label,
+                widget.label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: _homeText(
                   color: _homeLabel,
-                  fontSize: 14,
+                  fontSize: 15,
                   fontWeight: FontWeight.w800,
                 ),
               ),
@@ -4192,6 +4599,23 @@ String _relativeTime(DateTime date) {
   if (diff.inDays < 1) return '${diff.inHours}시간 전';
   if (diff.inDays < 7) return '${diff.inDays}일 전';
   return '${date.month}.${date.day}';
+}
+
+class StockPicksListScreen extends StatelessWidget {
+  const StockPicksListScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    return Scaffold(
+      appBar: AppBar(title: const Text('추천주')),
+      body: _StockStoragePage(
+        auth: auth,
+        searchQuery: '',
+        firestoreService: FirestoreService(),
+      ),
+    );
+  }
 }
 
 // ─── 주식저장소 서브탭 페이지 (추천주) ─────────────────────────

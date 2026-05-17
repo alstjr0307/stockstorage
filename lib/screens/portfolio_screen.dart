@@ -669,7 +669,7 @@ class _PortfolioContentState extends State<_PortfolioContent> {
         final favIds = favSnapshot.data?.toSet() ?? <String>{};
 
         return StreamBuilder<List<StockPick>>(
-          stream: _firestoreService.getStockPicks(),
+          stream: _firestoreService.getAllStockPicks(),
           builder: (context, picksSnapshot) {
             if (picksSnapshot.connectionState == ConnectionState.waiting) {
               return const Center(

@@ -451,86 +451,6 @@ class _FeatureDateNavigator extends StatelessWidget {
   }
 }
 
-class _FeatureFilterHint extends StatelessWidget {
-  const _FeatureFilterHint({required this.filter});
-
-  final _FeatureStockFilter filter;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: cs.onSurface.withValues(alpha: 0.045),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        filter.description,
-        style: TextStyle(
-          color: cs.onSurface.withValues(alpha: 0.56),
-          fontSize: 12,
-          height: 1.4,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-class _FeatureDateHeader extends StatelessWidget {
-  const _FeatureDateHeader({required this.date, required this.count});
-
-  final DateTime date;
-  final int count;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final target = DateTime(date.year, date.month, date.day);
-    final isToday = today.difference(target).inDays == 0;
-    final formattedDate = DateFormat('yyyy.MM.dd').format(date);
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 6, bottom: 2),
-      child: Row(
-        children: [
-          Text(
-            isToday ? '오늘' : formattedDate,
-            style: TextStyle(
-              color: cs.onSurface,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          if (isToday) ...[
-            const SizedBox(width: 8),
-            Text(
-              formattedDate,
-              style: TextStyle(
-                color: cs.onSurface.withValues(alpha: 0.38),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
-          const Spacer(),
-          Text(
-            '$count개',
-            style: TextStyle(
-              color: cs.onSurface.withValues(alpha: 0.42),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _FeatureStockRow extends StatelessWidget {
   const _FeatureStockRow({required this.item});
 
@@ -541,8 +461,6 @@ class _FeatureStockRow extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final isUp = item.changeRate >= 0;
     final moveColor = isUp ? const Color(0xFFF04452) : const Color(0xFF1677FF);
-    final subtitle = featureDisplayReason(item);
-
     return InkWell(
       onTap: () {
         Navigator.push(
@@ -597,19 +515,6 @@ class _FeatureStockRow extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  if (subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.46),
-                        fontSize: 12,
-                        height: 1.45,
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 6,
@@ -663,31 +568,6 @@ class _FeatureStockRow extends StatelessWidget {
     }
     return '거래대금 ${NumberFormat('#,###').format(value)}';
   }
-}
-
-String featureDisplayReason(MarketFeatureStock item) {
-  final reason = item.reason.replaceAll('\n', ' ').trim();
-  if (reason.isNotEmpty && !featureLooksEnglish(reason)) {
-    return reason;
-  }
-
-  final parts = <String>[];
-  parts.add('${featureSpecificLabel(item)} 기준으로 포착된 종목입니다.');
-  if (item.changeRate != 0) {
-    final direction = item.changeRate > 0 ? '상승' : '하락';
-    parts.add(
-      '당일 등락률은 ${item.changeRate.abs().toStringAsFixed(2)}% $direction했습니다.',
-    );
-  }
-  if (item.tradingValue > 0) {
-    parts.add('거래대금은 ${formatFeatureTradingValue(item.tradingValue)} 수준입니다.');
-  }
-  if (item.volumeRatio > 0) {
-    parts.add('거래량은 20일 평균 대비 ${item.volumeRatio.toStringAsFixed(1)}배입니다.');
-  }
-  final pattern = featurePatternLabel(item.pattern);
-  if (pattern != null) parts.add('$pattern 흐름이 함께 감지됐습니다.');
-  return parts.join(' ');
 }
 
 String featureSpecificLabel(MarketFeatureStock item) {
@@ -764,13 +644,6 @@ String formatFeatureTradingValue(int value) {
     return '${(value / 100000000).round()}억';
   }
   return NumberFormat('#,###').format(value);
-}
-
-bool featureLooksEnglish(String value) {
-  final text = value.trim();
-  if (text.isEmpty) return false;
-  if (RegExp(r'[가-힣]').hasMatch(text)) return false;
-  return RegExp(r'[A-Za-z]').hasMatch(text);
 }
 
 bool featureShowsScore(MarketFeatureStock item) {

@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
@@ -61,7 +61,7 @@ void main() async {
 }
 
 Future<void> initAds() async {
-  if (Platform.isIOS) {
+  if (!kIsWeb && Platform.isIOS) {
     // UI가 완전히 로드된 후 ATT 팝업 표시 (Apple 심사 요건)
     await Future.delayed(const Duration(milliseconds: 300));
     final status = await AppTrackingTransparency.trackingAuthorizationStatus;
@@ -113,6 +113,12 @@ class StockStorageApp extends StatelessWidget {
             appBarTheme: const AppBarTheme(
               backgroundColor: Color(0xFFF0F4F8),
               elevation: 0,
+              titleTextStyle: TextStyle(
+                fontFamily: 'Pretendard',
+                color: Color(0xFF191F28),
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
             ),
             bottomNavigationBarTheme: const BottomNavigationBarThemeData(
               backgroundColor: Color(0xFFF0F4F8),
@@ -134,6 +140,12 @@ class StockStorageApp extends StatelessWidget {
             appBarTheme: const AppBarTheme(
               backgroundColor: Color(0xFF0A0E1A),
               elevation: 0,
+              titleTextStyle: TextStyle(
+                fontFamily: 'Pretendard',
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
             ),
             bottomNavigationBarTheme: const BottomNavigationBarThemeData(
               backgroundColor: Color(0xFF0A0E1A),
