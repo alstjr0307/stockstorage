@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../models/market_feature_stock.dart';
 import '../services/stock_price_service.dart';
@@ -111,6 +114,8 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
               fontWeight: FontWeight.w500,
             ),
           ),
+          const SizedBox(height: 32),
+          _NaverBoardSection(ticker: item.ticker),
         ],
       ),
     );
@@ -1069,6 +1074,235 @@ class _MetricRow extends StatelessWidget {
           color: cs.onSurface.withValues(alpha: 0.06),
         ),
       ],
+    );
+  }
+}
+
+// ── 네이버 종목토론방 ─────────────────────────────────────────────────────
+
+class _NaverBoardPost {
+  const _NaverBoardPost({
+    required this.title,
+    required this.date,
+    required this.nid,
+  });
+  final String title;
+  final String date;
+  final String nid;
+}
+
+Future<List<_NaverBoardPost>> _fetchNaverPosts(String ticker) async {
+  final uri = Uri.parse(
+    'https://finance.naver.com/item/board.naver?code=$ticker',
+  );
+  final response = await http.get(uri, headers: {
+    'User-Agent':
+        'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 '
+        'Chrome/124.0 Mobile Safari/537.36',
+    'Accept-Language': 'ko-KR,ko;q=0.9',
+    'Accept': 'text/html,application/xhtml+xml',
+  }).timeout(const Duration(seconds: 10));
+
+  // Naver Finance는 EUC-KR 인코딩 사용 — UTF-8 시도 후 latin1 폴백
+  String body;
+  try {
+    body = utf8.decode(response.bodyBytes, allowMalformed: false);
+  } catch (_) {
+    body = latin1.decode(response.bodyBytes, allowInvalid: true);
+  }
+
+  final linkRe = RegExp(
+    r'href="[^"]*board_read\.naver\?code=[0-9]+&(?:amp;)?nid=([0-9]+)"[^>]*>'
+    r'\s*([^<]+?)\s*<',
+  );
+  final dateRe = RegExp(
+    r'class="(?:td_date|date)">\s*'
+    r'([0-9]{4}\.[0-9]{2}\.[0-9]{2}(?:\s+[0-9]{2}:[0-9]{2})?)',
+  );
+
+  final links = linkRe.allMatches(body).take(5).toList();
+  final dates = dateRe.allMatches(body).map((m) => m.group(1)!.trim()).toList();
+
+  return List.generate(links.length, (i) {
+    return _NaverBoardPost(
+      title: links[i].group(2)?.trim() ?? '',
+      date: i < dates.length ? dates[i] : '',
+      nid: links[i].group(1) ?? '',
+    );
+  });
+}
+
+class _NaverBoardSection extends StatefulWidget {
+  const _NaverBoardSection({required this.ticker});
+  final String ticker;
+
+  @override
+  State<_NaverBoardSection> createState() => _NaverBoardSectionState();
+}
+
+class _NaverBoardSectionState extends State<_NaverBoardSection> {
+  late Future<List<_NaverBoardPost>> _future;
+
+  String get _boardUrl =>
+      'https://finance.naver.com/item/board.naver?code=${widget.ticker}';
+
+  String _postUrl(String nid) =>
+      'https://finance.naver.com/item/board_read.naver'
+      '?code=${widget.ticker}&nid=$nid';
+
+  Future<void> _launch(String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('브라우저를 열 수 없습니다.')),
+      );
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _fetchNaverPosts(widget.ticker);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(child: _SectionHeader(title: '네이버 종목토론방')),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => _launch(_boardUrl),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF03C75A).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  '바로가기 →',
+                  style: TextStyle(
+                    color: Color(0xFF03C75A),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        FutureBuilder<List<_NaverBoardPost>>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return SizedBox(
+                height: 72,
+                child: Center(
+                  child: SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 1.5,
+                      color: cs.onSurface.withValues(alpha: 0.3),
+                    ),
+                  ),
+                ),
+              );
+            }
+            final posts = snapshot.data ?? [];
+            if (posts.isEmpty) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                child: Center(
+                  child: Text(
+                    '글을 불러오지 못했습니다.',
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.4),
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              );
+            }
+            return Column(
+              children: [
+                for (final post in posts)
+                  _NaverPostTile(
+                    post: post,
+                    onTap: () => _launch(_postUrl(post.nid)),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _NaverPostTile extends StatelessWidget {
+  const _NaverPostTile({required this.post, required this.onTap});
+
+  final _NaverBoardPost post;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    post.title.isEmpty ? '(제목 없음)' : post.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  post.date,
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.42),
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 14,
+                  color: cs.onSurface.withValues(alpha: 0.28),
+                ),
+              ],
+            ),
+          ),
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: cs.onSurface.withValues(alpha: 0.06),
+          ),
+        ],
+      ),
     );
   }
 }
