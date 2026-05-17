@@ -44,11 +44,11 @@ _SigCfg _getSig(MarketFeatureStock s) {
       // 패턴 없는 종목 → 그룹 기반 폴백
       switch (s.group) {
         case 'gainers':
-          return const _SigCfg(_kRed, '↑', '급등주');
+          return const _SigCfg(Color(0xFF8B92A8), '↑', '급등주');
         case 'top_trading_value':
-          return const _SigCfg(_kViolet, '💰', '거래대금 상위');
+          return const _SigCfg(Color(0xFF8B92A8), '·', '거래대금 상위');
         case 'volume_spike':
-          return const _SigCfg(_kViolet, '⚡', '거래량 급증');
+          return const _SigCfg(Color(0xFF8B92A8), '·', '거래량 급증');
         case 'high_breakout':
           return const _SigCfg(_kOrange, '✦', '신고가/전고점');
         default:
