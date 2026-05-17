@@ -1147,11 +1147,10 @@ class _NaverBoardSectionState extends State<_NaverBoardSection> {
   late Future<List<_NaverBoardPost>> _future;
 
   String get _boardUrl =>
-      'https://finance.naver.com/item/board.naver?code=${widget.ticker}';
+      'https://m.stock.naver.com/domestic/stock/${widget.ticker}/discuss';
 
   String _postUrl(String nid) =>
-      'https://finance.naver.com/item/board_read.naver'
-      '?code=${widget.ticker}&nid=$nid';
+      'https://m.stock.naver.com/domestic/stock/${widget.ticker}/board/$nid';
 
   Future<void> _launch(String url) async {
     final uri = Uri.parse(url);
