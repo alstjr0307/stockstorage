@@ -70,8 +70,6 @@ const _kSigFilters = [
   _SigFilter('ma20',          '20일선',  _kAccent),
   _SigFilter('consolidation', '재정비',  _kGold),
   _SigFilter('box',           '박스권',  _kGold),
-  _SigFilter('volume',        '거래량',  _kViolet),
-  _SigFilter('high',          '신고가',  _kRed),
   _SigFilter('retest',        '전고점',  _kBlue),
 ];
 
