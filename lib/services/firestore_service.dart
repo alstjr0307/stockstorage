@@ -570,7 +570,7 @@ class FirestoreService {
   Stream<List<MarketFeatureStock>> getMarketFeatureStocks({
     String? group,
     String? pattern,
-    int limit = 80,
+    int limit = 500,
   }) {
     Query<Map<String, dynamic>> query = _db.collection('market_feature_stocks');
     if (group != null && group.isNotEmpty) {
