@@ -6,11 +6,12 @@ import '../services/firestore_service.dart';
 import 'market_feature_stock_detail_screen.dart';
 
 // ── Design tokens ─────────────────────────────────────────────────────────
-const _kAccent = Color(0xFF00D68F); // 20일선 회복
-const _kGold   = Color(0xFFF5B547); // 급등 후 재정비
-const _kViolet = Color(0xFF9B7BFF); // 거래량 폭발
-const _kRed    = Color(0xFFFF4E6A); // 신고가 / 급등
-const _kBlue   = Color(0xFF4A9EFF); // 하락
+const _kAccent  = Color(0xFF00D68F); // 20일선 회복
+const _kGold    = Color(0xFFF5B547); // 급등 후 재정비
+const _kViolet  = Color(0xFF9B7BFF); // 거래량 폭발
+const _kRed     = Color(0xFFFF4E6A); // 신고가 돌파 / 급등
+const _kOrange  = Color(0xFFFF8C42); // 전고점 돌파
+const _kBlue    = Color(0xFF4A9EFF); // 하락
 
 // ── Per-pattern signal config ─────────────────────────────────────────────
 class _SigCfg {
@@ -34,7 +35,7 @@ _SigCfg _getSig(MarketFeatureStock s) {
     case 'new_52w_high':
       return const _SigCfg(_kRed, '✦', '신고가 돌파');
     case 'prior_high_breakout':
-      return const _SigCfg(_kRed, '↑', '전고점 돌파');
+      return const _SigCfg(_kOrange, '↑', '전고점 돌파');
     case 'prior_high_retest':
       return const _SigCfg(_kBlue, '⟳', '전고점 재도전');
     case 'box_upper_approach':
@@ -49,7 +50,7 @@ _SigCfg _getSig(MarketFeatureStock s) {
         case 'volume_spike':
           return const _SigCfg(_kViolet, '⚡', '거래량 급증');
         case 'high_breakout':
-          return const _SigCfg(_kRed, '✦', '신고가/전고점');
+          return const _SigCfg(_kOrange, '✦', '신고가/전고점');
         default:
           return s.changeRate >= 0
               ? const _SigCfg(_kRed, '↑', '상승')
