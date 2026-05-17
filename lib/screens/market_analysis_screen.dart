@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/fmkorea_stock_mention.dart';
 import '../models/market_analysis.dart';
+import '../models/stock_pick.dart';
 import '../services/ad_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
@@ -17,6 +18,7 @@ import '../widgets/banner_ad_widget.dart';
 import 'index_detail_screen.dart';
 import 'market_analysis_detail_screen.dart';
 import 'market_sentiment_screen.dart';
+import 'stock_detail_screen.dart';
 
 class MarketAnalysisScreen extends StatefulWidget {
   const MarketAnalysisScreen({super.key, this.initialTabIndex = 1})
@@ -100,6 +102,48 @@ class _FmkoreaHotStocksScreenState extends State<FmkoreaHotStocksScreen> {
     );
   }
 
+  Future<void> _openHotStock(FmkoreaStockMention mention) async {
+    final ticker = mention.ticker.trim().toUpperCase();
+    if (ticker.isEmpty) return;
+
+    var market = 'KS';
+    var name = mention.name.trim().isEmpty ? ticker : mention.name.trim();
+    try {
+      final results = await StockPriceService.searchStocks(ticker);
+      final exact = results.where((item) => item.ticker == ticker).toList();
+      final match = exact.isNotEmpty
+          ? exact.first
+          : (results.isNotEmpty ? results.first : null);
+      if (match != null) {
+        market = match.market == 'KQ' ? 'KQ' : 'KS';
+        if (match.name.trim().isNotEmpty) name = match.name.trim();
+      }
+    } catch (_) {
+      // HOT 목록 자체의 티커로 상세 화면을 열 수 있으면 그대로 진행한다.
+    }
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      stockDetailRoute(
+        StockPick(
+          id: 'fmkorea_hot_${market}_$ticker',
+          ticker: ticker,
+          name: name,
+          buyPrice: 0,
+          targetPrice: 0,
+          reason: '펨코 HOT 종목에서 선택한 종목입니다.',
+          category: 'HOT',
+          market: market,
+          isPremium: false,
+          createdAt: DateTime.now(),
+          status: 'active',
+        ),
+        enablePickFeatures: false,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -179,6 +223,7 @@ class _FmkoreaHotStocksScreenState extends State<FmkoreaHotStocksScreen> {
           data: data,
           showShare: true,
           onShare: () => _openShareSheet(context, data),
+          onOpenStock: _openHotStock,
         );
       },
     );
@@ -198,7 +243,11 @@ class _FmkoreaHotStocksScreenState extends State<FmkoreaHotStocksScreen> {
         if (data == null || data.topMentions.isEmpty) {
           return const _FmkoreaHotEmpty(text: '표시할 전일 HOT 데이터가 아직 없습니다.');
         }
-        return _FmkoreaHotRows(title: '펨코 전일 HOT 종목', data: data);
+        return _FmkoreaHotRows(
+          title: '펨코 전일 HOT 종목',
+          data: data,
+          onOpenStock: _openHotStock,
+        );
       },
     );
   }
@@ -291,12 +340,14 @@ class _FmkoreaHotRows extends StatelessWidget {
     required this.data,
     this.showShare = false,
     this.onShare,
+    this.onOpenStock,
   });
 
   final String title;
   final FmkoreaStockMentionsSnapshot data;
   final bool showShare;
   final VoidCallback? onShare;
+  final ValueChanged<FmkoreaStockMention>? onOpenStock;
 
   @override
   Widget build(BuildContext context) {
@@ -370,6 +421,9 @@ class _FmkoreaHotRows extends StatelessWidget {
                     ticker: rows[i].ticker,
                     mentionCount: rows[i].mentionCount,
                     isLast: i == rows.length - 1,
+                    onTap: onOpenStock == null
+                        ? null
+                        : () => onOpenStock!(rows[i]),
                   ),
                 ),
             ],
@@ -387,6 +441,7 @@ class _FmkoreaHotRow extends StatelessWidget {
     required this.ticker,
     required this.mentionCount,
     required this.isLast,
+    this.onTap,
   });
 
   final int rank;
@@ -394,72 +449,86 @@ class _FmkoreaHotRow extends StatelessWidget {
   final String ticker;
   final int mentionCount;
   final bool isLast;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-          child: Row(
-            children: [
-              Container(
-                width: 24,
-                height: 24,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: const Color(
-                    0xFF10B981,
-                  ).withValues(alpha: rank <= 3 ? 0.2 : 0.12),
-                  borderRadius: BorderRadius.circular(7),
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.vertical(
+            top: rank == 1 ? const Radius.circular(14) : Radius.zero,
+            bottom: isLast ? const Radius.circular(14) : Radius.zero,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+            child: Row(
+              children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(
+                      0xFF10B981,
+                    ).withValues(alpha: rank <= 3 ? 0.2 : 0.12),
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: Text(
+                    '$rank',
+                    style: const TextStyle(
+                      color: Color(0xFF10B981),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
-                child: Text(
-                  '$rank',
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: cs.onSurface,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        ticker,
+                        style: TextStyle(
+                          color: cs.onSurface.withValues(alpha: 0.45),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '$mentionCount회',
                   style: const TextStyle(
                     color: Color(0xFF10B981),
-                    fontSize: 11,
+                    fontSize: 13,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      ticker,
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.45),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: cs.onSurface.withValues(alpha: 0.28),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '$mentionCount회',
-                style: const TextStyle(
-                  color: Color(0xFF10B981),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         if (!isLast)

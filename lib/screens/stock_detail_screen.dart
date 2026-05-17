@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
@@ -50,16 +51,31 @@ enum _Period {
   bool get isMinute => this == min1 || this == min5 || this == min60;
 }
 
-Route<dynamic> stockDetailRoute(StockPick pick) {
+Route<dynamic> stockDetailRoute(
+  StockPick pick, {
+  bool enablePickFeatures = true,
+}) {
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-    return CupertinoPageRoute(builder: (_) => StockDetailScreen(pick: pick));
+    return CupertinoPageRoute(
+      builder: (_) =>
+          StockDetailScreen(pick: pick, enablePickFeatures: enablePickFeatures),
+    );
   }
-  return MaterialPageRoute(builder: (_) => StockDetailScreen(pick: pick));
+  return MaterialPageRoute(
+    builder: (_) =>
+        StockDetailScreen(pick: pick, enablePickFeatures: enablePickFeatures),
+  );
 }
 
 class StockDetailScreen extends StatefulWidget {
   final StockPick pick;
-  const StockDetailScreen({super.key, required this.pick});
+  final bool enablePickFeatures;
+
+  const StockDetailScreen({
+    super.key,
+    required this.pick,
+    this.enablePickFeatures = true,
+  });
 
   @override
   State<StockDetailScreen> createState() => _StockDetailScreenState();
@@ -97,6 +113,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   final _memoController = TextEditingController();
   final _firestoreService = FirestoreService();
   late final Stream<List<Comment>> _commentsStream;
+  StreamSubscription<StockPick>? _pickSub;
   bool _submitting = false;
   bool _memoSaving = false;
   bool _memoChanged = false;
@@ -121,7 +138,9 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   @override
   void initState() {
     super.initState();
-    _commentsStream = _firestoreService.getComments(widget.pick.id);
+    _commentsStream = widget.enablePickFeatures
+        ? _firestoreService.getComments(widget.pick.id)
+        : Stream.value(const <Comment>[]);
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) return;
@@ -140,8 +159,10 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     _fetchPrice();
     _fetchChart(++_fetchSeq);
     _fetchFundamentals();
-    _loadMemo();
-    _loadVote();
+    if (widget.enablePickFeatures) {
+      _loadMemo();
+      _loadVote();
+    }
     _loadNews();
     _loadDiscussion();
     _subscribePick();
@@ -151,16 +172,10 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     });
   }
 
-  late final _pickSub = _firestoreService.getPickStream(widget.pick.id).listen((
-    p,
-  ) {
-    if (mounted) setState(() => _livePick = p);
-  });
-
   @override
   void dispose() {
     _tabController.dispose();
-    _pickSub.cancel();
+    _pickSub?.cancel();
     _commentController.dispose();
     _memoController.dispose();
     super.dispose();
@@ -168,8 +183,11 @@ class _StockDetailScreenState extends State<StockDetailScreen>
 
   void _subscribePick() {
     _livePick = widget.pick;
+    if (!widget.enablePickFeatures) return;
     // late field를 접근해 구독 시작 (lazy initialization 트리거)
-    _pickSub; // ignore: unnecessary_statements
+    _pickSub = _firestoreService.getPickStream(widget.pick.id).listen((p) {
+      if (mounted) setState(() => _livePick = p);
+    });
   }
 
   Future<void> _loadVote() async {
@@ -562,7 +580,9 @@ class _StockDetailScreenState extends State<StockDetailScreen>
 
     final livePrice = _livePrice?.price;
     final hasClosedPrice = pick.isCompleted && pick.closedPrice != null;
-    final returnRate = hasClosedPrice
+    final returnRate = pick.buyPrice <= 0
+        ? 0.0
+        : hasClosedPrice
         ? ((pick.closedPrice! - pick.buyPrice) / pick.buyPrice) * 100
         : livePrice != null
         ? ((livePrice - pick.buyPrice) / pick.buyPrice) * 100
@@ -705,66 +725,69 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
-                              _favoriteButton(cs),
+                              if (widget.enablePickFeatures) ...[
+                                const SizedBox(height: 8),
+                                _favoriteButton(cs),
+                              ],
                             ],
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: isPositive
-                                ? const Color(
-                                    0xFFF04452,
-                                  ).withValues(alpha: 0.12)
-                                : const Color(
-                                    0xFF1677FF,
-                                  ).withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
+                        if (widget.enablePickFeatures)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
                               color: isPositive
                                   ? const Color(
                                       0xFFF04452,
-                                    ).withValues(alpha: 0.4)
+                                    ).withValues(alpha: 0.12)
                                   : const Color(
                                       0xFF1677FF,
-                                    ).withValues(alpha: 0.4),
+                                    ).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isPositive
+                                    ? const Color(
+                                        0xFFF04452,
+                                      ).withValues(alpha: 0.4)
+                                    : const Color(
+                                        0xFF1677FF,
+                                      ).withValues(alpha: 0.4),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  hasClosedPrice ? '종료 수익률' : '매수가 대비',
+                                  style: TextStyle(
+                                    color: isPositive
+                                        ? const Color(
+                                            0xFFF04452,
+                                          ).withValues(alpha: 0.75)
+                                        : const Color(
+                                            0xFF1677FF,
+                                          ).withValues(alpha: 0.75),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
+                                  style: TextStyle(
+                                    color: isPositive
+                                        ? const Color(0xFFF04452)
+                                        : const Color(0xFF1677FF),
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 22,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                hasClosedPrice ? '종료 수익률' : '매수가 대비',
-                                style: TextStyle(
-                                  color: isPositive
-                                      ? const Color(
-                                          0xFFF04452,
-                                        ).withValues(alpha: 0.75)
-                                      : const Color(
-                                          0xFF1677FF,
-                                        ).withValues(alpha: 0.75),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
-                                style: TextStyle(
-                                  color: isPositive
-                                      ? const Color(0xFFF04452)
-                                      : const Color(0xFF1677FF),
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 22,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -1238,22 +1261,24 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                   ),
                                 ),
                                 const SizedBox(height: 20),
-                                // 투표
-                                _voteSection(),
-                                const SizedBox(height: 20),
-                                // 메모
-                                if (_currentUser != null) ...[
-                                  _memoSection(),
+                                if (widget.enablePickFeatures) ...[
+                                  // 투표
+                                  _voteSection(),
                                   const SizedBox(height: 20),
+                                  // 메모
+                                  if (_currentUser != null) ...[
+                                    _memoSection(),
+                                    const SizedBox(height: 20),
+                                  ],
+                                  // 댓글
+                                  _commentSectionV2(),
+                                  const SizedBox(height: 8),
                                 ],
-                                // 댓글
-                                _commentSectionV2(),
-                                const SizedBox(height: 8),
                               ],
                             ),
                           ),
                         ),
-                        _commentInput(),
+                        if (widget.enablePickFeatures) _commentInput(),
                       ],
                     ),
 
@@ -1661,13 +1686,18 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                     ],
                   ),
           ),
-          // PER / PBR
-          if (f != null && (f.per != null || f.pbr != null)) ...[
+          // 시총 / PER / PBR
+          if (f != null &&
+              (f.marketCap != null || f.per != null || f.pbr != null)) ...[
             const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (f.marketCap != null)
+                  _perPbrLabel('시총', _formatMarketCap(f.marketCap!), cs),
+                if (f.marketCap != null && (f.per != null || f.pbr != null))
+                  const SizedBox(height: 4),
                 if (f.per != null)
                   _perPbrLabel('PER', f.per!.toStringAsFixed(1), cs),
                 if (f.per != null && f.pbr != null) const SizedBox(height: 4),
@@ -1679,6 +1709,16 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         ],
       ),
     );
+  }
+
+  String _formatMarketCap(int value) {
+    if (value >= 1000000000000) {
+      return '${(value / 1000000000000).toStringAsFixed(1)}조';
+    }
+    if (value >= 100000000) {
+      return '${(value / 100000000).round()}억';
+    }
+    return NumberFormat('#,###').format(value);
   }
 
   Widget _perPbrLabel(String label, String value, ColorScheme cs) {

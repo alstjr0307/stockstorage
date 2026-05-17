@@ -1479,6 +1479,7 @@ class StockPriceService {
           per: cached.result.per,
           pbr: currentPrice / cached.result.bps!,
           bps: cached.result.bps,
+          marketCap: cached.result.marketCap,
         );
       }
       return cached.result;
@@ -1535,6 +1536,7 @@ class StockPriceService {
     // BPS: main.nhn
     double? bps;
     double? pbr;
+    int? marketCap;
     final mainUri = Uri.parse(
       'https://finance.naver.com/item/main.nhn?code=$ticker',
     );
@@ -1556,10 +1558,24 @@ class StockPriceService {
       if (bps != null && currentPrice != null) {
         pbr = currentPrice / bps;
       }
+      final capMatch = RegExp(
+        r'시가총액</span>[\s\S]{0,500}?<em[^>]*id="_market_sum"[^>]*>\s*([\d,]+)',
+      ).firstMatch(mainRes.body);
+      final capEok = int.tryParse(
+        capMatch?.group(1)?.replaceAll(',', '') ?? '',
+      );
+      if (capEok != null) {
+        marketCap = capEok * 100000000;
+      }
     }
 
-    if (per == null && pbr == null) return null;
-    return FundamentalsResult(per: per, pbr: pbr, bps: bps);
+    if (per == null && pbr == null && marketCap == null) return null;
+    return FundamentalsResult(
+      per: per,
+      pbr: pbr,
+      bps: bps,
+      marketCap: marketCap,
+    );
   }
 
   /// Yahoo Finance quoteSummary (crumb 방식, 미국주식)
@@ -1618,9 +1634,11 @@ class StockPriceService {
         ?.toDouble();
     final pbr = (result['defaultKeyStatistics']?['priceToBook']?['raw'] as num?)
         ?.toDouble();
+    final marketCap = (result['summaryDetail']?['marketCap']?['raw'] as num?)
+        ?.toInt();
 
-    if (per == null && pbr == null) return null;
-    return FundamentalsResult(per: per, pbr: pbr);
+    if (per == null && pbr == null && marketCap == null) return null;
+    return FundamentalsResult(per: per, pbr: pbr, marketCap: marketCap);
   }
 
   /// 네이버 종목토론방 게시글 (한국주식 전용, 최대 20개)
@@ -1848,7 +1866,8 @@ class FundamentalsResult {
   final double? per;
   final double? pbr;
   final double? bps; // BPS 캐시용 (PBR 재계산에 사용)
-  const FundamentalsResult({this.per, this.pbr, this.bps});
+  final int? marketCap;
+  const FundamentalsResult({this.per, this.pbr, this.bps, this.marketCap});
 }
 
 class _CachedFundamentals {

@@ -567,6 +567,45 @@ class FirestoreService {
     return _db.collection('market_analyses').doc(id).delete();
   }
 
+  Stream<List<Comment>> getMarketAnalysisComments(String analysisId) {
+    return _db
+        .collection('market_analyses')
+        .doc(analysisId)
+        .collection('comments')
+        .orderBy('createdAt')
+        .snapshots()
+        .map((s) => s.docs.map(Comment.fromFirestore).toList());
+  }
+
+  Future<void> addMarketAnalysisComment(
+    String analysisId,
+    Comment comment,
+  ) async {
+    await _db
+        .collection('market_analyses')
+        .doc(analysisId)
+        .collection('comments')
+        .add(comment.toFirestore());
+    await recordCommentCreated(comment.uid);
+  }
+
+  Future<void> deleteMarketAnalysisComment(
+    String analysisId,
+    String commentId,
+  ) async {
+    final ref = _db
+        .collection('market_analyses')
+        .doc(analysisId)
+        .collection('comments')
+        .doc(commentId);
+    final snap = await ref.get();
+    final commentUid = snap.data()?['uid'] as String?;
+    await ref.delete();
+    if (commentUid != null && commentUid.isNotEmpty) {
+      await recordCommentRemoved(commentUid);
+    }
+  }
+
   Stream<List<MarketFeatureStock>> getMarketFeatureStocks({
     String? group,
     String? pattern,
