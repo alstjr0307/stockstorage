@@ -66,11 +66,13 @@ class _SigFilter {
 }
 
 const _kSigFilters = [
-  _SigFilter('all',           '전체',  Color(0xFF8B92A8)),
-  _SigFilter('ma20',          '20일선', _kAccent),
-  _SigFilter('consolidation', '재정비', _kGold),
-  _SigFilter('volume',        '거래량', _kViolet),
-  _SigFilter('high',          '신고가', _kRed),
+  _SigFilter('all',           '전체',   Color(0xFF8B92A8)),
+  _SigFilter('ma20',          '20일선',  _kAccent),
+  _SigFilter('consolidation', '재정비',  _kGold),
+  _SigFilter('box',           '박스권',  _kGold),
+  _SigFilter('volume',        '거래량',  _kViolet),
+  _SigFilter('high',          '신고가',  _kRed),
+  _SigFilter('retest',        '전고점',  _kBlue),
 ];
 
 bool _passFilter(MarketFeatureStock s, String key) {
@@ -83,8 +85,10 @@ bool _passFilter(MarketFeatureStock s, String key) {
         'volume_spike_dry_up_pullback_support',
         'volume_surge_pullback_tail',
       }.contains(s.pattern);
+    case 'box':    return s.pattern == 'box_upper_approach';
     case 'volume': return s.pattern == 'trading_value_spike';
-    case 'high': return const {'new_52w_high', 'prior_high_breakout'}.contains(s.pattern);
+    case 'high':   return const {'new_52w_high', 'prior_high_breakout'}.contains(s.pattern);
+    case 'retest': return s.pattern == 'prior_high_retest';
     default: return true;
   }
 }
