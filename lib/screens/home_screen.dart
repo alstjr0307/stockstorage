@@ -1371,6 +1371,9 @@ class _DashboardHomePage extends StatefulWidget {
 class _DashboardHomePageState extends State<_DashboardHomePage> {
   late Future<(List<Post>, DocumentSnapshot?)> _postsFuture;
   late Future<Map<String, PriceResult?>> _indicesFuture;
+  late Stream<Announcement?> _latestAnnouncementStream;
+  late Stream<List<MarketFeatureStock>> _featureStocksStream;
+  late Stream<List<StockPick>> _stockPicksStream;
 
   static const _homeIndices = [
     ('KOSPI', '^KS11'),
@@ -1388,6 +1391,12 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
     super.initState();
     _postsFuture = widget.firestoreService.getPostsPaged(limit: 40);
     _indicesFuture = _loadIndices();
+    _latestAnnouncementStream = widget.firestoreService.getLatestAnnouncement();
+    _featureStocksStream = widget.firestoreService.getMarketFeatureStocks(
+      group: 'chart_capture',
+      limit: 4,
+    );
+    _stockPicksStream = widget.firestoreService.getAllStockPicks();
   }
 
   Future<void> _refresh() async {
@@ -1456,7 +1465,7 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                   _HomeReveal(
                     order: 1,
                     child: _LatestAnnouncementStrip(
-                      firestoreService: widget.firestoreService,
+                      stream: _latestAnnouncementStream,
                       onTap: widget.openAnnouncements,
                     ),
                   ),
@@ -1479,7 +1488,7 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                   _HomeReveal(
                     order: 3,
                     child: _DarkHomeSection(
-                      title: '실시간 시장',
+                      title: '📈 실시간 시장',
                       trailing: const _LiveStatusChip(),
                       child: _MarketLiveCard(
                         indicesFuture: _indicesFuture,
@@ -1499,7 +1508,7 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                   _HomeReveal(
                     order: 5,
                     child: _TopMoversPreview(
-                      firestoreService: widget.firestoreService,
+                      stream: _featureStocksStream,
                       openFeatureStocks: widget.openFeatureStocks,
                     ),
                   ),
@@ -1510,7 +1519,7 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                   _HomeReveal(
                     order: 6,
                     child: _DarkHomeSection(
-                      title: '지금 핫한토론',
+                      title: '🔥 지금 핫한 토론',
                       actionText: '더보기',
                       onAction: widget.openCommunity,
                       child: _RecentPostsPreview(
@@ -1527,9 +1536,10 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                   _HomeReveal(
                     order: 7,
                     child: _DarkHomeSection(
-                      title: '내 관심 추천주',
+                      title: '⭐ 내 관심 추천주',
                       child: _FavoritePicksPreview(
                         firestoreService: widget.firestoreService,
+                        picksStream: _stockPicksStream,
                         auth: widget.auth,
                         openStockPicks: widget.openFavoritePicks,
                       ),
@@ -1551,8 +1561,6 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                     openStockCompare: widget.openStockCompare,
                   ),
                 ),
-                const SizedBox(height: 12),
-                const _HomeReveal(order: 9, child: _HomeDisclaimerNote()),
               ],
             ),
           ),
@@ -1631,18 +1639,15 @@ class _DarkCard extends StatelessWidget {
 }
 
 class _LatestAnnouncementStrip extends StatelessWidget {
-  const _LatestAnnouncementStrip({
-    required this.firestoreService,
-    required this.onTap,
-  });
+  const _LatestAnnouncementStrip({required this.stream, required this.onTap});
 
-  final FirestoreService firestoreService;
+  final Stream<Announcement?> stream;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<Announcement?>(
-      stream: firestoreService.getLatestAnnouncement(),
+      stream: stream,
       builder: (context, snapshot) {
         final announcement = snapshot.data;
         final title = announcement?.title.trim();
@@ -1662,7 +1667,7 @@ class _LatestAnnouncementStrip extends StatelessWidget {
                 Icon(Icons.campaign_rounded, color: _homeAccent, size: 18),
                 const SizedBox(width: 9),
                 Text(
-                  '공지',
+                  '📢 공지',
                   style: _homeText(
                     color: _homeAccent,
                     fontSize: 12,
@@ -2263,11 +2268,12 @@ class _DailyMissionCard extends StatelessWidget {
               ),
             ];
         final doneCount = missions.where((m) => m.done).length;
+        final allDone = doneCount == missions.length;
 
         return _DarkHomeSection(
-          title: '오늘의 미션',
+          title: '✅ 오늘의 미션',
           trailing: Text(
-            '$doneCount/${missions.length}',
+            allDone ? '완료🎉' : '$doneCount/${missions.length}',
             style: _homeNumber(
               color: _homeAccent,
               fontSize: 12,
@@ -2609,15 +2615,15 @@ class _AIBriefCard extends StatelessWidget {
   static const double _contentHeight = 188;
 
   String _formatSlotTime(String? slotLabel, dynamic generatedAt) {
-    if (slotLabel != null) return 'AI 간단 시황 · 오늘 $slotLabel';
-    if (generatedAt == null) return 'AI 간단 시황';
+    if (slotLabel != null) return '🤖 AI 간단 시황 · 오늘 $slotLabel';
+    if (generatedAt == null) return '🤖 AI 간단 시황';
     try {
       final dt = (generatedAt as Timestamp).toDate().toLocal();
       final h = dt.hour.toString().padLeft(2, '0');
       final m = dt.minute.toString().padLeft(2, '0');
-      return 'AI 간단 시황 · 오늘 $h:$m';
+      return '🤖 AI 간단 시황 · 오늘 $h:$m';
     } catch (_) {
-      return 'AI 간단 시황';
+      return '🤖 AI 간단 시황';
     }
   }
 
@@ -2654,7 +2660,7 @@ class _AIBriefCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        'AI 간단 시황',
+                        '🤖 AI 간단 시황',
                         style: _homeText(
                           color: _homeAccent,
                           fontSize: 12,
@@ -2836,21 +2842,21 @@ class _AIBriefDetailScreen extends StatelessWidget {
 
 class _TopMoversPreview extends StatelessWidget {
   const _TopMoversPreview({
-    required this.firestoreService,
+    required this.stream,
     required this.openFeatureStocks,
   });
 
-  final FirestoreService firestoreService;
+  final Stream<List<MarketFeatureStock>> stream;
   final VoidCallback openFeatureStocks;
 
   @override
   Widget build(BuildContext context) {
     return _DarkHomeSection(
-      title: '특징주',
+      title: '✨ 오늘의 특징주',
       actionText: '더보기',
       onAction: openFeatureStocks,
       child: StreamBuilder<List<MarketFeatureStock>>(
-        stream: firestoreService.getMarketFeatureStocks(limit: 40),
+        stream: stream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const _PreviewLoading(height: 120);
@@ -2861,15 +2867,7 @@ class _TopMoversPreview extends StatelessWidget {
               child: _EmptyPreview(text: '특징주 오류: ${snapshot.error}'),
             );
           }
-          final visible = (snapshot.data ?? <MarketFeatureStock>[]).toList()
-            ..sort((a, b) {
-              final aAi = a.group == 'chart_capture';
-              final bAi = b.group == 'chart_capture';
-              if (aAi != bAi) return aAi ? -1 : 1;
-              final dateCompare = b.sourceDate.compareTo(a.sourceDate);
-              if (dateCompare != 0) return dateCompare;
-              return b.score.compareTo(a.score);
-            });
+          final visible = (snapshot.data ?? <MarketFeatureStock>[]).toList();
           final topVisible = visible.take(4).toList();
           if (topVisible.isEmpty) {
             return const _EmptyPreview(text: '표시할 특징주가 없습니다.');
@@ -3021,35 +3019,6 @@ class _FeatureStockTile extends StatelessWidget {
       return '거래량 ${item.volumeRatio.toStringAsFixed(1)}x';
     }
     return '점수 ${item.score}';
-  }
-}
-
-class _HomeDisclaimerNote extends StatelessWidget {
-  const _HomeDisclaimerNote();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.02),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _homeBorder),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.info_outline_rounded, size: 15, color: _homeFaint),
-          const SizedBox(width: 7),
-          Expanded(
-            child: Text(
-              '화면의 정보는 매수/매도 권유가 아닙니다. 투자 판단과 결과는 본인 책임입니다.',
-              style: _homeText(color: _homeFaint, fontSize: 11, height: 1.55),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 
@@ -3753,20 +3722,50 @@ class _HotPostTileState extends State<_HotPostTile> {
   }
 }
 
-class _FavoritePicksPreview extends StatelessWidget {
+class _FavoritePicksPreview extends StatefulWidget {
   const _FavoritePicksPreview({
     required this.firestoreService,
+    required this.picksStream,
     required this.auth,
     required this.openStockPicks,
   });
 
   final FirestoreService firestoreService;
+  final Stream<List<StockPick>> picksStream;
   final AuthProvider auth;
   final VoidCallback openStockPicks;
 
   @override
+  State<_FavoritePicksPreview> createState() => _FavoritePicksPreviewState();
+}
+
+class _FavoritePicksPreviewState extends State<_FavoritePicksPreview> {
+  late Stream<List<String>> _favoriteIdsStream;
+  String? _trackedUid;
+
+  @override
+  void initState() {
+    super.initState();
+    _trackedUid = widget.auth.user?.uid;
+    _favoriteIdsStream = _trackedUid == null || _trackedUid!.isEmpty
+        ? Stream.value([])
+        : widget.firestoreService.getFavoriteIds(_trackedUid!);
+  }
+
+  @override
+  void didUpdateWidget(_FavoritePicksPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextUid = widget.auth.user?.uid;
+    if (_trackedUid == nextUid) return;
+    _trackedUid = nextUid;
+    _favoriteIdsStream = nextUid == null || nextUid.isEmpty
+        ? Stream.value([])
+        : widget.firestoreService.getFavoriteIds(nextUid);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final uid = auth.user?.uid;
+    final uid = widget.auth.user?.uid;
     if (uid == null || uid.isEmpty) {
       return const SizedBox(
         height: _FavoritePerformanceList.height,
@@ -3775,7 +3774,7 @@ class _FavoritePicksPreview extends StatelessWidget {
     }
 
     return StreamBuilder<List<String>>(
-      stream: firestoreService.getFavoriteIds(uid),
+      stream: _favoriteIdsStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const _PreviewLoading(height: _FavoritePerformanceList.height);
@@ -3789,7 +3788,7 @@ class _FavoritePicksPreview extends StatelessWidget {
         }
 
         return StreamBuilder<List<StockPick>>(
-          stream: firestoreService.getStockPicks(),
+          stream: widget.picksStream,
           builder: (context, picksSnapshot) {
             if (picksSnapshot.connectionState == ConnectionState.waiting) {
               return const _PreviewLoading(
@@ -3807,7 +3806,7 @@ class _FavoritePicksPreview extends StatelessWidget {
             }
             return _FavoritePerformanceList(
               picks: picks.take(4).toList(),
-              onMore: openStockPicks,
+              onMore: widget.openStockPicks,
             );
           },
         );
@@ -4400,7 +4399,7 @@ class _QuickMenu extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Text(
-            '둘러보기',
+            '🧭 둘러보기',
             style: _homeText(
               color: _homeLabel,
               fontSize: 16,
@@ -4459,12 +4458,21 @@ class _QuickMenu extends StatelessWidget {
               label: '종목 비교',
               onTap: openStockCompare,
             ),
-            _QuickMenuTile(
-              icon: Icons.campaign_rounded,
-              label: '공지사항',
-              onTap: openAnnouncements,
-            ),
           ],
+        ),
+        const SizedBox(height: 8),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final tileHeight = ((constraints.maxWidth - 8) / 2) / 2.18;
+            return SizedBox(
+              height: tileHeight,
+              child: _QuickMenuTile(
+                icon: Icons.campaign_rounded,
+                label: '공지사항',
+                onTap: openAnnouncements,
+              ),
+            );
+          },
         ),
       ],
     );

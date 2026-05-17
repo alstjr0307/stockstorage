@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/announcement.dart';
 import '../models/market_analysis.dart';
+import '../models/post.dart';
 import '../models/stock_pick.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
@@ -24,7 +26,7 @@ class _AdminScreenState extends State<AdminScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 7, vsync: this);
+    _tabController = TabController(length: 8, vsync: this);
   }
 
   @override
@@ -69,6 +71,7 @@ class _AdminScreenState extends State<AdminScreen>
             Tab(text: '종목 등록'),
             Tab(text: '목록 관리'),
             Tab(text: '공지사항'),
+            Tab(text: '봇글 작성'),
             Tab(text: '시황 분석'),
             Tab(text: '알림 발송'),
             Tab(text: '유저 목록'),
@@ -82,6 +85,7 @@ class _AdminScreenState extends State<AdminScreen>
           _UploadTab(),
           _ManageTab(),
           _AnnouncementTab(),
+          _BotPostTab(),
           _MarketAnalysisAdminTab(),
           _PushNotificationTab(),
           _UsersTab(),
@@ -1205,6 +1209,193 @@ class _AnnouncementTabState extends State<_AnnouncementTab> {
                 },
               );
             },
+          ),
+        ),
+      ],
+    );
+  }
+
+  InputDecoration _inputDeco(BuildContext context, String hint) {
+    final cs = Theme.of(context).colorScheme;
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.24)),
+      filled: true,
+      fillColor: const Color(0xFF0A0E1A),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Color(0xFF10B981), width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    );
+  }
+}
+
+// ─── 봇글 작성 탭 ───────────────────────────────────────────────────────────
+
+class _BotPostTab extends StatefulWidget {
+  const _BotPostTab();
+
+  @override
+  State<_BotPostTab> createState() => _BotPostTabState();
+}
+
+class _BotPostTabState extends State<_BotPostTab> {
+  static const _botNicknames = ['주식저장소 봇', '시황알림 봇', '시장체크 봇', '리서치 봇'];
+
+  final _fs = FirestoreService();
+  final _titleCtrl = TextEditingController();
+  final _bodyCtrl = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _bodyCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final title = _titleCtrl.text.trim();
+    final body = _bodyCtrl.text.trim();
+    if (title.isEmpty || body.isEmpty || _saving) return;
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('로그인 정보가 없어 글을 등록할 수 없습니다.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    final nickname =
+        _botNicknames[DateTime.now().millisecondsSinceEpoch %
+            _botNicknames.length];
+
+    setState(() => _saving = true);
+    try {
+      await _fs.createPost(
+        Post(
+          id: '',
+          uid: uid,
+          nickname: nickname,
+          title: title,
+          content: body,
+          likes: 0,
+          createdAt: DateTime.now(),
+          imageUrls: const [],
+        ),
+      );
+      if (!mounted) return;
+      _titleCtrl.clear();
+      _bodyCtrl.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$nickname 이름으로 글을 등록했습니다.'),
+          backgroundColor: const Color(0xFF10B981),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('글 등록 실패: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF1A2035),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '봇글 작성',
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '닉네임은 등록할 때마다 봇계정 이름으로 자동 지정됩니다.',
+                style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.45),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _titleCtrl,
+                style: TextStyle(color: cs.onSurface),
+                textInputAction: TextInputAction.next,
+                decoration: _inputDeco(context, '글 제목'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _bodyCtrl,
+                minLines: 8,
+                maxLines: 14,
+                style: TextStyle(color: cs.onSurface, height: 1.45),
+                decoration: _inputDeco(context, '글 내용'),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: _saving ? null : _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    foregroundColor: const Color(0xFF07120E),
+                    disabledBackgroundColor: const Color(
+                      0xFF10B981,
+                    ).withValues(alpha: 0.35),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: _saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFF07120E),
+                          ),
+                        )
+                      : const Text(
+                          '봇글 등록',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                ),
+              ),
+            ],
           ),
         ),
       ],

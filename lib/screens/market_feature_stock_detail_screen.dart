@@ -79,8 +79,10 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
           const SizedBox(height: 28),
           _FeaturePriceChart(item: item, lineColor: moveColor),
           const SizedBox(height: 30),
-          _SectionHeader(title: '핵심 지표'),
-          const SizedBox(height: 6),
+          _SectionHeader(title: '포착 정보'),
+          const SizedBox(height: 10),
+          _ReasonText(reason: _localizedReason),
+          const SizedBox(height: 24),
           _MetricRow(label: '현재가', value: _formatPrice(item.price)),
           _MetricRow(
             label: '등락률',
@@ -99,10 +101,6 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
           ),
           if (_showsScore(item))
             _MetricRow(label: '포착 점수', value: '${item.score}'),
-          const SizedBox(height: 28),
-          _SectionHeader(title: '포착 정보'),
-          const SizedBox(height: 10),
-          _ReasonText(reason: _localizedReason),
           const SizedBox(height: 22),
           Text(
             '특징주는 시장 데이터 기반 포착 정보이며, 매수·매도 권유가 아닙니다.',

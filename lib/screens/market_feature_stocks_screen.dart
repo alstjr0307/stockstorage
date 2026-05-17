@@ -214,7 +214,28 @@ class _FeatureStockList extends StatefulWidget {
 }
 
 class _FeatureStockListState extends State<_FeatureStockList> {
+  late final FirestoreService _firestoreService;
+  late Stream<List<MarketFeatureStock>> _stocksStream;
   DateTime? _selectedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _firestoreService = FirestoreService();
+    _stocksStream = _firestoreService.getMarketFeatureStocks(
+      group: widget.filter.group,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _FeatureStockList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.filter.group == widget.filter.group) return;
+    _selectedDate = null;
+    _stocksStream = _firestoreService.getMarketFeatureStocks(
+      group: widget.filter.group,
+    );
+  }
 
   Future<void> _pickDate(
     BuildContext context,
@@ -243,12 +264,9 @@ class _FeatureStockListState extends State<_FeatureStockList> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final firestoreService = FirestoreService();
 
     return StreamBuilder<List<MarketFeatureStock>>(
-      stream: firestoreService.getMarketFeatureStocks(
-        group: widget.filter.group,
-      ),
+      stream: _stocksStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
@@ -282,14 +300,6 @@ class _FeatureStockListState extends State<_FeatureStockList> {
             _selectedDate != null && availableDates.contains(_selectedDate)
             ? _selectedDate!
             : fallbackDate;
-        if (_selectedDate != selectedDate) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            setState(() {
-              _selectedDate = selectedDate;
-            });
-          });
-        }
 
         final selectedItems = (grouped[selectedDate] ?? <MarketFeatureStock>[])
           ..sort((a, b) => _compareFeatureStocks(a, b));
