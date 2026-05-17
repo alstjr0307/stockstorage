@@ -71,8 +71,8 @@ const _kSigFilters = [
   _SigFilter('all',           '전체',   Color(0xFF8B92A8)),
   _SigFilter('ma20',          '20일선',  _kAccent),
   _SigFilter('consolidation', '재정비',  _kGold),
-  _SigFilter('box',           '박스권',  _kGold),
-  _SigFilter('retest',        '전고점',  _kBlue),
+  _SigFilter('box',           '박스권 상단', _kGold),
+  _SigFilter('retest',        '전고점 근처', _kBlue),
 ];
 
 bool _passFilter(MarketFeatureStock s, String key) {
