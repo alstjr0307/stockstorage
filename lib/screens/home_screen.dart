@@ -1479,6 +1479,8 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                       auth: widget.auth,
                       firestoreService: widget.firestoreService,
                       onWatchAd: widget.watchRewardAd,
+                      openCommunity: widget.openCommunity,
+                      openJournal: widget.openJournal,
                     ),
                   ),
                 ),
@@ -2204,11 +2206,15 @@ class _DailyMissionCard extends StatelessWidget {
     required this.auth,
     required this.firestoreService,
     required this.onWatchAd,
+    required this.openCommunity,
+    required this.openJournal,
   });
 
   final AuthProvider auth;
   final FirestoreService firestoreService;
   final VoidCallback onWatchAd;
+  final VoidCallback openCommunity;
+  final VoidCallback openJournal;
 
   @override
   Widget build(BuildContext context) {
@@ -2257,14 +2263,14 @@ class _DailyMissionCard extends StatelessWidget {
                 label: '댓글 1개 남기기',
                 xp: '+3 XP',
                 done: status.commentDone,
-                onTap: null,
+                onTap: status.commentDone ? null : openCommunity,
               ),
               (
                 icon: Icons.edit_note_rounded,
                 label: '매매일지 작성',
                 xp: '+10 XP',
                 done: status.memoDone,
-                onTap: null,
+                onTap: status.memoDone ? null : openJournal,
               ),
             ];
         final doneCount = missions.where((m) => m.done).length;
