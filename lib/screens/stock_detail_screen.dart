@@ -1415,7 +1415,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                   const SizedBox(height: 8),
                                 ] else if (_currentUser != null) ...[
                                   _memoSection(),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 80),
                                 ],
                               ],
                             ),
