@@ -523,15 +523,7 @@ class _HomeScreenState extends State<HomeScreen> {
         context,
         MaterialPageRoute(builder: (_) => const FavoritesPicksScreen()),
       ),
-      openFavoriteStocks: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => _FavoriteStocksScreen(
-            firestoreService: _firestoreService,
-            uid: auth.user?.uid,
-          ),
-        ),
-      ),
+      openFavoriteStocks: () => setState(() => _currentPage = 3),
       openStockSearch: () => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const StockSearchScreen()),
