@@ -8,6 +8,7 @@ import 'market_feature_stock_detail_screen.dart';
 // ── Design tokens ─────────────────────────────────────────────────────────
 const _kAccent = Color(0xFF00D68F); // 20일선 회복
 const _kGold = Color(0xFFF5B547); // 급등 후 재정비
+const _kTeal = Color(0xFF26C6DA); // 박스권 상단
 const _kViolet = Color(0xFF9B7BFF); // 거래량 폭발
 const _kRed = Color(0xFFFF4E6A); // 신고가 돌파 / 급등
 const _kOrange = Color(0xFFFF8C42); // 전고점 돌파
@@ -39,7 +40,7 @@ _SigCfg _getSig(MarketFeatureStock s) {
     case 'prior_high_retest':
       return const _SigCfg(_kBlue, '⟳', '전고점 재도전');
     case 'box_upper_approach':
-      return const _SigCfg(_kGold, '◈', '박스권 상단');
+      return const _SigCfg(_kTeal, '◈', '박스권 상단');
     default:
       // 패턴 없는 종목 → 그룹 기반 폴백
       switch (s.group) {
@@ -71,7 +72,7 @@ const _kSigFilters = [
   _SigFilter('all', '전체', Color(0xFF8B92A8)),
   _SigFilter('ma20', '20일선', _kAccent),
   _SigFilter('consolidation', '재정비', _kGold),
-  _SigFilter('box', '박스권 상단', _kGold),
+  _SigFilter('box', '박스권 상단', _kTeal),
   _SigFilter('retest', '전고점 근처', _kBlue),
 ];
 
