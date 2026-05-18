@@ -398,14 +398,13 @@ class _HomeScreenState extends State<HomeScreen> {
     _homeLightMode = !isDark;
     final isHome = _currentPage == 0;
     final hideHomeAppBar = isHome && !_showSearch;
-    final hideFavoriteStocksAppBar = _currentPage == 3;
     final bgColor = isHome
         ? _homeBg0
         : Theme.of(context).scaffoldBackgroundColor;
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: hideHomeAppBar || hideFavoriteStocksAppBar
+      appBar: hideHomeAppBar
           ? null
           : AppBar(
               backgroundColor: bgColor,
@@ -4032,7 +4031,7 @@ List<StockPick> _sortStocksByTodayChange(
 class _FavoriteStocksList extends StatefulWidget {
   const _FavoriteStocksList({required this.stocks, required this.onMore});
 
-  static const double height = 314;
+  static const double height = 317;
   static const double _rowHeight = 68;
   static const double _moreHeight = 42;
 
@@ -4653,7 +4652,7 @@ class _PerformanceMetric extends StatelessWidget {
 class _FavoritePerformanceList extends StatefulWidget {
   const _FavoritePerformanceList({required this.picks, required this.onMore});
 
-  static const double height = 390;
+  static const double height = 393;
   static const double _summaryHeight = 74;
   static const double _rowHeight = 68;
   static const double _moreHeight = 42;
