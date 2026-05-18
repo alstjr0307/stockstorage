@@ -1,4 +1,4 @@
-const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
+﻿const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { auth } = require('firebase-functions/v1');
@@ -1521,210 +1521,6 @@ async function fetchInvestorFlowSummary(db) {
   } catch (_) { return null; }
 }
 
-/** 지수·업종·매매동향 데이터를 Claude에 넘겨 시황 생성 */
-async function generateBriefWithClaude(apiKey, marketData, sectorData, investorFlow, slot) {
-  const Anthropic = require('@anthropic-ai/sdk');
-  const client = new Anthropic({ apiKey });
-
-  const { kospi, kosdaq } = marketData;
-  const slotLabel = getAiBriefSlotMeta(slot).label;
-
-  let investorContext = '';
-  if (investorFlow) {
-    const fi = investorFlow;
-    investorContext = `
-- KOSPI 외국인 순매수: ${fi.kospi?.foreignNet ? (fi.kospi.foreignNet / 1e8).toFixed(0) + '억원' : '데이터 없음'}
-- KOSPI 기관 순매수: ${fi.kospi?.institutionNet ? (fi.kospi.institutionNet / 1e8).toFixed(0) + '억원' : '데이터 없음'}
-- KOSDAQ 외국인 순매수: ${fi.kosdaq?.foreignNet ? (fi.kosdaq.foreignNet / 1e8).toFixed(0) + '억원' : '데이터 없음'}`;
-  }
-
-  let sectorContext = '';
-  if (sectorData && (sectorData.up.length > 0 || sectorData.down.length > 0)) {
-    const upStr = sectorData.up.map(s => `${s.name}(+${s.rate.toFixed(1)}%)`).join(', ');
-    const downStr = sectorData.down.map(s => `${s.name}(${s.rate.toFixed(1)}%)`).join(', ');
-    sectorContext = `
-- 상승 업종 TOP: ${upStr || '없음'}
-- 하락 업종 TOP: ${downStr || '없음'}`;
-  }
-
-  const prompt = `지금은 한국 주식시장 ${slotLabel}입니다. 다음 시장 데이터를 바탕으로 투자자가 한눈에 파악할 수 있는 시황을 작성해주세요.
-
-[현재 시장 데이터]
-- 코스피: ${kospi.price.toLocaleString('ko-KR')}pt (${kospi.isUp ? '상승' : '하락'} ${Math.abs(kospi.changeRate).toFixed(2)}%, ${kospi.change >= 0 ? '+' : ''}${kospi.change.toFixed(2)}pt)
-- 코스닥: ${kosdaq.price.toLocaleString('ko-KR')}pt (${kosdaq.isUp ? '상승' : '하락'} ${Math.abs(kosdaq.changeRate).toFixed(2)}%, ${kosdaq.change >= 0 ? '+' : ''}${kosdaq.change.toFixed(2)}pt)${investorContext}${sectorContext}
-
-[작성 규칙]
-- 2~3문장, 총 60자 이상 120자 이하
-- 첫 문장: 지수 전체 흐름 요약
-- 둘째 문장: 두드러진 상승/하락 업종 언급 (데이터에 있는 실제 업종명 사용)
-- 셋째 문장(선택): 매수 주체 흐름이 뚜렷할 때만 추가
-- 투자 권유·예측 금지, 사실 기반 서술만
-- 구어체로 친근하게, 마침표로 끝낼 것
-- "오늘은", "현재" 등 군더더기 없이 바로 시황 내용으로 시작
-
-시황만 출력하세요 (다른 설명 없이):`;
-
-  const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 300,
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  return message.content[0].text.trim();
-}
-
-/**
- * AI 시황 생성 → Firestore 저장
- * slot: '09' | '12' | '15'
- */
-async function runAiBriefGeneration(apiKey, slot) {
-  const db = getFirestore();
-
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
-  });
-  const dateKey = formatter.format(new Date());
-
-  // 1) 시장 데이터·업종·매매동향 병렬 수집
-  const [marketData, sectorData, investorFlow] = await Promise.all([
-    fetchMarketData(),
-    fetchSectorData(),
-    fetchInvestorFlowSummary(db),
-  ]);
-
-  // 2) Claude로 시황 생성
-  const brief = await generateBriefWithClaude(apiKey, marketData, sectorData, investorFlow, slot);
-
-  // 3) Firestore에 저장
-  const slotLabel = getAiBriefSlotMeta(slot).timeLabel;
-  const payload = {
-    brief, slot, slotLabel, date: dateKey,
-    kospi: marketData.kospi,
-    kosdaq: marketData.kosdaq,
-    sectors: sectorData ?? null,
-    generatedAt: new Date(),
-  };
-
-  const batch = db.batch();
-  batch.set(db.collection('ai_briefs').doc('latest'), payload);
-  batch.set(db.collection('ai_briefs').doc(dateKey), { [slot]: payload, updatedAt: new Date() }, { merge: true });
-  await batch.commit();
-
-  console.log(`[AiBrief] ${dateKey} ${slotLabel} 저장 완료: ${brief}`);
-  return brief;
-}
-
-// ── AI 시황 스케줄 (평일 09:00 KST) ─────────────────────────────────────────
-exports.generateAiBriefMorning = onSchedule(
-  {
-    schedule: '0 9 * * 1-5',
-    timeZone: 'Asia/Seoul',
-    region: 'asia-northeast3',
-    timeoutSeconds: 120,
-    secrets: [ANTHROPIC_API_KEY],
-  },
-  async () => {
-    await runAiBriefGeneration(ANTHROPIC_API_KEY.value(), '09');
-  }
-);
-
-// ── AI 시황 스케줄 (평일 12:00 KST) ─────────────────────────────────────────
-exports.generateAiBriefMidday = onSchedule(
-  {
-    schedule: '0 12 * * 1-5',
-    timeZone: 'Asia/Seoul',
-    region: 'asia-northeast3',
-    timeoutSeconds: 120,
-    secrets: [ANTHROPIC_API_KEY],
-  },
-  async () => {
-    await runAiBriefGeneration(ANTHROPIC_API_KEY.value(), '12');
-  }
-);
-
-// ── AI 시황 스케줄 (평일 15:30 KST) ─────────────────────────────────────────
-exports.generateAiBriefAfternoon = onSchedule(
-  {
-    schedule: '30 15 * * 1-5',
-    timeZone: 'Asia/Seoul',
-    region: 'asia-northeast3',
-    timeoutSeconds: 120,
-    secrets: [ANTHROPIC_API_KEY],
-  },
-  async () => {
-    await runAiBriefGeneration(ANTHROPIC_API_KEY.value(), '15');
-  }
-);
-
-// ── AI 시황 수동 트리거 (테스트용) ───────────────────────────────────────────
-exports.generateAiBriefNow = onRequest(
-  {
-    region: 'asia-northeast3',
-    timeoutSeconds: 120,
-    secrets: [ANTHROPIC_API_KEY],
-  },
-  async (req, res) => {
-    try {
-      // 관리자 인증 (간단 토큰 체크)
-      const db = getFirestore();
-      const adminSnap = await db.collection('config').doc('admin').get();
-      const adminUids = adminSnap.exists ? (adminSnap.data().uids || []) : [];
-      const authHeader = req.headers.authorization || '';
-      const idToken = authHeader.replace('Bearer ', '');
-      if (idToken) {
-        const decoded = await getAuth().verifyIdToken(idToken);
-        if (!adminUids.includes(decoded.uid)) {
-          return res.status(403).json({ error: '관리자만 실행 가능합니다.' });
-        }
-      } else {
-        return res.status(401).json({ error: '인증 토큰이 필요합니다.' });
-      }
-
-      const now = new Date();
-      const kstHour = new Intl.DateTimeFormat('en', {
-        timeZone: 'Asia/Seoul', hour: 'numeric', hour12: false,
-      }).format(now);
-      const h = Number(kstHour);
-      const slot = h < 11 ? '09' : h < 14 ? '12' : '15';
-
-      const brief = await runAiBriefGeneration(ANTHROPIC_API_KEY.value(), slot);
-      res.json({ ok: true, brief, slot });
-    } catch (e) {
-      console.error('[generateAiBriefNow]', e);
-      res.status(500).json({ error: e.message });
-    }
-  }
-);
-async function fetchMarketData() {
-  const [kospiRes, kosdaqRes] = await Promise.all([
-    axios.get('https://m.stock.naver.com/api/index/KOSPI/basic', { headers: NAVER_MOBILE_HEADERS, timeout: 8000 }),
-    axios.get('https://m.stock.naver.com/api/index/KOSDAQ/basic', { headers: NAVER_MOBILE_HEADERS, timeout: 8000 }),
-  ]);
-
-  const parse = (d) => ({
-    price: Number(d.closePrice?.replace(/,/g, '') || 0),
-    change: Number(d.compareToPreviousClosePrice?.replace(/,/g, '') || 0),
-    changeRate: Number(d.fluctuationsRatio || 0),
-    isUp: d.compareToPreviousPrice?.code === '2' || Number(d.fluctuationsRatio || 0) >= 0,
-    marketStatus: d.marketStatus || null,
-    tradedDate: d.localTradedAt ? String(d.localTradedAt).slice(0, 10) : null,
-  });
-
-  return { kospi: parse(kospiRes.data), kosdaq: parse(kosdaqRes.data) };
-}
-
-async function fetchInvestorFlowSummary(db) {
-  try {
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit',
-    });
-    const dateKey = formatter.format(new Date());
-    const snap = await db.collection('investor_flow').doc(dateKey).get();
-    if (!snap.exists) return null;
-    return snap.data();
-  } catch (_) { return null; }
-}
-
 async function generateBriefWithClaude(apiKey, marketData, sectorData, breadthData, investorFlow, news, usMarketData, slot) {
   const Anthropic = require('@anthropic-ai/sdk');
   const client = new Anthropic({ apiKey });
@@ -1852,8 +1648,14 @@ async function runAiBriefGeneration(apiKey, slot) {
   const weekendClosed = getMarketClosedInfo();
   if (weekendClosed) return saveMarketClosedBrief(weekendClosed);
 
-  const [marketData, sectorData, breadthData, investorFlow, news, usMarketData] = await Promise.all([
-    fetchMarketData(),
+  let marketData;
+  try {
+    marketData = await fetchMarketData();
+  } catch (e) {
+    console.error('[AiBrief] fetchMarketData 실패 — 시황 생성 중단:', e.message);
+    throw e;
+  }
+  const [sectorData, breadthData, investorFlow, news, usMarketData] = await Promise.all([
     fetchSectorData(),
     fetchMarketBreadth(),
     fetchInvestorFlowSummary(db),
