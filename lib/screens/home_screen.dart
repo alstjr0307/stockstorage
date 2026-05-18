@@ -34,6 +34,7 @@ import 'notification_history_screen.dart';
 import 'post_detail_screen.dart';
 import 'stock_compare_screen.dart';
 import 'stock_detail_screen.dart';
+import 'stock_search_screen.dart';
 import 'index_detail_screen.dart';
 import '../main.dart' show initAds;
 
@@ -72,7 +73,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final FirestoreService _firestoreService = FirestoreService();
 
-  // 탭: 0=홈, 1=커뮤니티, 2=매매일지
+  // 탭: 0=홈, 1=커뮤니티, 2=매매일지, 3=관심종목
   int _currentPage = 0;
   int _communityInitialTabIndex = 0;
 
@@ -81,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
   bool _rewardAdLoading = false;
-  static const _tabTitles = ['주식저장소', '커뮤니티', '매매일지'];
+  static const _tabTitles = ['주식저장소', '커뮤니티', '매매일지', '⭐ 관심종목'];
 
   @override
   void initState() {
@@ -397,13 +398,14 @@ class _HomeScreenState extends State<HomeScreen> {
     _homeLightMode = !isDark;
     final isHome = _currentPage == 0;
     final hideHomeAppBar = isHome && !_showSearch;
+    final hideFavoriteStocksAppBar = _currentPage == 3;
     final bgColor = isHome
         ? _homeBg0
         : Theme.of(context).scaffoldBackgroundColor;
 
     return Scaffold(
       backgroundColor: bgColor,
-      appBar: hideHomeAppBar
+      appBar: hideHomeAppBar || hideFavoriteStocksAppBar
           ? null
           : AppBar(
               backgroundColor: bgColor,
@@ -457,7 +459,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _currentPage = i;
             if (i == 1) _communityInitialTabIndex = 0;
           });
-          const tabNames = ['홈', '커뮤니티', '매매일지'];
+          const tabNames = ['홈', '커뮤니티', '매매일지', '관심종목'];
           AnalyticsService.instance.logTabChange(tabNames[i]);
         },
         backgroundColor: bgColor,
@@ -479,6 +481,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: Icon(Icons.account_balance_wallet_outlined),
             label: '매매일지',
           ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.star_border_rounded),
+            activeIcon: Icon(Icons.star_rounded),
+            label: '관심종목',
+          ),
         ],
       ),
       body: IndexedStack(
@@ -490,6 +497,7 @@ class _HomeScreenState extends State<HomeScreen> {
             initialTabIndex: _communityInitialTabIndex,
           ),
           _buildMyStocksPage(),
+          _buildFavoriteStocksPage(auth),
         ],
       ),
     );
@@ -498,6 +506,13 @@ class _HomeScreenState extends State<HomeScreen> {
   // ─── 매매일지 페이지 ───────────────────────────────────────────────────
   Widget _buildMyStocksPage() {
     return const PortfolioScreen();
+  }
+
+  Widget _buildFavoriteStocksPage(AuthProvider auth) {
+    return _FavoriteStocksBody(
+      firestoreService: _firestoreService,
+      uid: auth.user?.uid,
+    );
   }
 
   Widget _buildDashboardPage(AuthProvider auth) {
@@ -515,6 +530,19 @@ class _HomeScreenState extends State<HomeScreen> {
       openFavoritePicks: () => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const FavoritesPicksScreen()),
+      ),
+      openFavoriteStocks: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => _FavoriteStocksScreen(
+            firestoreService: _firestoreService,
+            uid: auth.user?.uid,
+          ),
+        ),
+      ),
+      openStockSearch: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const StockSearchScreen()),
       ),
       openStockPicks: () =>
           _openStandalonePage(title: '추천주', child: _buildStockPicksPage(auth)),
@@ -1330,6 +1358,8 @@ class _DashboardHomePage extends StatefulWidget {
     required this.openCommunity,
     required this.openJournal,
     required this.openFavoritePicks,
+    required this.openFavoriteStocks,
+    required this.openStockSearch,
     required this.openStockPicks,
     required this.openAnnouncements,
     required this.openIndexList,
@@ -1350,6 +1380,8 @@ class _DashboardHomePage extends StatefulWidget {
   final VoidCallback openCommunity;
   final VoidCallback openJournal;
   final VoidCallback openFavoritePicks;
+  final VoidCallback openFavoriteStocks;
+  final VoidCallback openStockSearch;
   final VoidCallback openStockPicks;
   final VoidCallback openAnnouncements;
   final VoidCallback openIndexList;
@@ -1534,11 +1566,11 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                 ),
                 const SizedBox(height: 14),
                 _fixedH(
-                  414,
+                  466,
                   _HomeReveal(
                     order: 7,
                     child: _DarkHomeSection(
-                      title: '⭐ 내 관심 추천주',
+                      title: '❤️ 내 관심 추천주',
                       child: _FavoritePicksPreview(
                         firestoreService: widget.firestoreService,
                         picksStream: _stockPicksStream,
@@ -1549,8 +1581,23 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                   ),
                 ),
                 const SizedBox(height: 14),
+                _fixedH(
+                  390,
+                  _HomeReveal(
+                    order: 8,
+                    child: _DarkHomeSection(
+                      title: '⭐ 오늘의 관심종목',
+                      child: _FavoriteStocksPreview(
+                        firestoreService: widget.firestoreService,
+                        auth: widget.auth,
+                        onMore: widget.openFavoriteStocks,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
                 _HomeReveal(
-                  order: 8,
+                  order: 9,
                   child: _QuickMenu(
                     openMarketAnalysis: widget.openMarketAnalysis,
                     openFeatureStocks: widget.openFeatureStocks,
@@ -1561,6 +1608,7 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                     openStockPicks: widget.openStockPicks,
                     openAnnouncements: widget.openAnnouncements,
                     openStockCompare: widget.openStockCompare,
+                    openStockSearch: widget.openStockSearch,
                   ),
                 ),
               ],
@@ -3890,6 +3938,677 @@ class _FavoritePicksPreviewState extends State<_FavoritePicksPreview> {
   }
 }
 
+class _FavoriteStocksPreview extends StatefulWidget {
+  const _FavoriteStocksPreview({
+    required this.firestoreService,
+    required this.auth,
+    required this.onMore,
+  });
+
+  final FirestoreService firestoreService;
+  final AuthProvider auth;
+  final VoidCallback onMore;
+
+  @override
+  State<_FavoriteStocksPreview> createState() => _FavoriteStocksPreviewState();
+}
+
+class _FavoriteStocksPreviewState extends State<_FavoriteStocksPreview> {
+  late Stream<List<StockPick>> _stocksStream;
+  String? _trackedUid;
+
+  @override
+  void initState() {
+    super.initState();
+    _trackedUid = widget.auth.user?.uid;
+    _stocksStream = _trackedUid == null || _trackedUid!.isEmpty
+        ? Stream.value(const [])
+        : widget.firestoreService.getFavoriteStocks(_trackedUid!);
+  }
+
+  @override
+  void didUpdateWidget(covariant _FavoriteStocksPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nextUid = widget.auth.user?.uid;
+    if (_trackedUid == nextUid) return;
+    _trackedUid = nextUid;
+    _stocksStream = nextUid == null || nextUid.isEmpty
+        ? Stream.value(const [])
+        : widget.firestoreService.getFavoriteStocks(nextUid);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = widget.auth.user?.uid;
+    if (uid == null || uid.isEmpty) {
+      return const SizedBox(
+        height: _FavoriteStocksList.height,
+        child: _EmptyPreview(text: '로그인하면 관심종목을 모아볼 수 있습니다.'),
+      );
+    }
+
+    return StreamBuilder<List<StockPick>>(
+      stream: _stocksStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const _PreviewLoading(height: _FavoriteStocksList.height);
+        }
+        final stocks = snapshot.data ?? const <StockPick>[];
+        if (stocks.isEmpty) {
+          return const SizedBox(
+            height: _FavoriteStocksList.height,
+            child: _EmptyPreview(text: '아직 관심종목이 없습니다.'),
+          );
+        }
+        return _FavoriteStocksList(
+          stocks: stocks.take(4).toList(),
+          onMore: widget.onMore,
+        );
+      },
+    );
+  }
+}
+
+List<StockPick> _sortStocksByTodayChange(
+  List<StockPick> stocks,
+  Map<String, PriceResult?> prices,
+) {
+  final indexed = [
+    for (var i = 0; i < stocks.length; i++) (index: i, stock: stocks[i]),
+  ];
+  indexed.sort((a, b) {
+    final aRate = prices[a.stock.id]?.changeRate;
+    final bRate = prices[b.stock.id]?.changeRate;
+    if (aRate == null && bRate == null) return a.index.compareTo(b.index);
+    if (aRate == null) return 1;
+    if (bRate == null) return -1;
+    final byRate = bRate.compareTo(aRate);
+    if (byRate != 0) return byRate;
+    return a.index.compareTo(b.index);
+  });
+  return indexed.map((entry) => entry.stock).toList();
+}
+
+class _FavoriteStocksList extends StatefulWidget {
+  const _FavoriteStocksList({required this.stocks, required this.onMore});
+
+  static const double height = 314;
+  static const double _rowHeight = 68;
+  static const double _moreHeight = 42;
+
+  final List<StockPick> stocks;
+  final VoidCallback onMore;
+
+  @override
+  State<_FavoriteStocksList> createState() => _FavoriteStocksListState();
+}
+
+class _FavoriteStocksListState extends State<_FavoriteStocksList> {
+  late Future<Map<String, PriceResult?>> _pricesFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _pricesFuture = _loadPrices();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FavoriteStocksList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldKey = oldWidget.stocks.map((stock) => stock.id).join(',');
+    final nextKey = widget.stocks.map((stock) => stock.id).join(',');
+    if (oldKey != nextKey) {
+      _pricesFuture = _loadPrices();
+    }
+  }
+
+  Future<Map<String, PriceResult?>> _loadPrices() async {
+    final results = await Future.wait(
+      widget.stocks.map(
+        (stock) => StockPriceService.fetchPrice(stock.ticker, stock.market),
+      ),
+    );
+    return {
+      for (var i = 0; i < widget.stocks.length; i++)
+        widget.stocks[i].id: results[i],
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, PriceResult?>>(
+      future: _pricesFuture,
+      builder: (context, snapshot) {
+        final prices = snapshot.data ?? const <String, PriceResult?>{};
+        final loading = snapshot.connectionState == ConnectionState.waiting;
+        final sortedStocks = _sortStocksByTodayChange(widget.stocks, prices);
+        return SizedBox(
+          height: _FavoriteStocksList.height,
+          child: Column(
+            children: [
+              for (var i = 0; i < 4; i++) ...[
+                SizedBox(
+                  height: _FavoriteStocksList._rowHeight,
+                  child: i < sortedStocks.length
+                      ? _FavoriteStockCompactRow(
+                          stock: sortedStocks[i],
+                          priceResult: prices[sortedStocks[i].id],
+                          loadingPrice: loading,
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                if (i != 3) const _ListDivider(indent: 0),
+              ],
+              SizedBox(
+                height: _FavoriteStocksList._moreHeight,
+                child: _FavoriteMoreRow(onTap: widget.onMore),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _FavoriteStockCompactRow extends StatelessWidget {
+  const _FavoriteStockCompactRow({
+    required this.stock,
+    required this.priceResult,
+    required this.loadingPrice,
+  });
+
+  final StockPick stock;
+  final PriceResult? priceResult;
+  final bool loadingPrice;
+
+  @override
+  Widget build(BuildContext context) {
+    final rate = priceResult?.changeRate ?? 0;
+    final rateColor = rate >= 0 ? _homeUp : _homeDown;
+    final priceText = loadingPrice && priceResult == null
+        ? '조회중'
+        : priceResult == null
+        ? '-'
+        : _formatHomePickPrice(priceResult!.price, stock.market);
+    final changeText = priceResult == null
+        ? '-'
+        : '${_formatTodayChange(priceResult!, stock.market)} (${rate.abs().toStringAsFixed(2)}%)';
+
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          stockDetailRoute(stock, enablePickFeatures: false),
+        );
+      },
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    stock.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _homeText(
+                      color: _homeLabel,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    '${stock.ticker} · ${stock.market}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _homeNumber(
+                      color: _homeFaint,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  changeText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _homeNumber(
+                    color: rateColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  priceText,
+                  style: _homeNumber(
+                    color: _homeMuted,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FavoriteStocksScreen extends StatelessWidget {
+  const _FavoriteStocksScreen({
+    required this.firestoreService,
+    required this.uid,
+  });
+
+  final FirestoreService firestoreService;
+  final String? uid;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('⭐ 관심종목')),
+      body: _FavoriteStocksBody(firestoreService: firestoreService, uid: uid),
+    );
+  }
+}
+
+class _FavoriteStocksBody extends StatefulWidget {
+  const _FavoriteStocksBody({
+    required this.firestoreService,
+    required this.uid,
+  });
+
+  final FirestoreService firestoreService;
+  final String? uid;
+
+  @override
+  State<_FavoriteStocksBody> createState() => _FavoriteStocksBodyState();
+}
+
+class _FavoriteStocksBodyState extends State<_FavoriteStocksBody> {
+  Future<Map<String, PriceResult?>>? _pricesFuture;
+  String _stocksKey = '';
+
+  Future<Map<String, PriceResult?>> _loadPrices(List<StockPick> stocks) async {
+    final results = await Future.wait(
+      stocks.map(
+        (stock) => StockPriceService.fetchPrice(stock.ticker, stock.market),
+      ),
+    );
+    return {for (var i = 0; i < stocks.length; i++) stocks[i].id: results[i]};
+  }
+
+  Future<void> _refreshPrices(List<StockPick> stocks) async {
+    for (final stock in stocks) {
+      StockPriceService.invalidateCache(stock.ticker);
+    }
+    setState(() {
+      _pricesFuture = _loadPrices(stocks);
+    });
+    await _pricesFuture;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final userId = widget.uid;
+    if (userId == null || userId.isEmpty) {
+      return const _EmptyPreview(text: '로그인하면 관심종목을 모아볼 수 있습니다.');
+    }
+
+    return StreamBuilder<List<StockPick>>(
+      stream: widget.firestoreService.getFavoriteStocks(userId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final stocks = snapshot.data ?? const <StockPick>[];
+        if (stocks.isEmpty) {
+          return const _EmptyPreview(text: '아직 관심종목이 없습니다.');
+        }
+
+        final nextKey = stocks.map((stock) => stock.id).join(',');
+        if (_stocksKey != nextKey || _pricesFuture == null) {
+          _stocksKey = nextKey;
+          _pricesFuture = _loadPrices(stocks);
+        }
+
+        return FutureBuilder<Map<String, PriceResult?>>(
+          future: _pricesFuture,
+          builder: (context, priceSnapshot) {
+            final prices = priceSnapshot.data ?? const <String, PriceResult?>{};
+            final loading =
+                priceSnapshot.connectionState == ConnectionState.waiting;
+            final sortedStocks = _sortStocksByTodayChange(stocks, prices);
+            final cs = Theme.of(context).colorScheme;
+            return RefreshIndicator(
+              color: const Color(0xFF10B981),
+              onRefresh: () => _refreshPrices(stocks),
+              child: ListView(
+                padding: const EdgeInsets.only(bottom: 96),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                    child: _FavoriteStocksSummary(
+                      stocks: stocks,
+                      prices: prices,
+                      loading: loading,
+                    ),
+                  ),
+                  const SizedBox(height: 26),
+                  Container(
+                    height: 10,
+                    color: cs.onSurface.withValues(alpha: 0.045),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
+                    child: Row(
+                      children: [
+                        Text(
+                          '상승률순',
+                          style: TextStyle(
+                            color: cs.onSurface.withValues(alpha: 0.48),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${sortedStocks.length}종목',
+                          style: TextStyle(
+                            color: cs.onSurface.withValues(alpha: 0.34),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Divider(
+                      height: 1,
+                      color: cs.onSurface.withValues(alpha: 0.08),
+                    ),
+                  ),
+                  for (var i = 0; i < sortedStocks.length; i++) ...[
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: _FavoriteStockMarketRow(
+                        stock: sortedStocks[i],
+                        priceResult: prices[sortedStocks[i].id],
+                        loadingPrice: loading,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Divider(
+                        height: 1,
+                        color: cs.onSurface.withValues(alpha: 0.08),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _FavoriteStocksSummary extends StatelessWidget {
+  const _FavoriteStocksSummary({
+    required this.stocks,
+    required this.prices,
+    required this.loading,
+  });
+
+  final List<StockPick> stocks;
+  final Map<String, PriceResult?> prices;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final validPrices = prices.values.whereType<PriceResult>().toList();
+    final upCount = validPrices.where((price) => price.changeRate >= 0).length;
+    final downCount = validPrices.where((price) => price.changeRate < 0).length;
+    final avgRate = validPrices.isEmpty
+        ? 0.0
+        : validPrices.fold<double>(
+                0,
+                (total, price) => total + price.changeRate,
+              ) /
+              validPrices.length;
+    final avgColor = avgRate == 0
+        ? cs.onSurface.withValues(alpha: 0.58)
+        : avgRate > 0
+        ? _homeUp
+        : _homeDown;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '⭐ 오늘의 관심종목',
+          style: TextStyle(
+            color: cs.onSurface,
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          loading ? '현재가를 불러오는 중입니다' : '현재가 기준 오늘 등락을 보여줍니다',
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.48),
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 22),
+        Row(
+          children: [
+            Expanded(
+              child: _FavoriteSummaryCell(
+                label: '등록',
+                value: '${stocks.length}',
+                color: cs.onSurface,
+              ),
+            ),
+            Expanded(
+              child: _FavoriteSummaryCell(
+                label: '상승',
+                value: '$upCount',
+                color: _homeUp,
+              ),
+            ),
+            Expanded(
+              child: _FavoriteSummaryCell(
+                label: '하락',
+                value: '$downCount',
+                color: _homeDown,
+              ),
+            ),
+            Expanded(
+              child: _FavoriteSummaryCell(
+                label: '평균 등락률',
+                value: loading && validPrices.isEmpty
+                    ? '-'
+                    : '${avgRate >= 0 ? '+' : ''}${avgRate.toStringAsFixed(2)}%',
+                color: avgColor,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _FavoriteSummaryCell extends StatelessWidget {
+  const _FavoriteSummaryCell({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.45),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: _homeNumber(
+            color: color,
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FavoriteStockMarketRow extends StatelessWidget {
+  const _FavoriteStockMarketRow({
+    required this.stock,
+    required this.priceResult,
+    required this.loadingPrice,
+  });
+
+  final StockPick stock;
+  final PriceResult? priceResult;
+  final bool loadingPrice;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final price = priceResult;
+    final isUp = (price?.changeRate ?? 0) >= 0;
+    final accent = price == null
+        ? cs.onSurface.withValues(alpha: 0.42)
+        : isUp
+        ? _homeUp
+        : _homeDown;
+    final marketLabel = switch (stock.market) {
+      'KQ' => 'KOSDAQ',
+      'US' => 'US',
+      _ => 'KOSPI',
+    };
+    final priceText = loadingPrice && price == null
+        ? '조회중'
+        : price?.formattedPrice ?? '-';
+    final changeText = price == null
+        ? '등락 정보 없음'
+        : '${_formatTodayChange(price, stock.market)} (${price.changeRate.abs().toStringAsFixed(2)}%)';
+
+    return InkWell(
+      onTap: () => Navigator.push(
+        context,
+        stockDetailRoute(stock, enablePickFeatures: false),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    stock.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    '${stock.ticker} · $marketLabel',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.42),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 14),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  priceText,
+                  style: _homeNumber(
+                    color: cs.onSurface,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  changeText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _homeNumber(
+                    color: accent,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _PerformanceMetric extends StatelessWidget {
   const _PerformanceMetric({
     required this.label,
@@ -3934,9 +4653,9 @@ class _PerformanceMetric extends StatelessWidget {
 class _FavoritePerformanceList extends StatefulWidget {
   const _FavoritePerformanceList({required this.picks, required this.onMore});
 
-  static const double height = 336;
-  static const double _summaryHeight = 70;
-  static const double _rowHeight = 54;
+  static const double height = 390;
+  static const double _summaryHeight = 74;
+  static const double _rowHeight = 68;
   static const double _moreHeight = 42;
   static const int _maxRows = 4;
 
@@ -4107,18 +4826,18 @@ class _FavoriteCompactRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: _homeText(
                       color: _homeLabel,
-                      fontSize: 13,
+                      fontSize: 16,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 5),
                   Text(
                     '${pick.ticker} · ${pick.market}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: _homeNumber(
                       color: _homeFaint,
-                      fontSize: 11,
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -4134,16 +4853,16 @@ class _FavoriteCompactRow extends StatelessWidget {
                   '${returnRate >= 0 ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
                   style: _homeNumber(
                     color: returnColor,
-                    fontSize: 13,
+                    fontSize: 15,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 5),
                 Text(
                   currentText,
                   style: _homeNumber(
                     color: _homeMuted,
-                    fontSize: 11,
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -4454,6 +5173,7 @@ class _QuickMenu extends StatelessWidget {
     required this.openStockPicks,
     required this.openAnnouncements,
     required this.openStockCompare,
+    required this.openStockSearch,
   });
 
   final VoidCallback openMarketAnalysis;
@@ -4465,6 +5185,7 @@ class _QuickMenu extends StatelessWidget {
   final VoidCallback openStockPicks;
   final VoidCallback openAnnouncements;
   final VoidCallback openStockCompare;
+  final VoidCallback openStockSearch;
 
   @override
   Widget build(BuildContext context) {
@@ -4492,10 +5213,15 @@ class _QuickMenu extends StatelessWidget {
           childAspectRatio: 2.18,
           children: [
             _QuickMenuTile(
+              icon: Icons.search_rounded,
+              label: '종목 검색',
+              onTap: openStockSearch,
+              emphasized: true,
+            ),
+            _QuickMenuTile(
               icon: Icons.show_chart_rounded,
               label: '운영자 추천주',
               onTap: openStockPicks,
-              emphasized: true,
             ),
             _QuickMenuTile(
               icon: Icons.analytics_outlined,
@@ -4533,21 +5259,12 @@ class _QuickMenu extends StatelessWidget {
               label: '종목 비교',
               onTap: openStockCompare,
             ),
+            _QuickMenuTile(
+              icon: Icons.campaign_rounded,
+              label: '공지사항',
+              onTap: openAnnouncements,
+            ),
           ],
-        ),
-        const SizedBox(height: 8),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final tileHeight = ((constraints.maxWidth - 8) / 2) / 2.18;
-            return SizedBox(
-              height: tileHeight,
-              child: _QuickMenuTile(
-                icon: Icons.campaign_rounded,
-                label: '공지사항',
-                onTap: openAnnouncements,
-              ),
-            );
-          },
         ),
       ],
     );

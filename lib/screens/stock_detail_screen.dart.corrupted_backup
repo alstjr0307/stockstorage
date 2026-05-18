@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
@@ -36,12 +36,12 @@ const _kUpColor = Color(0xFFF04452);
 const _kDownColor = Color(0xFF1677FF);
 
 enum _Period {
-  min1('1분', '1m', '1d'),
-  min5('5분', '5m', '5d'),
-  min60('60분', '60m', '1mo'),
-  day1('일봉', '1d', '2y'),
-  week('주봉', '1wk', 'max'),
-  month('월봉', '1mo', 'max');
+  min1('1遺?, '1m', '1d'),
+  min5('5遺?, '5m', '5d'),
+  min60('60遺?, '60m', '1mo'),
+  day1('?쇰큺', '1d', '2y'),
+  week('二쇰큺', '1wk', 'max'),
+  month('?붾큺', '1mo', 'max');
 
   const _Period(this.label, this.interval, this.range);
   final String label;
@@ -51,77 +51,16 @@ enum _Period {
   bool get isMinute => this == min1 || this == min5 || this == min60;
 }
 
-Route<dynamic> stockDetailRoute(
-  StockPick pick, {
-  bool enablePickFeatures = true,
-}) {
+Route<dynamic> stockDetailRoute(StockPick pick) {
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-    return CupertinoPageRoute(
-      builder: (_) =>
-          StockDetailScreen(pick: pick, enablePickFeatures: enablePickFeatures),
-    );
+    return CupertinoPageRoute(builder: (_) => StockDetailScreen(pick: pick));
   }
-  return MaterialPageRoute(
-    builder: (_) =>
-        StockDetailScreen(pick: pick, enablePickFeatures: enablePickFeatures),
-  );
-}
-
-StockPick stockPickFromSearchResult(
-  StockSearchResult result, {
-  String reason = '종목 검색에서 선택한 종목입니다.',
-  String category = 'STOCK',
-}) {
-  final market = result.market.trim().toUpperCase();
-  final ticker = result.ticker.trim().toUpperCase();
-  return StockPick(
-    id: 'stock_${market}_$ticker',
-    ticker: ticker,
-    name: result.name.trim().isEmpty ? ticker : result.name.trim(),
-    buyPrice: 0,
-    targetPrice: 0,
-    reason: reason,
-    category: category,
-    market: market,
-    isPremium: false,
-    createdAt: DateTime.now(),
-    status: 'active',
-  );
-}
-
-StockPick stockPickForGeneralDetail({
-  required String ticker,
-  required String name,
-  required String market,
-  String reason = '종목 상세에서 선택한 종목입니다.',
-  String category = 'STOCK',
-}) {
-  final normalizedMarket = market.trim().toUpperCase();
-  final normalizedTicker = ticker.trim().toUpperCase();
-  return StockPick(
-    id: 'stock_${normalizedMarket}_$normalizedTicker',
-    ticker: normalizedTicker,
-    name: name.trim().isEmpty ? normalizedTicker : name.trim(),
-    buyPrice: 0,
-    targetPrice: 0,
-    reason: reason,
-    category: category,
-    market: normalizedMarket,
-    isPremium: false,
-    createdAt: DateTime.now(),
-    status: 'active',
-  );
+  return MaterialPageRoute(builder: (_) => StockDetailScreen(pick: pick));
 }
 
 class StockDetailScreen extends StatefulWidget {
   final StockPick pick;
-  final bool enablePickFeatures;
-
-  const StockDetailScreen({
-    super.key,
-    required this.pick,
-    this.enablePickFeatures = true,
-  });
+  const StockDetailScreen({super.key, required this.pick});
 
   @override
   State<StockDetailScreen> createState() => _StockDetailScreenState();
@@ -139,7 +78,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   int? _touchedIndex;
   _Period _selectedPeriod = _Period.day1;
 
-  // 줌/패닝 상태
+  // 以??⑤떇 ?곹깭
   ChartVisibleRange _visibleRange = const ChartVisibleRange(0, 0);
   ChartVisibleRange? _rangeAtScaleStart;
   Offset? _focalPointAtScaleStart;
@@ -158,70 +97,51 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   final _commentController = TextEditingController();
   final _memoController = TextEditingController();
   final _firestoreService = FirestoreService();
-  late final Stream<List<Comment>> _commentsStream;
-  StreamSubscription<StockPick>? _pickSub;
   bool _submitting = false;
   bool _memoSaving = false;
   bool _memoChanged = false;
-  bool _adminCommentsOnly = false;
   final Set<String> _deletingCommentIds = {};
   bool _revealReady = false;
+  Timer? _livePriceTimer;
+  int _liveTickCount = 0;
 
-  // 투표
+  // ?ы몴
   String? _userVote; // 'up', 'down', null
   StockPick? _livePick;
 
-  // 뉴스
+  // ?댁뒪
   List<StockNews> _news = [];
   bool _loadingNews = true;
 
-  // 종목토론방
-  List<DiscussionPost> _discussionPosts = [];
+  // 醫낅ぉ?좊줎諛?  List<DiscussionPost> _discussionPosts = [];
   bool _loadingDiscussion = true;
 
   User? get _currentUser => FirebaseAuth.instance.currentUser;
-  bool get _isPickMode => widget.enablePickFeatures;
-  String get _memoDocId {
-    if (_isPickMode) return widget.pick.id;
-    final market = widget.pick.market.trim().toUpperCase();
-    final ticker = widget.pick.ticker.trim().toUpperCase();
-    return 'stock_${market}_$ticker';
-  }
 
   @override
   void initState() {
     super.initState();
-    _commentsStream = widget.enablePickFeatures
-        ? _firestoreService.getComments(widget.pick.id)
-        : Stream.value(const <Comment>[]);
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) return;
-      const tabNames = ['정보', '뉴스', '댓글'];
+      const tabNames = ['?뺣낫', '?댁뒪', '?볤?'];
       AnalyticsService.instance.logTabChange(
         'stock_detail_${tabNames[_tabController.index]}',
       );
     });
-    if (_isPickMode) {
-      AdService.instance.loadInterstitial();
-      AdService.instance.showInterstitialIfReady();
-    } else {
-      AdService.instance.cancelPendingStockInterstitial();
-    }
+    AdService.instance.loadInterstitial();
+    AdService.instance.showInterstitialIfReady();
     AnalyticsService.instance.logViewStock(
       ticker: widget.pick.ticker,
       name: widget.pick.name,
       market: widget.pick.market,
     );
     _fetchPrice();
+    _startLivePriceTimer();
     _fetchChart(++_fetchSeq);
     _fetchFundamentals();
-    if (_currentUser != null) {
-      _loadMemo();
-    }
-    if (widget.enablePickFeatures) {
-      _loadVote();
-    }
+    _loadMemo();
+    _loadVote();
     _loadNews();
     _loadDiscussion();
     _subscribePick();
@@ -231,10 +151,38 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     });
   }
 
+  late final _pickSub = _firestoreService.getPickStream(widget.pick.id).listen((
+    p,
+  ) {
+    if (mounted) setState(() => _livePick = p);
+  });
+
+  void _startLivePriceTimer() {
+    _livePriceTimer?.cancel();
+    _liveTickCount = 0;
+    final period = switch (widget.pick.market) {
+      'KS' || 'KQ' => const Duration(seconds: 5),
+      _ => const Duration(seconds: 20),
+    };
+    _livePriceTimer = Timer.periodic(period, (_) {
+      if (!mounted || _loadingPrice) return;
+      _fetchPrice();
+      _liveTickCount += 1;
+      final isDomestic =
+          widget.pick.market == 'KS' || widget.pick.market == 'KQ';
+      if (isDomestic &&
+          _selectedPeriod == _Period.day1 &&
+          _liveTickCount % 12 == 0) {
+        _fetchChart(++_fetchSeq);
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _livePriceTimer?.cancel();
     _tabController.dispose();
-    _pickSub?.cancel();
+    _pickSub.cancel();
     _commentController.dispose();
     _memoController.dispose();
     super.dispose();
@@ -242,11 +190,8 @@ class _StockDetailScreenState extends State<StockDetailScreen>
 
   void _subscribePick() {
     _livePick = widget.pick;
-    if (!widget.enablePickFeatures) return;
-    // late field를 접근해 구독 시작 (lazy initialization 트리거)
-    _pickSub = _firestoreService.getPickStream(widget.pick.id).listen((p) {
-      if (mounted) setState(() => _livePick = p);
-    });
+    // late field瑜??묎렐??援щ룆 ?쒖옉 (lazy initialization ?몃━嫄?
+    _pickSub; // ignore: unnecessary_statements
   }
 
   Future<void> _loadVote() async {
@@ -294,7 +239,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   Future<void> _loadMemo() async {
     final user = _currentUser;
     if (user == null) return;
-    final text = await _firestoreService.getMemo(user.uid, _memoDocId);
+    final text = await _firestoreService.getMemo(user.uid, widget.pick.id);
     if (mounted && text != null) {
       _memoController.text = text;
     }
@@ -310,195 +255,13 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     );
   }
 
-  Future<void> _toggleFavorite(bool isFavorite) async {
-    final user = _currentUser;
-    if (user == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('로그인 후 관심추천주에 등록할 수 있습니다.')));
-      return;
-    }
-
-    await _firestoreService.toggleFavorite(
-      user.uid,
-      widget.pick.id,
-      isFavorite,
-    );
-    AnalyticsService.instance.logToggleFavorite(
-      ticker: widget.pick.ticker,
-      name: widget.pick.name,
-      added: !isFavorite,
-    );
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isFavorite ? '관심 추천주에서 해제했습니다.' : '관심 추천주에 등록했습니다.'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  Future<void> _toggleFavoriteStock(bool isFavorite) async {
-    final user = _currentUser;
-    if (user == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('로그인 후 관심종목에 등록할 수 있습니다.')));
-      return;
-    }
-
-    await _firestoreService.toggleFavoriteStock(
-      user.uid,
-      widget.pick,
-      isFavorite,
-    );
-    AnalyticsService.instance.logToggleFavorite(
-      ticker: widget.pick.ticker,
-      name: widget.pick.name,
-      added: !isFavorite,
-    );
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isFavorite ? '관심종목에서 해제했습니다.' : '관심종목에 등록했습니다.'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  Widget _favoriteButton(ColorScheme cs) {
-    final user = _currentUser;
-    if (user == null) {
-      return OutlinedButton.icon(
-        onPressed: () => _toggleFavorite(false),
-        icon: const Icon(Icons.favorite_border_rounded, size: 16),
-        label: const Text('관심추천주'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: cs.onSurface.withValues(alpha: 0.7),
-          side: BorderSide(color: cs.onSurface.withValues(alpha: 0.16)),
-          visualDensity: VisualDensity.compact,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-        ),
-      );
-    }
-
-    return StreamBuilder<List<String>>(
-      stream: _firestoreService.getFavoriteIds(user.uid),
-      builder: (context, snapshot) {
-        final favoriteIds = snapshot.data ?? const <String>[];
-        final isFavorite = favoriteIds.contains(widget.pick.id);
-        return OutlinedButton.icon(
-          onPressed: () => _toggleFavorite(isFavorite),
-          icon: Icon(
-            isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            size: 16,
-          ),
-          label: const Text('관심추천주'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: isFavorite
-                ? Colors.redAccent
-                : cs.onSurface.withValues(alpha: 0.7),
-            side: BorderSide(
-              color: isFavorite
-                  ? Colors.redAccent.withValues(alpha: 0.42)
-                  : cs.onSurface.withValues(alpha: 0.16),
-            ),
-            backgroundColor: isFavorite
-                ? Colors.redAccent.withValues(alpha: 0.08)
-                : Colors.transparent,
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            textStyle: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _favoriteActions(ColorScheme cs) {
-    if (!_isPickMode) return _favoriteStockButton(cs);
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [_favoriteButton(cs), _favoriteStockButton(cs)],
-    );
-  }
-
-  Widget _favoriteStockButton(ColorScheme cs) {
-    final user = _currentUser;
-    final stockKey = FirestoreService.favoriteStockKey(
-      widget.pick.market,
-      widget.pick.ticker,
-    );
-    if (user == null) {
-      return OutlinedButton.icon(
-        onPressed: () => _toggleFavoriteStock(false),
-        icon: const Icon(Icons.star_border_rounded, size: 16),
-        label: const Text('관심종목'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: cs.onSurface.withValues(alpha: 0.7),
-          side: BorderSide(color: cs.onSurface.withValues(alpha: 0.16)),
-          visualDensity: VisualDensity.compact,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-        ),
-      );
-    }
-
-    return StreamBuilder<List<String>>(
-      stream: _firestoreService.getFavoriteStockIds(user.uid),
-      builder: (context, snapshot) {
-        final favoriteIds = snapshot.data ?? const <String>[];
-        final isFavorite = favoriteIds.contains(stockKey);
-        return OutlinedButton.icon(
-          onPressed: () => _toggleFavoriteStock(isFavorite),
-          icon: Icon(
-            isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
-            size: 16,
-          ),
-          label: const Text('관심종목'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: isFavorite
-                ? const Color(0xFFF5B547)
-                : cs.onSurface.withValues(alpha: 0.7),
-            side: BorderSide(
-              color: isFavorite
-                  ? const Color(0xFFF5B547).withValues(alpha: 0.46)
-                  : cs.onSurface.withValues(alpha: 0.16),
-            ),
-            backgroundColor: isFavorite
-                ? const Color(0xFFF5B547).withValues(alpha: 0.10)
-                : Colors.transparent,
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            textStyle: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   Future<void> _saveMemo() async {
     final user = _currentUser;
     if (user == null) return;
     setState(() => _memoSaving = true);
     await _firestoreService.saveMemo(
       user.uid,
-      _memoDocId,
+      widget.pick.id,
       _memoController.text.trim(),
     );
     AnalyticsService.instance.logSaveMemo(widget.pick.ticker);
@@ -509,7 +272,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('메모가 저장되었습니다', style: TextStyle(color: Colors.white)),
+          content: Text('硫붾え媛 ??λ릺?덉뒿?덈떎', style: TextStyle(color: Colors.white)),
           backgroundColor: const Color(0xFF10B981).withValues(alpha: 0.9),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -535,8 +298,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   }
 
   Future<void> _fetchFundamentals() async {
-    // 현재가가 준비된 후 호출되도록 가격 먼저 기다림
-    if (_loadingPrice) {
+    // ?꾩옱媛媛 以鍮꾨맂 ???몄텧?섎룄濡?媛寃?癒쇱? 湲곕떎由?    if (_loadingPrice) {
       await Future.doWhile(() async {
         await Future.delayed(const Duration(milliseconds: 200));
         return _loadingPrice && mounted;
@@ -650,7 +412,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
 
     setState(() {
       _visibleRange = ChartVisibleRange(newStart, newEnd);
-      _touchedIndex = null; // 줌/팬 중 툴팁 숨김
+      _touchedIndex = null; // 以???以??댄똻 ?④?
     });
   }
 
@@ -661,57 +423,30 @@ class _StockDetailScreenState extends State<StockDetailScreen>
 
   void _shareStock() {
     final pick = widget.pick;
-    if (!_isPickMode) {
-      final liveP = _livePrice?.price;
-      final divider = '━━━━━━━━━━━━━━━━━━';
-      final priceLine = liveP != null
-          ? '현재가: ${_formatPrice(liveP, pick.market)}\n'
-          : '';
-      final changeLine = _livePrice != null
-          ? '등락률: ${_livePrice!.changeRate >= 0 ? '+' : ''}${_livePrice!.changeRate.toStringAsFixed(2)}%\n'
-          : '';
-      final text =
-          '펨코 HOT 종목\n'
-          '$divider\n'
-          '${pick.market == 'US' ? '미국' : '국내'} ${pick.name} (${pick.ticker})\n'
-          '시장: ${pick.market}\n'
-          '$priceLine'
-          '$changeLine'
-          '$divider\n'
-          '주식저장소 앱에서 확인하세요.';
-      final box =
-          _shareButtonKey.currentContext?.findRenderObject() as RenderBox?;
-      final origin = box != null
-          ? box.localToGlobal(Offset.zero) & box.size
-          : Rect.fromLTWH(0, 0, 100, 100);
-      Share.share(text, sharePositionOrigin: origin);
-      return;
-    }
-
-    // 현재가 기준 수익률 (현재가 없으면 목표가 기준)
+    // ?꾩옱媛 湲곗? ?섏씡瑜?(?꾩옱媛 ?놁쑝硫?紐⑺몴媛 湲곗?)
     final liveP = _livePrice?.price;
     final double currentReturn = liveP != null
         ? ((liveP - pick.buyPrice) / pick.buyPrice) * 100
-        : pick.currentReturnRate;
-    final double targetReturn = pick.targetReturnRate;
+        : pick.returnRate;
+    final double targetReturn = pick.returnRate;
     final isLiveUp = currentReturn >= 0;
     final isTargetUp = targetReturn >= 0;
-    final divider = '━━━━━━━━━━━━━━━━━━';
+    final divider = '?곣봺?곣봺?곣봺?곣봺?곣봺?곣봺?곣봺?곣봺?곣봺';
     final text =
-        '📊 StockStorage 추천 종목\n'
+        '?뱤 StockStorage 異붿쿇 醫낅ぉ\n'
         '$divider\n'
-        '${pick.market == 'US' ? '🇺🇸' : '🇰🇷'} ${pick.name}  (${pick.ticker})\n'
-        '📂 ${pick.market}\n'
+        '${pick.market == 'US' ? '?눣?눡' : '?눖?눟'} ${pick.name}  (${pick.ticker})\n'
+        '?뱛 ${pick.market}\n'
         '$divider\n'
-        '💰 매수가: ${_formatPrice(pick.buyPrice, pick.market)}\n'
-        '🎯 목표가: ${_formatPrice(pick.targetPrice, pick.market)}\n'
-        '${isTargetUp ? '📈' : '📉'} 목표 수익률: ${isTargetUp ? '+' : ''}${targetReturn.toStringAsFixed(1)}%\n'
-        '${liveP != null ? '${isLiveUp ? '🟢' : '🔴'} 현재 수익률: ${isLiveUp ? '+' : ''}${currentReturn.toStringAsFixed(1)}%\n' : ''}'
+        '?뮥 留ㅼ닔媛: ${_formatPrice(pick.buyPrice, pick.market)}\n'
+        '?렞 紐⑺몴媛: ${_formatPrice(pick.targetPrice, pick.market)}\n'
+        '${isTargetUp ? '?뱢' : '?뱣'} 紐⑺몴 ?섏씡瑜? ${isTargetUp ? '+' : ''}${targetReturn.toStringAsFixed(1)}%\n'
+        '${liveP != null ? '${isLiveUp ? '?윟' : '?뵶'} ?꾩옱 ?섏씡瑜? ${isLiveUp ? '+' : ''}${currentReturn.toStringAsFixed(1)}%\n' : ''}'
         '$divider\n'
-        '📝 매수 근거:\n${pick.reason}\n'
+        '?뱷 留ㅼ닔 洹쇨굅:\n${pick.reason}\n'
         '$divider\n'
-        'StockStorage 앱에서 더 많은 종목을 확인하세요! 🚀\n'
-        '👉 ${DeepLinkService.pickUrl(pick)}';
+        'StockStorage ?깆뿉????留롮? 醫낅ぉ???뺤씤?섏꽭?? ??\n'
+        '?몛 ${DeepLinkService.pickUrl(pick)}';
     final box =
         _shareButtonKey.currentContext?.findRenderObject() as RenderBox?;
     final origin = box != null
@@ -743,7 +478,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       final origin = Rect.fromLTWH(size.width / 2, size.height / 2, 1, 1);
       await Share.shareXFiles(
         [XFile(file.path)],
-        text: _isPickMode ? '📈 주식저장소 추천 종목' : '펨코 HOT 종목',
+        text: '?뱢 二쇱떇??μ냼 異붿쿇 醫낅ぉ',
         sharePositionOrigin: origin,
       );
     } finally {
@@ -764,13 +499,11 @@ class _StockDetailScreenState extends State<StockDetailScreen>
 
     final livePrice = _livePrice?.price;
     final hasClosedPrice = pick.isCompleted && pick.closedPrice != null;
-    final returnRate = pick.buyPrice <= 0
-        ? 0.0
-        : hasClosedPrice
+    final returnRate = hasClosedPrice
         ? ((pick.closedPrice! - pick.buyPrice) / pick.buyPrice) * 100
         : livePrice != null
         ? ((livePrice - pick.buyPrice) / pick.buyPrice) * 100
-        : pick.currentReturnRate;
+        : pick.returnRate;
     final isPositive = returnRate >= 0;
     final isKorean = pick.market == 'KS' || pick.market == 'KQ';
 
@@ -791,65 +524,51 @@ class _StockDetailScreenState extends State<StockDetailScreen>
             style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700),
           ),
           actions: [
-            if (_isPickMode)
-              IconButton(
-                icon: StreamBuilder<bool>(
-                  stream: _currentUser == null
-                      ? null
-                      : _firestoreService.watchPickCommentNotificationEnabled(
-                          _currentUser!.uid,
-                          widget.pick.id,
-                        ),
-                  builder: (context, snap) {
-                    final enabled = snap.data ?? true;
-                    return Icon(
-                      enabled
-                          ? Icons.notifications_active_outlined
-                          : Icons.notifications_off_outlined,
-                      color: enabled
-                          ? const Color(0xFF10B981)
-                          : cs.onSurface.withValues(alpha: 0.54),
-                      size: 20,
-                    );
-                  },
-                ),
-                onPressed: () async {
-                  final user = _currentUser;
-                  if (user == null) {
-                    if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('로그인 후 설정할 수 있습니다.')),
-                    );
-                    return;
-                  }
-                  final current = await _firestoreService
-                      .getPickCommentNotificationEnabled(
-                        user.uid,
+            IconButton(
+              icon: StreamBuilder<bool>(
+                stream: _currentUser == null
+                    ? null
+                    : _firestoreService.watchPickCommentNotificationEnabled(
+                        _currentUser!.uid,
                         widget.pick.id,
-                      );
-                  final next = !current;
-                  await _togglePickCommentNotification(next);
-                  if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        next ? '이 추천주 댓글 알림이 켜졌습니다.' : '이 추천주 댓글 알림이 꺼졌습니다.',
                       ),
-                      duration: const Duration(seconds: 2),
-                    ),
+                builder: (context, snap) {
+                  final enabled = snap.data ?? true;
+                  return Icon(
+                    enabled
+                        ? Icons.notifications_active_outlined
+                        : Icons.notifications_off_outlined,
+                    color: cs.onSurface.withValues(alpha: 0.54),
+                    size: 20,
                   );
                 },
               ),
-            if (_isPickMode)
-              IconButton(
-                key: _shareButtonKey,
-                icon: Icon(
-                  Icons.share_outlined,
-                  color: cs.onSurface.withValues(alpha: 0.54),
-                  size: 20,
-                ),
-                onPressed: _shareStock,
+              onPressed: () async {
+                final user = _currentUser;
+                if (user == null) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('濡쒓렇?????ㅼ젙?????덉뒿?덈떎.')),
+                  );
+                  return;
+                }
+                final current = await _firestoreService
+                    .getPickCommentNotificationEnabled(
+                      user.uid,
+                      widget.pick.id,
+                    );
+                await _togglePickCommentNotification(!current);
+              },
+            ),
+            IconButton(
+              key: _shareButtonKey,
+              icon: Icon(
+                Icons.share_outlined,
+                color: cs.onSurface.withValues(alpha: 0.54),
+                size: 20,
               ),
+              onPressed: _shareStock,
+            ),
             IconButton(
               icon: Icon(
                 Icons.refresh,
@@ -869,7 +588,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         ),
         body: Column(
           children: [
-            // ── 상단 고정 영역 ──────────────────────────────────────
+            // ?? ?곷떒 怨좎젙 ?곸뿭 ??????????????????????????????????????
             _DetailReveal(
               show: _revealReady,
               delayMs: 30,
@@ -878,7 +597,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 종목 헤더
+                    // 醫낅ぉ ?ㅻ뜑
                     Row(
                       children: [
                         Expanded(
@@ -911,71 +630,68 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
-                              _favoriteActions(cs),
                             ],
                           ),
                         ),
-                        if (_isPickMode)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isPositive
+                                ? const Color(
+                                    0xFFF04452,
+                                  ).withValues(alpha: 0.12)
+                                : const Color(
+                                    0xFF1677FF,
+                                  ).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
                               color: isPositive
                                   ? const Color(
                                       0xFFF04452,
-                                    ).withValues(alpha: 0.12)
+                                    ).withValues(alpha: 0.4)
                                   : const Color(
                                       0xFF1677FF,
-                                    ).withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: isPositive
-                                    ? const Color(
-                                        0xFFF04452,
-                                      ).withValues(alpha: 0.4)
-                                    : const Color(
-                                        0xFF1677FF,
-                                      ).withValues(alpha: 0.4),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  hasClosedPrice ? '종료 수익률' : '매수가 대비',
-                                  style: TextStyle(
-                                    color: isPositive
-                                        ? const Color(
-                                            0xFFF04452,
-                                          ).withValues(alpha: 0.75)
-                                        : const Color(
-                                            0xFF1677FF,
-                                          ).withValues(alpha: 0.75),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
-                                  style: TextStyle(
-                                    color: isPositive
-                                        ? const Color(0xFFF04452)
-                                        : const Color(0xFF1677FF),
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 22,
-                                  ),
-                                ),
-                              ],
+                                    ).withValues(alpha: 0.4),
                             ),
                           ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                hasClosedPrice ? '醫낅즺 ?섏씡瑜? : '留ㅼ닔媛 ?鍮?,
+                                style: TextStyle(
+                                  color: isPositive
+                                      ? const Color(
+                                          0xFFF04452,
+                                        ).withValues(alpha: 0.75)
+                                      : const Color(
+                                          0xFF1677FF,
+                                        ).withValues(alpha: 0.75),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
+                                style: TextStyle(
+                                  color: isPositive
+                                      ? const Color(0xFFF04452)
+                                      : const Color(0xFF1677FF),
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 22,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    // 실시간 현재가 카드 (PER/PBR 통합)
+                    // ?ㅼ떆媛??꾩옱媛 移대뱶 (PER/PBR ?듯빀)
                     _livePriceCard(pick, formatter),
                     const SizedBox(height: 12),
                   ],
@@ -983,7 +699,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
               ),
             ),
 
-            // ── 탭바 ────────────────────────────────────────────────
+            // ?? ??컮 ????????????????????????????????????????????????
             _DetailReveal(
               show: _revealReady,
               delayMs: 140,
@@ -998,10 +714,8 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                   child: TabBar(
                     controller: _tabController,
                     dividerColor: Colors.transparent,
-                    labelColor: isDark ? const Color(0xFF0A0E1A) : Colors.white,
-                    unselectedLabelColor: cs.onSurface.withValues(
-                      alpha: isDark ? 0.62 : 0.68,
-                    ),
+                    labelColor: isDark ? const Color(0xFF0A0E1A) : cs.surface,
+                    unselectedLabelColor: cs.onSurface.withValues(alpha: 0.4),
                     indicatorSize: TabBarIndicatorSize.tab,
                     indicator: BoxDecoration(
                       color: isDark ? Colors.white : cs.onSurface,
@@ -1016,15 +730,15 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                       fontWeight: FontWeight.w500,
                     ),
                     tabs: [
-                      const Tab(text: '차트'),
-                      const Tab(text: '관련 뉴스'),
-                      Tab(text: isKorean ? '종목토론방' : ''),
+                      const Tab(text: '媛쒖슂'),
+                      const Tab(text: '愿???댁뒪'),
+                      Tab(text: isKorean ? '醫낅ぉ?좊줎諛? : ''),
                     ],
                   ),
                 ),
               ),
             ),
-            // ── 탭 콘텐츠 ────────────────────────────────────────────
+            // ?? ??肄섑뀗痢?????????????????????????????????????????????
             Expanded(
               child: _DetailReveal(
                 show: _revealReady,
@@ -1033,8 +747,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                   controller: _tabController,
                   physics: const NeverScrollableScrollPhysics(),
                   children: [
-                    // ① 차트 탭
-                    Column(
+                    // ??媛쒖슂 ??                    Column(
                       children: [
                         Expanded(
                           child: SingleChildScrollView(
@@ -1049,7 +762,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // ── 캡처 영역 시작 ──
+                                // ?? 罹≪쿂 ?곸뿭 ?쒖옉 ??
                                 RepaintBoundary(
                                   key: _captureKey,
                                   child: Container(
@@ -1064,7 +777,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        // 종목명 + 수익률 (캡처 시에만 표시)
+                                        // 醫낅ぉ紐?+ ?섏씡瑜?(罹≪쿂 ?쒖뿉留??쒖떆)
                                         if (_capturing) ...[
                                           Row(
                                             children: [
@@ -1076,9 +789,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                     Text(
                                                       pick.name,
                                                       style: TextStyle(
-                                                        color: _capturing
-                                                            ? Colors.white
-                                                            : cs.onSurface,
+                                                        color: cs.onSurface,
                                                         fontSize: 20,
                                                         fontWeight:
                                                             FontWeight.w800,
@@ -1100,17 +811,10 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                             pick.createdAt,
                                                           ),
                                                           style: TextStyle(
-                                                            color: _capturing
-                                                                ? Colors.white
-                                                                      .withValues(
-                                                                        alpha:
-                                                                            0.72,
-                                                                      )
-                                                                : cs.onSurface
-                                                                      .withValues(
-                                                                        alpha:
-                                                                            0.38,
-                                                                      ),
+                                                            color: cs.onSurface
+                                                                .withValues(
+                                                                  alpha: 0.38,
+                                                                ),
                                                             fontSize: 11,
                                                           ),
                                                         ),
@@ -1119,210 +823,250 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                   ],
                                                 ),
                                               ),
-                                              if (_isPickMode)
-                                                Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 12,
-                                                        vertical: 8,
-                                                      ),
-                                                  decoration: BoxDecoration(
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 8,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: isPositive
+                                                      ? _kUpColor.withValues(
+                                                          alpha: 0.12,
+                                                        )
+                                                      : _kDownColor.withValues(
+                                                          alpha: 0.12,
+                                                        ),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  border: Border.all(
                                                     color: isPositive
                                                         ? _kUpColor.withValues(
-                                                            alpha: 0.12,
+                                                            alpha: 0.4,
                                                           )
                                                         : _kDownColor
                                                               .withValues(
-                                                                alpha: 0.12,
+                                                                alpha: 0.4,
                                                               ),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          12,
-                                                        ),
-                                                    border: Border.all(
-                                                      color: isPositive
-                                                          ? _kUpColor
-                                                                .withValues(
-                                                                  alpha: 0.4,
-                                                                )
-                                                          : _kDownColor
-                                                                .withValues(
-                                                                  alpha: 0.4,
-                                                                ),
-                                                    ),
-                                                  ),
-                                                  child: Text(
-                                                    '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
-                                                    style: TextStyle(
-                                                      color: isPositive
-                                                          ? _kUpColor
-                                                          : _kDownColor,
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                      fontSize: 20,
-                                                    ),
                                                   ),
                                                 ),
+                                                child: Text(
+                                                  '${isPositive ? '+' : ''}${returnRate.toStringAsFixed(2)}%',
+                                                  style: TextStyle(
+                                                    color: isPositive
+                                                        ? _kUpColor
+                                                        : _kDownColor,
+                                                    fontWeight: FontWeight.w800,
+                                                    fontSize: 20,
+                                                  ),
+                                                ),
+                                              ),
                                             ],
                                           ),
                                           const SizedBox(height: 12),
-                                          // 현재가 카드
+                                          // ?꾩옱媛 移대뱶
                                           _livePriceCard(pick, formatter),
                                           const SizedBox(height: 12),
                                         ],
-                                        // 일봉 차트
+                                        // ?쇰큺 李⑦듃
                                         _chartCard(),
                                         const SizedBox(height: 14),
-                                        if (_isPickMode) ...[
-                                          // 매수가 / 현재가 / 목표가 (카드리스)
-                                          Column(
-                                            children: [
-                                              Row(
-                                                children: [
-                                                  Expanded(
-                                                    child: _priceItem(
-                                                      context,
-                                                      '매수가',
-                                                      _formatPrice(
-                                                        pick.buyPrice,
-                                                        pick.market,
-                                                      ),
-                                                      cs.onSurface.withValues(
-                                                        alpha: 0.6,
-                                                      ),
+                                        // 留ㅼ닔媛 / ?꾩옱媛 / 紐⑺몴媛 (移대뱶由ъ뒪)
+                                        Column(
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: _priceItem(
+                                                    context,
+                                                    '留ㅼ닔媛',
+                                                    _formatPrice(
+                                                      pick.buyPrice,
+                                                      pick.market,
+                                                    ),
+                                                    cs.onSurface.withValues(
+                                                      alpha: 0.6,
                                                     ),
                                                   ),
-                                                  Container(
-                                                    width: 1,
-                                                    height: 40,
-                                                    color: cs.onSurface
-                                                        .withValues(alpha: 0.1),
+                                                ),
+                                                Container(
+                                                  width: 1,
+                                                  height: 40,
+                                                  color: cs.onSurface
+                                                      .withValues(alpha: 0.1),
+                                                ),
+                                                Expanded(
+                                                  child: _priceItem(
+                                                    context,
+                                                    hasClosedPrice
+                                                        ? '醫낅즺媛'
+                                                        : '?꾩옱媛',
+                                                    hasClosedPrice
+                                                        ? _formatPrice(
+                                                            pick.closedPrice!,
+                                                            pick.market,
+                                                          )
+                                                        : (_livePrice != null
+                                                              ? _livePrice!
+                                                                    .formattedPrice
+                                                              : (_loadingPrice
+                                                                    ? '濡쒕뵫以?
+                                                                    : '--')),
+                                                    isPositive
+                                                        ? const Color(
+                                                            0xFFF04452,
+                                                          )
+                                                        : const Color(
+                                                            0xFF1677FF,
+                                                          ),
                                                   ),
-                                                  Expanded(
-                                                    child: _priceItem(
-                                                      context,
-                                                      hasClosedPrice
-                                                          ? '종료가'
-                                                          : '현재가',
-                                                      hasClosedPrice
-                                                          ? _formatPrice(
-                                                              pick.closedPrice!,
-                                                              pick.market,
-                                                            )
-                                                          : (_livePrice != null
-                                                                ? _livePrice!
-                                                                      .formattedPrice
-                                                                : (_loadingPrice
-                                                                      ? '로딩중'
-                                                                      : '--')),
-                                                      isPositive
-                                                          ? const Color(
-                                                              0xFFF04452,
-                                                            )
-                                                          : const Color(
-                                                              0xFF1677FF,
-                                                            ),
-                                                    ),
-                                                  ),
-                                                  Container(
-                                                    width: 1,
-                                                    height: 40,
-                                                    color: cs.onSurface
-                                                        .withValues(alpha: 0.1),
-                                                  ),
-                                                  Expanded(
-                                                    child: _priceItem(
-                                                      context,
-                                                      hasClosedPrice
-                                                          ? '현재가'
-                                                          : '목표가',
-                                                      hasClosedPrice
-                                                          ? (_livePrice != null
-                                                                ? _livePrice!
-                                                                      .formattedPrice
-                                                                : (_loadingPrice
-                                                                      ? '로딩중'
-                                                                      : '--'))
-                                                          : _formatPrice(
-                                                              pick.targetPrice,
-                                                              pick.market,
-                                                            ),
-                                                      hasClosedPrice
-                                                          ? (_livePrice != null
-                                                                ? (((_livePrice!.price -
-                                                                                  pick.buyPrice) /
-                                                                              pick.buyPrice) >=
-                                                                          0
-                                                                      ? const Color(
-                                                                          0xFFF04452,
-                                                                        )
-                                                                      : const Color(
-                                                                          0xFF1677FF,
-                                                                        ))
-                                                                : cs.onSurface
-                                                                      .withValues(
-                                                                        alpha:
-                                                                            0.45,
+                                                ),
+                                                Container(
+                                                  width: 1,
+                                                  height: 40,
+                                                  color: cs.onSurface
+                                                      .withValues(alpha: 0.1),
+                                                ),
+                                                Expanded(
+                                                  child: _priceItem(
+                                                    context,
+                                                    hasClosedPrice
+                                                        ? '?꾩옱媛'
+                                                        : '紐⑺몴媛',
+                                                    hasClosedPrice
+                                                        ? (_livePrice != null
+                                                              ? _livePrice!
+                                                                    .formattedPrice
+                                                              : (_loadingPrice
+                                                                    ? '濡쒕뵫以?
+                                                                    : '--'))
+                                                        : _formatPrice(
+                                                            pick.targetPrice,
+                                                            pick.market,
+                                                          ),
+                                                    hasClosedPrice
+                                                        ? (_livePrice != null
+                                                              ? (((_livePrice!.price -
+                                                                                pick.buyPrice) /
+                                                                            pick.buyPrice) >=
+                                                                        0
+                                                                    ? const Color(
+                                                                        0xFFF04452,
+                                                                      )
+                                                                    : const Color(
+                                                                        0xFF1677FF,
                                                                       ))
-                                                          : const Color(
-                                                              0xFF10B981,
-                                                            ),
+                                                              : cs.onSurface
+                                                                    .withValues(
+                                                                      alpha:
+                                                                          0.45,
+                                                                    ))
+                                                        : const Color(
+                                                            0xFF10B981,
+                                                          ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            if (!hasClosedPrice &&
+                                                _livePrice != null &&
+                                                pick.targetPrice >
+                                                    pick.buyPrice) ...[
+                                              const SizedBox(height: 12),
+                                              _priceProgressBar(
+                                                pick.buyPrice,
+                                                _livePrice!.price,
+                                                pick.targetPrice,
+                                                isPositive,
+                                              ),
+                                            ],
+                                            const SizedBox(height: 2),
+                                            Divider(
+                                              height: 16,
+                                              thickness: 1,
+                                              color: cs.onSurface.withValues(
+                                                alpha: 0.07,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 10),
+                                        Align(
+                                          alignment: Alignment.centerRight,
+                                          child: GestureDetector(
+                                            onTap: () => Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => StockCompareScreen(
+                                                  basePick: widget.pick,
+                                                ),
+                                              ),
+                                            ),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 7,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(
+                                                  0xFF10B981,
+                                                ).withValues(alpha: 0.12),
+                                                borderRadius:
+                                                    BorderRadius.circular(9999),
+                                                border: Border.all(
+                                                  color: const Color(
+                                                    0xFF10B981,
+                                                  ).withValues(alpha: 0.35),
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(
+                                                    Icons.compare_arrows,
+                                                    color: Color(0xFF10B981),
+                                                    size: 15,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    '종목비교',
+                                                    style: TextStyle(
+                                                      color: const Color(
+                                                        0xFF10B981,
+                                                      ),
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.w600,
                                                     ),
                                                   ),
                                                 ],
                                               ),
-                                              if (!hasClosedPrice &&
-                                                  _livePrice != null &&
-                                                  pick.targetPrice >
-                                                      pick.buyPrice) ...[
-                                                const SizedBox(height: 12),
-                                                _priceProgressBar(
-                                                  pick.buyPrice,
-                                                  _livePrice!.price,
-                                                  pick.targetPrice,
-                                                  isPositive,
-                                                ),
-                                              ],
-                                              const SizedBox(height: 12),
-                                              if (!_showCaptureWatermark)
-                                                _compareButton(context, cs),
-                                              const SizedBox(height: 2),
-                                              Divider(
-                                                height: 16,
-                                                thickness: 1,
-                                                color: cs.onSurface.withValues(
-                                                  alpha: 0.07,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 14),
-                                          // 매수 근거
-                                          Text(
-                                            '매수 근거',
-                                            style: TextStyle(
-                                              color: cs.onSurface.withValues(
-                                                alpha: 0.5,
-                                              ),
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w600,
-                                              letterSpacing: 0.5,
                                             ),
                                           ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            pick.reason,
-                                            style: TextStyle(
-                                              color: cs.onSurface,
-                                              fontSize: 14,
-                                              height: 1.8,
+                                        ),
+                                        const SizedBox(height: 14),
+                                        // 留ㅼ닔 洹쇨굅
+                                        Text(
+                                          '留ㅼ닔 洹쇨굅',
+                                          style: TextStyle(
+                                            color: cs.onSurface.withValues(
+                                              alpha: 0.5,
                                             ),
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 0.5,
                                           ),
-                                        ] else ...[
-                                          if (!_showCaptureWatermark)
-                                            _compareButton(context, cs),
-                                        ],
-                                        // 워터마크
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          pick.reason,
+                                          style: TextStyle(
+                                            color: cs.onSurface,
+                                            fontSize: 14,
+                                            height: 1.8,
+                                          ),
+                                        ),
+                                        // ?뚰꽣留덊겕
                                         if (_showCaptureWatermark) ...[
                                           const SizedBox(height: 14),
                                           Center(
@@ -1330,7 +1074,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                               text: TextSpan(
                                                 children: [
                                                   TextSpan(
-                                                    text: '주식저장소',
+                                                    text: '二쇱떇??μ냼',
                                                     style: TextStyle(
                                                       color: const Color(
                                                         0xFF10B981,
@@ -1341,7 +1085,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                     ),
                                                   ),
                                                   TextSpan(
-                                                    text: ' 앱에서 확인하세요 📈',
+                                                    text: ' ?깆뿉???뺤씤?섏꽭???뱢',
                                                     style: TextStyle(
                                                       color: cs.onSurface
                                                           .withValues(
@@ -1359,7 +1103,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                     ),
                                   ),
                                 ),
-                                // ── 캡처 영역 끝 ──
+                                // ?? 罹≪쿂 ?곸뿭 ????
                                 const SizedBox(height: 10),
                                 Center(
                                   child: TextButton.icon(
@@ -1383,7 +1127,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                             ),
                                           ),
                                     label: Text(
-                                      _capturing ? '캡처 중...' : '캡처해서 공유하기',
+                                      _capturing ? '罹≪쿂 以?..' : '罹≪쿂?댁꽌 怨듭쑀?섍린',
                                       style: TextStyle(
                                         color: cs.onSurface.withValues(
                                           alpha: 0.4,
@@ -1401,45 +1145,38 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                   ),
                                 ),
                                 const SizedBox(height: 20),
-                                if (widget.enablePickFeatures) ...[
-                                  // 투표
-                                  _voteSection(),
-                                  const SizedBox(height: 20),
-                                  // 메모
-                                  if (_currentUser != null) ...[
-                                    _memoSection(),
-                                    const SizedBox(height: 20),
-                                  ],
-                                  // 댓글
-                                  _commentSectionV2(),
-                                  const SizedBox(height: 8),
-                                ] else if (_currentUser != null) ...[
+                                // ?ы몴
+                                _voteSection(),
+                                const SizedBox(height: 20),
+                                // 硫붾え
+                                if (_currentUser != null) ...[
                                   _memoSection(),
-                                  const SizedBox(height: 8),
+                                  const SizedBox(height: 20),
                                 ],
+                                // ?볤?
+                                _commentSection(),
+                                const SizedBox(height: 8),
                               ],
                             ),
                           ),
                         ),
-                        if (widget.enablePickFeatures) _commentInput(),
+                        _commentInput(),
                       ],
                     ),
 
-                    // ② 관련 뉴스 탭
-                    SingleChildScrollView(
+                    // ??愿???댁뒪 ??                    SingleChildScrollView(
                       padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
                       child: _newsSection(),
                     ),
 
-                    // ③ 종목토론방 탭
-                    isKorean
+                    // ??醫낅ぉ?좊줎諛???                    isKorean
                         ? SingleChildScrollView(
                             padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
                             child: _discussionSection(),
                           )
                         : Center(
                             child: Text(
-                              '한국 주식에서만 제공됩니다',
+                              '?쒓뎅 二쇱떇?먯꽌留??쒓났?⑸땲??,
                               style: TextStyle(
                                 color: cs.onSurface.withValues(alpha: 0.3),
                               ),
@@ -1475,16 +1212,16 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 헤더: 기간 선택 — 로딩 중에도 항상 표시
+          // ?ㅻ뜑: 湲곌컙 ?좏깮 ??濡쒕뵫 以묒뿉????긽 ?쒖떆
           Padding(
             padding: const EdgeInsets.only(left: 8, bottom: 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 상단 행: 분봉/일봉/주봉/월봉 + 등락률 + 확대버튼
+                // ?곷떒 ?? 遺꾨큺/?쇰큺/二쇰큺/?붾큺 + ?깅씫瑜?+ ?뺣?踰꾪듉
                 Row(
                   children: [
-                    _periodBtn('분봉', _selectedPeriod.isMinute, cs, () {
+                    _periodBtn('遺꾨큺', _selectedPeriod.isMinute, cs, () {
                       if (!_selectedPeriod.isMinute)
                         _selectPeriod(_Period.min1);
                     }),
@@ -1544,8 +1281,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                     ),
                   ],
                 ),
-                // 분봉 서브 선택: 1분 / 5분 / 60분
-                AnimatedSize(
+                // 遺꾨큺 ?쒕툕 ?좏깮: 1遺?/ 5遺?/ 60遺?                AnimatedSize(
                   duration: const Duration(milliseconds: 220),
                   curve: Curves.easeInOut,
                   alignment: Alignment.topCenter,
@@ -1573,7 +1309,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
             ),
           ),
 
-          // 차트 영역
+          // 李⑦듃 ?곸뿭
           if (_loadingChart)
             const SizedBox(
               height: 200,
@@ -1587,7 +1323,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           else if (!hasData)
             const SizedBox(height: 200)
           else ...[
-            // 터치 툴팁
+            // ?곗튂 ?댄똻
             AnimatedSwitcher(
               duration: const Duration(milliseconds: 150),
               child: touched != null
@@ -1601,22 +1337,22 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                             Text(
                               _selectedPeriod.isMinute
                                   ? DateFormat(
-                                      'MM월 dd일 HH:mm',
+                                      'MM??dd??HH:mm',
                                     ).format(touched.date)
                                   : _selectedPeriod == _Period.month
-                                  ? DateFormat('yyyy년 MM월').format(touched.date)
-                                  : DateFormat('MM월 dd일').format(touched.date),
+                                  ? DateFormat('yyyy??MM??).format(touched.date)
+                                  : DateFormat('MM??dd??).format(touched.date),
                               style: TextStyle(
                                 color: cs.onSurface.withValues(alpha: 0.54),
                                 fontSize: 10,
                               ),
                             ),
                             const SizedBox(width: 12),
-                            _ohlcLabel('시', touched.open),
-                            _ohlcLabel('고', touched.high, color: _kUpColor),
-                            _ohlcLabel('저', touched.low, color: _kDownColor),
+                            _ohlcLabel('??, touched.open),
+                            _ohlcLabel('怨?, touched.high, color: _kUpColor),
+                            _ohlcLabel('?', touched.low, color: _kDownColor),
                             _ohlcLabel(
-                              '종',
+                              '醫?,
                               touched.close,
                               color: touched.close >= touched.open
                                   ? _kUpColor
@@ -1746,7 +1482,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           const Icon(Icons.show_chart, color: Color(0xFF10B981), size: 18),
           const SizedBox(width: 10),
           Text(
-            '현재가',
+            '?꾩옱媛',
             style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.38),
               fontSize: 12,
@@ -1798,7 +1534,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                   )
                 : _livePrice == null
                 ? Text(
-                    '조회 불가',
+                    '議고쉶 遺덇?',
                     style: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.24),
                       fontSize: 13,
@@ -1829,18 +1565,13 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                     ],
                   ),
           ),
-          // 시총 / PER / PBR
-          if (f != null &&
-              (f.marketCap != null || f.per != null || f.pbr != null)) ...[
+          // PER / PBR
+          if (f != null && (f.per != null || f.pbr != null)) ...[
             const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (f.marketCap != null)
-                  _perPbrLabel('시총', _formatMarketCap(f.marketCap!), cs),
-                if (f.marketCap != null && (f.per != null || f.pbr != null))
-                  const SizedBox(height: 4),
                 if (f.per != null)
                   _perPbrLabel('PER', f.per!.toStringAsFixed(1), cs),
                 if (f.per != null && f.pbr != null) const SizedBox(height: 4),
@@ -1852,16 +1583,6 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         ],
       ),
     );
-  }
-
-  String _formatMarketCap(int value) {
-    if (value >= 1000000000000) {
-      return '${(value / 1000000000000).toStringAsFixed(1)}조';
-    }
-    if (value >= 100000000) {
-      return '${(value / 100000000).round()}억';
-    }
-    return NumberFormat('#,###').format(value);
   }
 
   Widget _perPbrLabel(String label, String value, ColorScheme cs) {
@@ -1911,36 +1632,10 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     );
   }
 
-  Widget _compareButton(BuildContext context, ColorScheme cs) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => StockCompareScreen(basePick: widget.pick),
-          ),
-        ),
-        icon: const Icon(Icons.compare_arrows, size: 18),
-        label: const Text('다른 종목이랑 비교하기'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: cs.onSurface.withValues(alpha: 0.78),
-          backgroundColor: cs.onSurface.withValues(alpha: 0.04),
-          side: BorderSide(color: cs.onSurface.withValues(alpha: 0.14)),
-          minimumSize: const Size.fromHeight(44),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      ),
-    );
-  }
-
   String _formatPrice(double price, String market) {
     final formatter = NumberFormat('#,###');
     if (market == 'US') return '\$${price.toStringAsFixed(2)}';
-    return '₩${formatter.format(price.toInt())}';
+    return '??{formatter.format(price.toInt())}';
   }
 
   Widget _priceItem(
@@ -2002,21 +1697,21 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              '매수가',
+              '留ㅼ닔媛',
               style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.3),
                 fontSize: 10,
               ),
             ),
             Text(
-              '목표까지 ${((1 - progress) * 100).toStringAsFixed(1)}% 남음',
+              '紐⑺몴源뚯? ${((1 - progress) * 100).toStringAsFixed(1)}% ?⑥쓬',
               style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.4),
                 fontSize: 10,
               ),
             ),
             Text(
-              '목표가',
+              '紐⑺몴媛',
               style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.3),
                 fontSize: 10,
@@ -2041,7 +1736,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     );
   }
 
-  // ── 투표 ──────────────────────────────────────────────────────────────────
+  // ?? ?ы몴 ??????????????????????????????????????????????????????????????????
   Widget _voteSection() {
     final cs = Theme.of(context).colorScheme;
     final pick = _livePick ?? widget.pick;
@@ -2057,11 +1752,11 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       children: [
         Row(
           children: [
-            _sectionLabel('커뮤니티 의견'),
+            _sectionLabel('而ㅻ??덊떚 ?섍껄'),
             const Spacer(),
             if (total > 0)
               Text(
-                '$total명 참여',
+                '$total紐?李몄뿬',
                 style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.3),
                   fontSize: 11,
@@ -2126,7 +1821,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                       ),
                       const SizedBox(width: 5),
                       Text(
-                        '상승  $upCount',
+                        '?곸듅  $upCount',
                         style: TextStyle(
                           color: isUp
                               ? const Color(0xFF10B981)
@@ -2172,7 +1867,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                       ),
                       const SizedBox(width: 5),
                       Text(
-                        '하락  $downCount',
+                        '?섎씫  $downCount',
                         style: TextStyle(
                           color: isDown
                               ? const Color(0xFF1677FF)
@@ -2192,7 +1887,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           Padding(
             padding: const EdgeInsets.only(top: 6),
             child: Text(
-              '로그인 후 투표할 수 있습니다',
+              '濡쒓렇?????ы몴?????덉뒿?덈떎',
               style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.3),
                 fontSize: 11,
@@ -2203,14 +1898,14 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     );
   }
 
-  // ── 뉴스 ──────────────────────────────────────────────────────────────────
+  // ?? ?댁뒪 ??????????????????????????????????????????????????????????????????
   Widget _newsSection() {
     final cs = Theme.of(context).colorScheme;
     final borderColor = cs.outlineVariant.withValues(alpha: 0.55);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('관련 뉴스'),
+        _sectionLabel('愿???댁뒪'),
         const SizedBox(height: 8),
         if (_loadingNews)
           const Padding(
@@ -2226,7 +1921,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Text(
-              '관련 뉴스가 없습니다',
+              '愿???댁뒪媛 ?놁뒿?덈떎',
               style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.5),
                 fontSize: 13,
@@ -2267,7 +1962,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                '${n.publisher} · ${timeago.format(n.publishedAt, locale: 'ko')}',
+                                '${n.publisher} 쨌 ${timeago.format(n.publishedAt, locale: 'ko')}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
@@ -2298,7 +1993,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     );
   }
 
-  // ── 종목토론방 ────────────────────────────────────────────────────────────
+  // ?? 醫낅ぉ?좊줎諛?????????????????????????????????????????????????????????????
   Widget _discussionSection() {
     final cs = Theme.of(context).colorScheme;
     final borderColor = cs.outlineVariant.withValues(alpha: 0.6);
@@ -2313,7 +2008,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       children: [
         Row(
           children: [
-            _sectionLabel('종목토론방'),
+            _sectionLabel('醫낅ぉ?좊줎諛?),
             const Spacer(),
             TextButton(
               onPressed: () => launchUrl(
@@ -2329,7 +2024,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               child: const Text(
-                '네이버 바로가기',
+                '?ㅼ씠踰?諛붾줈媛湲?,
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
               ),
             ),
@@ -2350,7 +2045,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 6),
             child: Text(
-              '게시글이 없습니다',
+              '寃뚯떆湲???놁뒿?덈떎',
               style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.5),
                 fontSize: 13,
@@ -2390,7 +2085,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                '${formatDate(post.date)} · 조회 ${post.viewCount}',
+                                '${formatDate(post.date)} 쨌 議고쉶 ${post.viewCount}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
@@ -2421,17 +2116,13 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     );
   }
 
-  // ── 투자 메모 ─────────────────────────────────────────────────────────────
+  // ?? ?ъ옄 硫붾え ?????????????????????????????????????????????????????????????
   Widget _memoSection() {
     final cs = Theme.of(context).colorScheme;
-    final label = _isPickMode ? '내 투자 메모' : '내 종목 메모';
-    final hint = _isPickMode
-        ? '이 종목에 대한 나만의 메모를 남겨보세요\n(매수 이유, 목표, 주의사항 등)'
-        : '이 종목에 대한 나만의 메모를 남겨보세요\n(관심 이유, 체크할 뉴스, 주의사항 등)';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel(label),
+        _sectionLabel('???ъ옄 硫붾え'),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
@@ -2459,7 +2150,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                   if (!_memoChanged) setState(() => _memoChanged = true);
                 },
                 decoration: InputDecoration(
-                  hintText: hint,
+                  hintText: '??醫낅ぉ??????섎쭔??硫붾え瑜??④꺼蹂댁꽭??n(留ㅼ닔 ?댁쑀, 紐⑺몴, 二쇱쓽?ы빆 ??',
                   hintStyle: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.24),
                     fontSize: 13,
@@ -2499,7 +2190,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                               ),
                             )
                           : Text(
-                              '저장',
+                              '???,
                               style: TextStyle(fontWeight: FontWeight.w700),
                             ),
                     ),
@@ -2512,7 +2203,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     );
   }
 
-  // ── 코멘트 목록 ──────────────────────────────────────────────────────────
+  // ?? 肄붾찘??紐⑸줉 ??????????????????????????????????????????????????????????
   Widget _commentSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2524,7 +2215,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _sectionLabel('코멘트'),
+                  _sectionLabel('肄붾찘??),
                   const SizedBox(height: 10),
                   const SizedBox(
                     height: 48,
@@ -2545,7 +2236,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
               children: [
                 Row(
                   children: [
-                    _sectionLabel('코멘트'),
+                    _sectionLabel('肄붾찘??),
                     const SizedBox(width: 6),
                     Text(
                       '${comments.length}',
@@ -2562,7 +2253,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Text(
-                      '첫 번째 코멘트를 남겨보세요',
+                      '泥?踰덉㎏ 肄붾찘?몃? ?④꺼蹂댁꽭??,
                       style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.24),
                         fontSize: 13,
@@ -2576,135 +2267,6 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           },
         ),
       ],
-    );
-  }
-
-  Widget _commentSectionV2() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        StreamBuilder<List<Comment>>(
-          stream: _commentsStream,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _sectionLabel('댓글'),
-                  const SizedBox(height: 10),
-                  const SizedBox(
-                    height: 48,
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Color(0xFF10B981),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }
-            final comments = snapshot.data ?? [];
-            final adminComments = comments
-                .where((c) => AuthService.adminUids.contains(c.uid))
-                .toList();
-            final visibleComments = _adminCommentsOnly
-                ? adminComments
-                : comments;
-            final cs = Theme.of(context).colorScheme;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    _sectionLabel('댓글'),
-                    const SizedBox(width: 6),
-                    Text(
-                      '${visibleComments.length}',
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.38),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _commentFilterChip(
-                      label: '전체',
-                      selected: !_adminCommentsOnly,
-                      onTap: () => setState(() => _adminCommentsOnly = false),
-                    ),
-                    const SizedBox(width: 8),
-                    _commentFilterChip(
-                      label: '운영자',
-                      selected: _adminCommentsOnly,
-                      onTap: () => setState(() => _adminCommentsOnly = true),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                if (visibleComments.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Text(
-                      _adminCommentsOnly
-                          ? '운영자 댓글이 아직 없습니다.'
-                          : '첫 번째 댓글을 남겨보세요.',
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.24),
-                        fontSize: 13,
-                      ),
-                    ),
-                  )
-                else
-                  ...visibleComments.map((c) => _commentItem(c)),
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _commentFilterChip({
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: selected
-              ? const Color(0xFF10B981).withValues(alpha: 0.18)
-              : cs.onSurface.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected
-                ? const Color(0xFF10B981).withValues(alpha: 0.45)
-                : cs.onSurface.withValues(alpha: 0.14),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: selected
-                ? const Color(0xFF10B981)
-                : cs.onSurface.withValues(alpha: 0.65),
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
     );
   }
 
@@ -2771,14 +2333,14 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                     context,
                                   ).colorScheme.surface,
                                   title: Text(
-                                    '댓글 삭제',
+                                    '?볤? ??젣',
                                     style: TextStyle(
                                       color: cs.onSurface,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                   content: Text(
-                                    '이 댓글을 삭제하시겠습니까?',
+                                    '???볤?????젣?섏떆寃좎뒿?덇퉴?',
                                     style: TextStyle(
                                       color: cs.onSurface.withValues(
                                         alpha: 0.7,
@@ -2790,7 +2352,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                       onPressed: () =>
                                           Navigator.pop(ctx, false),
                                       child: Text(
-                                        '취소',
+                                        '痍⑥냼',
                                         style: TextStyle(
                                           color: cs.onSurface.withValues(
                                             alpha: 0.54,
@@ -2801,7 +2363,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                     TextButton(
                                       onPressed: () => Navigator.pop(ctx, true),
                                       child: Text(
-                                        '삭제',
+                                        '??젣',
                                         style: TextStyle(
                                           color: Colors.redAccent,
                                           fontWeight: FontWeight.w700,
@@ -2866,7 +2428,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     );
   }
 
-  // ── 코멘트 입력창 (하단 고정) ────────────────────────────────────────────
+  // ?? 肄붾찘???낅젰李?(?섎떒 怨좎젙) ????????????????????????????????????????????
   Widget _commentInput() {
     final user = _currentUser;
     final cs = Theme.of(context).colorScheme;
@@ -2875,7 +2437,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         color: Theme.of(context).scaffoldBackgroundColor,
         child: Text(
-          '로그인 후 코멘트를 남길 수 있습니다',
+          '濡쒓렇????肄붾찘?몃? ?④만 ???덉뒿?덈떎',
           style: TextStyle(
             color: cs.onSurface.withValues(alpha: 0.24),
             fontSize: 13,
@@ -2912,7 +2474,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _submitComment(user),
               decoration: InputDecoration(
-                hintText: '코멘트를 입력하세요...',
+                hintText: '肄붾찘?몃? ?낅젰?섏꽭??..',
                 hintStyle: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.24),
                   fontSize: 14,
@@ -2969,7 +2531,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       final nickname =
           await _firestoreService.getNickname(user.uid) ??
           user.email?.split('@').first ??
-          '익명';
+          '?듬챸';
       await _firestoreService.addComment(
         widget.pick.id,
         Comment(
@@ -2986,7 +2548,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         focusScope.unfocus();
       }
     } catch (_) {
-      // 권한 오류 등 — 실패해도 UI 잠김 방지
+      // 沅뚰븳 ?ㅻ쪟 ?????ㅽ뙣?대룄 UI ?좉? 諛⑹?
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -3060,9 +2622,7 @@ class _StockCandlePainter extends CustomPainter {
   final String Function(double) formatValue;
   final String Function(DateTime) formatDate;
   final Color labelColor;
-  final List<_OHLC>? allCandles; // MA 계산용 전체 데이터
-  final int visibleStart; // 전체 데이터 내 visible 시작 인덱스
-
+  final List<_OHLC>? allCandles; // MA 怨꾩궛???꾩껜 ?곗씠??  final int visibleStart; // ?꾩껜 ?곗씠????visible ?쒖옉 ?몃뜳??
   _StockCandlePainter({
     required this.candles,
     required this.touchedIndex,
@@ -3098,8 +2658,7 @@ class _StockCandlePainter extends CustomPainter {
     canvas.save();
     canvas.clipRect(Rect.fromLTWH(yAxisW, 0, chartW, chartH));
 
-    // 그리드
-    final gridPaint = Paint()
+    // 洹몃━??    final gridPaint = Paint()
       ..color = labelColor.withValues(alpha: 0.05)
       ..strokeWidth = 1;
     for (int i = 1; i <= 3; i++) {
@@ -3135,13 +2694,13 @@ class _StockCandlePainter extends CustomPainter {
       );
     }
 
-    // 이동평균선 (allCandles가 있을 때만)
+    // ?대룞?됯퇏??(allCandles媛 ?덉쓣 ?뚮쭔)
     if (allCandles != null && allCandles!.isNotEmpty) {
       const maConfigs = [
-        (5, Color(0xFFFFA726)), // MA5  - 주황
-        (20, Color(0xFF42A5F5)), // MA20 - 파랑
-        (60, Color(0xFFAB47BC)), // MA60 - 보라
-        (120, Color(0xFFEF5350)), // MA120 - 빨강
+        (5, Color(0xFFFFA726)), // MA5  - 二쇳솴
+        (20, Color(0xFF42A5F5)), // MA20 - ?뚮옉
+        (60, Color(0xFFAB47BC)), // MA60 - 蹂대씪
+        (120, Color(0xFFEF5350)), // MA120 - 鍮④컯
       ];
       for (final (period, color) in maConfigs) {
         final path = Path();
@@ -3175,8 +2734,7 @@ class _StockCandlePainter extends CustomPainter {
       }
     }
 
-    // 십자선
-    if (touchedIndex != null) {
+    // ??옄??    if (touchedIndex != null) {
       final cx = toX(touchedIndex!, n);
       canvas.drawLine(
         Offset(cx, 0),
@@ -3189,8 +2747,7 @@ class _StockCandlePainter extends CustomPainter {
 
     canvas.restore();
 
-    // Y축 레이블
-    for (int i = 1; i <= 3; i++) {
+    // Y異??덉씠釉?    for (int i = 1; i <= 3; i++) {
       final v = minY + yRange * (1 - i / 4);
       final tp = TextPainter(
         text: TextSpan(
@@ -3207,8 +2764,7 @@ class _StockCandlePainter extends CustomPainter {
       tp.paint(canvas, Offset(0, y));
     }
 
-    // X축 레이블
-    const labelCount = 5;
+    // X異??덉씠釉?    const labelCount = 5;
     final labelStyle = TextStyle(
       color: labelColor.withValues(alpha: 0.35),
       fontSize: 8,
@@ -3235,7 +2791,7 @@ class _StockCandlePainter extends CustomPainter {
       old.visibleStart != visibleStart;
 }
 
-// ── 가로 전체화면 차트 페이지 ──────────────────────────────────────────────
+// ?? 媛濡??꾩껜?붾㈃ 李⑦듃 ?섏씠吏 ??????????????????????????????????????????????
 class _FullscreenCandleChartPage extends StatefulWidget {
   final String ticker;
   final String market;
@@ -3404,7 +2960,7 @@ class _FullscreenCandleChartPageState
           children: [
             Column(
               children: [
-                // 상단 정보 행 (터치 OHLC 또는 빈 공간)
+                // ?곷떒 ?뺣낫 ??(?곗튂 OHLC ?먮뒗 鍮?怨듦컙)
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 150),
                   child: touched != null
@@ -3427,21 +2983,21 @@ class _FullscreenCandleChartPageState
                                   ),
                                 ),
                                 const SizedBox(width: 12),
-                                _ohlcLabel('시', touched.open, cs),
+                                _ohlcLabel('??, touched.open, cs),
                                 _ohlcLabel(
-                                  '고',
+                                  '怨?,
                                   touched.high,
                                   cs,
                                   color: _kUpColor,
                                 ),
                                 _ohlcLabel(
-                                  '저',
+                                  '?',
                                   touched.low,
                                   cs,
                                   color: _kDownColor,
                                 ),
                                 _ohlcLabel(
-                                  '종',
+                                  '醫?,
                                   touched.close,
                                   cs,
                                   color: touched.close >= touched.open
@@ -3454,7 +3010,7 @@ class _FullscreenCandleChartPageState
                         )
                       : SizedBox(key: const ValueKey('empty'), height: 26),
                 ),
-                // 차트 영역
+                // 李⑦듃 ?곸뿭
                 Expanded(
                   child: _loading
                       ? const Center(child: CircularProgressIndicator())
@@ -3489,7 +3045,7 @@ class _FullscreenCandleChartPageState
                           },
                         ),
                 ),
-                // 기간 선택 버튼
+                // 湲곌컙 ?좏깮 踰꾪듉
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -3497,7 +3053,7 @@ class _FullscreenCandleChartPageState
                   ),
                   child: Column(
                     children: [
-                      // 서브: 1분 / 5분 / 60분 — 위로 슬라이드
+                      // ?쒕툕: 1遺?/ 5遺?/ 60遺????꾨줈 ?щ씪?대뱶
                       AnimatedSize(
                         duration: const Duration(milliseconds: 220),
                         curve: Curves.easeInOut,
@@ -3526,11 +3082,11 @@ class _FullscreenCandleChartPageState
                               )
                             : const SizedBox.shrink(),
                       ),
-                      // 메인: 분봉 / 일봉 / 주봉 / 월봉
+                      // 硫붿씤: 遺꾨큺 / ?쇰큺 / 二쇰큺 / ?붾큺
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          _fsBtn('분봉', _period.isMinute, cs, () {
+                          _fsBtn('遺꾨큺', _period.isMinute, cs, () {
                             if (!_period.isMinute) _selectPeriod(_Period.min1);
                           }),
                           ...[_Period.day1, _Period.week, _Period.month].map(
@@ -3548,7 +3104,7 @@ class _FullscreenCandleChartPageState
                 ),
               ],
             ),
-            // 닫기 버튼
+            // ?リ린 踰꾪듉
             Positioned(
               top: 4,
               right: 4,
@@ -3622,3 +3178,5 @@ class _FullscreenCandleChartPageState
     );
   }
 }
+
+

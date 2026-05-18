@@ -46,12 +46,6 @@ class FirestoreService {
     'journalWriteReminder': false,
   };
 
-  static String favoriteStockKey(String market, String ticker) {
-    final normalizedMarket = market.trim().toUpperCase();
-    final normalizedTicker = ticker.trim().toUpperCase();
-    return '${normalizedMarket}_$normalizedTicker';
-  }
-
   int calculateUserLevel({
     required int postCount,
     required int commentCount,
@@ -336,16 +330,14 @@ class FirestoreService {
         attendanceCount: currentAttendance,
         bonusXp: currentBonusXp,
       );
-      final updates = <String, dynamic>{
+      tx.set(userRef, {
         'postCount': currentPostCount,
         'commentCount': nextCommentCount,
         'attendanceCount': currentAttendance,
         'bonusXp': currentBonusXp,
         'level': nextLevel,
         'lastActiveAt': FieldValue.serverTimestamp(),
-        if (delta > 0) 'lastCommentDate': _kstDayKey(),
-      };
-      tx.set(userRef, updates, SetOptions(merge: true));
+      }, SetOptions(merge: true));
       tx.set(publicRef, {'level': nextLevel}, SetOptions(merge: true));
     });
   }
@@ -362,7 +354,6 @@ class FirestoreService {
   Stream<List<StockPick>> getStockPicks({bool premiumOnly = false}) {
     Query query = _db
         .collection('stock_picks')
-        .where('status', isEqualTo: 'active')
         .orderBy('createdAt', descending: true);
 
     if (premiumOnly) {
@@ -370,21 +361,11 @@ class FirestoreService {
     }
 
     return query.snapshots().map(
-      (snapshot) =>
-          snapshot.docs.map((doc) => StockPick.fromFirestore(doc)).toList(),
+      (snapshot) => snapshot.docs
+          .map((doc) => StockPick.fromFirestore(doc))
+          .where((p) => !p.isCompleted)
+          .toList(),
     );
-  }
-
-  Stream<List<StockPick>> getAllStockPicks() {
-    return _db
-        .collection('stock_picks')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-          return snapshot.docs
-              .map((doc) => StockPick.fromFirestore(doc))
-              .toList();
-        });
   }
 
   Future<void> addStockPick(StockPick pick) {
@@ -524,87 +505,6 @@ class FirestoreService {
     }
   }
 
-  Stream<List<String>> getFavoriteStockIds(String uid) {
-    return _db.collection('users').doc(uid).snapshots().map((doc) {
-      return List<String>.from(doc.data()?['favoriteStockIds'] ?? const []);
-    });
-  }
-
-  Stream<List<StockPick>> getFavoriteStocks(String uid) {
-    return _db.collection('users').doc(uid).snapshots().map((doc) {
-      final rawMap = Map<String, dynamic>.from(
-        (doc.data()?['favoriteStocks'] as Map?) ?? const {},
-      );
-      final items = rawMap.entries
-          .map((entry) {
-            final data = Map<String, dynamic>.from(
-              (entry.value as Map?) ?? const {},
-            );
-            final ticker = (data['ticker'] as String? ?? '').trim();
-            final market = (data['market'] as String? ?? 'KS').trim();
-            if (ticker.isEmpty) return null;
-            final addedAt = (data['addedAt'] as num?)?.toInt() ?? 0;
-            return StockPick(
-              id: 'stock_${market.toUpperCase()}_${ticker.toUpperCase()}',
-              ticker: ticker.toUpperCase(),
-              name: (data['name'] as String? ?? ticker).trim(),
-              buyPrice: 0,
-              targetPrice: 0,
-              reason: '관심종목으로 등록한 종목입니다.',
-              category: 'STOCK',
-              market: market.toUpperCase(),
-              isPremium: false,
-              createdAt: addedAt > 0
-                  ? DateTime.fromMillisecondsSinceEpoch(addedAt)
-                  : DateTime.now(),
-              status: 'active',
-            );
-          })
-          .whereType<StockPick>()
-          .toList();
-      items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-      return items;
-    });
-  }
-
-  Future<void> toggleFavoriteStock(
-    String uid,
-    StockPick stock,
-    bool isCurrentlyFav,
-  ) async {
-    final ref = _db.collection('users').doc(uid);
-    final key = favoriteStockKey(stock.market, stock.ticker);
-    await _db.runTransaction((tx) async {
-      final snap = await tx.get(ref);
-      final data = snap.data() ?? <String, dynamic>{};
-      final ids = List<String>.from(data['favoriteStockIds'] ?? const []);
-      final stocks = Map<String, dynamic>.from(
-        (data['favoriteStocks'] as Map?) ?? const {},
-      );
-
-      if (isCurrentlyFav) {
-        ids.removeWhere((id) => id == key);
-        stocks.remove(key);
-      } else {
-        if (!ids.contains(key)) ids.insert(0, key);
-        stocks[key] = {
-          'ticker': stock.ticker.trim().toUpperCase(),
-          'name': stock.name.trim().isEmpty
-              ? stock.ticker.trim().toUpperCase()
-              : stock.name.trim(),
-          'market': stock.market.trim().toUpperCase(),
-          'addedAt': DateTime.now().millisecondsSinceEpoch,
-        };
-      }
-
-      tx.set(ref, {
-        'favoriteStockIds': ids,
-        'favoriteStocks': stocks,
-        'lastActiveAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    });
-  }
-
   // ── 종료 추천주 ───────────────────────────────────────────────────────
   Future<void> closeStockPick(String id, double closedPrice) {
     return _db.collection('stock_picks').doc(id).update({
@@ -653,49 +553,10 @@ class FirestoreService {
     return _db.collection('market_analyses').doc(id).delete();
   }
 
-  Stream<List<Comment>> getMarketAnalysisComments(String analysisId) {
-    return _db
-        .collection('market_analyses')
-        .doc(analysisId)
-        .collection('comments')
-        .orderBy('createdAt')
-        .snapshots()
-        .map((s) => s.docs.map(Comment.fromFirestore).toList());
-  }
-
-  Future<void> addMarketAnalysisComment(
-    String analysisId,
-    Comment comment,
-  ) async {
-    await _db
-        .collection('market_analyses')
-        .doc(analysisId)
-        .collection('comments')
-        .add(comment.toFirestore());
-    await recordCommentCreated(comment.uid);
-  }
-
-  Future<void> deleteMarketAnalysisComment(
-    String analysisId,
-    String commentId,
-  ) async {
-    final ref = _db
-        .collection('market_analyses')
-        .doc(analysisId)
-        .collection('comments')
-        .doc(commentId);
-    final snap = await ref.get();
-    final commentUid = snap.data()?['uid'] as String?;
-    await ref.delete();
-    if (commentUid != null && commentUid.isNotEmpty) {
-      await recordCommentRemoved(commentUid);
-    }
-  }
-
   Stream<List<MarketFeatureStock>> getMarketFeatureStocks({
     String? group,
     String? pattern,
-    int limit = 500,
+    int limit = 80,
   }) {
     Query<Map<String, dynamic>> query = _db.collection('market_feature_stocks');
     if (group != null && group.isNotEmpty) {
@@ -1116,35 +977,6 @@ class FirestoreService {
     });
   }
 
-  Stream<({bool commentDone, bool memoDone, int adRemaining, int adLimit})>
-  watchDailyMissions(String uid) {
-    if (uid.isEmpty) {
-      return Stream.value((
-        commentDone: false,
-        memoDone: false,
-        adRemaining: _rewardAdDailyLimit,
-        adLimit: _rewardAdDailyLimit,
-      ));
-    }
-    return _db.collection('users').doc(uid).snapshots().map((doc) {
-      final data = doc.data() ?? <String, dynamic>{};
-      final today = _kstDayKey();
-      final lastAdDate = data['lastRewardAdDate'] as String?;
-      final rawCount = (data['rewardAdCountToday'] as num?)?.toInt() ?? 0;
-      final watchedCount = lastAdDate == today
-          ? rawCount.clamp(0, _rewardAdDailyLimit).toInt()
-          : 0;
-      return (
-        commentDone:
-            (data['lastCommentMissionDate'] as String?) == today ||
-            (data['lastCommentDate'] as String?) == today,
-        memoDone: (data['lastJournalMissionDate'] as String?) == today,
-        adRemaining: _rewardAdDailyLimit - watchedCount,
-        adLimit: _rewardAdDailyLimit,
-      );
-    });
-  }
-
   Stream<bool> watchCanWatchRewardAdToday(String uid) {
     return watchRewardAdStatus(
       uid,
@@ -1546,7 +1378,7 @@ class FirestoreService {
     return doc.data()?['text'] as String?;
   }
 
-  Future<void> saveMemo(String uid, String pickId, String text) async {
+  Future<void> saveMemo(String uid, String pickId, String text) {
     return _db.collection('users').doc(uid).collection('memos').doc(pickId).set(
       {'text': text, 'updatedAt': Timestamp.fromDate(DateTime.now())},
     );
@@ -1842,11 +1674,6 @@ class FirestoreService {
   Future<void> createPost(Post post) async {
     await _db.collection('posts').add(post.toFirestore());
     await recordPostCreated(post.uid);
-  }
-
-  /// 봇 계정 글 등록 — 통계 카운트 없이 posts에만 저장
-  Future<void> createBotPost(Post post) async {
-    await _db.collection('posts').add(post.toFirestore());
   }
 
   Future<void> updatePost(

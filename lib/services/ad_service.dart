@@ -145,6 +145,10 @@ class AdService {
     );
   }
 
+  void cancelPendingStockInterstitial() {
+    _pendingStockInterstitial = false;
+  }
+
   void showInterstitialIfReady() {
     if (!_adsEnabled || _shouldBlockByAdmin) return;
     if (_stockInterstitialConsumed) return; // 추천주 상세 첫 노출 1회만 허용
@@ -212,6 +216,7 @@ class AdService {
         onAdFailedToLoad: (_) {
           _isIndicatorInterstitialLoading = false;
           _isIndicatorInterstitialReady = false;
+          _pendingIndicatorInterstitial = false;
         },
       ),
     );

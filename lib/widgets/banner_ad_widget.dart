@@ -26,6 +26,7 @@ class BannerAdWidget extends StatefulWidget {
   }) {
     if (kIsWeb || !AdService.adsEnabled || AdService.isAdmin) return;
     final unitId = adUnitId ?? AdService.bannerAdUnitId;
+    if (unitId.isEmpty) return;
     final cacheKey = '$slotId::$unitId';
     final entry = _bannerAdCache.putIfAbsent(cacheKey, () => _BannerAdEntry());
     entry.ensureLoaded(
@@ -55,6 +56,12 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
     _entry = widget.useCache
         ? _bannerAdCache.putIfAbsent(_cacheKey, () => _BannerAdEntry())
         : _BannerAdEntry();
+    if (kIsWeb ||
+        !AdService.adsEnabled ||
+        AdService.isAdmin ||
+        _unitId.isEmpty) {
+      return;
+    }
     _entry.ensureLoaded(
       _unitId,
       slotId: widget.slotId,
@@ -81,6 +88,7 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
       }
       return const SizedBox.shrink();
     }
+    if (_unitId.isEmpty) return const SizedBox.shrink();
     _entry.ensureLoaded(
       _unitId,
       slotId: widget.slotId,

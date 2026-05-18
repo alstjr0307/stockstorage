@@ -4842,3 +4842,98 @@
 [result] counts={"2026.05.17":6800,"2026.05.16":8125}
 [save] Firestore upsert complete: 2 day docs
 [save] summary doc updated
+===== 2026-05-18  0:00:02.22 ===== 
+[run] now=2026-05-17T15:00:03.574Z daysBack=2 cutoff=2026.05.17
+[warmup] title=주식 - 에펨코리아
+[coarse] start step=1000, max=300000
+[coarse] page=1 parsed=20 oldest=2026.05.17 hitCutoff=false
+[coarse] page=1001 parsed=20 oldest=2026.05.15 hitCutoff=true
+[binary] range 1..1001
+[binary] page=501 parsed=20 oldest=2026.05.16 move=left
+[binary] page=251 parsed=20 oldest=2026.05.17 move=right
+[binary] page=376 parsed=20 oldest=2026.05.16 move=left
+[binary] page=313 parsed=20 oldest=2026.05.17 move=right
+[binary] page=344 parsed=20 oldest=2026.05.17 move=right
+[binary] page=360 parsed=20 oldest=2026.05.17 move=right
+[binary] page=368 parsed=20 oldest=2026.05.16 move=left
+[binary] page=364 parsed=20 oldest=2026.05.16 move=left
+[binary] page=362 parsed=20 oldest=2026.05.16 move=left
+[binary] page=361 parsed=20 oldest=2026.05.17 move=right
+[run] detail scrape endPage=362
+[daily] 2026.05.18 pageRange=1-0 count=12
+[daily] 2026.05.17 pageRange=1-361 count=7213
+[result] dates=2026.05.17, 2026.05.18
+[result] counts={"2026.05.18":12,"2026.05.17":7213}
+[save] Firestore upsert complete: 2 day docs
+[save] summary doc updated
+===== 2026-05-18  1:00:02.21 ===== 
+[run] now=2026-05-17T16:00:03.683Z daysBack=2 cutoff=2026.05.17
+[warmup] title=주식 - 에펨코리아
+[coarse] start step=1000, max=300000
+[coarse] page=1 parsed=20 oldest=2026.05.18 hitCutoff=false
+[coarse] page=1001 parsed=20 oldest=2026.05.15 hitCutoff=true
+[binary] range 1..1001
+[binary] page=501 parsed=20 oldest=2026.05.16 move=left
+[binary] page=251 parsed=20 oldest=2026.05.17 move=right
+[binary] page=376 parsed=20 oldest=2026.05.17 move=right
+[binary] page=438 parsed=20 oldest=2026.05.16 move=left
+[binary] page=407 parsed=20 oldest=2026.05.16 move=left
+[binary] page=391 parsed=20 oldest=2026.05.16 move=left
+[binary] page=383 parsed=20 oldest=2026.05.16 move=left
+[binary] page=379 parsed=20 oldest=2026.05.16 move=left
+[binary] page=377 parsed=20 oldest=2026.05.17 move=right
+[binary] page=378 parsed=20 oldest=2026.05.16 move=left
+[run] detail scrape endPage=378
+[daily] 2026.05.18 pageRange=1-17 count=340
+[daily] 2026.05.17 pageRange=18-377 count=7181
+[result] dates=2026.05.17, 2026.05.18
+[result] counts={"2026.05.18":340,"2026.05.17":7181}
+[save] Firestore upsert complete: 2 day docs
+[save] summary doc updated
+===== 2026-05-18 19:00:02.10 ===== 
+[run] now=2026-05-18T10:00:03.889Z daysBack=2 cutoff=2026.05.17
+[warmup] title=주식 - 에펨코리아
+[coarse] start step=1000, max=300000
+[coarse] page=1 parsed=20 oldest=2026.05.18 hitCutoff=false
+[coarse] page=1001 parsed=20 oldest=2026.05.17 hitCutoff=false
+[coarse] page=2001 parsed=20 oldest=2026.05.15 hitCutoff=true
+[binary] range 1001..2001
+[binary] page=1501 parsed=20 oldest=2026.05.15 move=left
+[binary] page=1251 parsed=20 oldest=2026.05.16 move=left
+[binary] page=1126 parsed=20 oldest=2026.05.16 move=left
+[binary] page=1063 parsed=20 oldest=2026.05.16 move=left
+[binary] page=1032 parsed=20 oldest=2026.05.17 move=right
+[binary] page=1047 parsed=20 oldest=2026.05.16 move=left
+[binary] page=1039 parsed=20 oldest=2026.05.17 move=right
+[binary] page=1043 parsed=20 oldest=2026.05.17 move=right
+[binary] page=1045 parsed=20 oldest=2026.05.17 move=right
+[binary] page=1046 parsed=20 oldest=2026.05.16 move=left
+[run] detail scrape endPage=1046
+[daily] 2026.05.18 pageRange=1-690 count=13800
+[daily] 2026.05.17 pageRange=691-1045 count=7096
+[result] dates=2026.05.17, 2026.05.18
+[result] counts={"2026.05.18":13800,"2026.05.17":7096}
+[save] Firestore upsert complete: 2 day docs
+[save] summary doc updated
+===== 2026-05-18 20:00:02.25 ===== 
+[run] now=2026-05-18T11:00:03.272Z daysBack=2 cutoff=2026.05.17
+^C===== 2026-05-18 21:00:02.27 ===== 
+[run] now=2026-05-18T12:00:03.672Z daysBack=2 cutoff=2026.05.17
+[warmup] title=주식 - 에펨코리아
+[coarse] start step=1000, max=300000
+[coarse] page=1 parsed=20 oldest=2026.05.18 hitCutoff=false
+[coarse] page=1001 parsed=20 oldest=2026.05.17 hitCutoff=false
+[coarse] page=2001 parsed=20 oldest=2026.05.15 hitCutoff=true
+[binary] range 1001..2001
+[binary] page=1501 parsed=20 oldest=2026.05.16 move=left
+[binary] page=1251 parsed=20 oldest=2026.05.16 move=left
+[binary] page=1126 parsed=20 oldest=2026.05.16 move=left
+[binary] page=1063 parsed=20 oldest=2026.05.17 move=right
+[binary] page=1094 parsed=20 oldest=2026.05.17 move=right
+[binary] page=1110 parsed=20 oldest=2026.05.16 move=left
+[binary] page=1102 parsed=20 oldest=2026.05.16 move=left
+[binary] page=1098 parsed=20 oldest=2026.05.17 move=right
+[binary] page=1100 parsed=20 oldest=2026.05.17 move=right
+[binary] page=1101 parsed=20 oldest=2026.05.16 move=left
+[run] detail scrape endPage=1101
+[daily] 2026.05.18 pageRange=1-746 count=14920

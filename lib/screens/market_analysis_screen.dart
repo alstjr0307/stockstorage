@@ -3052,6 +3052,7 @@ class _InvestorFlowMarketBlock extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _InvestorFlowGroup(
+          marketLabel: marketLabel,
           title: '외국인 순매수',
           color: const Color(0xFF3182F6),
           items: foreignTop5,
@@ -3060,6 +3061,7 @@ class _InvestorFlowMarketBlock extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         _InvestorFlowGroup(
+          marketLabel: marketLabel,
           title: '기관 순매수',
           color: const Color(0xFFEA580C),
           items: institutionTop5,
@@ -3073,6 +3075,7 @@ class _InvestorFlowMarketBlock extends StatelessWidget {
 
 class _InvestorFlowGroup extends StatelessWidget {
   const _InvestorFlowGroup({
+    required this.marketLabel,
     required this.title,
     required this.color,
     required this.items,
@@ -3080,11 +3083,65 @@ class _InvestorFlowGroup extends StatelessWidget {
     this.emoji,
   });
 
+  final String marketLabel;
   final String title;
   final Color color;
   final List<_InvestorFlowItem> items;
   final IconData icon;
   final String? emoji;
+
+  Future<void> _openStockDetail(
+    BuildContext context,
+    _InvestorFlowItem item,
+  ) async {
+    final query = (item.ticker ?? item.name).trim();
+    if (query.isEmpty || query == '-') return;
+    final targetMarket = item.market ?? (marketLabel == 'KOSDAQ' ? 'KQ' : 'KS');
+
+    try {
+      final results = await StockPriceService.searchStocks(query);
+      final sameMarket = results.where((result) {
+        return result.market.toUpperCase() == targetMarket.toUpperCase();
+      }).toList();
+      final exactTicker = sameMarket.where((result) {
+        return item.ticker != null &&
+            result.ticker.toUpperCase() == item.ticker!.toUpperCase();
+      }).toList();
+      final exactName = sameMarket.where((result) => result.name == item.name);
+      final match = exactTicker.isNotEmpty
+          ? exactTicker.first
+          : exactName.isNotEmpty
+          ? exactName.first
+          : sameMarket.isNotEmpty
+          ? sameMarket.first
+          : (results.isNotEmpty ? results.first : null);
+
+      if (!context.mounted) return;
+      if (match == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('종목 정보를 찾지 못했습니다.')));
+        return;
+      }
+
+      Navigator.push(
+        context,
+        stockDetailRoute(
+          stockPickFromSearchResult(
+            match,
+            reason: '외인·기관 수급에서 선택한 종목입니다.',
+            category: '수급',
+          ),
+          enablePickFeatures: false,
+        ),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('종목 정보를 불러오지 못했습니다.')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -3169,60 +3226,70 @@ class _InvestorFlowGroup extends StatelessWidget {
                 beginOffset: const Offset(0.04, 0),
                 child: Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 24,
-                            height: 24,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '${item.rank}',
-                              style: TextStyle(
-                                color: color,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
+                    InkWell(
+                      onTap: () => _openStockDetail(context, item),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 24,
+                              height: 24,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '${item.rank}',
+                                style: TextStyle(
+                                  color: color,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              item.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: cs.onSurface,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                item.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: cs.onSurface,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: cs.onSurface.withValues(alpha: 0.04),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              item.amountEokText,
-                              style: TextStyle(
-                                color: cs.onSurface.withValues(alpha: 0.74),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w800,
+                            const SizedBox(width: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: cs.onSurface.withValues(alpha: 0.04),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                item.amountEokText,
+                                style: TextStyle(
+                                  color: cs.onSurface.withValues(alpha: 0.74),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              size: 16,
+                              color: cs.onSurface.withValues(alpha: 0.24),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     if (index != items.length - 1)
@@ -3275,11 +3342,15 @@ class _InvestorFlowItem {
     required this.rank,
     required this.name,
     required this.amount,
+    this.ticker,
+    this.market,
   });
 
   final int rank;
   final String name;
   final num? amount;
+  final String? ticker;
+  final String? market;
 
   String get amountEokText {
     if (amount == null) return '-';
@@ -3294,6 +3365,8 @@ class _InvestorFlowItem {
       rank: (map['rank'] as num?)?.toInt() ?? 0,
       name: (map['name'] as String?) ?? '-',
       amount: map['amount'] as num?,
+      ticker: (map['ticker'] as String?) ?? (map['code'] as String?),
+      market: map['market'] as String?,
     );
   }
 }
@@ -3496,7 +3569,7 @@ class _FmkoreaIndexCard extends StatelessWidget {
                               '현재 열기 ${effectiveInsight.heatLabel} · 평균 대비 ${effectiveInsight.diffRateText}',
                               style: TextStyle(
                                 color: effectiveInsight.color,
-                                fontSize: 12,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
