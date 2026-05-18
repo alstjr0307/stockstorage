@@ -70,12 +70,16 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   final FirestoreService _firestoreService = FirestoreService();
 
   // 탭: 0=홈, 1=커뮤니티, 2=매매일지, 3=관심종목
   int _currentPage = 0;
   int _communityInitialTabIndex = 0;
+
+  late final AnimationController _fadeController;
+  late final Animation<double> _fadeAnimation;
 
   // 검색
   bool _showSearch = false;
@@ -87,6 +91,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 180),
+      vsync: this,
+      value: 1.0,
+    );
+    _fadeAnimation = CurvedAnimation(parent: _fadeController, curve: Curves.easeIn);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       initAds();
       BannerAdWidget.prewarm(
@@ -258,6 +268,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    _fadeController.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -446,7 +457,9 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentPage,
         onTap: (i) {
+          if (i == _currentPage) return;
           if (i != 0) _closeSearch();
+          _fadeController.forward(from: 0.0);
           setState(() {
             _currentPage = i;
             if (i == 1) _communityInitialTabIndex = 0;
@@ -480,17 +493,20 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _currentPage,
-        children: [
-          _buildDashboardPage(auth),
-          CommunityScreen(
-            key: ValueKey('community_$_communityInitialTabIndex'),
-            initialTabIndex: _communityInitialTabIndex,
-          ),
-          _buildMyStocksPage(),
-          _buildFavoriteStocksPage(auth),
-        ],
+      body: FadeTransition(
+        opacity: _fadeAnimation,
+        child: IndexedStack(
+          index: _currentPage,
+          children: [
+            _buildDashboardPage(auth),
+            CommunityScreen(
+              key: ValueKey('community_$_communityInitialTabIndex'),
+              initialTabIndex: _communityInitialTabIndex,
+            ),
+            _buildMyStocksPage(),
+            _buildFavoriteStocksPage(auth),
+          ],
+        ),
       ),
     );
   }
@@ -511,14 +527,17 @@ class _HomeScreenState extends State<HomeScreen> {
     return _DashboardHomePage(
       auth: auth,
       firestoreService: _firestoreService,
-      openCommunity: () => setState(() {
-        _communityInitialTabIndex = 0;
-        _currentPage = 1;
-      }),
-      openJournal: () => setState(() {
-        _communityInitialTabIndex = 1;
-        _currentPage = 1;
-      }),
+      openCommunity: () {
+        _fadeController.forward(from: 0.0);
+        setState(() {
+          _communityInitialTabIndex = 0;
+          _currentPage = 1;
+        });
+      },
+      openJournal: () {
+        _fadeController.forward(from: 0.0);
+        setState(() => _currentPage = 2);
+      },
       openFavoritePicks: () => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const FavoritesPicksScreen()),

@@ -530,6 +530,15 @@ class FirestoreService {
     });
   }
 
+  Stream<bool> watchIsFavoriteStock(String uid, String key) {
+    return _db.collection('users').doc(uid).snapshots().map((doc) {
+      final stocks = Map<String, dynamic>.from(
+        (doc.data()?['favoriteStocks'] as Map?) ?? const {},
+      );
+      return stocks.containsKey(key);
+    });
+  }
+
   Stream<List<StockPick>> getFavoriteStocks(String uid) {
     return _db.collection('users').doc(uid).snapshots().map((doc) {
       final rawMap = Map<String, dynamic>.from(
@@ -574,35 +583,37 @@ class FirestoreService {
   ) async {
     final ref = _db.collection('users').doc(uid);
     final key = favoriteStockKey(stock.market, stock.ticker);
-    await _db.runTransaction((tx) async {
-      final snap = await tx.get(ref);
-      final data = snap.data() ?? <String, dynamic>{};
-      final ids = List<String>.from(data['favoriteStockIds'] ?? const []);
-      final stocks = Map<String, dynamic>.from(
-        (data['favoriteStocks'] as Map?) ?? const {},
-      );
 
-      if (isCurrentlyFav) {
-        ids.removeWhere((id) => id == key);
-        stocks.remove(key);
-      } else {
-        if (!ids.contains(key)) ids.insert(0, key);
-        stocks[key] = {
-          'ticker': stock.ticker.trim().toUpperCase(),
-          'name': stock.name.trim().isEmpty
-              ? stock.ticker.trim().toUpperCase()
-              : stock.name.trim(),
-          'market': stock.market.trim().toUpperCase(),
-          'addedAt': DateTime.now().millisecondsSinceEpoch,
-        };
-      }
-
-      tx.set(ref, {
-        'favoriteStockIds': ids,
-        'favoriteStocks': stocks,
+    if (isCurrentlyFav) {
+      // 해제: dot-notation으로 맵 키를 직접 삭제
+      await ref.update({
+        'favoriteStocks.$key': FieldValue.delete(),
+        'favoriteStockIds': FieldValue.arrayRemove([key]),
         'lastActiveAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    });
+      });
+    } else {
+      // 등록: 트랜잭션으로 중복 방지
+      await _db.runTransaction((tx) async {
+        final snap = await tx.get(ref);
+        final data = snap.data() ?? <String, dynamic>{};
+        final ids = List<String>.from(data['favoriteStockIds'] ?? const []);
+        if (!ids.contains(key)) ids.insert(0, key);
+        tx.set(ref, {
+          'favoriteStockIds': ids,
+          'favoriteStocks': {
+            key: {
+              'ticker': stock.ticker.trim().toUpperCase(),
+              'name': stock.name.trim().isEmpty
+                  ? stock.ticker.trim().toUpperCase()
+                  : stock.name.trim(),
+              'market': stock.market.trim().toUpperCase(),
+              'addedAt': DateTime.now().millisecondsSinceEpoch,
+            },
+          },
+          'lastActiveAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      });
+    }
   }
 
   Future<void> toggleFavoriteStockByInfo(
@@ -614,31 +625,33 @@ class FirestoreService {
   ) async {
     final ref = _db.collection('users').doc(uid);
     final key = favoriteStockKey(market, ticker);
-    await _db.runTransaction((tx) async {
-      final snap = await tx.get(ref);
-      final data = snap.data() ?? <String, dynamic>{};
-      final ids = List<String>.from(data['favoriteStockIds'] ?? const []);
-      final stocks = Map<String, dynamic>.from(
-        (data['favoriteStocks'] as Map?) ?? const {},
-      );
-      if (isCurrentlyFav) {
-        ids.removeWhere((id) => id == key);
-        stocks.remove(key);
-      } else {
-        if (!ids.contains(key)) ids.insert(0, key);
-        stocks[key] = {
-          'ticker': ticker.trim().toUpperCase(),
-          'name': name.trim().isEmpty ? ticker.trim().toUpperCase() : name.trim(),
-          'market': market.trim().toUpperCase(),
-          'addedAt': DateTime.now().millisecondsSinceEpoch,
-        };
-      }
-      tx.set(ref, {
-        'favoriteStockIds': ids,
-        'favoriteStocks': stocks,
+
+    if (isCurrentlyFav) {
+      await ref.update({
+        'favoriteStocks.$key': FieldValue.delete(),
+        'favoriteStockIds': FieldValue.arrayRemove([key]),
         'lastActiveAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    });
+      });
+    } else {
+      await _db.runTransaction((tx) async {
+        final snap = await tx.get(ref);
+        final data = snap.data() ?? <String, dynamic>{};
+        final ids = List<String>.from(data['favoriteStockIds'] ?? const []);
+        if (!ids.contains(key)) ids.insert(0, key);
+        tx.set(ref, {
+          'favoriteStockIds': ids,
+          'favoriteStocks': {
+            key: {
+              'ticker': ticker.trim().toUpperCase(),
+              'name': name.trim().isEmpty ? ticker.trim().toUpperCase() : name.trim(),
+              'market': market.trim().toUpperCase(),
+              'addedAt': DateTime.now().millisecondsSinceEpoch,
+            },
+          },
+          'lastActiveAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      });
+    }
   }
 
   // ── 종료 추천주 ───────────────────────────────────────────────────────

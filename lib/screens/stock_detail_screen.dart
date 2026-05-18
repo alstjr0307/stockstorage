@@ -171,6 +171,10 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   String? _userVote; // 'up', 'down', null
   StockPick? _livePick;
 
+  // 관심종목 로컬 상태 (낙관적 업데이트용)
+  bool? _isFavoriteStock;
+  StreamSubscription<bool>? _favoriteStockSub;
+
   // 뉴스
   List<StockNews> _news = [];
   bool _loadingNews = true;
@@ -225,9 +229,28 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     _loadNews();
     _loadDiscussion();
     _subscribePick();
+    // 관심종목 탭에서 열리면 이미 등록된 상태 — 스트림 응답 전 깜빡임 방지
+    if (!widget.enablePickFeatures) _isFavoriteStock = true;
+    _subscribeFavoriteStock();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() => _revealReady = true);
+    });
+  }
+
+  void _subscribeFavoriteStock() {
+    final user = _currentUser;
+    if (user == null) return;
+    final stockKey = FirestoreService.favoriteStockKey(
+      widget.pick.market,
+      widget.pick.ticker,
+    );
+    _favoriteStockSub = _firestoreService
+        .watchIsFavoriteStock(user.uid, stockKey)
+        .listen((isFav) {
+      if (mounted && _isFavoriteStock != isFav) {
+        setState(() => _isFavoriteStock = isFav);
+      }
     });
   }
 
@@ -235,6 +258,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   void dispose() {
     _tabController.dispose();
     _pickSub?.cancel();
+    _favoriteStockSub?.cancel();
     _commentController.dispose();
     _memoController.dispose();
     super.dispose();
@@ -341,7 +365,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     );
   }
 
-  Future<void> _toggleFavoriteStock(bool isFavorite) async {
+  Future<void> _toggleFavoriteStock() async {
     final user = _currentUser;
     if (user == null) {
       if (!mounted) return;
@@ -351,25 +375,37 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       return;
     }
 
-    await _firestoreService.toggleFavoriteStock(
-      user.uid,
-      widget.pick,
-      isFavorite,
-    );
-    AnalyticsService.instance.logToggleFavorite(
-      ticker: widget.pick.ticker,
-      name: widget.pick.name,
-      added: !isFavorite,
-    );
+    final wasSelected = _isFavoriteStock ?? false;
+    // 낙관적 업데이트: 즉시 UI 반전
+    setState(() => _isFavoriteStock = !wasSelected);
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isFavorite ? '관심종목에서 해제했습니다.' : '관심종목에 등록했습니다.'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    try {
+      await _firestoreService.toggleFavoriteStock(
+        user.uid,
+        widget.pick,
+        wasSelected,
+      );
+      AnalyticsService.instance.logToggleFavorite(
+        ticker: widget.pick.ticker,
+        name: widget.pick.name,
+        added: !wasSelected,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(wasSelected ? '관심종목에서 해제했습니다.' : '관심종목에 등록했습니다.'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      // 실패 시 원상복구
+      if (mounted) setState(() => _isFavoriteStock = wasSelected);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('오류가 발생했습니다. 다시 시도해주세요.')),
+      );
+    }
   }
 
   Widget _favoriteButton(ColorScheme cs) {
@@ -436,59 +472,30 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   }
 
   Widget _favoriteStockButton(ColorScheme cs) {
-    final user = _currentUser;
-    final stockKey = FirestoreService.favoriteStockKey(
-      widget.pick.market,
-      widget.pick.ticker,
-    );
-    if (user == null) {
-      return OutlinedButton.icon(
-        onPressed: () => _toggleFavoriteStock(false),
-        icon: const Icon(Icons.star_border_rounded, size: 16),
-        label: const Text('관심종목'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: cs.onSurface.withValues(alpha: 0.7),
-          side: BorderSide(color: cs.onSurface.withValues(alpha: 0.16)),
-          visualDensity: VisualDensity.compact,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+    final isFavorite = _isFavoriteStock ?? false;
+    return OutlinedButton.icon(
+      onPressed: _currentUser == null ? null : _toggleFavoriteStock,
+      icon: Icon(
+        isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
+        size: 16,
+      ),
+      label: const Text('관심종목'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: isFavorite
+            ? const Color(0xFFF5B547)
+            : cs.onSurface.withValues(alpha: 0.7),
+        side: BorderSide(
+          color: isFavorite
+              ? const Color(0xFFF5B547).withValues(alpha: 0.46)
+              : cs.onSurface.withValues(alpha: 0.16),
         ),
-      );
-    }
-
-    return StreamBuilder<List<String>>(
-      stream: _firestoreService.getFavoriteStockIds(user.uid),
-      builder: (context, snapshot) {
-        final favoriteIds = snapshot.data ?? const <String>[];
-        final isFavorite = favoriteIds.contains(stockKey);
-        return OutlinedButton.icon(
-          onPressed: () => _toggleFavoriteStock(isFavorite),
-          icon: Icon(
-            isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
-            size: 16,
-          ),
-          label: const Text('관심종목'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: isFavorite
-                ? const Color(0xFFF5B547)
-                : cs.onSurface.withValues(alpha: 0.7),
-            side: BorderSide(
-              color: isFavorite
-                  ? const Color(0xFFF5B547).withValues(alpha: 0.46)
-                  : cs.onSurface.withValues(alpha: 0.16),
-            ),
-            backgroundColor: isFavorite
-                ? const Color(0xFFF5B547).withValues(alpha: 0.10)
-                : Colors.transparent,
-            visualDensity: VisualDensity.compact,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            textStyle: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        );
-      },
+        backgroundColor: isFavorite
+            ? const Color(0xFFF5B547).withValues(alpha: 0.10)
+            : Colors.transparent,
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+      ),
     );
   }
 
