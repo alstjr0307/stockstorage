@@ -1894,8 +1894,12 @@ class FirestoreService {
   }
 
   /// 봇 계정 글 등록 — 통계 카운트 없이 posts에만 저장
-  Future<void> createBotPost(Post post) async {
-    await _db.collection('posts').add(post.toFirestore());
+  Future<void> createBotPost(Post post, {required int level}) async {
+    await _db.collection('posts').add({
+      ...post.toFirestore(),
+      'authorLevel': level,
+      'isBot': true,
+    });
   }
 
   Future<void> updatePost(

@@ -783,6 +783,8 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
 
   void _openPost(BuildContext context, Post post, AuthProvider auth) {
     final isOwn = auth.user?.uid == post.uid;
+    final isAdmin = AuthService.adminUids.contains(auth.user?.uid ?? '');
+    final canDelete = isOwn || isAdmin;
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -804,7 +806,7 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
                   }
                 })
               : null,
-          onDelete: isOwn
+          onDelete: canDelete
               ? () async {
                   await _firestoreService.deletePost(post.id);
                   if (mounted) _refresh();
@@ -815,10 +817,10 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
                   if (mounted) _refresh();
                 }
               : null,
-          onReport: (!isOwn && auth.isLoggedIn)
+          onReport: (!isOwn && auth.isLoggedIn && !isAdmin)
               ? () => _handleReport(post, auth.user!.uid)
               : null,
-          onBlock: (!isOwn && auth.isLoggedIn)
+          onBlock: (!isOwn && auth.isLoggedIn && !isAdmin)
               ? () => _handleBlock(post, auth.user!.uid)
               : null,
         ),
@@ -2310,6 +2312,7 @@ class _PostCardState extends State<_PostCard> {
                   children: [
                     UserLevelAvatar(
                       uid: post.uid,
+                      levelOverride: post.authorLevel,
                       radius: 12,
                       backgroundColor: cs.onSurface.withValues(alpha: 0.08),
                       textStyle: TextStyle(
@@ -2867,6 +2870,7 @@ class _PostDetailSheetState extends State<_PostDetailSheet> {
               children: [
                 UserLevelAvatar(
                   uid: widget.post.uid,
+                  levelOverride: widget.post.authorLevel,
                   radius: 12,
                   backgroundColor: cs.onSurface.withValues(alpha: 0.08),
                   textStyle: TextStyle(

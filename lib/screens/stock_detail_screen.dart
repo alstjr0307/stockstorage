@@ -248,10 +248,10 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     _favoriteStockSub = _firestoreService
         .watchIsFavoriteStock(user.uid, stockKey)
         .listen((isFav) {
-      if (mounted && _isFavoriteStock != isFav) {
-        setState(() => _isFavoriteStock = isFav);
-      }
-    });
+          if (mounted && _isFavoriteStock != isFav) {
+            setState(() => _isFavoriteStock = isFav);
+          }
+        });
   }
 
   @override
@@ -402,9 +402,9 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       // 실패 시 원상복구
       if (mounted) setState(() => _isFavoriteStock = wasSelected);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('오류가 발생했습니다. 다시 시도해주세요.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('오류가 발생했습니다. 다시 시도해주세요.')));
     }
   }
 
@@ -1005,13 +1005,15 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                   child: TabBar(
                     controller: _tabController,
                     dividerColor: Colors.transparent,
-                    labelColor: isDark ? const Color(0xFF0A0E1A) : Colors.white,
+                    labelColor: isDark
+                        ? const Color(0xFF0A0E1A)
+                        : const Color(0xFF191F28),
                     unselectedLabelColor: cs.onSurface.withValues(
                       alpha: isDark ? 0.62 : 0.68,
                     ),
                     indicatorSize: TabBarIndicatorSize.tab,
                     indicator: BoxDecoration(
-                      color: isDark ? Colors.white : cs.onSurface,
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(9999),
                     ),
                     labelStyle: TextStyle(
@@ -1023,7 +1025,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                       fontWeight: FontWeight.w500,
                     ),
                     tabs: [
-                      const Tab(text: '차트'),
+                      Tab(text: widget.enablePickFeatures ? '개요' : '차트'),
                       const Tab(text: '관련 뉴스'),
                       Tab(text: isKorean ? '종목토론방' : ''),
                     ],

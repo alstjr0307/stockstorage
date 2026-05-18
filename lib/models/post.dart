@@ -9,6 +9,7 @@ class Post {
   final int likes;
   final DateTime createdAt;
   final List<String> imageUrls;
+  final int? authorLevel;
 
   Post({
     required this.id,
@@ -19,6 +20,7 @@ class Post {
     required this.likes,
     required this.createdAt,
     this.imageUrls = const [],
+    this.authorLevel,
   });
 
   factory Post.fromFirestore(DocumentSnapshot doc) {
@@ -32,6 +34,7 @@ class Post {
       likes: (d['likes'] as int?) ?? 0,
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       imageUrls: List<String>.from(d['imageUrls'] as List? ?? []),
+      authorLevel: (d['authorLevel'] as num?)?.toInt(),
     );
   }
 
@@ -43,5 +46,6 @@ class Post {
     'likes': likes,
     'createdAt': Timestamp.fromDate(createdAt),
     'imageUrls': imageUrls,
+    if (authorLevel != null) 'authorLevel': authorLevel,
   };
 }

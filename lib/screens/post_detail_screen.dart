@@ -330,7 +330,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   await _togglePostCommentNotification(!current);
                 },
               ),
-            if (widget.isOwn)
+            if (widget.isOwn ||
+                widget.onDelete != null ||
+                (!widget.isOwn &&
+                    (widget.onReport != null || widget.onBlock != null)))
               PopupMenuButton<String>(
                 icon: Icon(
                   Icons.more_vert,
@@ -341,18 +344,26 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                 onSelected: (v) async {
                   if (v == 'edit') await _openEdit();
                   if (v == 'delete') await _confirmDelete();
+                  if (v == 'report') await widget.onReport?.call();
+                  if (v == 'block') {
+                    final blocked = await widget.onBlock?.call();
+                    if (blocked == true && context.mounted) {
+                      Navigator.pop(context);
+                    }
+                  }
                 },
                 itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_outlined, size: 16),
-                        SizedBox(width: 8),
-                        Text('수정하기', style: TextStyle(fontSize: 14)),
-                      ],
+                  if (widget.isOwn)
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit_outlined, size: 16),
+                          SizedBox(width: 8),
+                          Text('수정하기', style: TextStyle(fontSize: 14)),
+                        ],
+                      ),
                     ),
-                  ),
                   if (widget.onDelete != null)
                     const PopupMenuItem(
                       value: 'delete',
@@ -374,27 +385,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                         ],
                       ),
                     ),
-                ],
-              )
-            else if (!widget.isOwn &&
-                (widget.onReport != null || widget.onBlock != null))
-              PopupMenuButton<String>(
-                icon: Icon(
-                  Icons.more_vert,
-                  size: 20,
-                  color: cs.onSurface.withValues(alpha: 0.4),
-                ),
-                color: cs.surface,
-                onSelected: (v) async {
-                  if (v == 'report') await widget.onReport?.call();
-                  if (v == 'block') {
-                    final blocked = await widget.onBlock?.call();
-                    if (blocked == true && context.mounted) {
-                      Navigator.pop(context);
-                    }
-                  }
-                },
-                itemBuilder: (_) => [
                   if (widget.onReport != null)
                     PopupMenuItem(
                       value: 'report',
@@ -466,6 +456,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             children: [
                               UserLevelAvatar(
                                 uid: widget.post.uid,
+                                levelOverride: widget.post.authorLevel,
                                 radius: 11.5,
                                 backgroundColor: cs.onSurface.withValues(
                                   alpha: 0.08,

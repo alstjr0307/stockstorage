@@ -9,12 +9,14 @@ class UserLevelAvatar extends StatelessWidget {
     required this.radius,
     required this.backgroundColor,
     required this.textStyle,
+    this.levelOverride,
   });
 
   final String uid;
   final double radius;
   final Color backgroundColor;
   final TextStyle textStyle;
+  final int? levelOverride;
 
   static final FirestoreService _firestoreService = FirestoreService();
 
@@ -53,6 +55,18 @@ class UserLevelAvatar extends StatelessWidget {
           Icons.workspace_premium_rounded,
           size: radius * 0.9,
           color: adminAccent,
+        ),
+      );
+    }
+
+    final fixedLevel = levelOverride;
+    if (fixedLevel != null) {
+      final accent = _levelColor(fixedLevel);
+      return _buildAvatarShell(
+        accent: accent,
+        child: Text(
+          '$fixedLevel',
+          style: textStyle.copyWith(color: accent, fontWeight: FontWeight.w800),
         ),
       );
     }

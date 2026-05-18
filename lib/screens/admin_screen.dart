@@ -1244,28 +1244,71 @@ class _BotPostTab extends StatefulWidget {
 }
 
 class _BotPostTabState extends State<_BotPostTab> {
-  // 일반 유저처럼 보이는 닉네임 풀
-  static const _fakeNicknames = [
-    '재테크고수',
-    '개미투자자',
-    '주식공부중',
-    '투자하는사람',
-    '코스피라이더',
-    '배당주좋아',
-    '장기투자중',
-    '차트분석러',
-    '퀀트공부',
-    '가치투자자',
+  // 일반 유저처럼 보이는 봇 프로필 풀
+  static const _fakeProfiles = [
+    (nickname: '오늘도맑음', level: 4),
+    (nickname: '소소한하루', level: 5),
+    (nickname: '커피한잔', level: 6),
+    (nickname: '밤산책', level: 3),
+    (nickname: '느긋한사람', level: 7),
+    (nickname: '초코라떼', level: 5),
+    (nickname: '파란노트', level: 4),
+    (nickname: '하루기록', level: 8),
+    (nickname: '조용한방', level: 6),
+    (nickname: '민트초코', level: 3),
+    (nickname: '구름위로', level: 5),
+    (nickname: '작은습관', level: 7),
+    (nickname: '동네친구', level: 4),
+    (nickname: '새벽감성', level: 6),
+    (nickname: '읽는사람', level: 8),
+    (nickname: '기록중', level: 5),
+    (nickname: '단팥빵', level: 3),
+    (nickname: '노을빛', level: 6),
+    (nickname: '심심한날', level: 4),
+    (nickname: '바람소리', level: 7),
+    (nickname: '두부멘탈', level: 5),
+    (nickname: '느린거북', level: 3),
+    (nickname: '아침햇살', level: 8),
+    (nickname: '잠깐들림', level: 4),
+    (nickname: '라면먹자', level: 6),
+    (nickname: '고요한밤', level: 7),
+    (nickname: '낮잠필요', level: 5),
+    (nickname: '물한잔', level: 3),
+    (nickname: '먼지없는날', level: 6),
+    (nickname: '흰운동화', level: 4),
+    (nickname: '달달한거', level: 8),
+    (nickname: '노트정리', level: 5),
+    (nickname: '어쩌다보니', level: 7),
+    (nickname: '그냥웃자', level: 4),
+    (nickname: '버터토스트', level: 6),
+    (nickname: '청량한밤', level: 3),
+    (nickname: '고민중', level: 5),
+    (nickname: '천천히가자', level: 8),
+    (nickname: '작은방', level: 4),
+    (nickname: '여름비', level: 6),
+    (nickname: '메모장', level: 7),
+    (nickname: '대충살자', level: 5),
+    (nickname: '반짝이는중', level: 3),
+    (nickname: '오늘뭐하지', level: 6),
+    (nickname: '혼잣말', level: 4),
+    (nickname: '따뜻한물', level: 8),
+    (nickname: '가벼운마음', level: 5),
+    (nickname: '문득생각', level: 7),
+    (nickname: '책상정리', level: 4),
+    (nickname: '느낌표', level: 6),
   ];
 
   // Firebase uid 형식(28자 영숫자)처럼 보이는 가짜 uid 생성
   static String _fakeBotUid() {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const chars =
+        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     final rng = DateTime.now().millisecondsSinceEpoch;
     final buf = StringBuffer();
     var seed = rng;
     for (var i = 0; i < 28; i++) {
-      seed = (seed * 6364136223846793005 + 1442695040888963407) & 0x7FFFFFFFFFFFFFFF;
+      seed =
+          (seed * 6364136223846793005 + 1442695040888963407) &
+          0x7FFFFFFFFFFFFFFF;
       buf.write(chars[seed % chars.length]);
     }
     return buf.toString();
@@ -1289,7 +1332,7 @@ class _BotPostTabState extends State<_BotPostTab> {
     if (title.isEmpty || body.isEmpty || _saving) return;
 
     final rng = DateTime.now().millisecondsSinceEpoch;
-    final nickname = _fakeNicknames[rng % _fakeNicknames.length];
+    final profile = _fakeProfiles[rng % _fakeProfiles.length];
     final fakeUid = _fakeBotUid();
 
     setState(() => _saving = true);
@@ -1298,20 +1341,24 @@ class _BotPostTabState extends State<_BotPostTab> {
         Post(
           id: '',
           uid: fakeUid,
-          nickname: nickname,
+          nickname: profile.nickname,
           title: title,
           content: body,
           likes: 0,
           createdAt: DateTime.now(),
           imageUrls: const [],
+          authorLevel: profile.level,
         ),
+        level: profile.level,
       );
       if (!mounted) return;
       _titleCtrl.clear();
       _bodyCtrl.clear();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$nickname 이름으로 글을 등록했습니다.'),
+          content: Text(
+            '${profile.nickname} Lv.${profile.level} 이름으로 글을 등록했습니다.',
+          ),
           backgroundColor: const Color(0xFF10B981),
         ),
       );
@@ -1354,7 +1401,7 @@ class _BotPostTabState extends State<_BotPostTab> {
               ),
               const SizedBox(height: 6),
               Text(
-                '닉네임은 등록할 때마다 봇계정 이름으로 자동 지정됩니다.',
+                '닉네임과 레벨은 등록할 때마다 봇계정 프로필로 자동 지정됩니다.',
                 style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.45),
                   fontSize: 12,
