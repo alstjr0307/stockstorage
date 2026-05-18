@@ -436,14 +436,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         }
                       },
                     )
-                  : Text(
-                      _tabTitles[_currentPage],
-                      style: TextStyle(
-                        color: isHome || isDark ? Colors.white : Colors.black87,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 20,
-                      ),
-                    ),
+                  : null,
               actions: _buildTopActions(
                 auth,
                 isDarkSurface: isHome || isDark,
