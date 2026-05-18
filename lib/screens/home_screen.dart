@@ -1570,7 +1570,7 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                   _HomeReveal(
                     order: 8,
                     child: _DarkHomeSection(
-                      title: '⭐ 오늘의 관심종목',
+                      title: '⭐ 관심종목',
                       child: _FavoriteStocksPreview(
                         firestoreService: widget.firestoreService,
                         auth: widget.auth,
@@ -4391,7 +4391,7 @@ class _FavoriteStocksSummary extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '⭐ 오늘의 관심종목',
+          '⭐ 관심종목',
           style: TextStyle(
             color: cs.onSurface,
             fontSize: 26,
@@ -5197,15 +5197,15 @@ class _QuickMenu extends StatelessWidget {
           childAspectRatio: 2.18,
           children: [
             _QuickMenuTile(
-              icon: Icons.search_rounded,
-              label: '종목 검색',
-              onTap: openStockSearch,
-              emphasized: true,
-            ),
-            _QuickMenuTile(
               icon: Icons.show_chart_rounded,
               label: '운영자 추천주',
               onTap: openStockPicks,
+              emphasized: true,
+            ),
+            _QuickMenuTile(
+              icon: Icons.search_rounded,
+              label: '종목 검색',
+              onTap: openStockSearch,
             ),
             _QuickMenuTile(
               icon: Icons.analytics_outlined,

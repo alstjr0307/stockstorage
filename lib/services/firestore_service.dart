@@ -605,6 +605,42 @@ class FirestoreService {
     });
   }
 
+  Future<void> toggleFavoriteStockByInfo(
+    String uid,
+    String ticker,
+    String name,
+    String market,
+    bool isCurrentlyFav,
+  ) async {
+    final ref = _db.collection('users').doc(uid);
+    final key = favoriteStockKey(market, ticker);
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(ref);
+      final data = snap.data() ?? <String, dynamic>{};
+      final ids = List<String>.from(data['favoriteStockIds'] ?? const []);
+      final stocks = Map<String, dynamic>.from(
+        (data['favoriteStocks'] as Map?) ?? const {},
+      );
+      if (isCurrentlyFav) {
+        ids.removeWhere((id) => id == key);
+        stocks.remove(key);
+      } else {
+        if (!ids.contains(key)) ids.insert(0, key);
+        stocks[key] = {
+          'ticker': ticker.trim().toUpperCase(),
+          'name': name.trim().isEmpty ? ticker.trim().toUpperCase() : name.trim(),
+          'market': market.trim().toUpperCase(),
+          'addedAt': DateTime.now().millisecondsSinceEpoch,
+        };
+      }
+      tx.set(ref, {
+        'favoriteStockIds': ids,
+        'favoriteStocks': stocks,
+        'lastActiveAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    });
+  }
+
   // ── 종료 추천주 ───────────────────────────────────────────────────────
   Future<void> closeStockPick(String id, double closedPrice) {
     return _db.collection('stock_picks').doc(id).update({

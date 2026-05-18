@@ -1822,10 +1822,11 @@ function selectFeatureStocks(items) {
       }
       return b.score - a.score || b.tradingValue - a.tradingValue;
     });
-    selected.push(...sorted.slice(0, FEATURE_MAX_PER_GROUP));
+    // Dedup within each group/pattern bucket only — cross-group duplicates are intentional
+    const deduped = mergeFeatureItemsByTicker(sorted);
+    selected.push(...deduped.slice(0, FEATURE_MAX_PER_GROUP));
   }
-  const deduped = mergeFeatureItemsByTicker(selected);
-  return deduped.sort((a, b) => b.score - a.score || b.tradingValue - a.tradingValue);
+  return selected.sort((a, b) => b.score - a.score || b.tradingValue - a.tradingValue);
 }
 
 function parseKstSourceDate(value) {

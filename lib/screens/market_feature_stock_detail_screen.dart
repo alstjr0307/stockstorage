@@ -1,12 +1,15 @@
 import 'dart:convert';
 import 'dart:ui' as ui;
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/market_feature_stock.dart';
+import '../services/analytics_service.dart';
+import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
 
 typedef _FeatureCandle = ({
@@ -17,16 +20,62 @@ typedef _FeatureCandle = ({
   double close,
 });
 
-class MarketFeatureStockDetailScreen extends StatelessWidget {
+class MarketFeatureStockDetailScreen extends StatefulWidget {
   const MarketFeatureStockDetailScreen({super.key, required this.item});
 
   final MarketFeatureStock item;
 
+  static const accent = Color(0xFF10B981);
+  static const up = Color(0xFFF04452);
+  static const down = Color(0xFF1677FF);
+
+  @override
+  State<MarketFeatureStockDetailScreen> createState() =>
+      _MarketFeatureStockDetailScreenState();
+}
+
+class _MarketFeatureStockDetailScreenState
+    extends State<MarketFeatureStockDetailScreen> {
+  final _firestoreService = FirestoreService();
+
   static final _numberFormat = NumberFormat('#,###');
 
-  static const _accent = Color(0xFF10B981);
-  static const _up = Color(0xFFF04452);
-  static const _down = Color(0xFF1677FF);
+  static const _up = MarketFeatureStockDetailScreen.up;
+  static const _down = MarketFeatureStockDetailScreen.down;
+
+  User? get _currentUser => FirebaseAuth.instance.currentUser;
+
+  MarketFeatureStock get item => widget.item;
+
+  Future<void> _toggleFavorite(bool isCurrentlyFav) async {
+    final user = _currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로그인 후 관심종목에 등록할 수 있습니다.')),
+      );
+      return;
+    }
+    await _firestoreService.toggleFavoriteStockByInfo(
+      user.uid,
+      item.ticker,
+      item.name,
+      item.market,
+      isCurrentlyFav,
+    );
+    AnalyticsService.instance.logToggleFavorite(
+      ticker: item.ticker,
+      name: item.name,
+      added: !isCurrentlyFav,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isCurrentlyFav ? '관심종목에서 해제했습니다.' : '관심종목에 등록했습니다.'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +84,9 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
     final bg = theme.scaffoldBackgroundColor;
     final isUp = item.changeRate >= 0;
     final moveColor = isUp ? _up : _down;
+
+    final uid = _currentUser?.uid;
+    final favKey = FirestoreService.favoriteStockKey(item.market, item.ticker);
 
     return Scaffold(
       backgroundColor: bg,
@@ -79,7 +131,14 @@ class MarketFeatureStockDetailScreen extends StatelessWidget {
             isUp: isUp,
             featureTitle: _featureTitle(item),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 16),
+          _FavoriteStockButton(
+            uid: uid,
+            favKey: favKey,
+            firestoreService: _firestoreService,
+            onToggle: _toggleFavorite,
+          ),
+          const SizedBox(height: 12),
           _FeaturePriceChart(item: item, lineColor: moveColor),
           const SizedBox(height: 30),
           _SectionHeader(title: '포착 정보'),
@@ -475,10 +534,10 @@ class _FeaturePriceChartState extends State<_FeaturePriceChart> {
                         ? _FeatureCandleChartPainter(
                             candles: data,
                             markerDate: widget.item.sourceDate,
-                            upColor: MarketFeatureStockDetailScreen._up,
-                            downColor: MarketFeatureStockDetailScreen._down,
+                            upColor: MarketFeatureStockDetailScreen.up,
+                            downColor: MarketFeatureStockDetailScreen.down,
                             labelColor: cs.onSurface.withValues(alpha: 0.42),
-                            markerColor: MarketFeatureStockDetailScreen._accent,
+                            markerColor: MarketFeatureStockDetailScreen.accent,
                             gridColor: cs.onSurface.withValues(alpha: 0.06),
                             progress: progress,
                           )
@@ -490,7 +549,7 @@ class _FeaturePriceChartState extends State<_FeaturePriceChart> {
                             markerDate: widget.item.sourceDate,
                             color: widget.lineColor,
                             labelColor: cs.onSurface.withValues(alpha: 0.42),
-                            markerColor: MarketFeatureStockDetailScreen._accent,
+                            markerColor: MarketFeatureStockDetailScreen.accent,
                             gridColor: cs.onSurface.withValues(alpha: 0.06),
                             progress: progress,
                           ),
@@ -1305,6 +1364,69 @@ class _NaverPostTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _FavoriteStockButton extends StatelessWidget {
+  const _FavoriteStockButton({
+    required this.uid,
+    required this.favKey,
+    required this.firestoreService,
+    required this.onToggle,
+  });
+
+  final String? uid;
+  final String favKey;
+  final FirestoreService firestoreService;
+  final void Function(bool isCurrentlyFav) onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    if (uid == null) {
+      return OutlinedButton.icon(
+        onPressed: () => onToggle(false),
+        icon: const Icon(Icons.star_border_rounded, size: 16),
+        label: const Text('관심종목'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: cs.onSurface.withValues(alpha: 0.7),
+          side: BorderSide(color: cs.onSurface.withValues(alpha: 0.16)),
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+        ),
+      );
+    }
+    return StreamBuilder<List<String>>(
+      stream: firestoreService.getFavoriteStockIds(uid!),
+      builder: (context, snapshot) {
+        final isFav = snapshot.data?.contains(favKey) ?? false;
+        return OutlinedButton.icon(
+          onPressed: () => onToggle(isFav),
+          icon: Icon(
+            isFav ? Icons.star_rounded : Icons.star_border_rounded,
+            size: 16,
+          ),
+          label: const Text('관심종목'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: isFav
+                ? const Color(0xFFF5B547)
+                : cs.onSurface.withValues(alpha: 0.7),
+            side: BorderSide(
+              color: isFav
+                  ? const Color(0xFFF5B547).withValues(alpha: 0.46)
+                  : cs.onSurface.withValues(alpha: 0.16),
+            ),
+            backgroundColor: isFav
+                ? const Color(0xFFF5B547).withValues(alpha: 0.10)
+                : Colors.transparent,
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+          ),
+        );
+      },
     );
   }
 }
