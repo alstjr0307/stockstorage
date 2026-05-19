@@ -311,7 +311,13 @@
         <input type="file" id="an-img-input" accept="image/*" multiple style="display:none" onchange="handleImgSelect(this.files)" />
         <div id="an-img-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>
       </div>
-      <button class="submit-btn" id="an-btn" onclick="addAnalysis()">시황 분석 등록</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="submit-btn" id="an-btn" onclick="addAnalysis()" style="flex:1;">시황 분석 등록</button>
+        <button id="an-cancel-edit-btn" onclick="cancelAnalysisEdit()" style="
+          display:none;padding:12px 16px;border:none;border-radius:8px;
+          background:#2a3550;color:#cbd5e1;font-weight:700;cursor:pointer;
+        ">수정 취소</button>
+      </div>
       <div id="an-msg" class="msg"></div>
     </div>
 
@@ -627,6 +633,7 @@
 
   // 이미지 선택 관리
   let anImgFiles = [];
+  let editingAnalysisId = null;
   const MAX_IMGS = 5;
 
   function makeImgToken(id) {
@@ -729,6 +736,22 @@
       .trim();
   }
 
+  function resetAnalysisForm() {
+    document.getElementById('an-title').value = '';
+    document.getElementById('an-body').value = '';
+    anImgFiles = [];
+    editingAnalysisId = null;
+    renderImgPreviews();
+    document.getElementById('an-img-drop').style.display = 'block';
+    document.getElementById('an-btn').textContent = '시황 분석 등록';
+    document.getElementById('an-cancel-edit-btn').style.display = 'none';
+  }
+
+  window.cancelAnalysisEdit = () => {
+    resetAnalysisForm();
+    showMsg(document.getElementById('an-msg'), 'success', '수정을 취소했습니다.');
+  };
+
   // 시황 분석 등록
   window.addAnalysis = async () => {
     const btn = document.getElementById('an-btn');
@@ -737,24 +760,30 @@
     const rawBody = document.getElementById('an-body').value.trim();
     if (!title || !rawBody) { showMsg(msg, 'error', '제목과 내용을 입력하세요.'); return; }
     btn.disabled = true;
-    btn.textContent = anImgFiles.length > 0 ? '이미지 업로드 중...' : '등록 중...';
+    const isEditing = !!editingAnalysisId;
+    btn.textContent = anImgFiles.length > 0 ? '이미지 업로드 중...' : (isEditing ? '수정 중...' : '등록 중...');
     try {
       const usedImages = anImgFiles.filter(item => rawBody.includes(makeImgToken(item.id)));
       const uploaded = usedImages.length > 0 ? await uploadAnalysisImages(usedImages) : {};
       const body = replaceImageTokens(rawBody, uploaded);
-      btn.textContent = '등록 중...';
-      await addDoc(collection(db, 'market_analyses'), {
-        title, body, imageUrls: [], createdAt: serverTimestamp(),
-      });
-      showMsg(msg, 'success', '✓ 시황 분석이 등록되었습니다.');
-      document.getElementById('an-title').value = '';
-      document.getElementById('an-body').value = '';
-      anImgFiles = [];
-      renderImgPreviews();
-      document.getElementById('an-img-drop').style.display = 'block';
+      btn.textContent = isEditing ? '수정 중...' : '등록 중...';
+      if (isEditing) {
+        await updateDoc(doc(db, 'market_analyses', editingAnalysisId), {
+          title, body, imageUrls: [],
+        });
+        delete analysisCache[editingAnalysisId];
+        showMsg(msg, 'success', '✓ 시황 분석이 수정되었습니다.');
+      } else {
+        await addDoc(collection(db, 'market_analyses'), {
+          title, body, imageUrls: [], createdAt: serverTimestamp(),
+        });
+        showMsg(msg, 'success', '✓ 시황 분석이 등록되었습니다.');
+      }
+      resetAnalysisForm();
       loadAnalyses();
     } catch(e) { showMsg(msg, 'error', '오류: ' + e.message); }
-    btn.disabled = false; btn.textContent = '시황 분석 등록';
+    btn.disabled = false;
+    btn.textContent = editingAnalysisId ? '시황 분석 수정 저장' : '시황 분석 등록';
   };
 
   // 시황 분석 목록 로드
@@ -778,6 +807,7 @@
             </div>
             <div class="pick-card-actions">
               <button class="action-btn btn-complete" onclick="openAnalysisModal('${d.id}')">보기</button>
+              <button class="action-btn" onclick="editAnalysis('${d.id}')" style="background:#334155;color:#e2e8f0;">수정</button>
               <button class="action-btn btn-delete" onclick="deleteAnalysis('${d.id}', '${data.title.replace(/'/g, "\\'")}')">삭제</button>
             </div>
           </div>`;
@@ -789,17 +819,31 @@
 
   // 시황 분석 디테일 모달
   let analysisCache = {};
+  async function ensureAnalysis(id) {
+    if (!analysisCache[id]) {
+      const snap = await getDocs(query(collection(db, 'market_analyses')));
+      snap.docs.forEach(d => { analysisCache[d.id] = { id: d.id, ...d.data() }; });
+    }
+    return analysisCache[id];
+  }
+
+  function bodyForAnalysisEdit(data) {
+    const body = data.body || '';
+    const legacyImages = data.imageUrls || [];
+    if (!legacyImages.length || body.includes('![](')) return body;
+    return [
+      body,
+      ...legacyImages.map(url => `![](${url})`),
+    ].filter(Boolean).join('\n\n');
+  }
+
   window.openAnalysisModal = async (id) => {
     document.getElementById('analysis-modal').classList.add('open');
     document.getElementById('an-detail-title').textContent = '불러오는 중...';
     document.getElementById('an-detail-date').textContent = '';
     document.getElementById('an-detail-body').textContent = '';
     try {
-      if (!analysisCache[id]) {
-        const snap = await getDocs(query(collection(db, 'market_analyses')));
-        snap.docs.forEach(d => { analysisCache[d.id] = { id: d.id, ...d.data() }; });
-      }
-      const data = analysisCache[id];
+      const data = await ensureAnalysis(id);
       document.getElementById('an-detail-title').textContent = data.title;
       document.getElementById('an-detail-date').textContent = data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString('ko-KR') : '';
       document.getElementById('an-detail-body').textContent = data.body;
@@ -818,11 +862,30 @@
     document.getElementById('analysis-modal').classList.remove('open');
   };
 
+  window.editAnalysis = async (id) => {
+    try {
+      const data = await ensureAnalysis(id);
+      editingAnalysisId = id;
+      anImgFiles = [];
+      document.getElementById('an-title').value = data.title || '';
+      document.getElementById('an-body').value = bodyForAnalysisEdit(data);
+      renderImgPreviews();
+      document.getElementById('an-btn').textContent = '시황 분석 수정 저장';
+      document.getElementById('an-cancel-edit-btn').style.display = 'inline-block';
+      document.getElementById('an-title').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      showMsg(document.getElementById('an-msg'), 'success', '수정할 내용을 불러왔습니다. 기존 본문 이미지 URL은 그대로 유지됩니다.');
+    } catch(e) {
+      alert('오류: ' + e.message);
+    }
+  };
+
   // 시황 분석 삭제
   window.deleteAnalysis = async (id, title) => {
     if (!confirm(`"${title}" 시황 분석을 삭제할까요?`)) return;
     try {
       await deleteDoc(doc(db, 'market_analyses', id));
+      delete analysisCache[id];
+      if (editingAnalysisId === id) resetAnalysisForm();
       loadAnalyses();
     } catch(e) { alert('오류: ' + e.message); }
   };
