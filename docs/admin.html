@@ -297,7 +297,7 @@
         <textarea id="an-body" placeholder="시황 분석 내용을 입력하세요..." style="min-height:200px;"></textarea>
       </div>
       <div>
-        <label>이미지 첨부 (최대 5장)</label>
+        <label>본문 중간 이미지 첨부 (최대 5장)</label>
         <div id="an-img-drop" style="
           border: 2px dashed #2a3550; border-radius: 10px; padding: 20px;
           text-align: center; cursor: pointer; color: #555; font-size: 13px;
@@ -306,7 +306,7 @@
            ondragover="event.preventDefault();this.style.borderColor='#4ADE80'"
            ondragleave="this.style.borderColor='#2a3550'"
            ondrop="handleImgDrop(event)">
-          클릭하거나 이미지를 드래그해서 추가하세요
+          클릭하거나 이미지를 드래그하면 현재 커서 위치에 삽입됩니다
         </div>
         <input type="file" id="an-img-input" accept="image/*" multiple style="display:none" onchange="handleImgSelect(this.files)" />
         <div id="an-img-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>
@@ -629,14 +629,40 @@
   let anImgFiles = [];
   const MAX_IMGS = 5;
 
+  function makeImgToken(id) {
+    return `[[이미지:${id}]]`;
+  }
+
+  function insertAtBodyCursor(text) {
+    const bodyEl = document.getElementById('an-body');
+    const start = bodyEl.selectionStart ?? bodyEl.value.length;
+    const end = bodyEl.selectionEnd ?? bodyEl.value.length;
+    const before = bodyEl.value.slice(0, start);
+    const after = bodyEl.value.slice(end);
+    const prefix = before && !before.endsWith('\n') ? '\n\n' : '';
+    const suffix = after && !after.startsWith('\n') ? '\n\n' : '';
+    const insert = `${prefix}${text}${suffix}`;
+    bodyEl.value = before + insert + after;
+    const pos = before.length + insert.length;
+    bodyEl.focus();
+    bodyEl.setSelectionRange(pos, pos);
+  }
+
   window.handleImgSelect = (files) => {
     const newFiles = Array.from(files);
+    const inserted = [];
     for (const f of newFiles) {
       if (anImgFiles.length >= MAX_IMGS) break;
-      if (!anImgFiles.find(x => x.name === f.name && x.size === f.size)) {
-        anImgFiles.push(f);
+      if (!anImgFiles.find(x => x.file.name === f.name && x.file.size === f.size)) {
+        const item = {
+          id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          file: f,
+        };
+        anImgFiles.push(item);
+        inserted.push(makeImgToken(item.id));
       }
     }
+    if (inserted.length) insertAtBodyCursor(inserted.join('\n\n'));
     renderImgPreviews();
     document.getElementById('an-img-input').value = '';
   };
@@ -648,38 +674,59 @@
   };
 
   window.removeImgPreview = (idx) => {
+    const item = anImgFiles[idx];
+    if (item) {
+      const bodyEl = document.getElementById('an-body');
+      bodyEl.value = bodyEl.value
+        .replace(makeImgToken(item.id), '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    }
     anImgFiles.splice(idx, 1);
     renderImgPreviews();
   };
 
   function renderImgPreviews() {
     const container = document.getElementById('an-img-preview');
-    container.innerHTML = anImgFiles.map((f, i) => {
-      const url = URL.createObjectURL(f);
+    container.innerHTML = anImgFiles.map((item, i) => {
+      const url = URL.createObjectURL(item.file);
       return `
-        <div style="position:relative;width:80px;height:80px;flex-shrink:0;">
+        <div style="position:relative;width:92px;flex-shrink:0;">
           <img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #2a3550;" />
           <button onclick="removeImgPreview(${i})" style="
             position:absolute;top:-6px;right:-6px;width:20px;height:20px;
             background:#f87171;border:none;border-radius:50%;color:#fff;
             font-size:12px;cursor:pointer;line-height:20px;padding:0;
           ">✕</button>
+          <div style="font-size:10px;color:#7b8499;margin-top:4px;word-break:break-all;">본문삽입됨</div>
         </div>`;
     }).join('');
     const drop = document.getElementById('an-img-drop');
     drop.style.display = anImgFiles.length >= MAX_IMGS ? 'none' : 'block';
   }
 
-  async function uploadAnalysisImages(files) {
-    const urls = [];
-    for (const f of files) {
+  async function uploadAnalysisImages(items) {
+    const uploaded = {};
+    for (const item of items) {
+      const f = item.file;
       const path = `market_analyses/${Date.now()}_${f.name}`;
       const storageRef = ref(storage, path);
       await uploadBytes(storageRef, f);
       const url = await getDownloadURL(storageRef);
-      urls.push(url);
+      uploaded[item.id] = url;
     }
-    return urls;
+    return uploaded;
+  }
+
+  function replaceImageTokens(body, uploaded) {
+    let nextBody = body;
+    for (const [id, url] of Object.entries(uploaded)) {
+      nextBody = nextBody.replaceAll(makeImgToken(id), `![](${url})`);
+    }
+    return nextBody
+      .replace(/\[\[이미지:[^\]]+\]\]/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
   }
 
   // 시황 분석 등록
@@ -687,15 +734,17 @@
     const btn = document.getElementById('an-btn');
     const msg = document.getElementById('an-msg');
     const title = document.getElementById('an-title').value.trim();
-    const body = document.getElementById('an-body').value.trim();
-    if (!title || !body) { showMsg(msg, 'error', '제목과 내용을 입력하세요.'); return; }
+    const rawBody = document.getElementById('an-body').value.trim();
+    if (!title || !rawBody) { showMsg(msg, 'error', '제목과 내용을 입력하세요.'); return; }
     btn.disabled = true;
     btn.textContent = anImgFiles.length > 0 ? '이미지 업로드 중...' : '등록 중...';
     try {
-      const imageUrls = anImgFiles.length > 0 ? await uploadAnalysisImages(anImgFiles) : [];
+      const usedImages = anImgFiles.filter(item => rawBody.includes(makeImgToken(item.id)));
+      const uploaded = usedImages.length > 0 ? await uploadAnalysisImages(usedImages) : {};
+      const body = replaceImageTokens(rawBody, uploaded);
       btn.textContent = '등록 중...';
       await addDoc(collection(db, 'market_analyses'), {
-        title, body, imageUrls, createdAt: serverTimestamp(),
+        title, body, imageUrls: [], createdAt: serverTimestamp(),
       });
       showMsg(msg, 'success', '✓ 시황 분석이 등록되었습니다.');
       document.getElementById('an-title').value = '';
