@@ -2560,7 +2560,7 @@ class _MarketClockState extends State<_MarketClock> {
 
   DateTime _nowInKst() {
     final kst = DateTime.now().toUtc().add(const Duration(hours: 9));
-    return DateTime(
+    return DateTime.utc(
       kst.year,
       kst.month,
       kst.day,
@@ -2621,15 +2621,15 @@ class _MarketSessionStatus {
   static List<({String name, DateTime start, DateTime end})> _buildSessions(
     DateTime now,
   ) {
-    final today = DateTime(now.year, now.month, now.day);
+    final today = DateTime.utc(now.year, now.month, now.day);
     final sessions = <({String name, DateTime start, DateTime end})>[];
     for (var offset = -1; offset <= 8; offset++) {
       final day = today.add(Duration(days: offset));
       if (day.weekday >= DateTime.monday && day.weekday <= DateTime.friday) {
         sessions.add((
           name: '국장',
-          start: DateTime(day.year, day.month, day.day, 9),
-          end: DateTime(day.year, day.month, day.day, 15, 30),
+          start: DateTime.utc(day.year, day.month, day.day, 9),
+          end: DateTime.utc(day.year, day.month, day.day, 15, 30),
         ));
         final usOpen = _usRegularOpenKst(day);
         sessions.add((
@@ -2645,18 +2645,22 @@ class _MarketSessionStatus {
 
   static DateTime _usRegularOpenKst(DateTime kstDate) {
     final hour = _isUsDaylightSavingTime(kstDate) ? 22 : 23;
-    return DateTime(kstDate.year, kstDate.month, kstDate.day, hour, 30);
+    return DateTime.utc(kstDate.year, kstDate.month, kstDate.day, hour, 30);
   }
 
   static bool _isUsDaylightSavingTime(DateTime marketDate) {
     final dstStart = _nthSunday(marketDate.year, DateTime.march, 2);
     final dstEnd = _nthSunday(marketDate.year, DateTime.november, 1);
-    final date = DateTime(marketDate.year, marketDate.month, marketDate.day);
+    final date = DateTime.utc(
+      marketDate.year,
+      marketDate.month,
+      marketDate.day,
+    );
     return !date.isBefore(dstStart) && date.isBefore(dstEnd);
   }
 
   static DateTime _nthSunday(int year, int month, int nth) {
-    final first = DateTime(year, month);
+    final first = DateTime.utc(year, month);
     final daysUntilSunday = DateTime.sunday - first.weekday;
     return first.add(Duration(days: daysUntilSunday + 7 * (nth - 1)));
   }
