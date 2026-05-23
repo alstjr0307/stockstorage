@@ -1344,20 +1344,68 @@ async function fetchSectorData() {
   }
 }
 
-/** 네이버 금융 모바일 API에서 코스피/코스닥 상승·하락·보합 종목수 */
+function isPlainListedStock(item) {
+  const endType = String(item.stockEndType || '').toLowerCase();
+  const name = String(item.stockName || '').trim().toUpperCase();
+  if (endType && endType !== 'stock') return false;
+  if (!name) return false;
+  return !/^(KODEX|TIGER|ACE|SOL|KBSTAR|ARIRANG|HANARO|KOSEF|TIMEFOLIO|PLUS|RISE|히어로즈|마이티|TREX|FOCUS|BNK|UNICORN|WOORI|파워|SMART|QV|TRUE)\s?/.test(name) &&
+    !name.includes(' ETF') &&
+    !name.includes(' ETN') &&
+    !name.includes('인버스') &&
+    !name.includes('레버리지');
+}
+
+async function fetchMarketStockList(market) {
+  const pageSize = 100;
+  const first = await axios.get(
+    `https://m.stock.naver.com/api/stocks/marketValue/${market}?page=1&pageSize=${pageSize}`,
+    { headers: NAVER_MOBILE_HEADERS, timeout: 8000 }
+  );
+  const totalCount = Number(first.data?.totalCount || first.data?.stocks?.length || 0);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const pages = [first.data];
+  if (totalPages > 1) {
+    const rest = await Promise.all(
+      Array.from({ length: totalPages - 1 }, (_, i) =>
+        axios.get(
+          `https://m.stock.naver.com/api/stocks/marketValue/${market}?page=${i + 2}&pageSize=${pageSize}`,
+          { headers: NAVER_MOBILE_HEADERS, timeout: 8000 }
+        ).then(res => res.data)
+      )
+    );
+    pages.push(...rest);
+  }
+  return pages.flatMap(page => page?.stocks || []);
+}
+
+function countBreadthFromStocks(stocks) {
+  return stocks.filter(isPlainListedStock).reduce((acc, item) => {
+    const rate = Number(item.fluctuationsRatio || 0);
+    const code = String(item.compareToPreviousPrice?.code || '');
+    const name = String(item.compareToPreviousPrice?.name || '');
+    if (rate > 0 || code === '2' || name === 'RISING') acc.up += 1;
+    else if (rate < 0 || code === '5' || name === 'FALLING') acc.down += 1;
+    else acc.flat += 1;
+    return acc;
+  }, { up: 0, down: 0, flat: 0, excludes: 'ETF/ETN 제외' });
+}
+
+/** 네이버 금융 모바일 API에서 코스피/코스닥 상승·하락·보합 종목수(ETF/ETN 제외) */
 async function fetchMarketBreadth() {
   try {
-    const [kospiRes, kosdaqRes] = await Promise.all([
-      axios.get('https://m.stock.naver.com/api/index/KOSPI/integration', { headers: NAVER_MOBILE_HEADERS, timeout: 8000 }),
-      axios.get('https://m.stock.naver.com/api/index/KOSDAQ/integration', { headers: NAVER_MOBILE_HEADERS, timeout: 8000 }),
+    const [kospiStocks, kosdaqStocks] = await Promise.all([
+      fetchMarketStockList('KOSPI'),
+      fetchMarketStockList('KOSDAQ'),
     ]);
-    const parse = (d) => ({
-      up: Number(d.risingCount || d.advancingCount || 0),
-      down: Number(d.fallingCount || d.decliningCount || 0),
-      flat: Number(d.steadyCount || d.unchangedCount || 0),
-    });
-    return { kospi: parse(kospiRes.data), kosdaq: parse(kosdaqRes.data) };
-  } catch (_) { return null; }
+    return {
+      kospi: countBreadthFromStocks(kospiStocks),
+      kosdaq: countBreadthFromStocks(kosdaqStocks),
+    };
+  } catch (e) {
+    console.warn('[AiBrief] ETF 제외 시장 폭 데이터 실패:', e.message);
+    return null;
+  }
 }
 
 /** Google News RSS에서 한국 증시 주요 뉴스 헤드라인 수집 */
@@ -1554,10 +1602,10 @@ async function generateBriefWithClaude(apiKey, marketData, sectorData, breadthDa
   }
 
   let breadthContext = '';
-  if (breadthData) {
+  if (breadthData && slot !== '09') {
     const b = breadthData;
     if (b.kospi?.up || b.kospi?.down) {
-      breadthContext += `\n\n[시장 폭]\n- KOSPI 상승:${b.kospi.up}개 / 하락:${b.kospi.down}개 / 보합:${b.kospi.flat}개`;
+      breadthContext += `\n\n[시장 폭: ETF/ETN 제외]\n- KOSPI 상승:${b.kospi.up}개 / 하락:${b.kospi.down}개 / 보합:${b.kospi.flat}개`;
     }
     if (b.kosdaq?.up || b.kosdaq?.down) {
       breadthContext += `\n- KOSDAQ 상승:${b.kosdaq.up}개 / 하락:${b.kosdaq.down}개 / 보합:${b.kosdaq.flat}개`;
@@ -1597,6 +1645,7 @@ ${slotMeta.focus}
 
 [공통 규칙]
 - 각 문단은 2~3문장
+- 12시와 15:30 브리핑은 기존 지수·업종·수급·뉴스 설명을 유지하고, [시장 폭: ETF/ETN 제외]의 KOSPI·KOSDAQ 상승/하락 종목 수는 보조 근거로 한 문장 안에 짧게 덧붙일 것
 - 반드시 높임말(~습니다/~네요/~보입니다) 사용
 - 사실 기반 서술만, 투자 권유·예측 금지
 - 마침표로 끝낼 것
@@ -1732,6 +1781,236 @@ exports.generateAiBriefNow = onRequest(
     } catch (e) {
       console.error('[generateAiBriefNow]', e);
       res.status(500).json({ error: e.message });
+    }
+  }
+);
+
+function clampStockAnalysisInput(value, maxLength = 5000) {
+  return String(value ?? '').slice(0, maxLength);
+}
+
+function extractJsonObject(text) {
+  const raw = String(text || '').trim();
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced?.[1]) {
+    try {
+      return JSON.parse(fenced[1].trim());
+    } catch (_) {}
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (_) {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('AI 응답에서 JSON을 찾지 못했습니다.');
+    return JSON.parse(match[0]);
+  }
+}
+
+function fallbackStockAnalysisPayload(text) {
+  const loose = parseLooseStockAnalysisText(text);
+  if (loose) return normalizeStockAnalysisPayload(loose);
+  return normalizeStockAnalysisPayload({
+    summary: 'AI 응답 형식이 예상과 달라 이번 분석을 항목별로 정리하지 못했습니다. 다시 분석을 실행하면 정상 형식으로 생성될 수 있습니다.',
+    score: null,
+    scoreLabel: '형식 보정 필요',
+    theme: '',
+    sector: '',
+    todayReason: '',
+    fundamentals: '',
+    technical: '',
+    news: '',
+    momentum: '',
+    risks: ['AI 응답이 구조화된 JSON 형식으로 오지 않아 세부 항목을 분리하지 못했습니다.'],
+    sections: [],
+  });
+}
+
+function parseLooseStockAnalysisText(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return null;
+  const keys = [
+    'summary',
+    'scoreLabel',
+    'theme',
+    'sector',
+    'todayReason',
+    'fundamentals',
+    'technical',
+    'news',
+    'momentum',
+  ];
+  const out = {};
+  const keyPattern = new RegExp(`"?(${keys.join('|')}|score|risks|sections)"?\\s*:`, 'gi');
+  const matches = Array.from(raw.matchAll(keyPattern))
+    .map((m) => ({ key: m[1], start: m.index ?? 0, valueStart: (m.index ?? 0) + m[0].length }))
+    .sort((a, b) => a.start - b.start);
+
+  const firstUsefulKey = matches.find((m) => keys.includes(m.key));
+  if (firstUsefulKey && firstUsefulKey.start > 0 && !matches.some((m) => m.key === 'summary')) {
+    const prefix = cleanLooseValue(raw.slice(0, firstUsefulKey.start));
+    if (prefix) out.summary = prefix;
+  }
+
+  for (let i = 0; i < matches.length; i += 1) {
+    const current = matches[i];
+    const end = matches[i + 1]?.start ?? raw.length;
+    if (current.key === 'score') {
+      const scoreMatch = raw.slice(current.valueStart, end).match(/[0-9]{1,3}/);
+      if (scoreMatch) out.score = Number(scoreMatch[0]);
+      continue;
+    }
+    if (!keys.includes(current.key)) continue;
+    const value = cleanLooseValue(raw.slice(current.valueStart, end));
+    if (value) out[current.key] = value;
+  }
+  const scoreMatch = raw.match(/"?score"?\s*:\s*([0-9]{1,3})/i);
+  if (scoreMatch) out.score = Number(scoreMatch[1]);
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+function cleanLooseValue(value) {
+  return String(value || '')
+    .replace(/^[\s"'`{:,]+|[\s"'`,}]+$/g, '')
+    .replace(/\\n/g, '\n')
+    .replace(/\\"/g, '"')
+    .trim();
+}
+
+function normalizeStockAnalysisPayload(parsed) {
+  const sections = Array.isArray(parsed.sections) ? parsed.sections : [];
+  return {
+    summary: clampStockAnalysisInput(parsed.summary, 1200),
+    score: Number.isFinite(Number(parsed.score)) ? Math.max(0, Math.min(100, Number(parsed.score))) : null,
+    scoreLabel: clampStockAnalysisInput(parsed.scoreLabel, 80),
+    theme: clampStockAnalysisInput(parsed.theme, 600),
+    sector: clampStockAnalysisInput(parsed.sector, 300),
+    todayReason: clampStockAnalysisInput(parsed.todayReason, 1000),
+    fundamentals: clampStockAnalysisInput(parsed.fundamentals, 1000),
+    technical: clampStockAnalysisInput(parsed.technical, 1200),
+    news: clampStockAnalysisInput(parsed.news, 1200),
+    momentum: clampStockAnalysisInput(parsed.momentum, 1000),
+    risks: Array.isArray(parsed.risks)
+      ? parsed.risks.slice(0, 5).map((v) => clampStockAnalysisInput(v, 240)).filter(Boolean)
+      : [],
+    sections: sections.slice(0, 8).map((s) => ({
+      title: clampStockAnalysisInput(s?.title, 80),
+      body: clampStockAnalysisInput(s?.body, 900),
+    })).filter((s) => s.title && s.body),
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+exports.generateStockAiAnalysis = onCall(
+  { region: 'asia-northeast3', timeoutSeconds: 120, secrets: [ANTHROPIC_API_KEY] },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError('unauthenticated', '로그인 후 AI 분석을 사용할 수 있습니다.');
+    }
+
+    const data = request.data || {};
+    const stock = data.stock || {};
+    const price = data.price || {};
+    const fundamentals = data.fundamentals || {};
+    const candles = Array.isArray(data.candles) ? data.candles.slice(-140) : [];
+    const news = Array.isArray(data.news) ? data.news.slice(0, 8) : [];
+
+    const ticker = clampStockAnalysisInput(stock.ticker, 30);
+    const name = clampStockAnalysisInput(stock.name, 120);
+    const market = clampStockAnalysisInput(stock.market, 20);
+    if (!ticker || !name) {
+      throw new HttpsError('invalid-argument', '종목명과 티커가 필요합니다.');
+    }
+
+    const candleLines = candles.map((c) => {
+      const date = clampStockAnalysisInput(c.date, 20);
+      const open = Number(c.open);
+      const high = Number(c.high);
+      const low = Number(c.low);
+      const close = Number(c.close);
+      if (![open, high, low, close].every(Number.isFinite)) return null;
+      return `${date} O:${open} H:${high} L:${low} C:${close}`;
+    }).filter(Boolean).join('\n');
+
+    const newsLines = news.map((n, i) => {
+      const title = clampStockAnalysisInput(n.title, 220);
+      const publisher = clampStockAnalysisInput(n.publisher, 80);
+      const publishedAt = clampStockAnalysisInput(n.publishedAt, 40);
+      return `${i + 1}. ${title}${publisher ? ` (${publisher})` : ''}${publishedAt ? ` - ${publishedAt}` : ''}`;
+    }).filter(Boolean).join('\n');
+
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+
+    const prompt = `아래 데이터만 근거로 종목 딥리서치 초안을 작성하세요. 데이터에 없는 사실은 추정이라고 표시하고, 단정적인 매수/매도 권유와 목표가 제시는 금지합니다.
+
+[종목]
+- 이름: ${name}
+- 티커: ${ticker}
+- 시장: ${market}
+
+[현재가]
+- 가격: ${price.currentPrice ?? 'N/A'}
+- 등락: ${price.change ?? 'N/A'}
+- 등락률: ${price.changeRate ?? 'N/A'}%
+
+[밸류에이션/재무]
+- 시가총액: ${fundamentals.marketCap ?? 'N/A'}
+- PER: ${fundamentals.per ?? 'N/A'}
+- PBR: ${fundamentals.pbr ?? 'N/A'}
+- BPS: ${fundamentals.bps ?? 'N/A'}
+
+[최근 캔들: 오래된 순서]
+${candleLines || 'N/A'}
+
+[최근 뉴스 헤드라인]
+${newsLines || 'N/A'}
+
+[필수 분석 관점]
+1. 어느 테마와 어느 섹터로 볼 수 있는지. 데이터로 확정이 어려우면 뉴스/기업명 기반 추정이라고 명시.
+2. 분석 당일 등락 이유. 가격과 뉴스만으로 부족하면 확인 가능한 근거와 한계를 분리.
+3. PER, PBR, EPS/BPS, 시총 등 밸류에이션 해석. EPS 데이터가 없으면 PER 역산 가능 여부와 한계를 말할 것.
+4. 기술적 분석: 캔들, 이동평균선(5/20/60/120일), 볼린저밴드, 추세·변동성·지지/저항.
+5. 최근 뉴스의 방향성, 노이즈 여부, 실적/정책/수급/테마성 분류.
+6. 모멘텀과 리스크.
+7. 0~100점 점수. 점수는 추세, 뉴스, 밸류에이션, 리스크를 종합한 학습용 점수로 설명.
+
+반드시 아래 JSON 객체만 출력하세요. 첫 글자는 {, 마지막 글자는 } 이어야 합니다. 마크다운 코드블록, 앞뒤 설명, 주석 금지.
+{
+  "summary": "3~5문장 요약",
+  "score": 0,
+  "scoreLabel": "짧은 점수 해석",
+  "theme": "테마 분석",
+  "sector": "섹터 분석",
+  "todayReason": "당일 등락 이유",
+  "fundamentals": "실적/밸류에이션 분석",
+  "technical": "기술적 분석",
+  "news": "최근 뉴스 분석",
+  "momentum": "모멘텀 분석",
+  "risks": ["리스크1", "리스크2"],
+  "sections": [
+    {"title": "핵심 체크", "body": "추가로 볼 포인트"}
+  ]
+}`;
+
+    const message = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1800,
+      temperature: 0.2,
+      messages: [{ role: 'user', content: prompt }],
+    });
+
+    const text = (message.content || [])
+      .map((part) => part?.type === 'text' ? part.text : '')
+      .filter(Boolean)
+      .join('\n')
+      .trim();
+    try {
+      const parsed = extractJsonObject(text);
+      return normalizeStockAnalysisPayload(parsed);
+    } catch (e) {
+      console.warn('[generateStockAiAnalysis] JSON parse failed:', e?.message || e);
+      console.warn('[generateStockAiAnalysis] Raw AI response:', clampStockAnalysisInput(text, 1200));
+      return fallbackStockAnalysisPayload(text);
     }
   }
 );

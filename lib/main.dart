@@ -31,18 +31,18 @@ void main() async {
     if (e.code != 'duplicate-app') rethrow;
   }
 
-  // Firebase App Check 초기화 (디버그/에뮬레이터는 debug 프로바이더)
-  try {
-    await FirebaseAppCheck.instance.activate(
-      androidProvider: kDebugMode
-          ? AndroidProvider.debug
-          : AndroidProvider.playIntegrity,
-      appleProvider: kDebugMode
-          ? AppleProvider.debug
-          : AppleProvider.deviceCheck,
-    );
-  } catch (_) {
-    // 에뮬레이터 등 지원 안 되는 환경에서 무시
+  // Firebase App Check 초기화
+  // Debug provider 토큰은 앱 데이터 초기화 때마다 바뀔 수 있어 로컬 개발 중에는
+  // App Check를 켜지 않는다. 릴리즈 빌드에서만 실제 attestation을 사용한다.
+  if (!kDebugMode) {
+    try {
+      await FirebaseAppCheck.instance.activate(
+        androidProvider: AndroidProvider.playIntegrity,
+        appleProvider: AppleProvider.deviceCheck,
+      );
+    } catch (_) {
+      // 에뮬레이터 등 지원 안 되는 환경에서 무시
+    }
   }
 
   // FCM 백그라운드 핸들러 등록 (Firebase 초기화 직후)

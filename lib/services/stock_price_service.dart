@@ -1288,6 +1288,52 @@ class StockPriceService {
     }
   }
 
+  static Future<StockAiAnalysisResult> generateStockAiAnalysis({
+    required String ticker,
+    required String name,
+    required String market,
+    PriceResult? price,
+    FundamentalsResult? fundamentals,
+    required List<Map<String, dynamic>> candles,
+    required List<StockNews> news,
+  }) async {
+    final fn = FirebaseFunctions.instanceFor(region: 'asia-northeast3')
+        .httpsCallable(
+          'generateStockAiAnalysis',
+          options: HttpsCallableOptions(timeout: const Duration(seconds: 120)),
+        );
+    final res = await fn.call({
+      'stock': {'ticker': ticker, 'name': name, 'market': market},
+      'price': {
+        if (price != null) ...{
+          'currentPrice': price.price,
+          'change': price.change,
+          'changeRate': price.changeRate,
+        },
+      },
+      'fundamentals': {
+        if (fundamentals?.per != null) 'per': fundamentals!.per,
+        if (fundamentals?.pbr != null) 'pbr': fundamentals!.pbr,
+        if (fundamentals?.bps != null) 'bps': fundamentals!.bps,
+        if (fundamentals?.marketCap != null)
+          'marketCap': fundamentals!.marketCap,
+      },
+      'candles': candles,
+      'news': news
+          .map(
+            (n) => {
+              'title': n.title,
+              'publisher': n.publisher,
+              'publishedAt': n.publishedAt.toIso8601String(),
+            },
+          )
+          .toList(),
+    });
+    return StockAiAnalysisResult.fromMap(
+      Map<String, dynamic>.from(res.data as Map),
+    );
+  }
+
   static String _xmlTag(String xml, String tag) {
     final m = RegExp(
       '<$tag>(?:<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|([\\s\\S]*?))</$tag>',
@@ -1909,6 +1955,81 @@ class StockNews {
     required this.publisher,
     required this.publishedAt,
   });
+}
+
+class StockAiAnalysisResult {
+  final String summary;
+  final double? score;
+  final String scoreLabel;
+  final String theme;
+  final String sector;
+  final String todayReason;
+  final String fundamentals;
+  final String technical;
+  final String news;
+  final String momentum;
+  final List<String> risks;
+  final List<StockAiAnalysisSection> sections;
+  final DateTime? generatedAt;
+
+  const StockAiAnalysisResult({
+    required this.summary,
+    required this.score,
+    required this.scoreLabel,
+    required this.theme,
+    required this.sector,
+    required this.todayReason,
+    required this.fundamentals,
+    required this.technical,
+    required this.news,
+    required this.momentum,
+    required this.risks,
+    required this.sections,
+    required this.generatedAt,
+  });
+
+  factory StockAiAnalysisResult.fromMap(Map<String, dynamic> map) {
+    String text(String key) => (map[key] as String? ?? '').trim();
+    final rawSections = map['sections'] as List<dynamic>? ?? const [];
+    return StockAiAnalysisResult(
+      summary: text('summary'),
+      score: (map['score'] as num?)?.toDouble(),
+      scoreLabel: text('scoreLabel'),
+      theme: text('theme'),
+      sector: text('sector'),
+      todayReason: text('todayReason'),
+      fundamentals: text('fundamentals'),
+      technical: text('technical'),
+      news: text('news'),
+      momentum: text('momentum'),
+      risks: (map['risks'] as List<dynamic>? ?? const [])
+          .map((v) => v.toString().trim())
+          .where((v) => v.isNotEmpty)
+          .toList(),
+      sections: rawSections
+          .whereType<Map>()
+          .map(
+            (v) => StockAiAnalysisSection.fromMap(Map<String, dynamic>.from(v)),
+          )
+          .where((v) => v.title.isNotEmpty && v.body.isNotEmpty)
+          .toList(),
+      generatedAt: DateTime.tryParse(text('generatedAt')),
+    );
+  }
+}
+
+class StockAiAnalysisSection {
+  final String title;
+  final String body;
+
+  const StockAiAnalysisSection({required this.title, required this.body});
+
+  factory StockAiAnalysisSection.fromMap(Map<String, dynamic> map) {
+    return StockAiAnalysisSection(
+      title: (map['title'] as String? ?? '').trim(),
+      body: (map['body'] as String? ?? '').trim(),
+    );
+  }
 }
 
 class FearAndGreedResult {
