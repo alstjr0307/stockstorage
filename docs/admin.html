@@ -837,17 +837,51 @@
     ].filter(Boolean).join('\n\n');
   }
 
+  function escapeHtml(str = '') {
+    return str
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  function renderAnalysisBody(body = '') {
+    const imgPattern = /!\[[^\]]*]\((https?:\/\/[^\s)]+)\)/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+    while ((match = imgPattern.exec(body)) !== null) {
+      const before = body.slice(lastIndex, match.index);
+      if (before) {
+        parts.push(`<p style="white-space:pre-wrap;margin:0 0 12px 0;">${escapeHtml(before)}</p>`);
+      }
+      const url = match[1];
+      parts.push(
+        `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">` +
+        `<img src="${escapeHtml(url)}" style="display:block;max-width:100%;max-height:360px;object-fit:contain;border-radius:8px;border:1px solid #2a3550;margin:8px 0 16px;" />` +
+        `</a>`
+      );
+      lastIndex = match.index + match[0].length;
+    }
+    const tail = body.slice(lastIndex);
+    if (tail) {
+      parts.push(`<p style="white-space:pre-wrap;margin:0;">${escapeHtml(tail)}</p>`);
+    }
+    return parts.length ? parts.join('') : `<p style="white-space:pre-wrap;margin:0;">${escapeHtml(body)}</p>`;
+  }
+
   window.openAnalysisModal = async (id) => {
     document.getElementById('analysis-modal').classList.add('open');
     document.getElementById('an-detail-title').textContent = '불러오는 중...';
     document.getElementById('an-detail-date').textContent = '';
-    document.getElementById('an-detail-body').textContent = '';
+    document.getElementById('an-detail-body').innerHTML = '';
     try {
       const data = await ensureAnalysis(id);
       document.getElementById('an-detail-title').textContent = data.title;
       document.getElementById('an-detail-date').textContent = data.createdAt?.toDate ? data.createdAt.toDate().toLocaleDateString('ko-KR') : '';
-      document.getElementById('an-detail-body').textContent = data.body;
-      const imgs = data.imageUrls || [];
+      document.getElementById('an-detail-body').innerHTML = renderAnalysisBody(data.body || '');
+      const imgs = (data.imageUrls || []).filter(url => !String(data.body || '').includes(`![](${url})`));
       const imgsEl = document.getElementById('an-detail-images');
       imgsEl.style.display = imgs.length ? 'flex' : 'none';
       imgsEl.innerHTML = imgs.map(url => `
