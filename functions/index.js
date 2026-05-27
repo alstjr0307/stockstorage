@@ -896,6 +896,259 @@ async function fetchKisDomesticSnapshot(ticker) {
   }
 }
 
+function parseNaverNumeric(value) {
+  const match = String(value ?? '').replace(/,/g, '').match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const n = Number(match[0]);
+  return Number.isFinite(n) ? n : null;
+}
+
+async function fetchNaverMobileIntegration(ticker) {
+  const res = await axios.get(
+    `https://m.stock.naver.com/api/stock/${encodeURIComponent(ticker)}/integration`,
+    {
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        'Referer': 'https://m.stock.naver.com',
+        'Accept': 'application/json',
+      },
+      timeout: 8000,
+    }
+  );
+  return res.data && typeof res.data === 'object' ? res.data : null;
+}
+
+function naverTotalInfoValue(data, code) {
+  const totalInfos = Array.isArray(data?.totalInfos) ? data.totalInfos : [];
+  const item = totalInfos.find((v) => v?.code === code);
+  return parseNaverNumeric(item?.value);
+}
+
+function parseNaverResearchDate(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length !== 8) return null;
+  const year = Number(digits.slice(0, 4));
+  const month = Number(digits.slice(4, 6));
+  const day = Number(digits.slice(6, 8));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+async function fetchNaverPeerValuation(ticker) {
+  try {
+    const data = await fetchNaverMobileIntegration(ticker);
+    return {
+      per: naverTotalInfoValue(data, 'cnsPer') || naverTotalInfoValue(data, 'per'),
+      pbr: naverTotalInfoValue(data, 'pbr'),
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+async function fetchNaverDomesticValuation(ticker) {
+  if (!/^\d{6}$/.test(String(ticker || ''))) return null;
+  try {
+    const data = await fetchNaverMobileIntegration(ticker);
+    const peers = Array.isArray(data?.industryCompareInfo)
+      ? data.industryCompareInfo
+      : [];
+    const peerCodes = peers
+      .map((p) => String(p?.itemCode || '').trim())
+      .filter((code) => /^\d{6}$/.test(code))
+      .slice(0, 6);
+    const peerValuations = await Promise.all(peerCodes.map(fetchNaverPeerValuation));
+    const perValues = peerValuations
+      .map((v) => v?.per)
+      .filter((v) => Number.isFinite(v) && v > 0);
+    const sectorAveragePer = perValues.length
+      ? perValues.reduce((a, b) => a + b, 0) / perValues.length
+      : null;
+    const peerComparison = peers.slice(0, 5).map((p, index) => {
+      const v = peerValuations[index] || {};
+      return {
+        name: clampStockAnalysisInput(p?.stockName, 60),
+        ticker: clampStockAnalysisInput(p?.itemCode, 12),
+        per: Number.isFinite(v.per) && v.per > 0 ? v.per : null,
+        pbr: Number.isFinite(v.pbr) && v.pbr > 0 ? v.pbr : null,
+      };
+    }).filter((p) => p.name);
+    const now = Date.now();
+    const recentResearches = (Array.isArray(data?.researches) ? data.researches : [])
+      .map((r) => ({ ...r, parsedDate: parseNaverResearchDate(r?.wdt) }))
+      .filter((r) => r.parsedDate && now - r.parsedDate.getTime() <= 31 * 24 * 60 * 60 * 1000)
+      .slice(0, 5);
+    const reports = (await Promise.all(recentResearches.map(async (r) => {
+      try {
+        const res = await axios.get(
+          `https://m.stock.naver.com/api/research/company/${encodeURIComponent(r.id)}`,
+          {
+            headers: {
+              'User-Agent': 'Mozilla/5.0',
+              'Referer': 'https://m.stock.naver.com',
+              'Accept': 'application/json',
+            },
+            timeout: 8000,
+          }
+        );
+        const content = res.data?.researchContent || {};
+        return {
+          title: clampStockAnalysisInput(content.title || r.tit, 160),
+          broker: clampStockAnalysisInput(content.brokerName || r.bnm, 80),
+          date: clampStockAnalysisInput(content.writeDate || String(r.wdt || ''), 20),
+          opinion: clampStockAnalysisInput(content.opinion, 40),
+          targetPrice: parseNaverNumeric(content.goalPrice),
+          previousTargetPrice: parseNaverNumeric(content.prevGoalPrice),
+          priceAtWriteDate: parseNaverNumeric(content.priceAtWriteDate),
+          url: clampStockAnalysisInput(content.attachUrl, 500),
+        };
+      } catch (_) {
+        return {
+          title: clampStockAnalysisInput(r.tit, 160),
+          broker: clampStockAnalysisInput(r.bnm, 80),
+          date: clampStockAnalysisInput(String(r.wdt || ''), 20),
+          opinion: '',
+          targetPrice: null,
+          previousTargetPrice: null,
+          priceAtWriteDate: null,
+          url: r.id ? `https://m.stock.naver.com/investment/research/company/${encodeURIComponent(r.id)}` : '',
+        };
+      }
+    }))).filter((r) => r.title);
+
+    return {
+      per: naverTotalInfoValue(data, 'per'),
+      pbr: naverTotalInfoValue(data, 'pbr'),
+      bps: naverTotalInfoValue(data, 'bps'),
+      forwardPer: naverTotalInfoValue(data, 'cnsPer'),
+      forwardEps: naverTotalInfoValue(data, 'cnsEps'),
+      sectorAveragePer,
+      peerComparison,
+      reports,
+    };
+  } catch (e) {
+    console.warn('[fetchNaverDomesticValuation] failed:', e.response?.data || e.message);
+    return null;
+  }
+}
+
+function parseNaverFinanceTimelineShape(data) {
+  if (!data || typeof data !== 'object') return null;
+  const financeInfo = data.financeInfo && typeof data.financeInfo === 'object'
+    ? data.financeInfo
+    : null;
+  if (financeInfo && Array.isArray(financeInfo.trTitleList) && Array.isArray(financeInfo.rowList)) {
+    const epsRow = financeInfo.rowList.find(
+      (r) => String(r?.title || '').toUpperCase() === 'EPS',
+    );
+    const perRow = financeInfo.rowList.find(
+      (r) => String(r?.title || '').toUpperCase() === 'PER',
+    );
+    if (epsRow && epsRow.columns && typeof epsRow.columns === 'object') {
+      const parsed = financeInfo.trTitleList
+        .map((col) => {
+          const key = String(col?.key || '');
+          const epsCell = epsRow.columns[key];
+          const eps = parseNaverNumeric(epsCell?.value);
+          if (!key || eps == null) return null;
+          const period = String(col?.title || key).replace(/\.$/, '').trim();
+          const estimate = String(col?.isConsensus || '').toUpperCase() === 'Y';
+          const perCell = perRow?.columns?.[key];
+          const per = parseNaverNumeric(perCell?.value);
+          return { period, eps, per: Number.isFinite(per) ? per : null, estimate };
+        })
+        .filter(Boolean);
+      if (parsed.length) return parsed;
+    }
+  }
+  const items = Array.isArray(data.items)
+    ? data.items
+    : Array.isArray(data.financialList)
+      ? data.financialList
+      : Array.isArray(data.data)
+        ? data.data
+        : null;
+  if (items && items.length && items.some((it) => it && typeof it === 'object')) {
+    const parsed = items
+      .map((item) => {
+        const eps = parseNaverNumeric(
+          item?.eps ?? item?.epsValue ?? item?.epsConsolidated ?? item?.epsCon ?? null,
+        );
+        const periodRaw = item?.yearMonth || item?.period || item?.bizYm || item?.term || '';
+        if (eps == null || !periodRaw) return null;
+        const period = String(periodRaw).trim();
+        const estimate = Boolean(
+          item?.estimateFlag ||
+            item?.isEstimate ||
+            item?.estimate ||
+            period.includes('(E)') ||
+            period.includes('E)'),
+        );
+        const per = parseNaverNumeric(item?.per ?? item?.perValue ?? null);
+        return {
+          period: period.replace(/\s*\(E\)\s*$/i, '').trim(),
+          eps,
+          per: Number.isFinite(per) ? per : null,
+          estimate,
+        };
+      })
+      .filter(Boolean);
+    if (parsed.length) return parsed;
+  }
+  if (Array.isArray(data.rowHd) && Array.isArray(data.columnHd) && Array.isArray(data.tableData)) {
+    const epsRowIndex = data.rowHd.findIndex((row) =>
+      String(row?.title || row?.label || row?.name || '').toUpperCase().includes('EPS'),
+    );
+    if (epsRowIndex >= 0) {
+      const epsRow = data.tableData[epsRowIndex];
+      if (Array.isArray(epsRow)) {
+        const parsed = data.columnHd
+          .map((col, i) => {
+            const eps = parseNaverNumeric(epsRow[i]);
+            if (eps == null) return null;
+            const label = String(col?.title || col?.label || col?.name || '').trim();
+            const estimate = label.includes('(E)');
+            return {
+              period: label.replace(/\(E\)/g, '').trim(),
+              eps,
+              per: null,
+              estimate,
+            };
+          })
+          .filter(Boolean);
+        if (parsed.length) return parsed;
+      }
+    }
+  }
+  return null;
+}
+
+async function fetchNaverEpsTimeline(ticker) {
+  if (!/^\d{6}$/.test(String(ticker || ''))) return null;
+  const headers = {
+    'User-Agent': 'Mozilla/5.0',
+    'Referer': 'https://m.stock.naver.com',
+    'Accept': 'application/json',
+  };
+  const candidates = [
+    `https://m.stock.naver.com/api/stock/${encodeURIComponent(ticker)}/finance/annual`,
+    `https://api.stock.naver.com/stock/${encodeURIComponent(ticker)}/finance/annual`,
+    `https://m.stock.naver.com/api/stock/${encodeURIComponent(ticker)}/finance-summary/annual`,
+  ];
+  for (const url of candidates) {
+    try {
+      const res = await axios.get(url, { headers, timeout: 8000 });
+      const parsed = parseNaverFinanceTimelineShape(res.data);
+      if (parsed && parsed.length) {
+        return parsed.slice(-8);
+      }
+    } catch (_) {
+      // try next
+    }
+  }
+  return null;
+}
+
 async function getDartCorpCodeMap(apiKey) {
   const now = Date.now();
   if (_dartCorpCodeByStockCode && now - _dartCorpCodeFetchedAt < 24 * 60 * 60 * 1000) {
@@ -993,16 +1246,27 @@ async function fetchDartContext(ticker, apiKey) {
     const reportStory = await fetchDartReportStory(corp, disclosures, apiKey);
 
     const financial = financialResults[0];
-    const wantedAccounts = ['매출액', '영업이익', '당기순이익', '자산총계', '부채총계', '자본총계'];
     const financials = financial
-      ? financial.list
-          .filter((row) => wantedAccounts.includes(row.account_nm))
-          .map((row) => ({
-            account: row.account_nm,
-            current: row.thstrm_amount,
-            previous: row.frmtrm_amount,
-            statement: row.sj_nm,
-          }))
+      ? Array.from(
+          financial.list
+            .map((row) => ({ ...row, accountGroup: dartAccountGroup(row.account_nm) }))
+            .filter((row) => row.accountGroup)
+            .reduce((map, row) => {
+              const prev = map.get(row.accountGroup);
+              const rowIsConsolidated = String(row.sj_nm || '').includes('연결');
+              const prevIsConsolidated = String(prev?.sj_nm || '').includes('연결');
+              if (!prev || (rowIsConsolidated && !prevIsConsolidated)) {
+                map.set(row.accountGroup, row);
+              }
+              return map;
+            }, new Map())
+            .values(),
+        ).map((row) => ({
+          account: row.accountGroup,
+          current: row.thstrm_amount,
+          previous: row.frmtrm_amount,
+          statement: row.sj_nm,
+        }))
       : [];
 
     return {
@@ -2074,7 +2338,14 @@ function cleanLooseValue(value) {
 
 function normalizeStockAnalysisPayload(parsed) {
   const sections = Array.isArray(parsed.sections) ? parsed.sections : [];
+  const catalysts = Array.isArray(parsed.catalysts) ? parsed.catalysts : [];
+  const risksDetailed = Array.isArray(parsed.risksDetailed) ? parsed.risksDetailed : [];
+  const valuation = parsed.valuation && typeof parsed.valuation === 'object' ? parsed.valuation : null;
+  const technicalDetail = parsed.technicalDetail && typeof parsed.technicalDetail === 'object' ? parsed.technicalDetail : null;
+  const scenarios = parsed.scenarios && typeof parsed.scenarios === 'object' ? parsed.scenarios : null;
+  const timing = parsed.timing && typeof parsed.timing === 'object' ? parsed.timing : null;
   return {
+    companyOverview: clampStockAnalysisInput(parsed.companyOverview, 600),
     summary: clampStockAnalysisInput(parsed.summary, 1200),
     score: Number.isFinite(Number(parsed.score)) ? Math.max(0, Math.min(100, Number(parsed.score))) : null,
     scoreLabel: clampStockAnalysisInput(parsed.scoreLabel, 80),
@@ -2096,6 +2367,72 @@ function normalizeStockAnalysisPayload(parsed) {
       title: clampStockAnalysisInput(s?.title, 80),
       body: clampStockAnalysisInput(s?.body, 900),
     })).filter((s) => s.title && s.body),
+    catalysts: catalysts.slice(0, 6).map((c) => ({
+      title: clampStockAnalysisInput(c?.title, 160),
+      kind: clampStockAnalysisInput(c?.kind, 20),
+      impact: clampStockAnalysisInput(c?.impact, 20),
+      timeline: clampStockAnalysisInput(c?.timeline, 20),
+      confidence: clampStockAnalysisInput(c?.confidence, 20),
+      detail: clampStockAnalysisInput(c?.detail, 600),
+    })).filter((c) => c.title && c.detail),
+    valuation: valuation
+      ? {
+          perVerdict: clampStockAnalysisInput(valuation.perVerdict, 20),
+          pbrVerdict: clampStockAnalysisInput(valuation.pbrVerdict, 20),
+          forwardPer: clampStockAnalysisInput(valuation.forwardPer, 80),
+          sectorAveragePer: clampStockAnalysisInput(valuation.sectorAveragePer, 80),
+          peerComparison: Array.isArray(valuation.peerComparison)
+            ? valuation.peerComparison.slice(0, 5).map((p) => ({
+                name: clampStockAnalysisInput(p?.name, 60),
+                per: clampStockAnalysisInput(p?.per, 30),
+                pbr: clampStockAnalysisInput(p?.pbr, 30),
+              })).filter((p) => p.name)
+            : [],
+          reasoning: clampStockAnalysisInput(valuation.reasoning, 1200),
+        }
+      : null,
+    technicalDetail: technicalDetail
+      ? {
+          maPosition: clampStockAnalysisInput(technicalDetail.maPosition, 200),
+          rsiVerdict: clampStockAnalysisInput(technicalDetail.rsiVerdict, 200),
+          bollingerVerdict: clampStockAnalysisInput(technicalDetail.bollingerVerdict, 200),
+          support: clampStockAnalysisInput(technicalDetail.support, 120),
+          resistance: clampStockAnalysisInput(technicalDetail.resistance, 120),
+          pattern: clampStockAnalysisInput(technicalDetail.pattern, 200),
+          reasoning: clampStockAnalysisInput(technicalDetail.reasoning, 1000),
+        }
+      : null,
+    scenarios: scenarios
+      ? ['bull', 'base', 'bear'].reduce((acc, key) => {
+          const s = scenarios[key];
+          if (s && typeof s === 'object') {
+            acc[key] = {
+              trigger: clampStockAnalysisInput(s.trigger, 200),
+              priceTarget: clampStockAnalysisInput(s.priceTarget, 80),
+              probability: Number.isFinite(Number(s.probability))
+                ? Math.max(0, Math.min(1, Number(s.probability)))
+                : null,
+              narrative: clampStockAnalysisInput(s.narrative, 600),
+            };
+          }
+          return acc;
+        }, {})
+      : null,
+    risksDetailed: risksDetailed.slice(0, 6).map((r) => ({
+      category: clampStockAnalysisInput(r?.category, 20),
+      severity: clampStockAnalysisInput(r?.severity, 20),
+      probability: clampStockAnalysisInput(r?.probability, 20),
+      description: clampStockAnalysisInput(r?.description, 400),
+      mitigant: clampStockAnalysisInput(r?.mitigant, 400),
+    })).filter((r) => r.description),
+    timing: timing
+      ? {
+          shortTerm: clampStockAnalysisInput(timing.shortTerm, 500),
+          midTerm: clampStockAnalysisInput(timing.midTerm, 500),
+          action: clampStockAnalysisInput(timing.action, 30),
+          actionReason: clampStockAnalysisInput(timing.actionReason, 500),
+        }
+      : null,
     generatedAt: new Date().toISOString(),
   };
 }
@@ -2110,7 +2447,55 @@ function attachStockAnalysisSources(payload, sources) {
     sourceEps: sources?.sourceEps ?? null,
     sourceInvestorFlow: sources?.sourceInvestorFlow || null,
     sourceDailyInvestorFlow: sources?.sourceDailyInvestorFlow || null,
+    sourceReports: sources?.sourceReports || [],
+    sourceEpsTimeline: sources?.sourceEpsTimeline || [],
   };
+}
+
+function applyNaverValuationFallback(payload, naverValuation) {
+  if (!payload || !naverValuation) return payload;
+  const naverPeers = Array.isArray(naverValuation.peerComparison)
+    ? naverValuation.peerComparison.filter((p) => p.name)
+    : [];
+  if ((!Array.isArray(payload.themePeers) || payload.themePeers.length === 0) &&
+      naverPeers.length) {
+    payload.themePeers = naverPeers.slice(0, 8).map((p) => p.name);
+  }
+
+  const valuation = payload.valuation && typeof payload.valuation === 'object'
+    ? { ...payload.valuation }
+    : null;
+  if (!valuation) return payload;
+
+  if (Number.isFinite(naverValuation.forwardPer)) {
+    valuation.forwardPer = `${naverValuation.forwardPer.toFixed(2)}배`;
+  }
+  if (Number.isFinite(naverValuation.sectorAveragePer)) {
+    valuation.sectorAveragePer = `동종 종목 평균 약 ${naverValuation.sectorAveragePer.toFixed(2)}배`;
+    payload.peerPerAverage = `동종업계 평균 PER 약 ${naverValuation.sectorAveragePer.toFixed(2)}배`;
+  }
+  if ((!Array.isArray(valuation.peerComparison) || valuation.peerComparison.length === 0) &&
+      naverPeers.length) {
+    valuation.peerComparison = naverPeers
+      .slice(0, 4)
+      .map((p) => ({
+        name: p.name,
+        per: Number.isFinite(p.per) && p.per > 0 ? `${p.per.toFixed(2)}배` : 'N/A',
+        pbr: Number.isFinite(p.pbr) && p.pbr > 0 ? `${p.pbr.toFixed(2)}배` : 'N/A',
+      }));
+  }
+  return { ...payload, valuation };
+}
+
+function dartAccountGroup(accountName) {
+  const name = String(accountName || '').replace(/\s/g, '');
+  if (['매출액', '수익(매출액)', '영업수익', '매출', '매출및지분법손익'].includes(name)) return '매출액';
+  if (['영업이익', '영업손실'].includes(name)) return '영업이익';
+  if (['당기순이익', '당기순손실', '분기순이익', '분기순손실', '반기순이익', '반기순손실'].includes(name)) return '당기순이익';
+  if (name === '자산총계') return '자산총계';
+  if (name === '부채총계') return '부채총계';
+  if (name === '자본총계') return '자본총계';
+  return null;
 }
 
 function periodReturn(closes, period) {
@@ -2416,15 +2801,17 @@ exports.generateStockAiAnalysis = onCall(
       return `${i + 1}. ${title}${publisher ? ` (${publisher})` : ''}${publishedAt ? ` - ${publishedAt}` : ''}`;
     }).filter(Boolean).join('\n');
 
-    const [kisSnapshot, dartContext, investorFlow, dailyInvestorFlow, newsStorySnippets] = isDomesticStock
+    const [kisSnapshot, dartContext, investorFlow, dailyInvestorFlow, newsStorySnippets, naverValuation, epsTimeline] = isDomesticStock
       ? await Promise.all([
           fetchKisDomesticSnapshot(ticker),
           fetchDartContext(ticker, (DART_API_KEY.value() || '').trim()),
           fetchInvestorFlowForStock(ticker, market.toUpperCase()),
           fetchNaverStockInvestorFlow(ticker),
           fetchNewsStorySnippets(news),
+          fetchNaverDomesticValuation(ticker),
+          fetchNaverEpsTimeline(ticker),
         ])
-      : [null, null, null, null, []];
+      : [null, null, null, null, [], null, null];
 
     const kisLines = kisSnapshot
       ? [
@@ -2437,6 +2824,36 @@ exports.generateStockAiAnalysis = onCall(
           `- 52주 고가/저가: ${fmtMetric(kisSnapshot.high52w, 0)}원 / ${fmtMetric(kisSnapshot.low52w, 0)}원`,
         ].join('\n')
       : '- KIS 상세 스냅샷: 미수집';
+
+    const naverValuationLines = naverValuation
+      ? [
+          `- PER/PBR/BPS: ${fmtMetric(naverValuation.per, 2)} / ${fmtMetric(naverValuation.pbr, 2)} / ${fmtMetric(naverValuation.bps, 0)}원`,
+          `- FPER/추정EPS: ${fmtMetric(naverValuation.forwardPer, 2)} / ${fmtMetric(naverValuation.forwardEps, 0)}원`,
+          `- 동종업계 평균 PER: ${fmtMetric(naverValuation.sectorAveragePer, 2)}배`,
+          `- 동종 종목: ${naverValuation.peerComparison?.length ? naverValuation.peerComparison.map((p) => {
+            const parts = [p.name];
+            if (Number.isFinite(p.per)) parts.push(`PER ${p.per.toFixed(2)}배`);
+            if (Number.isFinite(p.pbr)) parts.push(`PBR ${p.pbr.toFixed(2)}배`);
+            return parts.join(' ');
+          }).join(', ') : 'N/A'}`,
+        ].join('\n')
+      : '- 네이버 밸류에이션: 미수집';
+    const naverReportLines = naverValuation?.reports?.length
+      ? naverValuation.reports.map((r, i) =>
+          `${i + 1}. ${r.date} ${r.broker} "${r.title}" / 의견 ${r.opinion || 'N/A'} / 목표가 ${Number.isFinite(r.targetPrice) ? `${r.targetPrice.toLocaleString('ko-KR')}원` : '미제공'}`,
+        ).join('\n')
+      : '- 최근 1개월 증권사 리포트: 미수집';
+
+    const epsTimelineLines = Array.isArray(epsTimeline) && epsTimeline.length
+      ? epsTimeline
+          .map((row) => {
+            const epsText = Number.isFinite(row.eps) ? `${row.eps.toLocaleString('ko-KR')}원` : 'N/A';
+            const perText = Number.isFinite(row.per) ? `${row.per.toFixed(2)}배` : null;
+            const tag = row.estimate ? ' (컨센서스)' : '';
+            return `- ${row.period}${tag}: EPS ${epsText}${perText ? ` / PER ${perText}` : ''}`;
+          })
+          .join('\n')
+      : '- 연도별 EPS·PER 컨센서스 시계열: 미수집';
 
     const dartDisclosureLines = dartContext?.hasData && dartContext.disclosures?.length
       ? dartContext.disclosures
@@ -2493,6 +2910,18 @@ exports.generateStockAiAnalysis = onCall(
       sourceEps: Number.isFinite(kisSnapshot?.eps) ? kisSnapshot.eps : null,
       sourceInvestorFlow: investorFlow,
       sourceDailyInvestorFlow: dailyInvestorFlow,
+      sourceReports: naverValuation?.reports?.length
+        ? naverValuation.reports.map((r) => ({
+            title: clampStockAnalysisInput(r.title, 180),
+            url: clampStockAnalysisInput(r.url, 500),
+            publisher: clampStockAnalysisInput(r.broker, 80),
+            publishedAt: clampStockAnalysisInput(r.date, 40),
+            opinion: clampStockAnalysisInput(r.opinion, 40),
+            targetPrice: Number.isFinite(r.targetPrice) ? r.targetPrice : null,
+            previousTargetPrice: Number.isFinite(r.previousTargetPrice) ? r.previousTargetPrice : null,
+            priceAtWriteDate: Number.isFinite(r.priceAtWriteDate) ? r.priceAtWriteDate : null,
+          })).filter((r) => r.title)
+        : [],
       sourceDisclosures: dartContext?.hasData && Array.isArray(dartContext.disclosures)
         ? dartContext.disclosures.map((d) => ({
             date: clampStockAnalysisInput(d.date, 20),
@@ -2510,7 +2939,24 @@ exports.generateStockAiAnalysis = onCall(
             statement: clampStockAnalysisInput(f.statement, 40),
           })).filter((f) => f.account)
         : [],
+      sourceEpsTimeline: Array.isArray(epsTimeline)
+        ? epsTimeline
+            .map((row) => ({
+              period: clampStockAnalysisInput(row?.period, 20),
+              eps: Number.isFinite(row?.eps) ? row.eps : null,
+              per: Number.isFinite(row?.per) ? row.per : null,
+              estimate: Boolean(row?.estimate),
+            }))
+            .filter((row) => row.period && row.eps != null)
+        : [],
     };
+
+    const providedForwardPer = Number.isFinite(Number(fundamentals.forwardPer))
+      ? Number(fundamentals.forwardPer)
+      : naverValuation?.forwardPer;
+    const providedSectorAveragePer = Number.isFinite(Number(fundamentals.sectorAveragePer))
+      ? Number(fundamentals.sectorAveragePer)
+      : naverValuation?.sectorAveragePer;
 
     const prompt = `당신은 한국 주식 앱의 "AI 종목 분석 리포트"를 작성하는 애널리스트입니다.
 아래 데이터만 근거로, 사용자가 모바일 화면에서 바로 읽을 수 있는 정교한 점수형 리포트를 작성하세요.
@@ -2528,12 +2974,23 @@ exports.generateStockAiAnalysis = onCall(
 
 [밸류에이션/재무]
 - 시가총액: ${fundamentals.marketCap ?? 'N/A'}
-- PER: ${fundamentals.per ?? 'N/A'}
+- PER(trailing): ${fundamentals.per ?? 'N/A'}
 - PBR: ${fundamentals.pbr ?? 'N/A'}
 - BPS: ${fundamentals.bps ?? 'N/A'}
+- Forward PER (제공 데이터, 있으면 그대로 사용): ${Number.isFinite(providedForwardPer) ? providedForwardPer.toFixed(2) : 'N/A'}
+- 업종/동종 종목 평균 PER (제공 데이터, 있으면 그대로 사용): ${Number.isFinite(providedSectorAveragePer) ? providedSectorAveragePer.toFixed(2) : 'N/A'}
 
 [KIS 현재가/거래/밸류 스냅샷]
 ${kisLines}
+
+[네이버 밸류에이션/동종업계 스냅샷]
+${naverValuationLines}
+
+[최근 1개월 증권사 리포트]
+${naverReportLines}
+
+[연도별 EPS·PER 컨센서스 시계열 (오래된 → 최신)]
+${epsTimelineLines}
 
 [외국인/기관 수급 스냅샷]
 ${investorFlowLines}
@@ -2573,15 +3030,30 @@ ${newsLines || 'N/A'}
 ${newsStoryLines}
 
 [리포트 작성 원칙]
-- 화면은 "종합 점수판 → 핵심 체크리스트 → 주요 지표 → 세부 분석" 순서로 보여줄 예정입니다.
-- 모든 문장은 길게 늘이지 말고, 한 항목당 1~2문장으로 작성하세요. 세미콜론(;)으로 문장을 이어 쓰지 마세요.
+- 화면은 "종합 점수판 → 핵심 재료 → 시나리오 → 전망·액션 → 데이터 보드 → 리스크 상세 → 근거 소스" 순서로 보여줄 예정입니다. 유료 사용자가 보는 화면이라 정보의 깊이와 구체성이 중요합니다.
 - 점수 구간 표현은 하나만 사용하세요. "우호와 중립", "중립-우호", "중립~긍정"처럼 서로 다른 판단을 동시에 쓰지 마세요.
-- 각 필드에는 숫자, 방향성, 근거, 한계를 같이 넣으세요. 예: "PER 16.2배는 업종 평균 확인 필요, PBR 2.39배는 장부가 대비 프리미엄 구간."
-- PER만으로 고평가/저평가를 단정하지 마세요. 향후 1~2년 영업이익·순이익 전망, 컨센서스, 실적 개선 스토리가 있으면 선행 PER(FPER/Forward PER) 관점으로 함께 판단하세요.
-- 향후 1~2년 이익 전망 데이터가 없으면 "선행 PER은 산출할 수 없습니다"라고 쓰고, 현재 PER은 보조 지표로만 해석하세요.
-- 바이오/제약/플랫폼/적자 성장주처럼 PER이 구조적으로 높거나 의미가 약한 업종은 절대 PER보다 동종업계 평균, 파이프라인/임상 단계, 매출화 가능성, 현금흐름, 적자 축소 여부를 우선 비교하세요.
-- 동종업계 평균 PER을 데이터에서 확인할 수 있으면 peerPerAverage에 "동종업계 평균 PER 약 00배"처럼 숫자로 쓰세요. 확인할 수 없으면 "동종업계 평균 PER 확인 필요"라고 쓰세요.
-- 같은 테마로 함께 비교해볼 만한 국내 종목명을 themePeers에 3~8개 넣으세요. 확실하지 않은 종목은 넣지 말고, 종목명만 짧게 쓰세요.
+- 각 필드에는 숫자, 방향성, 근거, 한계를 같이 넣으세요. 예: "PER 16.2배는 반도체 업종 평균 약 14배보다 다소 높은 편, PBR 2.39배는 장부가 대비 프리미엄 구간."
+
+[금지 표현 / 메타 코멘트 절대 사용 금지]
+사용자에게 보이는 화면이므로 다음 표현은 어떤 필드에서도 절대 사용하지 마세요. 이 규칙을 어기면 출력은 무효입니다.
+- "중립 성향의 리포트입니다", "이 리포트는...", "본 리포트는..." 같은 자기 메타 코멘트
+- "(정량적 내용 미공개)", "(비공개)", "(자세한 수치는 비공개)" 같은 비공개 디스클레이머
+- "미확인 변수", "확인 필요" 단독, "산출 불가", "데이터 없음" 같은 placeholder 표현
+- "KIS 기준", "OpenDART 기준", "(KIS)", "(OpenDART)", "데이터:", "단위 확인 필요" 같은 데이터 출처/내부 처리 문구
+- "핵심 원인은", "핵심 원인:", "근거 뉴스/공시:", "거래/가격 반응:", "설명 한계:"처럼 분석 메모 라벨로 시작하는 문장
+- "표기됩니다", "제공됩니다" 같은 보고서체 — "확인됩니다", "나타납니다"로 대체
+- AI/모델 자체에 대한 언급 ("모델이", "AI 추정", "본 분석은")
+
+[숫자/추정 강제]
+- 모든 숫자 필드는 반드시 구체 숫자 또는 범위로 채우세요. 데이터가 없으면 모델이 알고 있는 최신 시장 지식을 바탕으로 추정값을 적고 끝에 "(추정)"만 붙이세요. "(추정)"은 허용되지만 placeholder는 금지.
+- valuation.forwardPer: 입력 "Forward PER (제공 데이터)"가 N/A가 아니면 그 값을 그대로 사용(예: "12.4배"). N/A이면 향후 1~2년 EPS 추정과 현재가 기준으로 직접 산출한 숫자를 적으세요. 예: "약 11배(추정)" 또는 "10~13배 범위(추정)". 절대 빈 문자열이나 "산출 불가" 금지.
+- valuation.sectorAveragePer: 입력 "업종/동종 종목 평균 PER (제공 데이터)"가 N/A가 아니면 그 값을 그대로 사용하세요. N/A이면 해당 종목이 속한 한국/미국 업종의 평균 PER을 반드시 숫자로 추정하세요. 예: "반도체 업종 약 14배(추정)", "양극재/2차전지 약 25배(추정)", "S&P500 평균 약 22배". 빈 문자열 금지.
+- peerPerAverage: sectorAveragePer와 동일한 숫자를 다른 한 줄 표현으로. 예: "동종업계 평균 PER 약 14배(추정)".
+- valuation.peerComparison: 2~4개 동종업계 종목의 trailing PER/PBR을 반드시 숫자로. 정말 모르는 한 두 항목만 "N/A" 허용. "약 18.5" "20배 안팎" 같은 표현 가능.
+
+- PER만으로 고평가/저평가를 단정하지 마세요. 선행 PER, 실적 개선 스토리, 동종업계 비교를 함께 고려해 종합 판단하세요.
+- 바이오/제약/플랫폼/적자 성장주는 절대 PER보다 동종업계 평균, 파이프라인/임상 단계, 매출 성장률, 현금흐름을 우선 비교하세요. 단 sectorAveragePer는 비교 가능한 typical 범위를 그래도 숫자로 제시.
+- themePeers에 3~8개 종목명, peerComparison과 일부 겹쳐도 됨.
 - 앱 계산 기술 지표의 RSI, 기간 수익률, 이동평균, 볼린저밴드는 반드시 technical 또는 sections에 구체적인 숫자로 반영하세요.
 - 이동평균은 5/20/60/120일선을 따로 나열하기보다 현재가가 단기·중기·장기 평균선 대비 위/아래 어디에 있는지 종합 판정으로 설명하세요. "5/20/60/120일 대비 상회"라고 쓰지 말고 "5·20·60·120일 이동평균선 위"처럼 정확히 쓰세요.
 - KIS와 OpenDART 수집 데이터는 숫자/공시명/날짜를 임의로 바꾸지 말고 그대로 인용하세요.
@@ -2591,7 +3063,7 @@ ${newsStoryLines}
 - 시가총액(KIS)은 억원 단위로 제공됩니다. 예: "1조 86억원" 또는 "10,086억원"처럼 사용자 친화적으로 표현하세요.
 - DART 사업/제품 스토리 근거와 뉴스 본문 요약에 제품명, 사업부문, 고객사, 수요처, 매출 성장 단서가 있으면 이를 당일 재료와 테마 분석의 핵심 근거로 우선 반영하세요. 예: MLCC, 전장부품, 반도체 소재처럼 구체 제품/산업명을 쓰세요.
 - 실적 서프라이즈는 컨센서스 데이터가 없으면 "컨센서스 데이터가 없어 서프라이즈 여부는 판단할 수 없습니다"라고 쓰세요.
-- 최근 공시는 OpenDART 목록이 있으면 날짜와 공시명을 반드시 언급하세요. 없으면 "최근 180일 OpenDART 공시 목록에서 확인된 항목이 없습니다"라고 쓰세요.
+- 최근 공시 목록은 원인 판단의 내부 근거로만 사용하세요. summary, todayReason, news, catalysts, sections에는 "2026-05-27 [기재정정]투자판단관련주요경영사항"처럼 날짜+공시명을 그대로 노출하지 말고, "최근 주요 경영사항 정정 공시가 있었습니다"처럼 의미를 풀어 쓰세요.
 - "좋다/나쁘다"만 쓰지 말고 왜 그런지 근거를 붙이세요.
 - 사용자에게 직접 말하는 문장은 모두 높임말로 작성하세요. 반말, 명령조, "봐야 함", "~임", "~가능" 같은 메모체를 쓰지 마세요.
 - 문장 끝은 되도록 "입니다", "습니다", "필요합니다", "보입니다", "확인됩니다"처럼 마무리하세요.
@@ -2613,7 +3085,7 @@ ${newsStoryLines}
 5. 뉴스 분석: 뉴스 제목을 샅샅이 비교해 실적, 정책, 수주, 테마, 수급, 단순 노이즈 중 어느 쪽인지 구체적으로 분류. 테마는 기업 사업과 뉴스 근거가 맞물리는지 설명.
 6. RSI와 기간 수익률: RSI(14), 5/20/60/120일 수익률을 반드시 언급하고 과열/침체/추세 지속 여부를 판단.
 7. 실적 서프라이즈: 컨센서스 대비 상회/하회 근거가 뉴스나 데이터에 없으면 확인 필요라고 명시.
-8. 최근 공시: 뉴스 헤드라인에서 공시/계약/수주/증자/지분 단서가 있는지 확인하고 없으면 확인 필요라고 명시.
+8. 최근 공시: 뉴스 헤드라인과 공시 목록에서 계약/수주/증자/지분 단서가 있는지 확인하되, 사용자에게 보이는 문장에는 날짜+공시명 원문을 그대로 붙이지 마세요.
 9. 모멘텀: 단기 상승 지속력, 과열, 눌림, 재료 지속성, 최근 2주 외국인/기관 순매매 합계와 방향, 확인해야 할 다음 이벤트.
 10. 리스크: 최소 3개 이상. "데이터 부족"도 리스크로 취급 가능.
 
@@ -2628,20 +3100,79 @@ sections에는 아래 제목을 가능하면 모두 포함하세요. 각 body는
 - "뉴스 재료": 최근 뉴스가 가격에 미칠 수 있는 방향과 노이즈 여부.
 - "확인할 것": 다음 공시, 실적, 거래량, 뉴스 후속성 등 사용자가 체크할 항목.
 
+[sections body 포맷 규칙 — 매우 중요]
+화면에서 body가 구조화된 리스트로 표시됩니다. 아래 제목은 반드시 다음 형식으로 작성:
+- "CAN SLIM 체크" body: C/A/N/S/L/I/M 7개 알파벳 각각을 한 줄씩 분리. 형식은 정확히 "C: 분기 EPS 개선 여부 ...\nA: 연 EPS 흐름 ...\nN: 신제품/신경영 ...\nS: 거래량/공급 ...\nL: 업계 리더십 ...\nI: 기관 매수 ...\nM: 시장 방향 ...". 각 줄은 알파벳 + ":" + 공백 + 내용. 데이터 부족하면 "C: 분기 EPS 데이터 확인 필요"처럼 짧게.
+- "기술 지표" body: 라벨로 분리. 형식 "이동평균: ...\n볼린저밴드: ...\n지지/저항: ...\nRSI: ...". 각 항목 1문장씩.
+- "확인할 것" body: 각 체크 포인트를 한 문장씩 줄바꿈으로 분리. 형식 "다음 분기 실적 발표일 확인.\n외국인 순매수 지속 여부 점검.\n자사주 소각 일정 확인.". 한 줄 = 하나의 체크.
+- 위 규칙은 절대 깨지면 안 됩니다. 줄바꿈은 실제 "\n" 문자로 출력하세요.
+
+[추가 분석 관점: 심화 리포트용]
+11. 핵심 재료(catalysts): 최근 1~3개월 안에 가격을 움직일 만한 구체 재료(공시·계약·실적·정책·테마 이벤트)를 3~5개 골라 각각 종류·영향·시계·신뢰도·근거 설명을 분리해 작성. 단순 헤드라인 나열이 아니라 "왜 가격에 영향을 주는지"를 detail에 4~6문장으로 풍부하게 쓰세요. 구체 숫자나 공시/뉴스 인용을 포함하고, 영향 메커니즘(매출/이익/마진/수주잔고/임상단계 등)을 설명하세요.
+12. 밸류에이션 비교(valuation): forwardPer와 sectorAveragePer는 반드시 숫자(또는 범위)로 채우세요. 입력 데이터에 Forward PER 또는 업종/동종 종목 평균 PER이 있으면 그 값을 그대로, 없으면 모델이 알고 있는 향후 1~2년 이익 추정과 업종 평균을 바탕으로 "약 11배(추정)"처럼 적습니다. peerComparison에는 동종업계 2~4개 종목의 trailing PER과 PBR을 숫자로 채우고, 정말 모르는 항목만 "N/A"로 두세요. perVerdict/pbrVerdict는 "낮음/적정/높음/확인필요" 중 하나, reasoning은 4~6문장.
+13. 기술 상세(technicalDetail): 지지선·저항선은 추정 가격(예: "135,000원 근처")으로 쓰고 단정적이지 않게 "추정", "근처"를 붙이세요. 패턴은 보이지 않으면 "뚜렷한 패턴 미확인"이라고 쓰세요.
+14. 시나리오(scenarios): 강세(bull)/기본(base)/약세(bear) 3개를 모두 작성하고 probability 세 값의 합이 정확히 1.0이 되도록 하세요. priceTarget은 "+8~12%" 또는 "165,000원 근처"처럼 범위/근사로 쓰고 단정적 목표가는 금지. narrative는 시나리오 트리거와 신호를 2~3문장.
+15. 구조화 리스크(risksDetailed): 기존 risks 문자열 배열과 별개로 카테고리·심각도·발생가능성·대응법을 구조화해 3~5개 작성하세요. category는 재무/시장/규제/사업/기술/수급 중 하나, severity·probability는 높음/보통/낮음 중 하나.
+16. 타이밍·액션(timing): action은 "분할매수/관망/매수보류/비중확대/비중축소/판단보류" 중 하나만 고르되 단정적 매수·매도 권유로 들리지 않게 actionReason을 보수적으로 작성. shortTerm은 1~2주, midTerm은 1~3개월 관점으로 2~3문장씩.
+
 반드시 아래 JSON 객체만 출력하세요. 첫 글자는 {, 마지막 글자는 } 이어야 합니다. 마크다운 코드블록, 앞뒤 설명, 주석 금지.
 {
-  "summary": "3~4문장 핵심 요약. 첫 문장은 종합 판정, 둘째 문장은 상승/하락 이유, 셋째 문장은 리스크와 확인 포인트.",
+  "companyOverview": "이 회사가 어떤 사업을 하는지 3~4문장으로 소개. 다음을 포함하세요: (1) 주력 사업/제품 — 매출 비중 큰 사업부문이나 대표 제품 1~3개 (2) 산업 내 포지션 — 시장점유율·경쟁사 대비 위치·강점 (3) 주요 고객사·수요처 또는 사업 모델 핵심 (4) 최근 사업 변화나 신성장 동력이 있으면 한 문장. DART 사업 스토리 근거와 종목명/섹터 정보를 적극 활용하세요. 단정적 미래 표현 금지. 마지막 문장은 사실적 회사 정보로 끝내세요.",
+  "summary": "5~6개의 짧은 문장으로 구성한 풍부한 핵심 요약. 각 문장 끝에 반드시 '\\n\\n'(두 줄바꿈)을 넣어 사용자 화면에서 문단 단위로 보이게 하세요. 다음 요소를 한 문장씩 차례로 작성: (1) 최근 등락의 가장 큰 배경 — 어떤 재료·실적·테마가 가격을 움직였는지 구체적으로 (2) 밸류에이션 위치 — 현재 PER/PBR이 업종 평균(숫자) 대비 어디인지 (3) 기술/모멘텀 — 추세 단계와 과열 여부 (4) 가장 중요한 리스크 1개 (5) 다음에 확인해야 할 포인트. **첫 문장 맨 앞에 '핵심 원인은', '중립 성향의 리포트입니다', '본 리포트는', '이 분석은' 같은 메타 코멘트 절대 금지** — 바로 본론으로 들어가세요. 형식적이지 않게 자연스러운 한국어로 작성.",
   "score": 0,
   "scoreLabel": "점수 구간 해석. 우호, 중립, 주의 중 하나만 고르고 그 이유를 1문장",
   "theme": "핵심 테마 1~3개만 사용자에게 보이는 문장으로 작성. 근거 설명보다 어떤 테마인지가 먼저 보이게 작성",
   "sector": "섹터 분석. 업종/산업 분류와 확실성",
-  "todayReason": "당일 등락 이유. 사용자가 바로 이해하도록 핵심 원인 → 제품/실적/테마 스토리 → 근거 뉴스/공시 → 거래/가격 반응 → 설명 한계를 분리해 작성",
-  "fundamentals": "실적/밸류에이션 분석. 현재 PER, 선행 PER 산출 가능성, 향후 1~2년 이익 개선 근거, 동종업계 비교, PER/PBR/BPS/시총/EPS와 한계",
-  "technical": "기술적 분석. 현재가가 주요 이동평균 묶음 대비 어느 위치인지 종합하고, 캔들, 볼린저밴드, 지지/저항, 변동성을 설명",
-  "news": "최근 확인된 뉴스 항목을 사용자에게 보여주는 문장. '~스토리를 제공합니다' 같은 설명체 금지",
-  "momentum": "모멘텀 분석. 단기 흐름, 과열/눌림, 재료 지속성",
-  "peerPerAverage": "동종업계 평균 PER 약 00배 또는 확인 필요",
+  "todayReason": "최근 등락 이유 상세 분석. 4~6문장 분량으로 작성하세요. 첫 문장은 '핵심 원인은' 같은 라벨 없이 사용자가 바로 이해할 가격 변동 배경으로 시작하세요. 이어서 제품/실적/테마/정책 스토리 맥락, 뉴스·공시의 의미 요약, 거래량/가격 반응 강도를 자연스러운 문단으로 설명하세요. 제목·날짜 원문을 그대로 붙이지 말고 의미로 풀어 쓰세요. **'미확인 변수', '확인이 필요한 부분' 같은 placeholder 문장 금지**. 단순 헤드라인 반복이 아니라 사용자가 '왜 움직였는지'를 입체적으로 이해할 수 있게 작성.",
+  "fundamentals": "실적/밸류에이션 1문단 요약 3~4문장. 상세는 valuation 객체에 작성하세요.",
+  "technical": "기술 분석 1문단 요약 3~4문장. 상세는 technicalDetail 객체에 작성하세요.",
+  "news": "최근 뉴스 흐름의 방향성을 2~3문장으로 요약. 헤드라인을 그대로 나열하지 말고, 어떤 흐름이 우세한지(긍정/부정/혼조), 어떤 테마가 주도하는지, 어떤 점이 노이즈인지를 사용자가 한눈에 보게 정리. 예: '2차전지 양극재 신규 수주와 IRA 보조금 확대 기대가 우세한 흐름이지만, 단기 과열을 우려하는 증권사 코멘트도 일부 섞여 있습니다.'",
+  "momentum": "모멘텀 분석 3~4문장. 단기 흐름, 과열/눌림, 재료 지속성, 수급 보강",
+  "peerPerAverage": "동종업계 평균 PER을 숫자로 한 줄 요약. 예: '반도체 업종 평균 PER 약 14배(추정)'. 절대 '확인 필요'만 단독으로 쓰지 마세요.",
   "themePeers": ["같은 테마 종목명1", "같은 테마 종목명2", "같은 테마 종목명3"],
+  "catalysts": [
+    {
+      "title": "재료 한 줄 제목. 사용자가 바로 이해할 핵심 문장 (예: 'LG엔솔향 NCM 양극재 1.8조 4년 공급계약')",
+      "kind": "공시|뉴스|이벤트|실적|수급|루머 중 하나",
+      "impact": "강한긍정|긍정|중립|부정|강한부정 중 하나",
+      "timeline": "단기|중기|장기 중 하나",
+      "confidence": "높음|보통|낮음 중 하나",
+      "detail": "4~6문장 분량의 풍부한 분석. 다음을 포함: (1) 이 재료가 왜 가격에 영향을 주는지 — 매출/이익/마진 구조에 어떻게 작용하는지 (2) 구체 숫자나 공시명/뉴스 헤드라인 인용 (3) 영향이 얼마나 지속될지 (4) 비교/사례 — 비슷한 과거 케이스나 동종 업종 사례 (5) 변수/제약 — 신뢰도가 보통/낮음이면 무엇이 걸리는지. 단순 헤드라인 반복은 금지."
+    }
+  ],
+  "valuation": {
+    "perVerdict": "낮음|적정|높음|확인필요 중 하나",
+    "pbrVerdict": "낮음|적정|높음|확인필요 중 하나",
+    "forwardPer": "선행 PER. 입력 데이터 Forward PER이 있으면 그 값(예: '12.4배'). 없으면 모델 추정 (예: '약 11배(추정, 향후 1~2년 EPS 개선 가정)')",
+    "sectorAveragePer": "해당 종목 업종/산업의 평균 PER을 숫자로. 예: '반도체 업종 약 14배(추정)' 또는 '10~14배 범위'. '확인 필요'만 단독 사용 금지.",
+    "peerComparison": [
+      {"name": "비교 종목명1", "per": "PER 숫자 (예: '17.5' 또는 '18배 안팎'). 정말 불가능할 때만 'N/A'", "pbr": "PBR 숫자"}
+    ],
+    "reasoning": "4~6문장. 현재 PER/PBR이 동종업계 대비 어디에 있는지(숫자 인용), 선행 PER 관점 추가 해석, 적정/할인/프리미엄 판단 근거, 한계."
+  },
+  "technicalDetail": {
+    "maPosition": "5·20·60·120일 이동평균선 종합 위치 한 줄",
+    "rsiVerdict": "RSI 수치와 과열/침체 해석",
+    "bollingerVerdict": "볼린저밴드 위치와 변동성 한 줄",
+    "support": "추정 지지선 가격 또는 확인 필요",
+    "resistance": "추정 저항선 가격 또는 확인 필요",
+    "pattern": "감지된 캔들/차트 패턴 또는 뚜렷한 패턴 미확인",
+    "reasoning": "현재 추세, 변동성, 진입/대응 관점 3~5문장"
+  },
+  "scenarios": {
+    "bull": {"trigger": "강세 시나리오 트리거 한 줄", "priceTarget": "+N% 또는 가격 범위 또는 확인 필요", "probability": 0.0, "narrative": "현실화 조건과 신호 2~3문장"},
+    "base": {"trigger": "...", "priceTarget": "...", "probability": 0.0, "narrative": "..."},
+    "bear": {"trigger": "...", "priceTarget": "...", "probability": 0.0, "narrative": "..."}
+  },
+  "risksDetailed": [
+    {"category": "재무|시장|규제|사업|기술|수급", "severity": "높음|보통|낮음", "probability": "높음|보통|낮음", "description": "리스크 설명 1~2문장", "mitigant": "투자자가 관찰/대응할 수 있는 방법 1~2문장"}
+  ],
+  "timing": {
+    "shortTerm": "1~2주 전망 2~3문장",
+    "midTerm": "1~3개월 전망 2~3문장",
+    "action": "분할매수|관망|매수보류|비중확대|비중축소|판단보류 중 하나",
+    "actionReason": "그렇게 판단한 이유 2~3문장. 단정적 매수·매도 표현 금지"
+  },
   "risks": ["구체적 리스크1", "구체적 리스크2", "구체적 리스크3"],
   "sections": [
     {"title": "CAN SLIM 체크", "body": "C/A/N/S/L/I/M 관점 체크"},
@@ -2667,10 +3198,10 @@ sections에는 아래 제목을 가능하면 모두 포함하세요. 각 body는
       body: JSON.stringify({
         model: 'gpt-5-mini',
         input: prompt,
-        max_output_tokens: 2800,
-        reasoning: { effort: 'low' },
+        max_output_tokens: 10000,
+        reasoning: { effort: 'medium' },
         text: {
-          verbosity: 'medium',
+          verbosity: 'high',
           format: {
             type: 'json_schema',
             name: 'stock_ai_analysis',
@@ -2679,6 +3210,7 @@ sections에는 아래 제목을 가능하면 모두 포함하세요. 각 body는
               type: 'object',
               additionalProperties: false,
               required: [
+                'companyOverview',
                 'summary',
                 'score',
                 'scoreLabel',
@@ -2693,8 +3225,15 @@ sections에는 아래 제목을 가능하면 모두 포함하세요. 각 body는
                 'themePeers',
                 'risks',
                 'sections',
+                'catalysts',
+                'valuation',
+                'technicalDetail',
+                'scenarios',
+                'risksDetailed',
+                'timing',
               ],
               properties: {
+                companyOverview: { type: 'string' },
                 summary: { type: 'string' },
                 score: { type: 'number', minimum: 0, maximum: 100 },
                 scoreLabel: { type: 'string' },
@@ -2729,6 +3268,167 @@ sections에는 아래 제목을 가능하면 모두 포함하세요. 각 body는
                     },
                   },
                 },
+                catalysts: {
+                  type: 'array',
+                  maxItems: 6,
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['title', 'kind', 'impact', 'timeline', 'confidence', 'detail'],
+                    properties: {
+                      title: { type: 'string' },
+                      kind: {
+                        type: 'string',
+                        enum: ['공시', '뉴스', '이벤트', '실적', '수급', '루머'],
+                      },
+                      impact: {
+                        type: 'string',
+                        enum: ['강한긍정', '긍정', '중립', '부정', '강한부정'],
+                      },
+                      timeline: {
+                        type: 'string',
+                        enum: ['단기', '중기', '장기'],
+                      },
+                      confidence: {
+                        type: 'string',
+                        enum: ['높음', '보통', '낮음'],
+                      },
+                      detail: { type: 'string' },
+                    },
+                  },
+                },
+                valuation: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: [
+                    'perVerdict',
+                    'pbrVerdict',
+                    'forwardPer',
+                    'sectorAveragePer',
+                    'peerComparison',
+                    'reasoning',
+                  ],
+                  properties: {
+                    perVerdict: {
+                      type: 'string',
+                      enum: ['낮음', '적정', '높음', '확인필요'],
+                    },
+                    pbrVerdict: {
+                      type: 'string',
+                      enum: ['낮음', '적정', '높음', '확인필요'],
+                    },
+                    forwardPer: { type: 'string' },
+                    sectorAveragePer: { type: 'string' },
+                    peerComparison: {
+                      type: 'array',
+                      maxItems: 5,
+                      items: {
+                        type: 'object',
+                        additionalProperties: false,
+                        required: ['name', 'per', 'pbr'],
+                        properties: {
+                          name: { type: 'string' },
+                          per: { type: 'string' },
+                          pbr: { type: 'string' },
+                        },
+                      },
+                    },
+                    reasoning: { type: 'string' },
+                  },
+                },
+                technicalDetail: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['maPosition', 'rsiVerdict', 'bollingerVerdict', 'support', 'resistance', 'pattern', 'reasoning'],
+                  properties: {
+                    maPosition: { type: 'string' },
+                    rsiVerdict: { type: 'string' },
+                    bollingerVerdict: { type: 'string' },
+                    support: { type: 'string' },
+                    resistance: { type: 'string' },
+                    pattern: { type: 'string' },
+                    reasoning: { type: 'string' },
+                  },
+                },
+                scenarios: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['bull', 'base', 'bear'],
+                  properties: {
+                    bull: {
+                      type: 'object',
+                      additionalProperties: false,
+                      required: ['trigger', 'priceTarget', 'probability', 'narrative'],
+                      properties: {
+                        trigger: { type: 'string' },
+                        priceTarget: { type: 'string' },
+                        probability: { type: 'number', minimum: 0, maximum: 1 },
+                        narrative: { type: 'string' },
+                      },
+                    },
+                    base: {
+                      type: 'object',
+                      additionalProperties: false,
+                      required: ['trigger', 'priceTarget', 'probability', 'narrative'],
+                      properties: {
+                        trigger: { type: 'string' },
+                        priceTarget: { type: 'string' },
+                        probability: { type: 'number', minimum: 0, maximum: 1 },
+                        narrative: { type: 'string' },
+                      },
+                    },
+                    bear: {
+                      type: 'object',
+                      additionalProperties: false,
+                      required: ['trigger', 'priceTarget', 'probability', 'narrative'],
+                      properties: {
+                        trigger: { type: 'string' },
+                        priceTarget: { type: 'string' },
+                        probability: { type: 'number', minimum: 0, maximum: 1 },
+                        narrative: { type: 'string' },
+                      },
+                    },
+                  },
+                },
+                risksDetailed: {
+                  type: 'array',
+                  maxItems: 6,
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['category', 'severity', 'probability', 'description', 'mitigant'],
+                    properties: {
+                      category: {
+                        type: 'string',
+                        enum: ['재무', '시장', '규제', '사업', '기술', '수급'],
+                      },
+                      severity: {
+                        type: 'string',
+                        enum: ['높음', '보통', '낮음'],
+                      },
+                      probability: {
+                        type: 'string',
+                        enum: ['높음', '보통', '낮음'],
+                      },
+                      description: { type: 'string' },
+                      mitigant: { type: 'string' },
+                    },
+                  },
+                },
+                timing: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['shortTerm', 'midTerm', 'action', 'actionReason'],
+                  properties: {
+                    shortTerm: { type: 'string' },
+                    midTerm: { type: 'string' },
+                    action: {
+                      type: 'string',
+                      enum: ['분할매수', '관망', '매수보류', '비중확대', '비중축소', '판단보류'],
+                    },
+                    actionReason: { type: 'string' },
+                  },
+                },
               },
             },
           },
@@ -2757,13 +3457,22 @@ sections에는 아래 제목을 가능하면 모두 포함하세요. 각 body는
     try {
       const parsed = extractJsonObject(text);
       return attachStockAnalysisSources(
-        normalizeStockAnalysisPayload(parsed),
+        applyNaverValuationFallback(
+          normalizeStockAnalysisPayload(parsed),
+          naverValuation
+        ),
         sourcePayload
       );
     } catch (e) {
       console.warn('[generateStockAiAnalysis] JSON parse failed:', e?.message || e);
       console.warn('[generateStockAiAnalysis] Raw AI response:', clampStockAnalysisInput(text, 1200));
-      return attachStockAnalysisSources(fallbackStockAnalysisPayload(text), sourcePayload);
+      return attachStockAnalysisSources(
+        applyNaverValuationFallback(
+          fallbackStockAnalysisPayload(text),
+          naverValuation
+        ),
+        sourcePayload
+      );
     }
   }
 );

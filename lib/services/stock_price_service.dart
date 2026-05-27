@@ -1317,6 +1317,10 @@ class StockPriceService {
         if (fundamentals?.bps != null) 'bps': fundamentals!.bps,
         if (fundamentals?.marketCap != null)
           'marketCap': fundamentals!.marketCap,
+        if (fundamentals?.forwardPer != null)
+          'forwardPer': fundamentals!.forwardPer,
+        if (fundamentals?.sectorAveragePer != null)
+          'sectorAveragePer': fundamentals!.sectorAveragePer,
       },
       'candles': candles,
       'news': news
@@ -1527,6 +1531,8 @@ class StockPriceService {
           pbr: currentPrice / cached.result.bps!,
           bps: cached.result.bps,
           marketCap: cached.result.marketCap,
+          forwardPer: cached.result.forwardPer,
+          sectorAveragePer: cached.result.sectorAveragePer,
         );
       }
       return cached.result;
@@ -1584,6 +1590,8 @@ class StockPriceService {
     double? bps;
     double? pbr;
     int? marketCap;
+    double? forwardPer;
+    double? sectorAveragePer;
     final mainUri = Uri.parse(
       'https://finance.naver.com/item/main.nhn?code=$ticker',
     );
@@ -1616,13 +1624,139 @@ class StockPriceService {
       }
     }
 
-    if (per == null && pbr == null && marketCap == null) return null;
+    final naverMobile = await _fetchNaverMobileValuation(ticker);
+    per ??= naverMobile.per;
+    bps ??= naverMobile.bps;
+    pbr ??= naverMobile.pbr;
+    marketCap ??= naverMobile.marketCap;
+    forwardPer = naverMobile.forwardPer;
+    sectorAveragePer = naverMobile.sectorAveragePer;
+    if (pbr == null && bps != null && currentPrice != null) {
+      pbr = currentPrice / bps;
+    }
+
+    if (per == null &&
+        pbr == null &&
+        marketCap == null &&
+        forwardPer == null &&
+        sectorAveragePer == null) {
+      return null;
+    }
     return FundamentalsResult(
       per: per,
       pbr: pbr,
       bps: bps,
       marketCap: marketCap,
+      forwardPer: forwardPer,
+      sectorAveragePer: sectorAveragePer,
     );
+  }
+
+  static Future<_NaverMobileValuation> _fetchNaverMobileValuation(
+    String ticker,
+  ) async {
+    try {
+      final data = await _fetchNaverMobileIntegration(ticker);
+      if (data == null) return const _NaverMobileValuation();
+      final totalInfos = data['totalInfos'] as List<dynamic>? ?? const [];
+      double? valueByCode(String code) {
+        for (final item in totalInfos.whereType<Map>()) {
+          if (item['code'] == code) {
+            return _parseNaverNumber(item['value']);
+          }
+        }
+        return null;
+      }
+
+      final peers = data['industryCompareInfo'] as List<dynamic>? ?? const [];
+      final peerPers = await Future.wait(
+        peers
+            .whereType<Map>()
+            .map((p) => (p['itemCode'] as String? ?? '').trim())
+            .where((code) => RegExp(r'^\d{6}$').hasMatch(code))
+            .take(6)
+            .map(_fetchNaverPeerPer),
+      );
+      final validPeerPers = peerPers
+          .whereType<double>()
+          .where((v) => v > 0 && v.isFinite)
+          .toList();
+      final sectorAveragePer = validPeerPers.isEmpty
+          ? null
+          : validPeerPers.reduce((a, b) => a + b) / validPeerPers.length;
+
+      return _NaverMobileValuation(
+        per: valueByCode('per'),
+        pbr: valueByCode('pbr'),
+        bps: valueByCode('bps'),
+        marketCap: _parseNaverMarketCap(totalInfos),
+        forwardPer: valueByCode('cnsPer'),
+        sectorAveragePer: sectorAveragePer,
+      );
+    } catch (_) {
+      return const _NaverMobileValuation();
+    }
+  }
+
+  static Future<Map<String, dynamic>?> _fetchNaverMobileIntegration(
+    String ticker,
+  ) async {
+    final uri = Uri.parse(
+      'https://m.stock.naver.com/api/stock/$ticker/integration',
+    );
+    final response = await http
+        .get(
+          uri,
+          headers: {
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://m.stock.naver.com',
+            'Accept': 'application/json',
+          },
+        )
+        .timeout(const Duration(seconds: 8));
+    if (response.statusCode != 200) return null;
+    final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+    return decoded is Map<String, dynamic> ? decoded : null;
+  }
+
+  static Future<double?> _fetchNaverPeerPer(String ticker) async {
+    final data = await _fetchNaverMobileIntegration(ticker);
+    if (data == null) return null;
+    final totalInfos = data['totalInfos'] as List<dynamic>? ?? const [];
+    for (final code in const ['cnsPer', 'per']) {
+      for (final item in totalInfos.whereType<Map>()) {
+        if (item['code'] == code) {
+          final value = _parseNaverNumber(item['value']);
+          if (value != null && value > 0) return value;
+        }
+      }
+    }
+    return null;
+  }
+
+  static double? _parseNaverNumber(Object? value) {
+    final text = (value?.toString() ?? '').replaceAll(',', '');
+    final match = RegExp(r'-?\d+(?:\.\d+)?').firstMatch(text);
+    return double.tryParse(match?.group(0) ?? '');
+  }
+
+  static int? _parseNaverMarketCap(List<dynamic> totalInfos) {
+    String? raw;
+    for (final item in totalInfos.whereType<Map>()) {
+      if (item['code'] == 'marketValue') {
+        raw = item['value'] as String?;
+        break;
+      }
+    }
+    if (raw == null || raw.trim().isEmpty) return null;
+    var total = 0.0;
+    for (final match in RegExp(r'([\d,]+(?:\.\d+)?)\s*(조|억)').allMatches(raw)) {
+      final value = double.tryParse(match.group(1)!.replaceAll(',', ''));
+      if (value == null) continue;
+      if (match.group(2) == '조') total += value * 1000000000000;
+      if (match.group(2) == '억') total += value * 100000000;
+    }
+    return total > 0 ? total.round() : null;
   }
 
   /// Yahoo Finance quoteSummary (crumb 방식, 미국주식)
@@ -1683,9 +1817,20 @@ class StockPriceService {
         ?.toDouble();
     final marketCap = (result['summaryDetail']?['marketCap']?['raw'] as num?)
         ?.toInt();
+    final forwardPer =
+        (result['summaryDetail']?['forwardPE']?['raw'] as num?)?.toDouble() ??
+        (result['defaultKeyStatistics']?['forwardPE']?['raw'] as num?)
+            ?.toDouble();
 
-    if (per == null && pbr == null && marketCap == null) return null;
-    return FundamentalsResult(per: per, pbr: pbr, marketCap: marketCap);
+    if (per == null && pbr == null && marketCap == null && forwardPer == null) {
+      return null;
+    }
+    return FundamentalsResult(
+      per: per,
+      pbr: pbr,
+      marketCap: marketCap,
+      forwardPer: forwardPer,
+    );
   }
 
   /// 네이버 종목토론방 게시글 (한국주식 전용, 최대 20개)
@@ -1914,7 +2059,34 @@ class FundamentalsResult {
   final double? pbr;
   final double? bps; // BPS 캐시용 (PBR 재계산에 사용)
   final int? marketCap;
-  const FundamentalsResult({this.per, this.pbr, this.bps, this.marketCap});
+  final double? forwardPer;
+  final double? sectorAveragePer;
+  const FundamentalsResult({
+    this.per,
+    this.pbr,
+    this.bps,
+    this.marketCap,
+    this.forwardPer,
+    this.sectorAveragePer,
+  });
+}
+
+class _NaverMobileValuation {
+  final double? per;
+  final double? pbr;
+  final double? bps;
+  final int? marketCap;
+  final double? forwardPer;
+  final double? sectorAveragePer;
+
+  const _NaverMobileValuation({
+    this.per,
+    this.pbr,
+    this.bps,
+    this.marketCap,
+    this.forwardPer,
+    this.sectorAveragePer,
+  });
 }
 
 class _CachedFundamentals {
@@ -1959,6 +2131,7 @@ class StockNews {
 }
 
 class StockAiAnalysisResult {
+  final String companyOverview;
   final String summary;
   final double? score;
   final String scoreLabel;
@@ -1974,15 +2147,24 @@ class StockAiAnalysisResult {
   final String peerPerAverage;
   final List<String> themePeers;
   final List<StockAiSourceItem> sourceNews;
+  final List<StockAiSourceItem> sourceReports;
   final List<StockAiSourceItem> sourceDisclosures;
   final List<StockAiFinancialItem> sourceFinancials;
+  final List<StockAiEpsPoint> sourceEpsTimeline;
   final int? sourceMarketCap;
   final double? sourceEps;
   final StockAiInvestorFlow? sourceInvestorFlow;
   final StockAiDailyInvestorFlow? sourceDailyInvestorFlow;
+  final List<StockAiCatalyst> catalysts;
+  final StockAiValuation? valuation;
+  final StockAiTechnicalDetail? technicalDetail;
+  final StockAiScenarios? scenarios;
+  final List<StockAiRiskDetail> risksDetailed;
+  final StockAiTiming? timing;
   final DateTime? generatedAt;
 
   const StockAiAnalysisResult({
+    this.companyOverview = '',
     required this.summary,
     required this.score,
     required this.scoreLabel,
@@ -1998,24 +2180,36 @@ class StockAiAnalysisResult {
     this.peerPerAverage = '',
     this.themePeers = const [],
     this.sourceNews = const [],
+    this.sourceReports = const [],
     this.sourceDisclosures = const [],
     this.sourceFinancials = const [],
+    this.sourceEpsTimeline = const [],
     this.sourceMarketCap,
     this.sourceEps,
     this.sourceInvestorFlow,
     this.sourceDailyInvestorFlow,
+    this.catalysts = const [],
+    this.valuation,
+    this.technicalDetail,
+    this.scenarios,
+    this.risksDetailed = const [],
+    this.timing,
     required this.generatedAt,
   });
 
   factory StockAiAnalysisResult.fromMap(Map<String, dynamic> map) {
     String text(String key) => (map[key] as String? ?? '').trim();
     final rawSections = map['sections'] as List<dynamic>? ?? const [];
-    final rawThemePeers = map['themePeers'] as List<dynamic>? ?? const [];
+    final rawThemePeers = map['themePeers'];
     final rawNews = map['sourceNews'] as List<dynamic>? ?? const [];
+    final rawReports = map['sourceReports'] as List<dynamic>? ?? const [];
     final rawDisclosures =
         map['sourceDisclosures'] as List<dynamic>? ?? const [];
     final rawFinancials = map['sourceFinancials'] as List<dynamic>? ?? const [];
+    final rawEpsTimeline =
+        map['sourceEpsTimeline'] as List<dynamic>? ?? const [];
     return StockAiAnalysisResult(
+      companyOverview: text('companyOverview'),
       summary: text('summary'),
       score: (map['score'] as num?)?.toDouble(),
       scoreLabel: text('scoreLabel'),
@@ -2031,10 +2225,7 @@ class StockAiAnalysisResult {
           .where((v) => v.isNotEmpty)
           .toList(),
       peerPerAverage: text('peerPerAverage'),
-      themePeers: rawThemePeers
-          .map((v) => v.toString().trim())
-          .where((v) => v.isNotEmpty)
-          .toList(),
+      themePeers: _parseThemePeers(rawThemePeers),
       sections: rawSections
           .whereType<Map>()
           .map(
@@ -2043,6 +2234,11 @@ class StockAiAnalysisResult {
           .where((v) => v.title.isNotEmpty && v.body.isNotEmpty)
           .toList(),
       sourceNews: rawNews
+          .whereType<Map>()
+          .map((v) => StockAiSourceItem.fromMap(Map<String, dynamic>.from(v)))
+          .where((v) => v.title.isNotEmpty)
+          .toList(),
+      sourceReports: rawReports
           .whereType<Map>()
           .map((v) => StockAiSourceItem.fromMap(Map<String, dynamic>.from(v)))
           .where((v) => v.title.isNotEmpty)
@@ -2059,6 +2255,11 @@ class StockAiAnalysisResult {
           )
           .where((v) => v.account.isNotEmpty)
           .toList(),
+      sourceEpsTimeline: rawEpsTimeline
+          .whereType<Map>()
+          .map((v) => StockAiEpsPoint.fromMap(Map<String, dynamic>.from(v)))
+          .where((v) => v.period.isNotEmpty && v.eps != null)
+          .toList(),
       sourceMarketCap: (map['sourceMarketCap'] as num?)?.round(),
       sourceEps: (map['sourceEps'] as num?)?.toDouble(),
       sourceInvestorFlow: map['sourceInvestorFlow'] is Map
@@ -2071,12 +2272,43 @@ class StockAiAnalysisResult {
               Map<String, dynamic>.from(map['sourceDailyInvestorFlow'] as Map),
             )
           : null,
+      catalysts: (map['catalysts'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map((v) => StockAiCatalyst.fromMap(Map<String, dynamic>.from(v)))
+          .where((c) => c.title.isNotEmpty)
+          .toList(),
+      valuation: map['valuation'] is Map
+          ? StockAiValuation.fromMap(
+              Map<String, dynamic>.from(map['valuation'] as Map),
+            )
+          : null,
+      technicalDetail: map['technicalDetail'] is Map
+          ? StockAiTechnicalDetail.fromMap(
+              Map<String, dynamic>.from(map['technicalDetail'] as Map),
+            )
+          : null,
+      scenarios: map['scenarios'] is Map
+          ? StockAiScenarios.fromMap(
+              Map<String, dynamic>.from(map['scenarios'] as Map),
+            )
+          : null,
+      risksDetailed: (map['risksDetailed'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map((v) => StockAiRiskDetail.fromMap(Map<String, dynamic>.from(v)))
+          .where((r) => r.description.isNotEmpty)
+          .toList(),
+      timing: map['timing'] is Map
+          ? StockAiTiming.fromMap(
+              Map<String, dynamic>.from(map['timing'] as Map),
+            )
+          : null,
       generatedAt: DateTime.tryParse(text('generatedAt')),
     );
   }
 
   Map<String, dynamic> toMap() {
     return {
+      'companyOverview': companyOverview,
       'summary': summary,
       'score': score,
       'scoreLabel': scoreLabel,
@@ -2092,17 +2324,57 @@ class StockAiAnalysisResult {
       'themePeers': themePeers,
       'sections': sections.map((section) => section.toMap()).toList(),
       'sourceNews': sourceNews.map((item) => item.toMap()).toList(),
+      'sourceReports': sourceReports.map((item) => item.toMap()).toList(),
       'sourceDisclosures': sourceDisclosures
           .map((item) => item.toMap())
           .toList(),
       'sourceFinancials': sourceFinancials.map((item) => item.toMap()).toList(),
+      'sourceEpsTimeline': sourceEpsTimeline
+          .map((item) => item.toMap())
+          .toList(),
       'sourceMarketCap': sourceMarketCap,
       'sourceEps': sourceEps,
       'sourceInvestorFlow': sourceInvestorFlow?.toMap(),
       'sourceDailyInvestorFlow': sourceDailyInvestorFlow?.toMap(),
+      'catalysts': catalysts.map((c) => c.toMap()).toList(),
+      'valuation': valuation?.toMap(),
+      'technicalDetail': technicalDetail?.toMap(),
+      'scenarios': scenarios?.toMap(),
+      'risksDetailed': risksDetailed.map((r) => r.toMap()).toList(),
+      'timing': timing?.toMap(),
       'generatedAt': generatedAt?.toIso8601String(),
     };
   }
+}
+
+List<String> _parseThemePeers(dynamic value) {
+  final items = <String>[];
+  void add(dynamic raw) {
+    if (raw == null) return;
+    if (raw is Map) {
+      add(raw['name'] ?? raw['stockName'] ?? raw['title']);
+      return;
+    }
+    final text = raw.toString().trim();
+    if (text.isEmpty) return;
+    items.addAll(
+      text
+          .split(RegExp(r'[,/·\n]'))
+          .map((v) => v.trim())
+          .where((v) => v.isNotEmpty),
+    );
+  }
+
+  if (value is List) {
+    for (final item in value) {
+      add(item);
+    }
+  } else {
+    add(value);
+  }
+
+  final seen = <String>{};
+  return items.where((item) => seen.add(item)).take(8).toList();
 }
 
 class StockAiAnalysisSection {
@@ -2123,6 +2395,299 @@ class StockAiAnalysisSection {
   }
 }
 
+class StockAiCatalyst {
+  final String title;
+  final String kind;
+  final String impact;
+  final String timeline;
+  final String confidence;
+  final String detail;
+
+  const StockAiCatalyst({
+    required this.title,
+    required this.kind,
+    required this.impact,
+    required this.timeline,
+    required this.confidence,
+    required this.detail,
+  });
+
+  factory StockAiCatalyst.fromMap(Map<String, dynamic> map) {
+    String s(String key) => (map[key] as String? ?? '').trim();
+    return StockAiCatalyst(
+      title: s('title'),
+      kind: s('kind'),
+      impact: s('impact'),
+      timeline: s('timeline'),
+      confidence: s('confidence'),
+      detail: s('detail'),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'kind': kind,
+      'impact': impact,
+      'timeline': timeline,
+      'confidence': confidence,
+      'detail': detail,
+    };
+  }
+}
+
+class StockAiPeerComparison {
+  final String name;
+  final String per;
+  final String pbr;
+
+  const StockAiPeerComparison({
+    required this.name,
+    required this.per,
+    required this.pbr,
+  });
+
+  factory StockAiPeerComparison.fromMap(Map<String, dynamic> map) {
+    return StockAiPeerComparison(
+      name: (map['name'] as String? ?? '').trim(),
+      per: (map['per'] as String? ?? '').trim(),
+      pbr: (map['pbr'] as String? ?? '').trim(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {'name': name, 'per': per, 'pbr': pbr};
+  }
+}
+
+class StockAiValuation {
+  final String perVerdict;
+  final String pbrVerdict;
+  final String forwardPer;
+  final String sectorAveragePer;
+  final List<StockAiPeerComparison> peerComparison;
+  final String reasoning;
+
+  const StockAiValuation({
+    required this.perVerdict,
+    required this.pbrVerdict,
+    required this.forwardPer,
+    required this.sectorAveragePer,
+    required this.peerComparison,
+    required this.reasoning,
+  });
+
+  factory StockAiValuation.fromMap(Map<String, dynamic> map) {
+    final peers = map['peerComparison'] as List<dynamic>? ?? const [];
+    return StockAiValuation(
+      perVerdict: (map['perVerdict'] as String? ?? '').trim(),
+      pbrVerdict: (map['pbrVerdict'] as String? ?? '').trim(),
+      forwardPer: (map['forwardPer'] as String? ?? '').trim(),
+      sectorAveragePer: (map['sectorAveragePer'] as String? ?? '').trim(),
+      peerComparison: peers
+          .whereType<Map>()
+          .map(
+            (v) => StockAiPeerComparison.fromMap(Map<String, dynamic>.from(v)),
+          )
+          .where((p) => p.name.isNotEmpty)
+          .toList(),
+      reasoning: (map['reasoning'] as String? ?? '').trim(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'perVerdict': perVerdict,
+      'pbrVerdict': pbrVerdict,
+      'forwardPer': forwardPer,
+      'sectorAveragePer': sectorAveragePer,
+      'peerComparison': peerComparison.map((p) => p.toMap()).toList(),
+      'reasoning': reasoning,
+    };
+  }
+}
+
+class StockAiTechnicalDetail {
+  final String maPosition;
+  final String rsiVerdict;
+  final String bollingerVerdict;
+  final String support;
+  final String resistance;
+  final String pattern;
+  final String reasoning;
+
+  const StockAiTechnicalDetail({
+    required this.maPosition,
+    required this.rsiVerdict,
+    required this.bollingerVerdict,
+    required this.support,
+    required this.resistance,
+    required this.pattern,
+    required this.reasoning,
+  });
+
+  factory StockAiTechnicalDetail.fromMap(Map<String, dynamic> map) {
+    String s(String key) => (map[key] as String? ?? '').trim();
+    return StockAiTechnicalDetail(
+      maPosition: s('maPosition'),
+      rsiVerdict: s('rsiVerdict'),
+      bollingerVerdict: s('bollingerVerdict'),
+      support: s('support'),
+      resistance: s('resistance'),
+      pattern: s('pattern'),
+      reasoning: s('reasoning'),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'maPosition': maPosition,
+      'rsiVerdict': rsiVerdict,
+      'bollingerVerdict': bollingerVerdict,
+      'support': support,
+      'resistance': resistance,
+      'pattern': pattern,
+      'reasoning': reasoning,
+    };
+  }
+}
+
+class StockAiScenario {
+  final String trigger;
+  final String priceTarget;
+  final double? probability;
+  final String narrative;
+
+  const StockAiScenario({
+    required this.trigger,
+    required this.priceTarget,
+    required this.probability,
+    required this.narrative,
+  });
+
+  factory StockAiScenario.fromMap(Map<String, dynamic> map) {
+    return StockAiScenario(
+      trigger: (map['trigger'] as String? ?? '').trim(),
+      priceTarget: (map['priceTarget'] as String? ?? '').trim(),
+      probability: (map['probability'] as num?)?.toDouble(),
+      narrative: (map['narrative'] as String? ?? '').trim(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'trigger': trigger,
+      'priceTarget': priceTarget,
+      'probability': probability,
+      'narrative': narrative,
+    };
+  }
+}
+
+class StockAiScenarios {
+  final StockAiScenario? bull;
+  final StockAiScenario? base;
+  final StockAiScenario? bear;
+
+  const StockAiScenarios({
+    required this.bull,
+    required this.base,
+    required this.bear,
+  });
+
+  factory StockAiScenarios.fromMap(Map<String, dynamic> map) {
+    StockAiScenario? read(String key) {
+      final raw = map[key];
+      if (raw is! Map) return null;
+      return StockAiScenario.fromMap(Map<String, dynamic>.from(raw));
+    }
+
+    return StockAiScenarios(
+      bull: read('bull'),
+      base: read('base'),
+      bear: read('bear'),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'bull': bull?.toMap(),
+      'base': base?.toMap(),
+      'bear': bear?.toMap(),
+    };
+  }
+}
+
+class StockAiRiskDetail {
+  final String category;
+  final String severity;
+  final String probability;
+  final String description;
+  final String mitigant;
+
+  const StockAiRiskDetail({
+    required this.category,
+    required this.severity,
+    required this.probability,
+    required this.description,
+    required this.mitigant,
+  });
+
+  factory StockAiRiskDetail.fromMap(Map<String, dynamic> map) {
+    String s(String key) => (map[key] as String? ?? '').trim();
+    return StockAiRiskDetail(
+      category: s('category'),
+      severity: s('severity'),
+      probability: s('probability'),
+      description: s('description'),
+      mitigant: s('mitigant'),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'category': category,
+      'severity': severity,
+      'probability': probability,
+      'description': description,
+      'mitigant': mitigant,
+    };
+  }
+}
+
+class StockAiTiming {
+  final String shortTerm;
+  final String midTerm;
+  final String action;
+  final String actionReason;
+
+  const StockAiTiming({
+    required this.shortTerm,
+    required this.midTerm,
+    required this.action,
+    required this.actionReason,
+  });
+
+  factory StockAiTiming.fromMap(Map<String, dynamic> map) {
+    String s(String key) => (map[key] as String? ?? '').trim();
+    return StockAiTiming(
+      shortTerm: s('shortTerm'),
+      midTerm: s('midTerm'),
+      action: s('action'),
+      actionReason: s('actionReason'),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'shortTerm': shortTerm,
+      'midTerm': midTerm,
+      'action': action,
+      'actionReason': actionReason,
+    };
+  }
+}
+
 class StockAiSourceItem {
   final String title;
   final String url;
@@ -2131,6 +2696,10 @@ class StockAiSourceItem {
   final String date;
   final String submitter;
   final String receiptNo;
+  final String opinion;
+  final double? targetPrice;
+  final double? previousTargetPrice;
+  final double? priceAtWriteDate;
 
   const StockAiSourceItem({
     required this.title,
@@ -2140,6 +2709,10 @@ class StockAiSourceItem {
     this.date = '',
     this.submitter = '',
     this.receiptNo = '',
+    this.opinion = '',
+    this.targetPrice,
+    this.previousTargetPrice,
+    this.priceAtWriteDate,
   });
 
   factory StockAiSourceItem.fromMap(Map<String, dynamic> map) {
@@ -2151,6 +2724,10 @@ class StockAiSourceItem {
       date: (map['date'] as String? ?? '').trim(),
       submitter: (map['submitter'] as String? ?? '').trim(),
       receiptNo: (map['receiptNo'] as String? ?? '').trim(),
+      opinion: (map['opinion'] as String? ?? '').trim(),
+      targetPrice: (map['targetPrice'] as num?)?.toDouble(),
+      previousTargetPrice: (map['previousTargetPrice'] as num?)?.toDouble(),
+      priceAtWriteDate: (map['priceAtWriteDate'] as num?)?.toDouble(),
     );
   }
 
@@ -2163,6 +2740,10 @@ class StockAiSourceItem {
       'date': date,
       'submitter': submitter,
       'receiptNo': receiptNo,
+      'opinion': opinion,
+      'targetPrice': targetPrice,
+      'previousTargetPrice': previousTargetPrice,
+      'priceAtWriteDate': priceAtWriteDate,
     };
   }
 }
@@ -2195,6 +2776,38 @@ class StockAiFinancialItem {
       'current': current,
       'previous': previous,
       'statement': statement,
+    };
+  }
+}
+
+class StockAiEpsPoint {
+  final String period;
+  final double? eps;
+  final double? per;
+  final bool estimate;
+
+  const StockAiEpsPoint({
+    required this.period,
+    required this.eps,
+    this.per,
+    this.estimate = false,
+  });
+
+  factory StockAiEpsPoint.fromMap(Map<String, dynamic> map) {
+    return StockAiEpsPoint(
+      period: (map['period'] as String? ?? '').trim(),
+      eps: (map['eps'] as num?)?.toDouble(),
+      per: (map['per'] as num?)?.toDouble(),
+      estimate: map['estimate'] == true,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'period': period,
+      'eps': eps,
+      'per': per,
+      'estimate': estimate,
     };
   }
 }
