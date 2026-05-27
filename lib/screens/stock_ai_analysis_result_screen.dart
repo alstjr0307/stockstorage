@@ -502,6 +502,12 @@ class _AnalysisContent extends StatelessWidget {
       children: [
         _ReportHeroCard(pick: pick, price: price, analysis: analysis),
         const SizedBox(height: 12),
+        _SummaryCard(
+          text: StockAiAnalysisResultScreen.cleanSummaryText(analysis.summary),
+        ),
+        const SizedBox(height: 12),
+        _ScoreBoardCard(analysis: analysis, fundamentals: fundamentals),
+        const SizedBox(height: 12),
         _SnapshotGrid(
           analysis: analysis,
           price: price,
@@ -509,13 +515,7 @@ class _AnalysisContent extends StatelessWidget {
           technicalMetrics: technicalMetrics,
         ),
         const SizedBox(height: 12),
-        _SummaryCard(
-          text: StockAiAnalysisResultScreen.cleanSummaryText(analysis.summary),
-        ),
-        const SizedBox(height: 12),
         _SignalGridCard(analysis: analysis),
-        const SizedBox(height: 12),
-        _SourceEvidenceCard(analysis: analysis),
         const SizedBox(height: 12),
         _DataRoomCard(
           fundamentals: fundamentals,
@@ -523,7 +523,7 @@ class _AnalysisContent extends StatelessWidget {
           technicalMetrics: technicalMetrics,
         ),
         const SizedBox(height: 12),
-        _ScoreBoardCard(analysis: analysis, fundamentals: fundamentals),
+        _SourceEvidenceCard(analysis: analysis),
         const SizedBox(height: 12),
         _StatusCard(fromCache: fromCache, generatedText: generatedText),
         const SizedBox(height: 6),
@@ -566,23 +566,16 @@ class _ReportHeroCard extends StatelessWidget {
         : scoreValue >= 55
         ? '중립'
         : '주의';
+    final changeColor = (price?.change ?? 0) >= 0
+        ? const Color(0xFFF04452)
+        : const Color(0xFF4D9BFF);
 
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF18B6A4), Color(0xFF109178)],
-        ),
+        color: cs.surface,
         borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF109178).withValues(alpha: 0.22),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -596,35 +589,89 @@ class _ReportHeroCard extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        _MarketPill(market: pick.market, inverse: true),
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF10B981),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
                         const SizedBox(width: 7),
+                        Text(
+                          'AI 종목 분석',
+                          style: TextStyle(
+                            color: const Color(0xFF10B981),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.8,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        _MarketPill(market: pick.market),
+                        const SizedBox(width: 6),
                         Text(
                           pick.ticker,
                           style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.72),
+                            color: cs.onSurface.withValues(alpha: 0.36),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 13),
+                    Text(
+                      price?.formattedPrice ?? pick.name,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 31,
+                        fontWeight: FontWeight.w900,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Text(
+                          pick.name,
+                          style: TextStyle(
+                            color: cs.onSurface.withValues(alpha: 0.55),
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: changeColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            _formatHeroChange(price),
+                            style: TextStyle(
+                              color: changeColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      pick.name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    Text(
                       analysis.scoreLabel.isEmpty
-                          ? 'AI가 뉴스, 재무, 차트 흐름을 종합했습니다.'
+                          ? '뉴스, 재무, 차트 흐름을 종합했습니다.'
                           : _cleanScoreLabel(analysis.scoreLabel, scoreValue),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.80),
-                        fontSize: 13,
+                        color: cs.onSurface.withValues(alpha: 0.58),
+                        fontSize: 12.5,
                         height: 1.45,
                         fontWeight: FontWeight.w700,
                       ),
@@ -634,143 +681,53 @@ class _ReportHeroCard extends StatelessWidget {
               ),
               const SizedBox(width: 14),
               Container(
-                width: 96,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 11,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.96),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                width: 84,
+                height: 84,
+                alignment: Alignment.center,
+                child: Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Text(
-                      'AI SCORE',
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.42),
-                        fontSize: 9,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    Text(
-                      scoreText,
-                      style: TextStyle(
-                        color: scoreColor,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w900,
-                        height: 1,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(999),
-                      child: LinearProgressIndicator(
+                    SizedBox(
+                      width: 84,
+                      height: 84,
+                      child: CircularProgressIndicator(
                         value: score == null ? 0 : score.clamp(0, 100) / 100,
-                        minHeight: 6,
+                        strokeWidth: 7,
                         color: scoreColor,
                         backgroundColor: cs.onSurface.withValues(alpha: 0.08),
+                        strokeCap: StrokeCap.round,
                       ),
                     ),
-                    const SizedBox(height: 7),
-                    Text(
-                      scoreCaption,
-                      style: TextStyle(
-                        color: scoreColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                      ),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          scoreText,
+                          style: TextStyle(
+                            color: scoreColor,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            height: 1,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          scoreCaption,
+                          style: TextStyle(
+                            color: scoreColor,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _HeroStat(
-                    label: '현재가',
-                    value: price?.formattedPrice ?? '-',
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 30,
-                  color: Colors.white.withValues(alpha: 0.16),
-                ),
-                Expanded(
-                  child: _HeroStat(
-                    label: '등락',
-                    value: _formatHeroChange(price),
-                    alignEnd: true,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
-    );
-  }
-}
-
-class _HeroStat extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool alignEnd;
-
-  const _HeroStat({
-    required this.label,
-    required this.value,
-    this.alignEnd = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: alignEnd
-          ? CrossAxisAlignment.end
-          : CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.58),
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -828,10 +785,10 @@ class _SnapshotGrid extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       itemCount: items.length,
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisExtent: 86,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
+        crossAxisCount: 4,
+        mainAxisExtent: 78,
+        crossAxisSpacing: 6,
+        mainAxisSpacing: 6,
       ),
       itemBuilder: (_, index) => _SnapshotTile(item: items[index]),
     );
@@ -848,60 +805,48 @@ class _SnapshotTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final color = _verdictColor(item.caption);
     return Container(
-      padding: const EdgeInsets.all(13),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 9),
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: cs.onSurface.withValues(alpha: 0.07)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(9),
+          Text(
+            item.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.48),
+              fontSize: 9.5,
+              fontWeight: FontWeight.w900,
             ),
-            child: Icon(item.icon, color: color, size: 18),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  item.label,
-                  style: TextStyle(
-                    color: cs.onSurface.withValues(alpha: 0.48),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  item.value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  item.caption,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
+          const SizedBox(height: 5),
+          Text(
+            item.value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: cs.onSurface,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            item.caption,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: color,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w900,
             ),
           ),
         ],
@@ -1082,7 +1027,19 @@ class _SignalGridCard extends StatelessWidget {
             color: Color(0xFF10B981),
           ),
           const SizedBox(height: 12),
-          ...signals.map((signal) => _SignalRow(signal: signal)),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: signals.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisExtent: 150,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+            ),
+            itemBuilder: (_, index) => _SignalRow(signal: signals[index]),
+          ),
+          const SizedBox(height: 8),
           _ThemePeersCard(peers: analysis.themePeers),
         ],
       ),
@@ -1103,8 +1060,7 @@ class _SignalRow extends StatelessWidget {
         : _signalColor(signal.value);
     final body = StockAiAnalysisResultScreen.cleanText(signal.body);
     return Container(
-      margin: const EdgeInsets.only(bottom: 9),
-      padding: const EdgeInsets.all(13),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: cs.surface,
         borderRadius: BorderRadius.circular(10),
@@ -1507,7 +1463,7 @@ class _ResolvedFundamentals {
   }
 }
 
-class _DataRoomCard extends StatelessWidget {
+class _DataRoomCard extends StatefulWidget {
   final FundamentalsResult? fundamentals;
   final StockAiAnalysisResult analysis;
   final _AiTechnicalMetrics? technicalMetrics;
@@ -1519,14 +1475,24 @@ class _DataRoomCard extends StatelessWidget {
   });
 
   @override
+  State<_DataRoomCard> createState() => _DataRoomCardState();
+}
+
+class _DataRoomCardState extends State<_DataRoomCard> {
+  int _tabIndex = 0;
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final resolved = _ResolvedFundamentals.from(fundamentals, analysis);
+    final resolved = _ResolvedFundamentals.from(
+      widget.fundamentals,
+      widget.analysis,
+    );
     final rows = [
       _MetricRowData(
         label: 'PER',
         value: resolved.per == null ? '-' : resolved.per!.toStringAsFixed(1),
-        verdict: _peerPerCaption(analysis),
+        verdict: _peerPerCaption(widget.analysis),
       ),
       _MetricRowData(
         label: 'PBR',
@@ -1556,58 +1522,64 @@ class _DataRoomCard extends StatelessWidget {
       ),
       _MetricRowData(
         label: 'RSI 14',
-        value: technicalMetrics?.rsi14 == null
+        value: widget.technicalMetrics?.rsi14 == null
             ? '-'
-            : technicalMetrics!.rsi14!.toStringAsFixed(1),
-        verdict: _rsiVerdict(technicalMetrics?.rsi14),
+            : widget.technicalMetrics!.rsi14!.toStringAsFixed(1),
+        verdict: _rsiVerdict(widget.technicalMetrics?.rsi14),
       ),
       _MetricRowData(
         label: '5일 수익률',
-        value: _formatPercent(technicalMetrics?.return5),
-        verdict: _returnVerdict(technicalMetrics?.return5),
+        value: _formatPercent(widget.technicalMetrics?.return5),
+        verdict: _returnVerdict(widget.technicalMetrics?.return5),
       ),
       _MetricRowData(
         label: '20일 수익률',
-        value: _formatPercent(technicalMetrics?.return20),
-        verdict: _returnVerdict(technicalMetrics?.return20),
+        value: _formatPercent(widget.technicalMetrics?.return20),
+        verdict: _returnVerdict(widget.technicalMetrics?.return20),
       ),
       _MetricRowData(
         label: '60일 수익률',
-        value: _formatPercent(technicalMetrics?.return60),
-        verdict: _returnVerdict(technicalMetrics?.return60),
+        value: _formatPercent(widget.technicalMetrics?.return60),
+        verdict: _returnVerdict(widget.technicalMetrics?.return60),
       ),
       _MetricRowData(
         label: '120일 수익률',
-        value: _formatPercent(technicalMetrics?.return120),
-        verdict: _returnVerdict(technicalMetrics?.return120),
+        value: _formatPercent(widget.technicalMetrics?.return120),
+        verdict: _returnVerdict(widget.technicalMetrics?.return120),
       ),
       _MetricRowData(
         label: '볼린저 위치',
-        value: technicalMetrics?.bollingerPosition ?? '-',
-        verdict: technicalMetrics?.bollingerVerdict ?? '데이터 없음',
+        value: widget.technicalMetrics?.bollingerPosition ?? '-',
+        verdict: widget.technicalMetrics?.bollingerVerdict ?? '데이터 없음',
       ),
       _MetricRowData(
         label: '외국인 2주',
-        value: _formatShareFlow(analysis.sourceDailyInvestorFlow?.foreignNet14),
+        value: _formatShareFlow(
+          widget.analysis.sourceDailyInvestorFlow?.foreignNet14,
+        ),
         verdict: _shareFlowVerdict(
-          analysis.sourceDailyInvestorFlow?.foreignNet14,
+          widget.analysis.sourceDailyInvestorFlow?.foreignNet14,
         ),
       ),
       _MetricRowData(
         label: '기관 2주',
         value: _formatShareFlow(
-          analysis.sourceDailyInvestorFlow?.institutionNet14,
+          widget.analysis.sourceDailyInvestorFlow?.institutionNet14,
         ),
         verdict: _shareFlowVerdict(
-          analysis.sourceDailyInvestorFlow?.institutionNet14,
+          widget.analysis.sourceDailyInvestorFlow?.institutionNet14,
         ),
       ),
       _MetricRowData(
         label: '외국인 보유율',
-        value: analysis.sourceDailyInvestorFlow?.latestForeignHoldRate == null
+        value:
+            widget.analysis.sourceDailyInvestorFlow?.latestForeignHoldRate ==
+                null
             ? '-'
-            : '${analysis.sourceDailyInvestorFlow!.latestForeignHoldRate!.toStringAsFixed(2)}%',
-        verdict: analysis.sourceDailyInvestorFlow?.latestForeignHoldRate == null
+            : '${widget.analysis.sourceDailyInvestorFlow!.latestForeignHoldRate!.toStringAsFixed(2)}%',
+        verdict:
+            widget.analysis.sourceDailyInvestorFlow?.latestForeignHoldRate ==
+                null
             ? '데이터 없음'
             : '최근 기준',
       ),
@@ -1615,6 +1587,22 @@ class _DataRoomCard extends StatelessWidget {
     final valuationRows = rows.take(5).toList();
     final technicalRows = rows.skip(5).take(6).toList();
     final flowRows = rows.skip(11).toList();
+    final tabs = [
+      (label: '밸류에이션', rows: valuationRows, footer: null),
+      (
+        label: '기술 지표',
+        rows: technicalRows,
+        footer: _MovingAveragePositionCard(metrics: widget.technicalMetrics),
+      ),
+      (
+        label: '수급',
+        rows: flowRows,
+        footer: _InvestorFlowTable(
+          flow: widget.analysis.sourceDailyInvestorFlow,
+        ),
+      ),
+    ];
+    final active = tabs[_tabIndex.clamp(0, tabs.length - 1)];
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1628,61 +1616,98 @@ class _DataRoomCard extends StatelessWidget {
             color: Color(0xFF14B8A6),
           ),
           const SizedBox(height: 12),
-          _DataGroup(title: '밸류에이션', rows: valuationRows),
-          _DataGroup(
-            title: '기술 지표',
-            rows: technicalRows,
-            footer: _MovingAveragePositionCard(metrics: technicalMetrics),
+          _DataTabs(
+            tabs: tabs.map((tab) => tab.label).toList(),
+            selectedIndex: _tabIndex,
+            onChanged: (index) => setState(() => _tabIndex = index),
           ),
-          _DataGroup(
-            title: '수급',
-            rows: flowRows,
-            footer: _InvestorFlowTable(flow: analysis.sourceDailyInvestorFlow),
-          ),
+          const SizedBox(height: 8),
+          _MetricPanel(rows: active.rows, footer: active.footer),
         ],
       ),
     );
   }
 }
 
-class _DataGroup extends StatelessWidget {
-  final String title;
+class _DataTabs extends StatelessWidget {
+  final List<String> tabs;
+  final int selectedIndex;
+  final ValueChanged<int> onChanged;
+
+  const _DataTabs({
+    required this.tabs,
+    required this.selectedIndex,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.07)),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < tabs.length; i++)
+            Expanded(
+              child: GestureDetector(
+                onTap: () => onChanged(i),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  padding: const EdgeInsets.symmetric(vertical: 9),
+                  decoration: BoxDecoration(
+                    color: selectedIndex == i
+                        ? cs.onSurface.withValues(alpha: 0.07)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: Text(
+                    tabs[i],
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: selectedIndex == i
+                          ? cs.onSurface
+                          : cs.onSurface.withValues(alpha: 0.42),
+                      fontSize: 12,
+                      fontWeight: selectedIndex == i
+                          ? FontWeight.w900
+                          : FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricPanel extends StatelessWidget {
   final List<_MetricRowData> rows;
   final Widget? footer;
 
-  const _DataGroup({required this.title, required this.rows, this.footer});
+  const _MetricPanel({required this.rows, this.footer});
 
   @override
   Widget build(BuildContext context) {
     if (rows.isEmpty) return const SizedBox.shrink();
     final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          dividerColor: Colors.transparent,
-          splashColor: Colors.transparent,
-          highlightColor: Colors.transparent,
-        ),
-        child: ExpansionTile(
-          initiallyExpanded: title == '밸류에이션',
-          tilePadding: EdgeInsets.zero,
-          childrenPadding: EdgeInsets.zero,
-          iconColor: const Color(0xFF14B8A6),
-          collapsedIconColor: cs.onSurface.withValues(alpha: 0.42),
-          title: Text(
-            title,
-            style: TextStyle(
-              color: cs.onSurface,
-              fontSize: 14,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          children: [
-            ...rows.map((row) => _MetricRow(row: row)),
-            ?footer,
-          ],
-        ),
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.07)),
+      ),
+      child: Column(
+        children: [
+          ...rows.map((row) => _MetricRow(row: row, embedded: true)),
+          ?footer,
+        ],
       ),
     );
   }
@@ -2130,20 +2155,27 @@ class _FlowCell extends StatelessWidget {
 
 class _MetricRow extends StatelessWidget {
   final _MetricRowData row;
+  final bool embedded;
 
-  const _MetricRow({required this.row});
+  const _MetricRow({required this.row, this.embedded = false});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final color = _verdictColor(row.verdict);
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      margin: embedded ? EdgeInsets.zero : const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: color.withValues(alpha: 0.11)),
+        color: embedded ? Colors.transparent : color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(embedded ? 0 : 9),
+        border: embedded
+            ? Border(
+                bottom: BorderSide(
+                  color: cs.onSurface.withValues(alpha: 0.055),
+                ),
+              )
+            : Border.all(color: color.withValues(alpha: 0.11)),
       ),
       child: Row(
         children: [
@@ -2492,9 +2524,8 @@ class _CardTitle extends StatelessWidget {
 
 class _MarketPill extends StatelessWidget {
   final String market;
-  final bool inverse;
 
-  const _MarketPill({required this.market, this.inverse = false});
+  const _MarketPill({required this.market});
 
   @override
   Widget build(BuildContext context) {
@@ -2502,17 +2533,13 @@ class _MarketPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: inverse
-            ? Colors.white.withValues(alpha: 0.16)
-            : cs.onSurface.withValues(alpha: 0.06),
+        color: cs.onSurface.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(7),
       ),
       child: Text(
         market,
         style: TextStyle(
-          color: inverse
-              ? Colors.white.withValues(alpha: 0.84)
-              : cs.onSurface.withValues(alpha: 0.54),
+          color: cs.onSurface.withValues(alpha: 0.54),
           fontSize: 11,
           fontWeight: FontWeight.w800,
         ),
