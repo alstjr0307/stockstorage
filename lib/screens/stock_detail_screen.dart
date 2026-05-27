@@ -185,9 +185,6 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   bool _loadingDiscussion = true;
 
   // AI 종목 분석
-  StockAiAnalysisResult? _aiAnalysis;
-  bool _loadingAiAnalysis = false;
-  String? _aiAnalysisError;
 
   User? get _currentUser => FirebaseAuth.instance.currentUser;
   bool get _isPickMode => widget.enablePickFeatures;
@@ -612,62 +609,25 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         .toList();
   }
 
-  Future<void> _generateAiAnalysis() async {
+  Future<void> _openAiAnalysisScreen() async {
     if (_currentUser == null) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('로그인 후 AI 분석을 사용할 수 있습니다.')));
       return;
     }
-    if (_loadingAiAnalysis) return;
-    setState(() {
-      _loadingAiAnalysis = true;
-      _aiAnalysisError = null;
-    });
-    try {
-      var candles = _analysisCandles();
-      if (_selectedPeriod != _Period.day1 || candles.length < 80) {
-        final dailyCandles = await StockPriceService.fetchOHLC(
-          widget.pick.ticker,
-          widget.pick.market,
-          interval: _Period.day1.interval,
-          range: _Period.day1.range,
-        );
-        if (dailyCandles.isNotEmpty) {
-          candles = _analysisCandles(dailyCandles);
-        }
-      }
-      if (!mounted) return;
-      final result = await StockPriceService.generateStockAiAnalysis(
-        ticker: widget.pick.ticker,
-        name: widget.pick.name,
-        market: widget.pick.market,
-        price: _livePrice,
-        fundamentals: _fundamentals,
-        candles: candles,
-        news: _news,
-      );
-      if (!mounted) return;
-      setState(() => _aiAnalysis = result);
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => StockAiAnalysisResultScreen(
-            pick: widget.pick,
-            analysis: result,
-            price: _livePrice,
-            fundamentals: _fundamentals,
-          ),
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => StockAiAnalysisResultScreen(
+          pick: widget.pick,
+          price: _livePrice,
+          fundamentals: _fundamentals,
+          candles: _analysisCandles(),
+          news: _news,
         ),
-      );
-    } catch (e, st) {
-      debugPrint('AI analysis failed: $e');
-      debugPrintStack(stackTrace: st);
-      if (!mounted) return;
-      setState(() => _aiAnalysisError = 'AI 분석을 불러오지 못했습니다.\n${e.toString()}');
-    } finally {
-      if (mounted) setState(() => _loadingAiAnalysis = false);
-    }
+      ),
+    );
   }
 
   void _onTouch(double localX, double chartW) {
@@ -1262,8 +1222,6 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                         ],
                                         // 일봉 차트
                                         _chartCard(),
-                                        _aiAnalysisSection(),
-                                        const SizedBox(height: 14),
                                         if (_isPickMode) ...[
                                           // 매수가 / 현재가 / 목표가 (카드리스)
                                           Column(
@@ -1498,6 +1456,8 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                   const SizedBox(height: 20),
                                   // 메모
                                   if (_currentUser != null) ...[
+                                    _aiAnalysisSection(),
+                                    const SizedBox(height: 20),
                                     _memoSection(),
                                     const SizedBox(height: 20),
                                   ],
@@ -1505,6 +1465,8 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                   _commentSectionV2(),
                                   const SizedBox(height: 8),
                                 ] else if (_currentUser != null) ...[
+                                  _aiAnalysisSection(),
+                                  const SizedBox(height: 20),
                                   _memoSection(),
                                   const SizedBox(height: 80),
                                 ],
@@ -1548,7 +1510,6 @@ class _StockDetailScreenState extends State<StockDetailScreen>
 
   Widget _aiAnalysisSection() {
     final cs = Theme.of(context).colorScheme;
-    final hasAnalysis = _aiAnalysis != null;
 
     return Container(
       width: double.infinity,
@@ -1604,12 +1565,9 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           ),
           const SizedBox(height: 12),
           Text(
-            _aiAnalysisError ??
-                '뉴스·재무·차트 데이터를 모아 테마, 등락 이유, 기술적 분석, 모멘텀과 리스크를 카드별로 정리합니다.',
+            '분석 화면으로 이동한 뒤 기록을 먼저 확인하고, 없을 때만 새 분석을 생성합니다.',
             style: TextStyle(
-              color: _aiAnalysisError == null
-                  ? cs.onSurface.withValues(alpha: 0.62)
-                  : const Color(0xFFF04452),
+              color: cs.onSurface.withValues(alpha: 0.62),
               fontSize: 13,
               height: 1.55,
             ),
@@ -1618,24 +1576,9 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: _loadingAiAnalysis ? null : _generateAiAnalysis,
-              icon: _loadingAiAnalysis
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.psychology_alt_outlined, size: 18),
-              label: Text(
-                _loadingAiAnalysis
-                    ? '분석 중...'
-                    : hasAnalysis
-                    ? 'AI 분석 다시 생성'
-                    : 'AI 분석하기',
-              ),
+              onPressed: _openAiAnalysisScreen,
+              icon: const Icon(Icons.psychology_alt_outlined, size: 18),
+              label: const Text('AI 분석 보기'),
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF10B981),
                 foregroundColor: Colors.white,

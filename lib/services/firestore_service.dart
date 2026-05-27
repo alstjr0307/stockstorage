@@ -7,6 +7,7 @@ import '../models/market_feature_stock.dart';
 import '../models/post.dart';
 import '../models/stock_pick.dart';
 import '../models/trading_journal.dart';
+import 'stock_price_service.dart';
 
 class FirestoreService {
   final _db = FirebaseFirestore.instance;
@@ -643,7 +644,9 @@ class FirestoreService {
           'favoriteStocks': {
             key: {
               'ticker': ticker.trim().toUpperCase(),
-              'name': name.trim().isEmpty ? ticker.trim().toUpperCase() : name.trim(),
+              'name': name.trim().isEmpty
+                  ? ticker.trim().toUpperCase()
+                  : name.trim(),
               'market': market.trim().toUpperCase(),
               'addedAt': DateTime.now().millisecondsSinceEpoch,
             },
@@ -1599,6 +1602,42 @@ class FirestoreService {
     return _db.collection('users').doc(uid).collection('memos').doc(pickId).set(
       {'text': text, 'updatedAt': Timestamp.fromDate(DateTime.now())},
     );
+  }
+
+  // ── 개인별 AI 종목 분석 기록 (users/{uid}/stock_ai_analyses/{pickId}) ─────
+  Future<StockAiAnalysisResult?> getStockAiAnalysis(
+    String uid,
+    String pickId,
+  ) async {
+    final doc = await _db
+        .collection('users')
+        .doc(uid)
+        .collection('stock_ai_analyses')
+        .doc(pickId)
+        .get();
+    final data = doc.data();
+    if (data == null) return null;
+    return StockAiAnalysisResult.fromMap(data);
+  }
+
+  Future<void> saveStockAiAnalysis(
+    String uid,
+    String pickId,
+    StockAiAnalysisResult analysis, {
+    required StockPick pick,
+  }) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('stock_ai_analyses')
+        .doc(pickId)
+        .set({
+          ...analysis.toMap(),
+          'ticker': pick.ticker,
+          'name': pick.name,
+          'market': pick.market,
+          'updatedAt': Timestamp.fromDate(DateTime.now()),
+        }, SetOptions(merge: true));
   }
 
   // ── pick 실시간 스트림 (투표 카운트 반영) ──────────────────────────────────

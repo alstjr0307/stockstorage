@@ -89,6 +89,10 @@ service cloud.firestore {
         allow read, write: if isLoggedIn() && request.auth.uid == uid;
       }
 
+      match /stock_ai_analyses/{pickId} {
+        allow read, write: if isLoggedIn() && request.auth.uid == uid;
+      }
+
       match /votes/{pickId} {
         allow read, write: if isLoggedIn() && request.auth.uid == uid;
       }

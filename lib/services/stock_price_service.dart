@@ -1323,6 +1323,7 @@ class StockPriceService {
           .map(
             (n) => {
               'title': n.title,
+              'url': n.url,
               'publisher': n.publisher,
               'publishedAt': n.publishedAt.toIso8601String(),
             },
@@ -1970,6 +1971,15 @@ class StockAiAnalysisResult {
   final String momentum;
   final List<String> risks;
   final List<StockAiAnalysisSection> sections;
+  final String peerPerAverage;
+  final List<String> themePeers;
+  final List<StockAiSourceItem> sourceNews;
+  final List<StockAiSourceItem> sourceDisclosures;
+  final List<StockAiFinancialItem> sourceFinancials;
+  final int? sourceMarketCap;
+  final double? sourceEps;
+  final StockAiInvestorFlow? sourceInvestorFlow;
+  final StockAiDailyInvestorFlow? sourceDailyInvestorFlow;
   final DateTime? generatedAt;
 
   const StockAiAnalysisResult({
@@ -1985,12 +1995,26 @@ class StockAiAnalysisResult {
     required this.momentum,
     required this.risks,
     required this.sections,
+    this.peerPerAverage = '',
+    this.themePeers = const [],
+    this.sourceNews = const [],
+    this.sourceDisclosures = const [],
+    this.sourceFinancials = const [],
+    this.sourceMarketCap,
+    this.sourceEps,
+    this.sourceInvestorFlow,
+    this.sourceDailyInvestorFlow,
     required this.generatedAt,
   });
 
   factory StockAiAnalysisResult.fromMap(Map<String, dynamic> map) {
     String text(String key) => (map[key] as String? ?? '').trim();
     final rawSections = map['sections'] as List<dynamic>? ?? const [];
+    final rawThemePeers = map['themePeers'] as List<dynamic>? ?? const [];
+    final rawNews = map['sourceNews'] as List<dynamic>? ?? const [];
+    final rawDisclosures =
+        map['sourceDisclosures'] as List<dynamic>? ?? const [];
+    final rawFinancials = map['sourceFinancials'] as List<dynamic>? ?? const [];
     return StockAiAnalysisResult(
       summary: text('summary'),
       score: (map['score'] as num?)?.toDouble(),
@@ -2006,6 +2030,11 @@ class StockAiAnalysisResult {
           .map((v) => v.toString().trim())
           .where((v) => v.isNotEmpty)
           .toList(),
+      peerPerAverage: text('peerPerAverage'),
+      themePeers: rawThemePeers
+          .map((v) => v.toString().trim())
+          .where((v) => v.isNotEmpty)
+          .toList(),
       sections: rawSections
           .whereType<Map>()
           .map(
@@ -2013,8 +2042,66 @@ class StockAiAnalysisResult {
           )
           .where((v) => v.title.isNotEmpty && v.body.isNotEmpty)
           .toList(),
+      sourceNews: rawNews
+          .whereType<Map>()
+          .map((v) => StockAiSourceItem.fromMap(Map<String, dynamic>.from(v)))
+          .where((v) => v.title.isNotEmpty)
+          .toList(),
+      sourceDisclosures: rawDisclosures
+          .whereType<Map>()
+          .map((v) => StockAiSourceItem.fromMap(Map<String, dynamic>.from(v)))
+          .where((v) => v.title.isNotEmpty)
+          .toList(),
+      sourceFinancials: rawFinancials
+          .whereType<Map>()
+          .map(
+            (v) => StockAiFinancialItem.fromMap(Map<String, dynamic>.from(v)),
+          )
+          .where((v) => v.account.isNotEmpty)
+          .toList(),
+      sourceMarketCap: (map['sourceMarketCap'] as num?)?.round(),
+      sourceEps: (map['sourceEps'] as num?)?.toDouble(),
+      sourceInvestorFlow: map['sourceInvestorFlow'] is Map
+          ? StockAiInvestorFlow.fromMap(
+              Map<String, dynamic>.from(map['sourceInvestorFlow'] as Map),
+            )
+          : null,
+      sourceDailyInvestorFlow: map['sourceDailyInvestorFlow'] is Map
+          ? StockAiDailyInvestorFlow.fromMap(
+              Map<String, dynamic>.from(map['sourceDailyInvestorFlow'] as Map),
+            )
+          : null,
       generatedAt: DateTime.tryParse(text('generatedAt')),
     );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'summary': summary,
+      'score': score,
+      'scoreLabel': scoreLabel,
+      'theme': theme,
+      'sector': sector,
+      'todayReason': todayReason,
+      'fundamentals': fundamentals,
+      'technical': technical,
+      'news': news,
+      'momentum': momentum,
+      'risks': risks,
+      'peerPerAverage': peerPerAverage,
+      'themePeers': themePeers,
+      'sections': sections.map((section) => section.toMap()).toList(),
+      'sourceNews': sourceNews.map((item) => item.toMap()).toList(),
+      'sourceDisclosures': sourceDisclosures
+          .map((item) => item.toMap())
+          .toList(),
+      'sourceFinancials': sourceFinancials.map((item) => item.toMap()).toList(),
+      'sourceMarketCap': sourceMarketCap,
+      'sourceEps': sourceEps,
+      'sourceInvestorFlow': sourceInvestorFlow?.toMap(),
+      'sourceDailyInvestorFlow': sourceDailyInvestorFlow?.toMap(),
+      'generatedAt': generatedAt?.toIso8601String(),
+    };
   }
 }
 
@@ -2029,6 +2116,236 @@ class StockAiAnalysisSection {
       title: (map['title'] as String? ?? '').trim(),
       body: (map['body'] as String? ?? '').trim(),
     );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {'title': title, 'body': body};
+  }
+}
+
+class StockAiSourceItem {
+  final String title;
+  final String url;
+  final String publisher;
+  final String publishedAt;
+  final String date;
+  final String submitter;
+  final String receiptNo;
+
+  const StockAiSourceItem({
+    required this.title,
+    this.url = '',
+    this.publisher = '',
+    this.publishedAt = '',
+    this.date = '',
+    this.submitter = '',
+    this.receiptNo = '',
+  });
+
+  factory StockAiSourceItem.fromMap(Map<String, dynamic> map) {
+    return StockAiSourceItem(
+      title: (map['title'] as String? ?? '').trim(),
+      url: (map['url'] as String? ?? '').trim(),
+      publisher: (map['publisher'] as String? ?? '').trim(),
+      publishedAt: (map['publishedAt'] as String? ?? '').trim(),
+      date: (map['date'] as String? ?? '').trim(),
+      submitter: (map['submitter'] as String? ?? '').trim(),
+      receiptNo: (map['receiptNo'] as String? ?? '').trim(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'url': url,
+      'publisher': publisher,
+      'publishedAt': publishedAt,
+      'date': date,
+      'submitter': submitter,
+      'receiptNo': receiptNo,
+    };
+  }
+}
+
+class StockAiFinancialItem {
+  final String account;
+  final String current;
+  final String previous;
+  final String statement;
+
+  const StockAiFinancialItem({
+    required this.account,
+    this.current = '',
+    this.previous = '',
+    this.statement = '',
+  });
+
+  factory StockAiFinancialItem.fromMap(Map<String, dynamic> map) {
+    return StockAiFinancialItem(
+      account: (map['account'] as String? ?? '').trim(),
+      current: (map['current'] as String? ?? '').trim(),
+      previous: (map['previous'] as String? ?? '').trim(),
+      statement: (map['statement'] as String? ?? '').trim(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'account': account,
+      'current': current,
+      'previous': previous,
+      'statement': statement,
+    };
+  }
+}
+
+class StockAiInvestorFlow {
+  final String marketDate;
+  final String market;
+  final StockAiInvestorFlowItem? foreign;
+  final StockAiInvestorFlowItem? institution;
+
+  const StockAiInvestorFlow({
+    this.marketDate = '',
+    this.market = '',
+    this.foreign,
+    this.institution,
+  });
+
+  factory StockAiInvestorFlow.fromMap(Map<String, dynamic> map) {
+    return StockAiInvestorFlow(
+      marketDate: (map['marketDate'] as String? ?? '').trim(),
+      market: (map['market'] as String? ?? '').trim(),
+      foreign: map['foreign'] is Map
+          ? StockAiInvestorFlowItem.fromMap(
+              Map<String, dynamic>.from(map['foreign'] as Map),
+            )
+          : null,
+      institution: map['institution'] is Map
+          ? StockAiInvestorFlowItem.fromMap(
+              Map<String, dynamic>.from(map['institution'] as Map),
+            )
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'marketDate': marketDate,
+      'market': market,
+      'foreign': foreign?.toMap(),
+      'institution': institution?.toMap(),
+    };
+  }
+}
+
+class StockAiInvestorFlowItem {
+  final int? rank;
+  final String amountText;
+  final String quantityText;
+
+  const StockAiInvestorFlowItem({
+    this.rank,
+    this.amountText = '',
+    this.quantityText = '',
+  });
+
+  factory StockAiInvestorFlowItem.fromMap(Map<String, dynamic> map) {
+    return StockAiInvestorFlowItem(
+      rank: (map['rank'] as num?)?.round(),
+      amountText: (map['amountText'] as String? ?? '').trim(),
+      quantityText: (map['quantityText'] as String? ?? '').trim(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'rank': rank,
+      'amountText': amountText,
+      'quantityText': quantityText,
+    };
+  }
+}
+
+class StockAiDailyInvestorFlow {
+  final List<StockAiInvestorFlowDay> days;
+  final double? foreignNet14;
+  final double? institutionNet14;
+  final double? latestForeignHoldRate;
+
+  const StockAiDailyInvestorFlow({
+    this.days = const [],
+    this.foreignNet14,
+    this.institutionNet14,
+    this.latestForeignHoldRate,
+  });
+
+  factory StockAiDailyInvestorFlow.fromMap(Map<String, dynamic> map) {
+    final rawDays = map['days'] as List<dynamic>? ?? const [];
+    return StockAiDailyInvestorFlow(
+      days: rawDays
+          .whereType<Map>()
+          .map(
+            (v) => StockAiInvestorFlowDay.fromMap(Map<String, dynamic>.from(v)),
+          )
+          .toList(),
+      foreignNet14: (map['foreignNet14'] as num?)?.toDouble(),
+      institutionNet14: (map['institutionNet14'] as num?)?.toDouble(),
+      latestForeignHoldRate: (map['latestForeignHoldRate'] as num?)?.toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'days': days.map((day) => day.toMap()).toList(),
+      'foreignNet14': foreignNet14,
+      'institutionNet14': institutionNet14,
+      'latestForeignHoldRate': latestForeignHoldRate,
+    };
+  }
+}
+
+class StockAiInvestorFlowDay {
+  final String date;
+  final double? close;
+  final double? changeRate;
+  final double? volume;
+  final double? foreignNet;
+  final double? institutionNet;
+  final double? foreignHoldRate;
+
+  const StockAiInvestorFlowDay({
+    this.date = '',
+    this.close,
+    this.changeRate,
+    this.volume,
+    this.foreignNet,
+    this.institutionNet,
+    this.foreignHoldRate,
+  });
+
+  factory StockAiInvestorFlowDay.fromMap(Map<String, dynamic> map) {
+    return StockAiInvestorFlowDay(
+      date: (map['date'] as String? ?? '').trim(),
+      close: (map['close'] as num?)?.toDouble(),
+      changeRate: (map['changeRate'] as num?)?.toDouble(),
+      volume: (map['volume'] as num?)?.toDouble(),
+      foreignNet: (map['foreignNet'] as num?)?.toDouble(),
+      institutionNet: (map['institutionNet'] as num?)?.toDouble(),
+      foreignHoldRate: (map['foreignHoldRate'] as num?)?.toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'date': date,
+      'close': close,
+      'changeRate': changeRate,
+      'volume': volume,
+      'foreignNet': foreignNet,
+      'institutionNet': institutionNet,
+      'foreignHoldRate': foreignHoldRate,
+    };
   }
 }
 

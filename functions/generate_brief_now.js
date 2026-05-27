@@ -129,29 +129,70 @@ async function fetchSectorData() {
   }
 }
 
-// ── 시장 폭 (상승/하락/보합 종목수) ─────────────────────────────────────────
+function isPlainListedStock(item) {
+  const endType = String(item.stockEndType || '').toLowerCase();
+  const name = String(item.stockName || '').trim().toUpperCase();
+  if (endType && endType !== 'stock') return false;
+  if (!name) return false;
+  return !/^(KODEX|TIGER|ACE|SOL|KBSTAR|ARIRANG|HANARO|KOSEF|TIMEFOLIO|PLUS|RISE|히어로즈|마이티|TREX|FOCUS|BNK|UNICORN|WOORI|파워|SMART|QV|TRUE)\s?/.test(name) &&
+    !name.includes(' ETF') &&
+    !name.includes(' ETN') &&
+    !name.includes('인버스') &&
+    !name.includes('레버리지');
+}
+
+async function fetchMarketStockList(market) {
+  const pageSize = 100;
+  const first = await axios.get(
+    `https://m.stock.naver.com/api/stocks/marketValue/${market}?page=1&pageSize=${pageSize}`,
+    { headers: NAVER_MOBILE_HEADERS, timeout: 8000 }
+  );
+  const totalCount = Number(first.data?.totalCount || first.data?.stocks?.length || 0);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const pages = [first.data];
+  if (totalPages > 1) {
+    const rest = await Promise.all(
+      Array.from({ length: totalPages - 1 }, (_, i) =>
+        axios.get(
+          `https://m.stock.naver.com/api/stocks/marketValue/${market}?page=${i + 2}&pageSize=${pageSize}`,
+          { headers: NAVER_MOBILE_HEADERS, timeout: 8000 }
+        ).then(res => res.data)
+      )
+    );
+    pages.push(...rest);
+  }
+  return pages.flatMap(page => page?.stocks || []);
+}
+
+function countBreadthFromStocks(stocks) {
+  return stocks.filter(isPlainListedStock).reduce((acc, item) => {
+    const rate = Number(item.fluctuationsRatio || 0);
+    const code = String(item.compareToPreviousPrice?.code || '');
+    const name = String(item.compareToPreviousPrice?.name || '');
+    if (rate > 0 || code === '2' || name === 'RISING') acc.up += 1;
+    else if (rate < 0 || code === '5' || name === 'FALLING') acc.down += 1;
+    else acc.flat += 1;
+    return acc;
+  }, { up: 0, down: 0, flat: 0, excludes: 'ETF/ETN 제외' });
+}
+
+// ── 시장 폭 (상승/하락/보합 종목수, ETF/ETN 제외) ─────────────────────────
 async function fetchMarketBreadth() {
   try {
-    const [kospiRes, kosdaqRes] = await Promise.all([
-      axios.get('https://m.stock.naver.com/api/index/KOSPI/integration', {
-        headers: NAVER_MOBILE_HEADERS, timeout: 8000,
-      }),
-      axios.get('https://m.stock.naver.com/api/index/KOSDAQ/integration', {
-        headers: NAVER_MOBILE_HEADERS, timeout: 8000,
-      }),
+    const [kospiStocks, kosdaqStocks] = await Promise.all([
+      fetchMarketStockList('KOSPI'),
+      fetchMarketStockList('KOSDAQ'),
     ]);
-    const parse = (d) => ({
-      up: Number(d.risingCount || d.advancingCount || 0),
-      down: Number(d.fallingCount || d.decliningCount || 0),
-      flat: Number(d.steadyCount || d.unchangedCount || 0),
-    });
-    const result = { kospi: parse(kospiRes.data), kosdaq: parse(kosdaqRes.data) };
+    const result = {
+      kospi: countBreadthFromStocks(kospiStocks),
+      kosdaq: countBreadthFromStocks(kosdaqStocks),
+    };
     if (result.kospi.up > 0 || result.kospi.down > 0) {
-      console.log(`  KOSPI 상승 ${result.kospi.up}개 / 하락 ${result.kospi.down}개 / 보합 ${result.kospi.flat}개`);
+      console.log(`  KOSPI 상승 ${result.kospi.up}개 / 하락 ${result.kospi.down}개 / 보합 ${result.kospi.flat}개 (ETF/ETN 제외)`);
     }
     return result;
-  } catch (_) {
-    console.warn('  ⚠️ 시장 폭 데이터 실패 (건너뜀)');
+  } catch (e) {
+    console.warn('  ⚠️ ETF 제외 시장 폭 데이터 실패:', e.message);
     return null;
   }
 }
@@ -348,10 +389,10 @@ async function generateBrief(marketData, sectorData, breadthData, investorFlow, 
   }
 
   let breadthContext = '';
-  if (breadthData) {
+  if (breadthData && slot !== '09') {
     const b = breadthData;
     if (b.kospi?.up || b.kospi?.down) {
-      breadthContext += `\n\n[시장 폭]\n- KOSPI 상승:${b.kospi.up}개 / 하락:${b.kospi.down}개 / 보합:${b.kospi.flat}개`;
+      breadthContext += `\n\n[시장 폭: ETF/ETN 제외]\n- KOSPI 상승:${b.kospi.up}개 / 하락:${b.kospi.down}개 / 보합:${b.kospi.flat}개`;
     }
     if (b.kosdaq?.up || b.kosdaq?.down) {
       breadthContext += `\n- KOSDAQ 상승:${b.kosdaq.up}개 / 하락:${b.kosdaq.down}개 / 보합:${b.kosdaq.flat}개`;
@@ -391,6 +432,7 @@ ${slotMeta.focus}
 
 [공통 규칙]
 - 각 문단은 2~3문장
+- 12시와 15:30 브리핑은 기존 지수·업종·수급·뉴스 설명을 유지하고, [시장 폭: ETF/ETN 제외]의 KOSPI·KOSDAQ 상승/하락 종목 수는 보조 근거로 한 문장 안에 짧게 덧붙일 것
 - 반드시 높임말(~습니다/~네요/~보입니다) 사용
 - 사실 기반 서술만, 투자 권유·예측 금지
 - 마침표로 끝낼 것

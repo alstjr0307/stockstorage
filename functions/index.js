@@ -11,8 +11,12 @@ const https = require('https');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const WebSocket = require('ws');
+const AdmZip = require('adm-zip');
+const eucKrDecoder = new TextDecoder('euc-kr');
 
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
+const OPENAI_API_KEY = defineSecret('OPENAI_API_KEY');
+const DART_API_KEY = defineSecret('DART_API_KEY');
 const {
   crawlDailyInvestorFlow,
   collectDailyInvestorFlow,
@@ -809,6 +813,8 @@ exports.sendPushOnNotificationQueue = onDocumentCreated(
 // ── KOSPI 200 야간선물 현재가 (KIS API) ──────────────────────────────────────
 let _kisToken = null;
 let _kisTokenExpiry = null;
+let _dartCorpCodeByStockCode = null;
+let _dartCorpCodeFetchedAt = 0;
 
 async function getKisToken(appKey, appSecret) {
   const now = Date.now();
@@ -823,6 +829,196 @@ async function getKisToken(appKey, appSecret) {
   _kisToken = res.data.access_token;
   _kisTokenExpiry = now + (res.data.expires_in - 300) * 1000; // 5분 여유
   return _kisToken;
+}
+
+function numOrNull(value) {
+  const n = Number(String(value ?? '').replace(/,/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+function signedNumOrNull(value) {
+  const n = Number(String(value ?? '').replace(/[^\d.+-]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+async function getKisConfig() {
+  const db = getFirestore();
+  const snap = await db.collection('_admin').doc('kis').get();
+  if (!snap.exists) return null;
+  const { appKey, appSecret } = snap.data() || {};
+  if (!appKey || !appSecret) return null;
+  return { appKey, appSecret };
+}
+
+async function fetchKisDomesticSnapshot(ticker) {
+  if (!/^\d{6}$/.test(String(ticker || ''))) return null;
+  const config = await getKisConfig();
+  if (!config) return null;
+  try {
+    const token = await getKisToken(config.appKey, config.appSecret);
+    const res = await axios.get(
+      'https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price',
+      {
+        headers: {
+          authorization: `Bearer ${token}`,
+          appkey: config.appKey,
+          appsecret: config.appSecret,
+          tr_id: 'FHKST01010100',
+          custtype: 'P',
+        },
+        params: {
+          FID_COND_MRKT_DIV_CODE: 'J',
+          FID_INPUT_ISCD: ticker,
+        },
+        timeout: 8000,
+      }
+    );
+    const o = res.data?.output || {};
+    return {
+      price: numOrNull(o.stck_prpr),
+      change: numOrNull(o.prdy_vrss),
+      changeRate: numOrNull(o.prdy_ctrt),
+      volume: numOrNull(o.acml_vol),
+      tradingValue: numOrNull(o.acml_tr_pbmn),
+      marketCap: numOrNull(o.hts_avls),
+      per: numOrNull(o.per),
+      pbr: numOrNull(o.pbr),
+      eps: numOrNull(o.eps),
+      bps: numOrNull(o.bps),
+      high52w: numOrNull(o.w52_hgpr),
+      low52w: numOrNull(o.w52_lwpr),
+      rawName: clampStockAnalysisInput(o.hts_kor_isnm, 80),
+      source: 'KIS inquire-price',
+    };
+  } catch (e) {
+    console.warn('[fetchKisDomesticSnapshot] failed:', e.response?.data || e.message);
+    return null;
+  }
+}
+
+async function getDartCorpCodeMap(apiKey) {
+  const now = Date.now();
+  if (_dartCorpCodeByStockCode && now - _dartCorpCodeFetchedAt < 24 * 60 * 60 * 1000) {
+    return _dartCorpCodeByStockCode;
+  }
+  const res = await axios.get('https://opendart.fss.or.kr/api/corpCode.xml', {
+    params: { crtfc_key: apiKey },
+    responseType: 'arraybuffer',
+    timeout: 15000,
+  });
+  const zip = new AdmZip(Buffer.from(res.data));
+  const entry = zip.getEntries().find((e) => !e.isDirectory);
+  if (!entry) throw new Error('DART corpCode zip is empty');
+  const xml = entry.getData().toString('utf8');
+  const map = new Map();
+  const blocks = xml.match(/<list>[\s\S]*?<\/list>/g) || [];
+  for (const block of blocks) {
+    const corpCode = (block.match(/<corp_code>([\s\S]*?)<\/corp_code>/)?.[1] || '').trim();
+    const corpName = (block.match(/<corp_name>([\s\S]*?)<\/corp_name>/)?.[1] || '').trim();
+    const stockCode = (block.match(/<stock_code>([\s\S]*?)<\/stock_code>/)?.[1] || '').trim();
+    if (/^\d{6}$/.test(stockCode) && corpCode) {
+      map.set(stockCode, { corpCode, corpName, stockCode });
+    }
+  }
+  _dartCorpCodeByStockCode = map;
+  _dartCorpCodeFetchedAt = now;
+  return map;
+}
+
+function dartReportCodeForQuarter(date = new Date()) {
+  const month = date.getUTCMonth() + 1;
+  if (month >= 11) return '11014'; // 3분기
+  if (month >= 8) return '11012'; // 반기
+  if (month >= 5) return '11013'; // 1분기
+  return '11011'; // 사업보고서
+}
+
+async function fetchDartContext(ticker, apiKey) {
+  if (!apiKey || !/^\d{6}$/.test(String(ticker || ''))) return null;
+  try {
+    const map = await getDartCorpCodeMap(apiKey);
+    const corp = map.get(ticker);
+    if (!corp) return { hasData: false, reason: 'DART corp_code 매칭 실패' };
+
+    const now = new Date();
+    const end = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const beginDate = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+    const begin = beginDate.toISOString().slice(0, 10).replace(/-/g, '');
+
+    const disclosurePromise = axios.get('https://opendart.fss.or.kr/api/list.json', {
+      params: {
+        crtfc_key: apiKey,
+        corp_code: corp.corpCode,
+        bgn_de: begin,
+        end_de: end,
+        page_count: 10,
+      },
+      timeout: 12000,
+    }).catch((e) => ({ error: e }));
+
+    const currentYear = now.getUTCFullYear();
+    const reportCandidates = [
+      { year: currentYear, code: dartReportCodeForQuarter(now) },
+      { year: currentYear - 1, code: '11011' },
+    ];
+    const financialResults = [];
+    for (const candidate of reportCandidates) {
+      try {
+        const res = await axios.get('https://opendart.fss.or.kr/api/fnlttSinglAcnt.json', {
+          params: {
+            crtfc_key: apiKey,
+            corp_code: corp.corpCode,
+            bsns_year: String(candidate.year),
+            reprt_code: candidate.code,
+          },
+          timeout: 12000,
+        });
+        const list = Array.isArray(res.data?.list) ? res.data.list : [];
+        if (list.length) {
+          financialResults.push({ year: candidate.year, reportCode: candidate.code, list });
+          break;
+        }
+      } catch (_) {}
+    }
+
+    const disclosureRes = await disclosurePromise;
+    const disclosures = Array.isArray(disclosureRes.data?.list)
+      ? disclosureRes.data.list.slice(0, 10).map((d) => ({
+          date: d.rcept_dt,
+          title: clampStockAnalysisInput(d.report_nm, 160),
+          receiptNo: d.rcept_no,
+          submitter: clampStockAnalysisInput(d.flr_nm, 80),
+        }))
+      : [];
+    const reportStory = await fetchDartReportStory(corp, disclosures, apiKey);
+
+    const financial = financialResults[0];
+    const wantedAccounts = ['매출액', '영업이익', '당기순이익', '자산총계', '부채총계', '자본총계'];
+    const financials = financial
+      ? financial.list
+          .filter((row) => wantedAccounts.includes(row.account_nm))
+          .map((row) => ({
+            account: row.account_nm,
+            current: row.thstrm_amount,
+            previous: row.frmtrm_amount,
+            statement: row.sj_nm,
+          }))
+      : [];
+
+    return {
+      hasData: true,
+      corpCode: corp.corpCode,
+      corpName: corp.corpName,
+      disclosures,
+      financials,
+      reportStory,
+      financialReport: financial ? `${financial.year}/${financial.reportCode}` : null,
+      source: 'OpenDART',
+    };
+  } catch (e) {
+    console.warn('[fetchDartContext] failed:', e.response?.data || e.message);
+    return { hasData: false, reason: e.message || 'DART 조회 실패' };
+  }
 }
 
 // 해당 연/월의 두 번째 목요일(선물 최종거래일) 날짜 반환
@@ -1889,6 +2085,10 @@ function normalizeStockAnalysisPayload(parsed) {
     technical: clampStockAnalysisInput(parsed.technical, 1200),
     news: clampStockAnalysisInput(parsed.news, 1200),
     momentum: clampStockAnalysisInput(parsed.momentum, 1000),
+    peerPerAverage: clampStockAnalysisInput(parsed.peerPerAverage, 160),
+    themePeers: Array.isArray(parsed.themePeers)
+      ? parsed.themePeers.slice(0, 8).map((v) => clampStockAnalysisInput(v, 80)).filter(Boolean)
+      : [],
     risks: Array.isArray(parsed.risks)
       ? parsed.risks.slice(0, 5).map((v) => clampStockAnalysisInput(v, 240)).filter(Boolean)
       : [],
@@ -1900,8 +2100,284 @@ function normalizeStockAnalysisPayload(parsed) {
   };
 }
 
+function attachStockAnalysisSources(payload, sources) {
+  return {
+    ...payload,
+    sourceNews: sources?.sourceNews || [],
+    sourceDisclosures: sources?.sourceDisclosures || [],
+    sourceFinancials: sources?.sourceFinancials || [],
+    sourceMarketCap: sources?.sourceMarketCap ?? null,
+    sourceEps: sources?.sourceEps ?? null,
+    sourceInvestorFlow: sources?.sourceInvestorFlow || null,
+    sourceDailyInvestorFlow: sources?.sourceDailyInvestorFlow || null,
+  };
+}
+
+function periodReturn(closes, period) {
+  if (!Array.isArray(closes) || closes.length <= period) return null;
+  const base = closes[closes.length - 1 - period];
+  const last = closes[closes.length - 1];
+  if (!Number.isFinite(base) || !Number.isFinite(last) || base <= 0) return null;
+  return ((last / base) - 1) * 100;
+}
+
+function rsi(closes, period = 14) {
+  if (!Array.isArray(closes) || closes.length <= period) return null;
+  let gains = 0;
+  let losses = 0;
+  for (let i = closes.length - period; i < closes.length; i += 1) {
+    const diff = closes[i] - closes[i - 1];
+    if (diff >= 0) gains += diff;
+    else losses += Math.abs(diff);
+  }
+  const avgGain = gains / period;
+  const avgLoss = losses / period;
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  return 100 - (100 / (1 + rs));
+}
+
+function movingAverage(closes, period) {
+  if (!Array.isArray(closes) || closes.length < period) return null;
+  const values = closes.slice(-period);
+  return values.reduce((sum, v) => sum + v, 0) / values.length;
+}
+
+function bollinger(closes) {
+  if (!Array.isArray(closes) || closes.length < 20) return null;
+  const values = closes.slice(-20);
+  const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
+  const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
+  const sd = Math.sqrt(variance);
+  const upper = mean + (2 * sd);
+  const lower = mean - (2 * sd);
+  const close = closes[closes.length - 1];
+  const position = sd === 0
+    ? '중단'
+    : close >= upper
+      ? '상단 접근'
+      : close <= lower
+        ? '하단 접근'
+        : close >= mean
+          ? '중상단'
+          : '중하단';
+  return { middle: mean, upper, lower, position };
+}
+
+function fmtMetric(value, digits = 2, suffix = '') {
+  return Number.isFinite(value) ? `${value.toFixed(digits)}${suffix}` : 'N/A';
+}
+
+function fmtKrw(value) {
+  if (!Number.isFinite(value)) return 'N/A';
+  if (Math.abs(value) >= 1000000000000) return `${(value / 1000000000000).toFixed(2)}조원`;
+  if (Math.abs(value) >= 100000000) return `${(value / 100000000).toFixed(0)}억원`;
+  return `${value.toLocaleString('ko-KR')}원`;
+}
+
+function fmtEok(value) {
+  return Number.isFinite(value) ? `${value.toLocaleString('ko-KR')}억원` : 'N/A';
+}
+
+async function fetchInvestorFlowForStock(ticker, market) {
+  if (!/^\d{6}$/.test(String(ticker || ''))) return null;
+  const marketKey = market === 'KS' ? 'kospi' : market === 'KQ' ? 'kosdaq' : null;
+  if (!marketKey) return null;
+  try {
+    const db = getFirestore();
+    const snap = await db
+      .collection('market_investor_flow')
+      .orderBy('marketDate', 'desc')
+      .limit(1)
+      .get();
+    if (snap.empty) return null;
+    const doc = snap.docs[0];
+    const data = doc.data() || {};
+    const bucket = data[marketKey] || {};
+    const findItem = (items) =>
+      Array.isArray(items) ? items.find((item) => String(item.code) === ticker) || null : null;
+    const pick = (item) => item
+      ? {
+          rank: Number.isFinite(Number(item.rank)) ? Number(item.rank) : null,
+          amountText: clampStockAnalysisInput(item.amountText, 60),
+          quantityText: clampStockAnalysisInput(item.quantityText, 60),
+        }
+      : null;
+    return {
+      marketDate: clampStockAnalysisInput(data.marketDate || doc.id, 20),
+      market: marketKey.toUpperCase(),
+      foreign: pick(findItem(bucket.foreignTop5)),
+      institution: pick(findItem(bucket.institutionTop5)),
+    };
+  } catch (e) {
+    console.warn('[fetchInvestorFlowForStock] failed:', e.message);
+    return null;
+  }
+}
+
+async function fetchNaverStockInvestorFlow(ticker) {
+  if (!/^\d{6}$/.test(String(ticker || ''))) return null;
+  try {
+    const res = await axios.get(`https://finance.naver.com/item/frgn.naver`, {
+      params: { code: ticker, page: 1 },
+      responseType: 'arraybuffer',
+      timeout: 12000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        Referer: 'https://finance.naver.com/',
+        'Accept-Language': 'ko-KR,ko;q=0.9',
+      },
+    });
+    const $ = cheerio.load(eucKrDecoder.decode(res.data));
+    const days = [];
+    $('table.type2 tr').each((_, tr) => {
+      const cells = $(tr)
+        .find('td')
+        .map((__, td) => $(td).text().trim().replace(/\s+/g, ' '))
+        .get();
+      if (cells.length < 9 || !/^\d{4}\.\d{2}\.\d{2}$/.test(cells[0])) return;
+      days.push({
+        date: cells[0],
+        close: numOrNull(cells[1]),
+        changeRate: signedNumOrNull(cells[3]),
+        volume: numOrNull(cells[4]),
+        institutionNet: numOrNull(cells[5]),
+        foreignNet: numOrNull(cells[6]),
+        foreignHoldShares: numOrNull(cells[7]),
+        foreignHoldRate: numOrNull(cells[8]),
+      });
+    });
+    const recent = days.slice(0, 14);
+    const sum = (key) => recent.reduce((acc, day) => acc + (Number.isFinite(day[key]) ? day[key] : 0), 0);
+    const latest = recent[0] || null;
+    return {
+      source: 'Naver Finance item/frgn',
+      days: recent,
+      foreignNet14: sum('foreignNet'),
+      institutionNet14: sum('institutionNet'),
+      latestForeignHoldRate: latest?.foreignHoldRate ?? null,
+    };
+  } catch (e) {
+    console.warn('[fetchNaverStockInvestorFlow] failed:', e.message);
+    return null;
+  }
+}
+
+async function fetchNewsStorySnippets(news) {
+  const targets = (Array.isArray(news) ? news : [])
+    .filter((n) => /^https?:\/\//.test(String(n.url || '')))
+    .slice(0, 5);
+  const results = await Promise.all(
+    targets.map(async (n) => {
+      try {
+        const res = await axios.get(n.url, {
+          timeout: 8000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0',
+            'Accept-Language': 'ko-KR,ko;q=0.9',
+          },
+        });
+        const $ = cheerio.load(res.data);
+        const meta =
+          $('meta[property="og:description"]').attr('content') ||
+          $('meta[name="description"]').attr('content') ||
+          $('article').text() ||
+          $('body').text();
+        const snippet = clampStockAnalysisInput(
+          String(meta || '').replace(/\s+/g, ' '),
+          450,
+        );
+        return snippet
+          ? {
+              title: clampStockAnalysisInput(n.title, 180),
+              publisher: clampStockAnalysisInput(n.publisher, 80),
+              snippet,
+            }
+          : null;
+      } catch (_) {
+        return null;
+      }
+    }),
+  );
+  return results.filter(Boolean);
+}
+
+async function fetchDartReportStory(corp, disclosures, apiKey) {
+  const report = (Array.isArray(disclosures) ? disclosures : []).find((d) =>
+    /사업보고서|분기보고서|반기보고서/.test(d.title || ''),
+  );
+  if (!corp?.corpCode || !report?.receiptNo || !apiKey) return null;
+  try {
+    const res = await axios.get('https://opendart.fss.or.kr/api/document.xml', {
+      params: { crtfc_key: apiKey, rcept_no: report.receiptNo },
+      responseType: 'arraybuffer',
+      timeout: 15000,
+    });
+    let text = '';
+    try {
+      const zip = new AdmZip(Buffer.from(res.data));
+      const entry = zip.getEntries().find((e) => !e.isDirectory);
+      text = entry ? entry.getData().toString('utf8') : '';
+    } catch (_) {
+      text = Buffer.from(res.data).toString('utf8');
+    }
+    text = text
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&[a-z]+;/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const keywords = ['주요 제품', '사업의 내용', '매출', '신규사업', '시장점유율', '영업의 개황'];
+    const snippets = [];
+    for (const keyword of keywords) {
+      const index = text.indexOf(keyword);
+      if (index >= 0) {
+        snippets.push(text.slice(Math.max(0, index - 120), index + 520));
+      }
+      if (snippets.length >= 3) break;
+    }
+    const body = clampStockAnalysisInput(snippets.join(' / ') || text, 1800);
+    return body
+      ? {
+          title: report.title,
+          date: report.date,
+          receiptNo: report.receiptNo,
+          body,
+        }
+      : null;
+  } catch (e) {
+    console.warn('[fetchDartReportStory] failed:', e.response?.data || e.message);
+    return null;
+  }
+}
+
+function buildTechnicalSnapshot(candles) {
+  const closes = candles
+    .map((c) => Number(c.close))
+    .filter((v) => Number.isFinite(v) && v > 0);
+  const b = bollinger(closes);
+  const latest = closes.length ? closes[closes.length - 1] : null;
+  return {
+    latestClose: latest,
+    rsi14: rsi(closes, 14),
+    return5: periodReturn(closes, 5),
+    return20: periodReturn(closes, 20),
+    return60: periodReturn(closes, 60),
+    return120: periodReturn(closes, 120),
+    ma5: movingAverage(closes, 5),
+    ma20: movingAverage(closes, 20),
+    ma60: movingAverage(closes, 60),
+    ma120: movingAverage(closes, 120),
+    bollinger: b,
+  };
+}
+
 exports.generateStockAiAnalysis = onCall(
-  { region: 'asia-northeast3', timeoutSeconds: 120, secrets: [ANTHROPIC_API_KEY] },
+  {
+    region: 'asia-northeast3',
+    timeoutSeconds: 120,
+    memory: '1GiB',
+    secrets: [OPENAI_API_KEY, DART_API_KEY],
+  },
   async (request) => {
     if (!request.auth?.uid) {
       throw new HttpsError('unauthenticated', '로그인 후 AI 분석을 사용할 수 있습니다.');
@@ -1920,6 +2396,7 @@ exports.generateStockAiAnalysis = onCall(
     if (!ticker || !name) {
       throw new HttpsError('invalid-argument', '종목명과 티커가 필요합니다.');
     }
+    const isDomesticStock = /^\d{6}$/.test(ticker) && ['KS', 'KQ'].includes(market.toUpperCase());
 
     const candleLines = candles.map((c) => {
       const date = clampStockAnalysisInput(c.date, 20);
@@ -1930,6 +2407,7 @@ exports.generateStockAiAnalysis = onCall(
       if (![open, high, low, close].every(Number.isFinite)) return null;
       return `${date} O:${open} H:${high} L:${low} C:${close}`;
     }).filter(Boolean).join('\n');
+    const technicalSnapshot = buildTechnicalSnapshot(candles);
 
     const newsLines = news.map((n, i) => {
       const title = clampStockAnalysisInput(n.title, 220);
@@ -1938,10 +2416,105 @@ exports.generateStockAiAnalysis = onCall(
       return `${i + 1}. ${title}${publisher ? ` (${publisher})` : ''}${publishedAt ? ` - ${publishedAt}` : ''}`;
     }).filter(Boolean).join('\n');
 
-    const Anthropic = require('@anthropic-ai/sdk');
-    const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY.value() });
+    const [kisSnapshot, dartContext, investorFlow, dailyInvestorFlow, newsStorySnippets] = isDomesticStock
+      ? await Promise.all([
+          fetchKisDomesticSnapshot(ticker),
+          fetchDartContext(ticker, (DART_API_KEY.value() || '').trim()),
+          fetchInvestorFlowForStock(ticker, market.toUpperCase()),
+          fetchNaverStockInvestorFlow(ticker),
+          fetchNewsStorySnippets(news),
+        ])
+      : [null, null, null, null, []];
 
-    const prompt = `아래 데이터만 근거로 종목 딥리서치 초안을 작성하세요. 데이터에 없는 사실은 추정이라고 표시하고, 단정적인 매수/매도 권유와 목표가 제시는 금지합니다.
+    const kisLines = kisSnapshot
+      ? [
+          `- 현재가: ${fmtMetric(kisSnapshot.price, 0)}원`,
+          `- 등락률: ${fmtMetric(kisSnapshot.changeRate, 2, '%')}`,
+          `- 누적거래량: ${Number.isFinite(kisSnapshot.volume) ? kisSnapshot.volume.toLocaleString('ko-KR') : 'N/A'}주`,
+          `- 누적거래대금: ${fmtKrw(kisSnapshot.tradingValue)}`,
+          `- 시가총액(KIS): ${fmtEok(kisSnapshot.marketCap)}`,
+          `- PER/PBR/EPS/BPS(KIS): ${fmtMetric(kisSnapshot.per, 2)} / ${fmtMetric(kisSnapshot.pbr, 2)} / ${fmtMetric(kisSnapshot.eps, 0)}원 / ${fmtMetric(kisSnapshot.bps, 0)}원`,
+          `- 52주 고가/저가: ${fmtMetric(kisSnapshot.high52w, 0)}원 / ${fmtMetric(kisSnapshot.low52w, 0)}원`,
+        ].join('\n')
+      : '- KIS 상세 스냅샷: 미수집';
+
+    const dartDisclosureLines = dartContext?.hasData && dartContext.disclosures?.length
+      ? dartContext.disclosures
+          .map((d, i) => `${i + 1}. ${d.date} ${d.title} (${d.submitter || '제출자 미상'}, 접수번호 ${d.receiptNo})`)
+          .join('\n')
+      : `- 최근 공시: ${dartContext?.reason || '수집 데이터 없음'}`;
+
+    const dartFinancialLines = dartContext?.hasData && dartContext.financials?.length
+      ? [
+          `- 기준 보고서: ${dartContext.financialReport || '확인 필요'}`,
+          ...dartContext.financials.map((f) => `- ${f.account}: 당기 ${f.current || 'N/A'} / 전기 ${f.previous || 'N/A'} (${f.statement || '재무제표'})`),
+        ].join('\n')
+      : `- 재무제표: ${dartContext?.reason || '수집 데이터 없음'}`;
+
+    const investorFlowLines = investorFlow
+      ? [
+          `- 기준일: ${investorFlow.marketDate}`,
+          `- 외국인 순매수 TOP5 포함 여부: ${investorFlow.foreign ? `${investorFlow.foreign.rank}위, ${investorFlow.foreign.amountText}` : '미포함'}`,
+          `- 기관 순매수 TOP5 포함 여부: ${investorFlow.institution ? `${investorFlow.institution.rank}위, ${investorFlow.institution.amountText}` : '미포함'}`,
+        ].join('\n')
+      : '- 수급 스냅샷: 미수집';
+
+    const dailyInvestorFlowLines = dailyInvestorFlow?.days?.length
+      ? [
+          `- 최근 ${dailyInvestorFlow.days.length}거래일 외국인 순매매 합계: ${dailyInvestorFlow.foreignNet14.toLocaleString('ko-KR')}주`,
+          `- 최근 ${dailyInvestorFlow.days.length}거래일 기관 순매매 합계: ${dailyInvestorFlow.institutionNet14.toLocaleString('ko-KR')}주`,
+          `- 최신 외국인 보유율: ${fmtMetric(dailyInvestorFlow.latestForeignHoldRate, 2, '%')}`,
+          ...dailyInvestorFlow.days.map((d) =>
+            `- ${d.date}: 외국인 ${Number.isFinite(d.foreignNet) ? d.foreignNet.toLocaleString('ko-KR') : 'N/A'}주 / 기관 ${Number.isFinite(d.institutionNet) ? d.institutionNet.toLocaleString('ko-KR') : 'N/A'}주 / 등락률 ${fmtMetric(d.changeRate, 2, '%')}`,
+          ),
+        ].join('\n')
+      : '- 최근 2주 일별 수급: 미수집';
+
+    const newsStoryLines = newsStorySnippets?.length
+      ? newsStorySnippets
+          .map((n, i) => `${i + 1}. ${n.title}${n.publisher ? ` (${n.publisher})` : ''}: ${n.snippet}`)
+          .join('\n')
+      : '- 뉴스 본문 요약: 미수집';
+
+    const dartStoryLines = dartContext?.reportStory
+      ? `- ${dartContext.reportStory.date} ${dartContext.reportStory.title}: ${dartContext.reportStory.body}`
+      : '- DART 사업 내용 요약: 미수집';
+
+    const sourcePayload = {
+      sourceNews: news.map((n) => ({
+        title: clampStockAnalysisInput(n.title, 220),
+        url: clampStockAnalysisInput(n.url, 500),
+        publisher: clampStockAnalysisInput(n.publisher, 80),
+        publishedAt: clampStockAnalysisInput(n.publishedAt, 40),
+      })).filter((n) => n.title),
+      sourceMarketCap: Number.isFinite(kisSnapshot?.marketCap)
+        ? Math.round(kisSnapshot.marketCap * 100000000)
+        : null,
+      sourceEps: Number.isFinite(kisSnapshot?.eps) ? kisSnapshot.eps : null,
+      sourceInvestorFlow: investorFlow,
+      sourceDailyInvestorFlow: dailyInvestorFlow,
+      sourceDisclosures: dartContext?.hasData && Array.isArray(dartContext.disclosures)
+        ? dartContext.disclosures.map((d) => ({
+            date: clampStockAnalysisInput(d.date, 20),
+            title: clampStockAnalysisInput(d.title, 180),
+            url: d.receiptNo ? `https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${encodeURIComponent(d.receiptNo)}` : '',
+            submitter: clampStockAnalysisInput(d.submitter, 80),
+            receiptNo: clampStockAnalysisInput(d.receiptNo, 30),
+          })).filter((d) => d.title)
+        : [],
+      sourceFinancials: dartContext?.hasData && Array.isArray(dartContext.financials)
+        ? dartContext.financials.map((f) => ({
+            account: clampStockAnalysisInput(f.account, 40),
+            current: clampStockAnalysisInput(f.current, 40),
+            previous: clampStockAnalysisInput(f.previous, 40),
+            statement: clampStockAnalysisInput(f.statement, 40),
+          })).filter((f) => f.account)
+        : [],
+    };
+
+    const prompt = `당신은 한국 주식 앱의 "AI 종목 분석 리포트"를 작성하는 애널리스트입니다.
+아래 데이터만 근거로, 사용자가 모바일 화면에서 바로 읽을 수 있는 정교한 점수형 리포트를 작성하세요.
+데이터에 없는 사실은 "확인 필요" 또는 "추정"이라고 명시하고, 단정적인 매수/매도 권유와 목표가 제시는 금지합니다.
 
 [종목]
 - 이름: ${name}
@@ -1959,58 +2532,238 @@ exports.generateStockAiAnalysis = onCall(
 - PBR: ${fundamentals.pbr ?? 'N/A'}
 - BPS: ${fundamentals.bps ?? 'N/A'}
 
+[KIS 현재가/거래/밸류 스냅샷]
+${kisLines}
+
+[외국인/기관 수급 스냅샷]
+${investorFlowLines}
+
+[최근 2주 일별 외국인/기관 수급]
+${dailyInvestorFlowLines}
+
+[OpenDART 최근 공시: 최근 180일, 최대 10건]
+${dartDisclosureLines}
+
+[OpenDART 최근 재무제표 주요 계정]
+${dartFinancialLines}
+
+[DART 사업/제품 스토리 근거]
+${dartStoryLines}
+
 [최근 캔들: 오래된 순서]
 ${candleLines || 'N/A'}
+
+[앱 계산 기술 지표]
+- 최신 종가: ${fmtMetric(technicalSnapshot.latestClose, 0)}
+- RSI(14): ${fmtMetric(technicalSnapshot.rsi14, 1)}
+- 5일 수익률: ${fmtMetric(technicalSnapshot.return5, 1, '%')}
+- 20일 수익률: ${fmtMetric(technicalSnapshot.return20, 1, '%')}
+- 60일 수익률: ${fmtMetric(technicalSnapshot.return60, 1, '%')}
+- 120일 수익률: ${fmtMetric(technicalSnapshot.return120, 1, '%')}
+- MA5: ${fmtMetric(technicalSnapshot.ma5, 0)}
+- MA20: ${fmtMetric(technicalSnapshot.ma20, 0)}
+- MA60: ${fmtMetric(technicalSnapshot.ma60, 0)}
+- MA120: ${fmtMetric(technicalSnapshot.ma120, 0)}
+- 볼린저밴드: ${technicalSnapshot.bollinger ? `중심 ${fmtMetric(technicalSnapshot.bollinger.middle, 0)}, 상단 ${fmtMetric(technicalSnapshot.bollinger.upper, 0)}, 하단 ${fmtMetric(technicalSnapshot.bollinger.lower, 0)}, 위치 ${technicalSnapshot.bollinger.position}` : 'N/A'}
 
 [최근 뉴스 헤드라인]
 ${newsLines || 'N/A'}
 
+[뉴스 본문/요약 스토리 근거]
+${newsStoryLines}
+
+[리포트 작성 원칙]
+- 화면은 "종합 점수판 → 핵심 체크리스트 → 주요 지표 → 세부 분석" 순서로 보여줄 예정입니다.
+- 모든 문장은 길게 늘이지 말고, 한 항목당 1~2문장으로 작성하세요. 세미콜론(;)으로 문장을 이어 쓰지 마세요.
+- 점수 구간 표현은 하나만 사용하세요. "우호와 중립", "중립-우호", "중립~긍정"처럼 서로 다른 판단을 동시에 쓰지 마세요.
+- 각 필드에는 숫자, 방향성, 근거, 한계를 같이 넣으세요. 예: "PER 16.2배는 업종 평균 확인 필요, PBR 2.39배는 장부가 대비 프리미엄 구간."
+- PER만으로 고평가/저평가를 단정하지 마세요. 향후 1~2년 영업이익·순이익 전망, 컨센서스, 실적 개선 스토리가 있으면 선행 PER(FPER/Forward PER) 관점으로 함께 판단하세요.
+- 향후 1~2년 이익 전망 데이터가 없으면 "선행 PER은 산출할 수 없습니다"라고 쓰고, 현재 PER은 보조 지표로만 해석하세요.
+- 바이오/제약/플랫폼/적자 성장주처럼 PER이 구조적으로 높거나 의미가 약한 업종은 절대 PER보다 동종업계 평균, 파이프라인/임상 단계, 매출화 가능성, 현금흐름, 적자 축소 여부를 우선 비교하세요.
+- 동종업계 평균 PER을 데이터에서 확인할 수 있으면 peerPerAverage에 "동종업계 평균 PER 약 00배"처럼 숫자로 쓰세요. 확인할 수 없으면 "동종업계 평균 PER 확인 필요"라고 쓰세요.
+- 같은 테마로 함께 비교해볼 만한 국내 종목명을 themePeers에 3~8개 넣으세요. 확실하지 않은 종목은 넣지 말고, 종목명만 짧게 쓰세요.
+- 앱 계산 기술 지표의 RSI, 기간 수익률, 이동평균, 볼린저밴드는 반드시 technical 또는 sections에 구체적인 숫자로 반영하세요.
+- 이동평균은 5/20/60/120일선을 따로 나열하기보다 현재가가 단기·중기·장기 평균선 대비 위/아래 어디에 있는지 종합 판정으로 설명하세요. "5/20/60/120일 대비 상회"라고 쓰지 말고 "5·20·60·120일 이동평균선 위"처럼 정확히 쓰세요.
+- KIS와 OpenDART 수집 데이터는 숫자/공시명/날짜를 임의로 바꾸지 말고 그대로 인용하세요.
+- 사용자 화면에 표시될 문장에는 "KIS", "OpenDART", "KIS 기준", "OpenDART 기준", "데이터:", "단위 확인 필요", "표기됩니다" 같은 내부 처리 문구를 쓰지 마세요.
+- 출처명보다 사용자가 이해할 원인과 의미를 우선하세요. 예: "최근 공시에 따르면", "현재가 기준", "최근 2주 수급에서는"처럼 표현하세요.
+- KIS EPS가 제공되면 EPS를 역산하지 말고 제공 EPS를 기준으로 설명하세요. EPS가 N/A일 때만 역산 가능성과 한계를 설명하세요.
+- 시가총액(KIS)은 억원 단위로 제공됩니다. 예: "1조 86억원" 또는 "10,086억원"처럼 사용자 친화적으로 표현하세요.
+- DART 사업/제품 스토리 근거와 뉴스 본문 요약에 제품명, 사업부문, 고객사, 수요처, 매출 성장 단서가 있으면 이를 당일 재료와 테마 분석의 핵심 근거로 우선 반영하세요. 예: MLCC, 전장부품, 반도체 소재처럼 구체 제품/산업명을 쓰세요.
+- 실적 서프라이즈는 컨센서스 데이터가 없으면 "컨센서스 데이터가 없어 서프라이즈 여부는 판단할 수 없습니다"라고 쓰세요.
+- 최근 공시는 OpenDART 목록이 있으면 날짜와 공시명을 반드시 언급하세요. 없으면 "최근 180일 OpenDART 공시 목록에서 확인된 항목이 없습니다"라고 쓰세요.
+- "좋다/나쁘다"만 쓰지 말고 왜 그런지 근거를 붙이세요.
+- 사용자에게 직접 말하는 문장은 모두 높임말로 작성하세요. 반말, 명령조, "봐야 함", "~임", "~가능" 같은 메모체를 쓰지 마세요.
+- 문장 끝은 되도록 "입니다", "습니다", "필요합니다", "보입니다", "확인됩니다"처럼 마무리하세요.
+- 투자 조언처럼 보이는 표현(매수, 매도, 목표가, 반드시, 확실)은 금지합니다.
+
+[점수 산정 프레임]
+0~100점으로 평가하세요. 기준은 다음 가중치입니다.
+- 가격/추세/기술적 흐름 25점: 최근 캔들, 5/20/60/120일 이동평균 추정, 추세, 변동성, 지지/저항
+- 뉴스/당일 재료 20점: 최근 뉴스 방향성, 등락 설명력, 테마성, 이벤트 신뢰도
+- 재무/밸류에이션 20점: 현재 PER, 선행 PER 산출 가능성, 향후 1~2년 이익 개선 여부, 동종업계 비교, PBR, BPS, 시총, EPS, 데이터 결측 한계
+- 모멘텀/수급 추정 20점: 단기 모멘텀, 거래량/변동성 단서, 과열/눌림
+- 리스크 15점: 데이터 부족, 밸류 부담, 뉴스 노이즈, 기술적 이탈 가능성
+
 [필수 분석 관점]
-1. 어느 테마와 어느 섹터로 볼 수 있는지. 데이터로 확정이 어려우면 뉴스/기업명 기반 추정이라고 명시.
-2. 분석 당일 등락 이유. 가격과 뉴스만으로 부족하면 확인 가능한 근거와 한계를 분리.
-3. PER, PBR, EPS/BPS, 시총 등 밸류에이션 해석. EPS 데이터가 없으면 PER 역산 가능 여부와 한계를 말할 것.
-4. 기술적 분석: 캔들, 이동평균선(5/20/60/120일), 볼린저밴드, 추세·변동성·지지/저항.
-5. 최근 뉴스의 방향성, 노이즈 여부, 실적/정책/수급/테마성 분류.
-6. 모멘텀과 리스크.
-7. 0~100점 점수. 점수는 추세, 뉴스, 밸류에이션, 리스크를 종합한 학습용 점수로 설명.
+1. 테마/섹터: 기업명, 시장, 뉴스 헤드라인으로 추정하되 불확실하면 명시.
+2. 당일 등락 이유: 사용자가 바로 이해할 수 있게 "무엇 때문에 움직였는지"를 먼저 쓰고, 가격 변화·거래대금·뉴스/공시 근거·아직 설명되지 않는 부분을 분리.
+3. 재무/밸류: 현재 PER, 선행 PER 산출 가능성, 향후 1~2년 영업이익 개선 근거, 동종업계 비교 필요성, PBR, BPS, 시총을 해석. EPS가 없으면 "PER 역산 EPS" 가능 여부와 한계를 언급.
+4. 기술적 분석: 최근 고점/저점, 단기 추세, 현재가가 5/20/60/120일 이동평균 묶음 대비 어느 위치인지 종합. 볼린저밴드는 변동성/상단·하단 접근 여부를 추정.
+5. 뉴스 분석: 뉴스 제목을 샅샅이 비교해 실적, 정책, 수주, 테마, 수급, 단순 노이즈 중 어느 쪽인지 구체적으로 분류. 테마는 기업 사업과 뉴스 근거가 맞물리는지 설명.
+6. RSI와 기간 수익률: RSI(14), 5/20/60/120일 수익률을 반드시 언급하고 과열/침체/추세 지속 여부를 판단.
+7. 실적 서프라이즈: 컨센서스 대비 상회/하회 근거가 뉴스나 데이터에 없으면 확인 필요라고 명시.
+8. 최근 공시: 뉴스 헤드라인에서 공시/계약/수주/증자/지분 단서가 있는지 확인하고 없으면 확인 필요라고 명시.
+9. 모멘텀: 단기 상승 지속력, 과열, 눌림, 재료 지속성, 최근 2주 외국인/기관 순매매 합계와 방향, 확인해야 할 다음 이벤트.
+10. 리스크: 최소 3개 이상. "데이터 부족"도 리스크로 취급 가능.
+
+[sections 구성 지침]
+sections에는 아래 제목을 가능하면 모두 포함하세요. 각 body는 2~4개의 짧은 체크 문장으로 작성하세요.
+- "CAN SLIM 체크": C/A/N/S/L/I/M 관점 중 데이터로 볼 수 있는 것과 부족한 것.
+- "기술 지표": 이동평균, 볼린저밴드, 지지/저항, 변동성.
+- "재무 지표": 현재 PER, 선행 PER 산출 가능성, 향후 1~2년 이익 전망, 동종업계 비교, PBR/BPS/시총/EPS와 한계.
+- "기간 수익률": 5/20/60/120일 수익률과 추세 해석.
+- "실적 서프라이즈": 컨센서스 상회/하회 확인 가능 여부.
+- "최근 공시": 공시/계약/수주/증자/지분 변동 단서와 확인 필요 여부.
+- "뉴스 재료": 최근 뉴스가 가격에 미칠 수 있는 방향과 노이즈 여부.
+- "확인할 것": 다음 공시, 실적, 거래량, 뉴스 후속성 등 사용자가 체크할 항목.
 
 반드시 아래 JSON 객체만 출력하세요. 첫 글자는 {, 마지막 글자는 } 이어야 합니다. 마크다운 코드블록, 앞뒤 설명, 주석 금지.
 {
-  "summary": "3~5문장 요약",
+  "summary": "3~4문장 핵심 요약. 첫 문장은 종합 판정, 둘째 문장은 상승/하락 이유, 셋째 문장은 리스크와 확인 포인트.",
   "score": 0,
-  "scoreLabel": "짧은 점수 해석",
-  "theme": "테마 분석",
-  "sector": "섹터 분석",
-  "todayReason": "당일 등락 이유",
-  "fundamentals": "실적/밸류에이션 분석",
-  "technical": "기술적 분석",
-  "news": "최근 뉴스 분석",
-  "momentum": "모멘텀 분석",
-  "risks": ["리스크1", "리스크2"],
+  "scoreLabel": "점수 구간 해석. 우호, 중립, 주의 중 하나만 고르고 그 이유를 1문장",
+  "theme": "핵심 테마 1~3개만 사용자에게 보이는 문장으로 작성. 근거 설명보다 어떤 테마인지가 먼저 보이게 작성",
+  "sector": "섹터 분석. 업종/산업 분류와 확실성",
+  "todayReason": "당일 등락 이유. 사용자가 바로 이해하도록 핵심 원인 → 제품/실적/테마 스토리 → 근거 뉴스/공시 → 거래/가격 반응 → 설명 한계를 분리해 작성",
+  "fundamentals": "실적/밸류에이션 분석. 현재 PER, 선행 PER 산출 가능성, 향후 1~2년 이익 개선 근거, 동종업계 비교, PER/PBR/BPS/시총/EPS와 한계",
+  "technical": "기술적 분석. 현재가가 주요 이동평균 묶음 대비 어느 위치인지 종합하고, 캔들, 볼린저밴드, 지지/저항, 변동성을 설명",
+  "news": "최근 확인된 뉴스 항목을 사용자에게 보여주는 문장. '~스토리를 제공합니다' 같은 설명체 금지",
+  "momentum": "모멘텀 분석. 단기 흐름, 과열/눌림, 재료 지속성",
+  "peerPerAverage": "동종업계 평균 PER 약 00배 또는 확인 필요",
+  "themePeers": ["같은 테마 종목명1", "같은 테마 종목명2", "같은 테마 종목명3"],
+  "risks": ["구체적 리스크1", "구체적 리스크2", "구체적 리스크3"],
   "sections": [
-    {"title": "핵심 체크", "body": "추가로 볼 포인트"}
+    {"title": "CAN SLIM 체크", "body": "C/A/N/S/L/I/M 관점 체크"},
+    {"title": "기술 지표", "body": "이동평균/볼린저밴드/지지저항 체크"},
+    {"title": "확인할 것", "body": "다음에 볼 데이터와 이벤트"}
   ]
 }`;
 
-    const message = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1800,
-      temperature: 0.2,
-      messages: [{ role: 'user', content: prompt }],
-    });
+    const openAiApiKey = (OPENAI_API_KEY.value() || '').trim();
+    if (!openAiApiKey) {
+      console.warn('[generateStockAiAnalysis] OPENAI_API_KEY is empty');
+      throw new HttpsError('internal', 'AI 분석 설정이 완료되지 않았습니다.');
+    }
 
-    const text = (message.content || [])
-      .map((part) => part?.type === 'text' ? part.text : '')
+    let response;
+    try {
+      response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAiApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-5-mini',
+        input: prompt,
+        max_output_tokens: 2800,
+        reasoning: { effort: 'low' },
+        text: {
+          verbosity: 'medium',
+          format: {
+            type: 'json_schema',
+            name: 'stock_ai_analysis',
+            strict: true,
+            schema: {
+              type: 'object',
+              additionalProperties: false,
+              required: [
+                'summary',
+                'score',
+                'scoreLabel',
+                'theme',
+                'sector',
+                'todayReason',
+                'fundamentals',
+                'technical',
+                'news',
+                'momentum',
+                'peerPerAverage',
+                'themePeers',
+                'risks',
+                'sections',
+              ],
+              properties: {
+                summary: { type: 'string' },
+                score: { type: 'number', minimum: 0, maximum: 100 },
+                scoreLabel: { type: 'string' },
+                theme: { type: 'string' },
+                sector: { type: 'string' },
+                todayReason: { type: 'string' },
+                fundamentals: { type: 'string' },
+                technical: { type: 'string' },
+                news: { type: 'string' },
+                momentum: { type: 'string' },
+                peerPerAverage: { type: 'string' },
+                themePeers: {
+                  type: 'array',
+                  maxItems: 8,
+                  items: { type: 'string' },
+                },
+                risks: {
+                  type: 'array',
+                  maxItems: 5,
+                  items: { type: 'string' },
+                },
+                sections: {
+                  type: 'array',
+                  maxItems: 8,
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['title', 'body'],
+                    properties: {
+                      title: { type: 'string' },
+                      body: { type: 'string' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+      });
+    } catch (e) {
+      console.warn('[generateStockAiAnalysis] OpenAI request failed:', e?.message || e);
+      throw new HttpsError('internal', 'AI 분석 생성에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    }
+
+    const body = await response.json().catch(() => null);
+    if (!response.ok) {
+      const detail = body?.error?.message || response.statusText || 'OpenAI API request failed';
+      console.warn('[generateStockAiAnalysis] OpenAI error:', detail);
+      throw new HttpsError('internal', 'AI 분석 생성에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    }
+
+    const text = (body?.output_text || (body?.output || [])
+      .flatMap((item) => item?.content || [])
+      .map((part) => part?.text || '')
       .filter(Boolean)
-      .join('\n')
+      .join('\n'))
       .trim();
+
     try {
       const parsed = extractJsonObject(text);
-      return normalizeStockAnalysisPayload(parsed);
+      return attachStockAnalysisSources(
+        normalizeStockAnalysisPayload(parsed),
+        sourcePayload
+      );
     } catch (e) {
       console.warn('[generateStockAiAnalysis] JSON parse failed:', e?.message || e);
       console.warn('[generateStockAiAnalysis] Raw AI response:', clampStockAnalysisInput(text, 1200));
-      return fallbackStockAnalysisPayload(text);
+      return attachStockAnalysisSources(fallbackStockAnalysisPayload(text), sourcePayload);
     }
   }
 );
