@@ -356,6 +356,47 @@ class FirestoreService {
     await _markDailyMissionDate(uid, 'lastCommentMissionDate');
   }
 
+  /// 매매일지 작성 일일 미션 보상.
+  /// 같은 KST 날짜에 이미 받았으면 무시. 처음 작성한 일지에만 bonusXp +5.
+  Future<void> grantDailyJournalMissionXp(
+    String uid, {
+    int xp = 5,
+  }) async {
+    if (uid.isEmpty) return;
+    final todayKey = _kstDayKey();
+    final userRef = _db.collection('users').doc(uid);
+    final publicRef = _db.collection('user_public').doc(uid);
+
+    await _db.runTransaction((tx) async {
+      final snap = await tx.get(userRef);
+      final data = snap.data() ?? <String, dynamic>{};
+      final lastDate = data['lastJournalMissionDate'] as String?;
+      final alreadyDoneToday = lastDate == todayKey;
+
+      final postCount = (data['postCount'] as num?)?.toInt() ?? 0;
+      final commentCount = (data['commentCount'] as num?)?.toInt() ?? 0;
+      final attendanceCount = (data['attendanceCount'] as num?)?.toInt() ?? 0;
+      final currentBonusXp = (data['bonusXp'] as num?)?.toInt() ?? 0;
+      final nextBonusXp = alreadyDoneToday
+          ? currentBonusXp
+          : currentBonusXp + xp;
+      final nextLevel = calculateUserLevel(
+        postCount: postCount,
+        commentCount: commentCount,
+        attendanceCount: attendanceCount,
+        bonusXp: nextBonusXp,
+      );
+
+      tx.set(userRef, {
+        'lastJournalMissionDate': todayKey,
+        'bonusXp': nextBonusXp,
+        'level': nextLevel,
+        'lastActiveAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      tx.set(publicRef, {'level': nextLevel}, SetOptions(merge: true));
+    });
+  }
+
   Future<void> recordCommentRemoved(String uid) {
     return _adjustCommentCount(uid, -1);
   }
@@ -1864,7 +1905,7 @@ class FirestoreService {
         'publishedAt': Timestamp.fromDate(journal.publishedAt ?? now),
     };
     await _db.collection('trading_journal').add(payload);
-    await _markDailyMissionDate(journal.uid, 'lastJournalMissionDate');
+    await grantDailyJournalMissionXp(journal.uid);
     if (journal.isPublic) {
       await recordPostCreated(journal.uid);
     }

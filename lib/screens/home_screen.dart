@@ -599,6 +599,17 @@ class _HomeScreenState extends State<HomeScreen>
         context,
         MaterialPageRoute(builder: (_) => const StockAiAnalysisListScreen()),
       ),
+      openAiAnalysisSearch: () {
+        final uid = auth.user?.uid;
+        if (uid == null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+          return;
+        }
+        startAiAnalysisFromSearch(context, uid);
+      },
       watchRewardAd: () => _confirmAndWatchRewardAd(auth),
       onTopStateChanged: (_) {},
       topActions: _showSearch
@@ -1382,6 +1393,7 @@ class _DashboardHomePage extends StatefulWidget {
     required this.openMarketSentiment,
     required this.openStockCompare,
     required this.openAiAnalysisList,
+    required this.openAiAnalysisSearch,
     required this.watchRewardAd,
     required this.onTopStateChanged,
     required this.topActions,
@@ -1405,6 +1417,7 @@ class _DashboardHomePage extends StatefulWidget {
   final VoidCallback openMarketSentiment;
   final VoidCallback openStockCompare;
   final VoidCallback openAiAnalysisList;
+  final VoidCallback openAiAnalysisSearch;
   final VoidCallback watchRewardAd;
   final ValueChanged<bool> onTopStateChanged;
   final List<Widget> topActions;
@@ -1530,6 +1543,16 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                   ),
                 ),
                 const SizedBox(height: 14),
+                _fixedH(
+                  84,
+                  _HomeReveal(
+                    order: 2,
+                    child: _AiAnalysisPromptCard(
+                      onTap: widget.openAiAnalysisSearch,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 28),
                 _fixedH(
                   360,
                   _HomeReveal(
@@ -1760,6 +1783,93 @@ class _LatestAnnouncementStrip extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _AiAnalysisPromptCard extends StatelessWidget {
+  const _AiAnalysisPromptCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: _homeCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: _homeAccent.withValues(alpha: 0.35),
+              width: 1,
+            ),
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                _homeAccent.withValues(alpha: 0.08),
+                _homeCard,
+              ],
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: _homeAccent.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 20,
+                  color: _homeAccent,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'AI 종목 분석 받아보기',
+                      style: _homeText(
+                        color: _homeLabel,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '관심 가는 종목, AI가 점수와 리포트로 정리해줘요',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _homeText(
+                        color: _homeMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: _homeFaint,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -2378,7 +2488,7 @@ class _DailyMissionCard extends StatelessWidget {
               (
                 icon: Icons.edit_note_rounded,
                 label: '매매일지 작성',
-                xp: '+10 XP',
+                xp: '+5 XP',
                 done: status.memoDone,
                 onTap: status.memoDone ? null : openJournal,
               ),

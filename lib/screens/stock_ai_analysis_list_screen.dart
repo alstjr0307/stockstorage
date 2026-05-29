@@ -16,6 +16,40 @@ import 'stock_ai_analysis_result_screen.dart';
 import 'stock_detail_screen.dart' show stockPickFromSearchResult;
 import 'stock_search_screen.dart';
 
+/// 검색 → 광고 게이트 → AI 분석 결과 화면 으로 이어지는 새 분석 흐름.
+/// 홈 카드, 리스트 화면 FAB 등 어디서든 동일 동작을 재사용한다.
+Future<void> startAiAnalysisFromSearch(
+  BuildContext context,
+  String uid,
+) async {
+  final picked = await Navigator.push<StockSearchResult>(
+    context,
+    MaterialPageRoute(
+      builder: (pickerCtx) => StockSearchScreen(
+        title: '분석할 종목',
+        subtitle: '선택하면 AI 분석을 새로 시작해요.',
+        onPick: (result) =>
+            Navigator.pop<StockSearchResult>(pickerCtx, result),
+      ),
+    ),
+  );
+  if (picked == null || !context.mounted) return;
+
+  final passed = await AiAnalysisAdGate.run(context, uid);
+  if (!passed || !context.mounted) return;
+
+  final pick = stockPickFromSearchResult(picked);
+  await Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => StockAiAnalysisResultScreen(
+        pick: pick,
+        forceFresh: true,
+      ),
+    ),
+  );
+}
+
 enum _SortMode { recent, scoreHigh, scoreLow, name }
 
 extension _SortModeLabel on _SortMode {
@@ -357,37 +391,8 @@ class _StockAiAnalysisListScreenState extends State<StockAiAnalysisListScreen> {
     }
   }
 
-  Future<void> _startNewAnalysisFlow(String uid) async {
-    // 1) 종목 검색
-    final picked = await Navigator.push<StockSearchResult>(
-      context,
-      MaterialPageRoute(
-        builder: (pickerCtx) => StockSearchScreen(
-          title: '분석할 종목',
-          subtitle: '선택하면 AI 분석을 새로 시작해요.',
-          onPick: (result) =>
-              Navigator.pop<StockSearchResult>(pickerCtx, result),
-        ),
-      ),
-    );
-    if (picked == null || !mounted) return;
-
-    // 2) 종목 선택 직후 광고 시청 팝업
-    final passed = await AiAnalysisAdGate.run(context, uid);
-    if (!passed || !mounted) return;
-
-    // 3) 결과 화면으로 이동 (강제 새로 생성)
-    final pick = stockPickFromSearchResult(picked);
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => StockAiAnalysisResultScreen(
-          pick: pick,
-          forceFresh: true,
-        ),
-      ),
-    );
-  }
+  Future<void> _startNewAnalysisFlow(String uid) =>
+      startAiAnalysisFromSearch(context, uid);
 
   void _openDetail(StockAiAnalysisSummary item) {
     AdService.instance.showAiAnalysisDetailInterstitialIfReady();
