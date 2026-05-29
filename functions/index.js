@@ -2759,7 +2759,7 @@ function buildTechnicalSnapshot(candles) {
 exports.generateStockAiAnalysis = onCall(
   {
     region: 'asia-northeast3',
-    timeoutSeconds: 120,
+    timeoutSeconds: 540,
     memory: '1GiB',
     secrets: [OPENAI_API_KEY, DART_API_KEY],
   },
@@ -3077,6 +3077,15 @@ ${newsStoryLines}
 - 모멘텀/수급 추정 20점: 단기 모멘텀, 거래량/변동성 단서, 과열/눌림
 - 리스크 15점: 데이터 부족, 밸류 부담, 뉴스 노이즈, 기술적 이탈 가능성
 
+[점수 분포 규칙 — 매우 중요]
+점수를 50~65 구간에 몰지 마세요. 종목마다 차이가 분명히 드러나야 합니다.
+- 75점 이상: 가격/추세, 뉴스, 재무, 모멘텀 중 3개 이상이 분명히 우호적이고 큰 리스크가 없을 때
+- 60~74점: 일부 요소가 우호적이지만 한두 항목에 약점·과열·노이즈가 섞일 때
+- 45~59점: 우호/주의 요소가 비슷하게 섞여 방향이 모호할 때 (진짜 중립일 때만)
+- 30~44점: 가격/추세나 재무 또는 뉴스 흐름에 분명한 약점이 있을 때
+- 30점 미만: 다수 요소에서 부정 신호가 누적되거나 큰 리스크가 두드러질 때
+"애매하면 일단 55~60점"으로 도망치지 말고, 가중치별 점수를 머릿속으로 합산해 그대로 반영하세요. 동점은 피하고 1점 단위로 차별화하세요.
+
 [필수 분석 관점]
 1. 테마/섹터: 기업명, 시장, 뉴스 헤드라인으로 추정하되 불확실하면 명시.
 2. 당일 등락 이유: 사용자가 바로 이해할 수 있게 "무엇 때문에 움직였는지"를 먼저 쓰고, 가격 변화·거래대금·뉴스/공시 근거·아직 설명되지 않는 부분을 분리.
@@ -3113,7 +3122,13 @@ sections에는 아래 제목을 가능하면 모두 포함하세요. 각 body는
 13. 기술 상세(technicalDetail): 지지선·저항선은 추정 가격(예: "135,000원 근처")으로 쓰고 단정적이지 않게 "추정", "근처"를 붙이세요. 패턴은 보이지 않으면 "뚜렷한 패턴 미확인"이라고 쓰세요.
 14. 시나리오(scenarios): 강세(bull)/기본(base)/약세(bear) 3개를 모두 작성하고 probability 세 값의 합이 정확히 1.0이 되도록 하세요. priceTarget은 "+8~12%" 또는 "165,000원 근처"처럼 범위/근사로 쓰고 단정적 목표가는 금지. narrative는 시나리오 트리거와 신호를 2~3문장.
 15. 구조화 리스크(risksDetailed): 기존 risks 문자열 배열과 별개로 카테고리·심각도·발생가능성·대응법을 구조화해 3~5개 작성하세요. category는 재무/시장/규제/사업/기술/수급 중 하나, severity·probability는 높음/보통/낮음 중 하나.
-16. 타이밍·액션(timing): action은 "분할매수/관망/매수보류/비중확대/비중축소/판단보류" 중 하나만 고르되 단정적 매수·매도 권유로 들리지 않게 actionReason을 보수적으로 작성. shortTerm은 1~2주, midTerm은 1~3개월 관점으로 2~3문장씩.
+16. 타이밍·액션(timing): action은 "분할매수/관망/매수보류/비중확대/비중축소/판단보류" 중 하나만 고르되, 점수와 데이터 방향에 따라 다음 가이드를 따르세요. "관망"은 정말 양방향 혼조일 때만 쓰고, "판단보류"는 핵심 데이터(실적·뉴스·가격)가 결측된 경우에만 쓰세요. 어느 쪽으로든 신호가 우세하면 반드시 방향성 있는 액션을 고르세요.
+  - score ≥ 70: 분할매수 또는 비중확대 (재료 신뢰도가 높고 추세가 살아 있으면 비중확대, 단기 변동 위험이 있으면 분할매수)
+  - score 55~69: 모멘텀·재료가 우세하면 분할매수, 과열·고PER 우려면 매수보류, 진짜 혼조면 관망
+  - score 40~54: 매수보류가 기본, 약점이 더 두드러지면 비중축소, 데이터가 정말 양방향이면 관망
+  - score < 40: 비중축소 또는 매수보류 (큰 약점이 분명하면 비중축소)
+  - 핵심 데이터(가격/실적/뉴스 중 2개 이상) 결측: 판단보류
+actionReason은 "단정적 매수·매도 권유"로 들리지 않되 방향은 명확히 드러나도록 작성하세요. shortTerm은 1~2주, midTerm은 1~3개월 관점으로 2~3문장씩.
 
 반드시 아래 JSON 객체만 출력하세요. 첫 글자는 {, 마지막 글자는 } 이어야 합니다. 마크다운 코드블록, 앞뒤 설명, 주석 금지.
 {
@@ -3454,9 +3469,10 @@ sections에는 아래 제목을 가능하면 모두 포함하세요. 각 body는
       .join('\n'))
       .trim();
 
+    let payload;
     try {
       const parsed = extractJsonObject(text);
-      return attachStockAnalysisSources(
+      payload = attachStockAnalysisSources(
         applyNaverValuationFallback(
           normalizeStockAnalysisPayload(parsed),
           naverValuation
@@ -3466,7 +3482,7 @@ sections에는 아래 제목을 가능하면 모두 포함하세요. 각 body는
     } catch (e) {
       console.warn('[generateStockAiAnalysis] JSON parse failed:', e?.message || e);
       console.warn('[generateStockAiAnalysis] Raw AI response:', clampStockAnalysisInput(text, 1200));
-      return attachStockAnalysisSources(
+      payload = attachStockAnalysisSources(
         applyNaverValuationFallback(
           fallbackStockAnalysisPayload(text),
           naverValuation
@@ -3474,5 +3490,98 @@ sections에는 아래 제목을 가능하면 모두 포함하세요. 각 body는
         sourcePayload
       );
     }
+
+    // 클라이언트가 백그라운드/연결 종료 상태여도 결과가 유실되지 않도록
+    // Firestore에 직접 저장한다. 클라이언트는 같은 문서를 listen 해서
+    // 함수 응답과 Firestore snapshot 중 먼저 도착하는 쪽을 사용한다.
+    const analysisId = `${market.toUpperCase()}_${ticker.toUpperCase()}`;
+    try {
+      // 분석 시점 가격 스냅샷 — 카드에서 "분석 후 +X.X%" 비교에 사용
+      const baselinePrice = Number(price.currentPrice);
+      const snapshot = {
+        ...payload,
+        ticker,
+        name,
+        market,
+        updatedAt: new Date(),
+      };
+      if (Number.isFinite(baselinePrice) && baselinePrice > 0) {
+        snapshot.analysisPrice = baselinePrice;
+      }
+      await getFirestore()
+        .collection('users')
+        .doc(request.auth.uid)
+        .collection('stock_ai_analyses')
+        .doc(analysisId)
+        .set(snapshot, { merge: true });
+    } catch (e) {
+      console.warn('[generateStockAiAnalysis] Firestore save failed:', e?.message || e);
+    }
+
+    // 분석 완료 푸시 알림 — 클라이언트가 백그라운드/종료 상태여도 결과를 알린다.
+    try {
+      const db = getFirestore();
+      const uid = request.auth.uid;
+      const tokensSnap = await db
+        .collection('fcm_tokens')
+        .where('uid', '==', uid)
+        .get();
+      const tokens = tokensSnap.docs
+        .map((d) => d.data().token)
+        .filter((t) => typeof t === 'string' && t.length > 0);
+
+      if (tokens.length > 0) {
+        const score = Number.isFinite(Number(payload?.score)) ? Math.round(Number(payload.score)) : null;
+        const scoreLabel = (payload?.scoreLabel || '').toString().trim();
+        const body = score !== null
+          ? `${name} · ${score}점${scoreLabel ? ` (${scoreLabel})` : ''}`
+          : `${name} 분석이 준비되었습니다.`;
+
+        const response = await getMessaging().sendEachForMulticast({
+          tokens,
+          notification: {
+            title: 'AI 분석이 완료되었어요',
+            body,
+          },
+          data: {
+            type: 'ai_analysis_complete',
+            analysisId,
+            ticker,
+            market,
+            name,
+          },
+          android: {
+            priority: 'high',
+            notification: { channelId: 'default', sound: 'default' },
+          },
+          apns: {
+            payload: { aps: { sound: 'default' } },
+          },
+        });
+
+        // 만료된 토큰 정리
+        const invalidTokens = [];
+        response.responses.forEach((r, i) => {
+          if (!r.success) {
+            const code = r.error?.code || '';
+            if (
+              code === 'messaging/invalid-registration-token' ||
+              code === 'messaging/registration-token-not-registered'
+            ) {
+              invalidTokens.push(tokens[i]);
+            }
+          }
+        });
+        if (invalidTokens.length > 0) {
+          await Promise.all(
+            invalidTokens.map((t) => db.collection('fcm_tokens').doc(t).delete())
+          );
+        }
+      }
+    } catch (e) {
+      console.warn('[generateStockAiAnalysis] FCM notify failed:', e?.message || e);
+    }
+
+    return payload;
   }
 );

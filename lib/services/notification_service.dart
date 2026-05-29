@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+import '../models/stock_pick.dart';
 import '../models/trading_journal.dart';
 import '../screens/home_screen.dart';
 import '../screens/journal_chart_screen.dart';
 import '../screens/post_detail_screen.dart';
+import '../screens/stock_ai_analysis_result_screen.dart';
 import '../utils/globals.dart';
 import 'firestore_service.dart';
 
@@ -249,10 +251,19 @@ class NotificationService {
 
   Future<void> _handleNotificationTap(RemoteMessage message) async {
     final data = message.data;
+    final type = (data['type'] ?? '').toString();
     final postId = (data['postId'] ?? '').toString();
     final pickId = (data['pickId'] ?? '').toString();
     final journalId = (data['journalId'] ?? '').toString();
 
+    if (type == 'ai_analysis_complete') {
+      await _openAiAnalysisResult(
+        ticker: (data['ticker'] ?? '').toString(),
+        market: (data['market'] ?? '').toString(),
+        name: (data['name'] ?? '').toString(),
+      );
+      return;
+    }
     if (postId.isNotEmpty) {
       await _openPost(postId);
       return;
@@ -264,6 +275,35 @@ class NotificationService {
     if (journalId.isNotEmpty) {
       await _openJournal(journalId);
     }
+  }
+
+  Future<void> _openAiAnalysisResult({
+    required String ticker,
+    required String market,
+    required String name,
+  }) async {
+    await _waitForNavigatorContext();
+    if (ticker.isEmpty) return;
+    final normalizedMarket = market.trim().toUpperCase();
+    final normalizedTicker = ticker.trim().toUpperCase();
+    final pick = StockPick(
+      id: 'stock_${normalizedMarket}_$normalizedTicker',
+      ticker: normalizedTicker,
+      name: name.isEmpty ? normalizedTicker : name,
+      buyPrice: 0,
+      targetPrice: 0,
+      reason: '',
+      category: '단기',
+      market: normalizedMarket.isEmpty ? 'KS' : normalizedMarket,
+      isPremium: false,
+      createdAt: DateTime.now(),
+      status: 'active',
+    );
+    navigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (_) => StockAiAnalysisResultScreen(pick: pick),
+      ),
+    );
   }
 
   Future<void> _openPost(String postId) async {

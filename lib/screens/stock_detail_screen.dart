@@ -928,6 +928,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                   children: [
                     // 종목 헤더
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
                           child: Column(
@@ -959,11 +960,17 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
-                              _favoriteActions(cs),
+                              if (_isPickMode) ...[
+                                const SizedBox(height: 8),
+                                _favoriteActions(cs),
+                              ],
                             ],
                           ),
                         ),
+                        if (!_isPickMode) ...[
+                          const SizedBox(width: 8),
+                          _favoriteStockButton(cs),
+                        ],
                         if (_isPickMode)
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -1333,9 +1340,6 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                                 ),
                                               ],
                                               const SizedBox(height: 12),
-                                              if (!_showCaptureWatermark)
-                                                _compareButton(context, cs),
-                                              const SizedBox(height: 2),
                                               Divider(
                                                 height: 16,
                                                 thickness: 1,
@@ -1367,9 +1371,6 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                               height: 1.8,
                                             ),
                                           ),
-                                        ] else ...[
-                                          if (!_showCaptureWatermark)
-                                            _compareButton(context, cs),
                                         ],
                                         // 워터마크
                                         if (_showCaptureWatermark) ...[
@@ -1409,45 +1410,37 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                   ),
                                 ),
                                 // ── 캡처 영역 끝 ──
-                                const SizedBox(height: 10),
-                                Center(
-                                  child: TextButton.icon(
-                                    onPressed: _capturing
-                                        ? null
-                                        : _captureAndShare,
-                                    icon: _capturing
-                                        ? const SizedBox(
-                                            width: 14,
-                                            height: 14,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Color(0xFF10B981),
-                                            ),
-                                          )
-                                        : Icon(
-                                            Icons.camera_alt_outlined,
-                                            size: 16,
-                                            color: cs.onSurface.withValues(
-                                              alpha: 0.4,
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _stockActionChip(
+                                        cs: cs,
+                                        icon: Icons.compare_arrows_rounded,
+                                        label: '종목 비교',
+                                        onTap: () => Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => StockCompareScreen(
+                                              basePick: widget.pick,
                                             ),
                                           ),
-                                    label: Text(
-                                      _capturing ? '캡처 중...' : '캡처해서 공유하기',
-                                      style: TextStyle(
-                                        color: cs.onSurface.withValues(
-                                          alpha: 0.4,
                                         ),
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 13,
                                       ),
                                     ),
-                                    style: TextButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: _stockActionChip(
+                                        cs: cs,
+                                        icon: Icons.ios_share_rounded,
+                                        label: _capturing ? '캡처 중...' : '캡처 공유',
+                                        onTap: _capturing
+                                            ? null
+                                            : _captureAndShare,
+                                        loading: _capturing,
                                       ),
                                     ),
-                                  ),
+                                  ],
                                 ),
                                 const SizedBox(height: 20),
                                 if (widget.enablePickFeatures) ...[
@@ -1508,89 +1501,147 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     );
   }
 
+  Widget _aiAnalysisLastAtLabel(ColorScheme cs) {
+    final user = _currentUser;
+    final defaultLabel = Text(
+      '분석 결과는 별도 화면에서 정리됩니다',
+      style: TextStyle(
+        color: cs.onSurface.withValues(alpha: 0.42),
+        fontSize: 11,
+      ),
+    );
+    if (user == null) return defaultLabel;
+    final analysisKey = FirestoreService.favoriteStockKey(
+      widget.pick.market,
+      widget.pick.ticker,
+    );
+    return StreamBuilder<DateTime?>(
+      stream: _firestoreService.watchStockAiAnalysisUpdatedAt(
+        user.uid,
+        analysisKey,
+      ),
+      builder: (context, snap) {
+        final at = snap.data;
+        if (at == null) return defaultLabel;
+        final label = DateFormat('yyyy.MM.dd HH:mm').format(at);
+        return Row(
+          children: [
+            Icon(
+              Icons.schedule,
+              size: 11,
+              color: cs.onSurface.withValues(alpha: 0.42),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '마지막 분석 $label',
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.55),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _aiAnalysisSection() {
     final cs = Theme.of(context).colorScheme;
+    const accent = Color(0xFF10B981);
 
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: cs.onSurface.withValues(alpha: 0.035),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.onSurface.withValues(alpha: 0.08)),
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accent.withValues(alpha: 0.14),
+            accent.withValues(alpha: 0.04),
+          ],
+        ),
+        border: Border.all(color: accent.withValues(alpha: 0.28), width: 1),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(8),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: _openAiAnalysisScreen,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: accent.withValues(alpha: 0.32)),
+                  ),
+                  child: const Icon(
+                    Icons.auto_awesome,
+                    size: 22,
+                    color: accent,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.auto_awesome,
-                  size: 18,
-                  color: Color(0xFF10B981),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'AI 딥 분석',
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '종목 AI 분석',
+                        style: TextStyle(
+                          color: cs.onSurface,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                        ),
                       ),
-                    ),
-                    Text(
-                      '분석 결과는 별도 화면에서 정리됩니다',
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.42),
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
+                      const SizedBox(height: 3),
+                      _aiAnalysisLastAtLabel(cs),
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '분석 화면으로 이동한 뒤 기록을 먼저 확인하고, 없을 때만 새 분석을 생성합니다.',
-            style: TextStyle(
-              color: cs.onSurface.withValues(alpha: 0.62),
-              fontSize: 13,
-              height: 1.55,
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: accent,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '보기',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      SizedBox(width: 3),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 14,
+                        color: Colors.white,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: _openAiAnalysisScreen,
-              icon: const Icon(Icons.psychology_alt_outlined, size: 18),
-              label: const Text('AI 분석 보기'),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF10B981),
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(42),
-                textStyle: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -2051,26 +2102,53 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     );
   }
 
-  Widget _compareButton(BuildContext context, ColorScheme cs) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => StockCompareScreen(basePick: widget.pick),
-          ),
-        ),
-        icon: const Icon(Icons.compare_arrows, size: 18),
-        label: const Text('다른 종목이랑 비교하기'),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: cs.onSurface.withValues(alpha: 0.78),
-          backgroundColor: cs.onSurface.withValues(alpha: 0.04),
-          side: BorderSide(color: cs.onSurface.withValues(alpha: 0.14)),
-          minimumSize: const Size.fromHeight(44),
-          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-          shape: RoundedRectangleBorder(
+  Widget _stockActionChip({
+    required ColorScheme cs,
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+    bool loading = false,
+  }) {
+    final fg = cs.onSurface.withValues(alpha: onTap == null ? 0.35 : 0.78);
+    return Material(
+      color: cs.onSurface.withValues(alpha: 0.04),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 12),
+          decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: cs.onSurface.withValues(alpha: 0.12),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (loading)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF10B981),
+                  ),
+                )
+              else
+                Icon(icon, size: 17, color: fg),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -2865,15 +2943,15 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                 children: [
                   UserLevelAvatar(
                     uid: comment.uid,
-                    radius: 18,
+                    radius: 10,
                     backgroundColor: cs.onSurface.withValues(alpha: 0.07),
                     textStyle: TextStyle(
                       color: cs.onSurface.withValues(alpha: 0.55),
-                      fontSize: 11,
+                      fontSize: 8,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2984,7 +3062,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                 ],
               ),
               Padding(
-                padding: const EdgeInsets.only(left: 46, top: 8),
+                padding: const EdgeInsets.only(left: 34, top: 8),
                 child: Text(
                   comment.content,
                   style: TextStyle(

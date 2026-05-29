@@ -32,6 +32,7 @@ import 'my_comments_screen.dart';
 import 'my_posts_screen.dart';
 import 'notification_history_screen.dart';
 import 'post_detail_screen.dart';
+import 'stock_ai_analysis_list_screen.dart';
 import 'stock_compare_screen.dart';
 import 'stock_detail_screen.dart';
 import 'stock_search_screen.dart';
@@ -593,6 +594,10 @@ class _HomeScreenState extends State<HomeScreen>
       openStockCompare: () => _openStandalonePage(
         title: '종목 비교',
         child: const StockCompareScreen(),
+      ),
+      openAiAnalysisList: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const StockAiAnalysisListScreen()),
       ),
       watchRewardAd: () => _confirmAndWatchRewardAd(auth),
       onTopStateChanged: (_) {},
@@ -1376,6 +1381,7 @@ class _DashboardHomePage extends StatefulWidget {
     required this.openInvestorFlow,
     required this.openMarketSentiment,
     required this.openStockCompare,
+    required this.openAiAnalysisList,
     required this.watchRewardAd,
     required this.onTopStateChanged,
     required this.topActions,
@@ -1398,6 +1404,7 @@ class _DashboardHomePage extends StatefulWidget {
   final VoidCallback openInvestorFlow;
   final VoidCallback openMarketSentiment;
   final VoidCallback openStockCompare;
+  final VoidCallback openAiAnalysisList;
   final VoidCallback watchRewardAd;
   final ValueChanged<bool> onTopStateChanged;
   final List<Widget> topActions;
@@ -1615,6 +1622,7 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                     openAnnouncements: widget.openAnnouncements,
                     openStockCompare: widget.openStockCompare,
                     openStockSearch: widget.openStockSearch,
+                    openAiAnalysisList: widget.openAiAnalysisList,
                   ),
                 ),
               ],
@@ -1722,8 +1730,6 @@ class _LatestAnnouncementStrip extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(Icons.campaign_rounded, color: _homeAccent, size: 18),
-                const SizedBox(width: 9),
                 Text(
                   '📢 공지',
                   style: _homeText(
@@ -5433,6 +5439,7 @@ class _QuickMenu extends StatelessWidget {
     required this.openAnnouncements,
     required this.openStockCompare,
     required this.openStockSearch,
+    required this.openAiAnalysisList,
   });
 
   final VoidCallback openMarketAnalysis;
@@ -5445,6 +5452,7 @@ class _QuickMenu extends StatelessWidget {
   final VoidCallback openAnnouncements;
   final VoidCallback openStockCompare;
   final VoidCallback openStockSearch;
+  final VoidCallback openAiAnalysisList;
 
   @override
   Widget build(BuildContext context) {
@@ -5475,6 +5483,12 @@ class _QuickMenu extends StatelessWidget {
               icon: Icons.show_chart_rounded,
               label: '운영자 추천주',
               onTap: openStockPicks,
+              emphasized: true,
+            ),
+            _QuickMenuTile(
+              icon: Icons.auto_awesome,
+              label: 'AI 분석 기록',
+              onTap: openAiAnalysisList,
               emphasized: true,
             ),
             _QuickMenuTile(

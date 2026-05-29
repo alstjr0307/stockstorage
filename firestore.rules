@@ -93,6 +93,10 @@ service cloud.firestore {
         allow read, write: if isLoggedIn() && request.auth.uid == uid;
       }
 
+      match /ai_quota/{dateKey} {
+        allow read, write: if isLoggedIn() && request.auth.uid == uid;
+      }
+
       match /votes/{pickId} {
         allow read, write: if isLoggedIn() && request.auth.uid == uid;
       }

@@ -50,6 +50,28 @@ class AdService {
     return 'ca-app-pub-6925657557995580/2656065066';
   }
 
+  static String get _aiAnalysisInterstitialAdUnitId {
+    if (kIsWeb) return '';
+    if (_useTestAds) {
+      return Platform.isAndroid
+          ? 'ca-app-pub-3940256099942544/1033173712'
+          : 'ca-app-pub-3940256099942544/4411468910';
+    }
+    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/1747945525';
+    return 'ca-app-pub-6925657557995580/6808700518';
+  }
+
+  static String get _aiAnalysisListBannerAdUnitId {
+    if (kIsWeb) return '';
+    if (_useTestAds) {
+      return Platform.isAndroid
+          ? 'ca-app-pub-3940256099942544/6300978111'
+          : 'ca-app-pub-3940256099942544/2934735716';
+    }
+    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/3496141466';
+    return 'ca-app-pub-6925657557995580/2550421535';
+  }
+
   static String get _marketAnalysisMidBannerAdUnitId {
     if (kIsWeb) return '';
     if (_useTestAds) {
@@ -61,6 +83,7 @@ class AdService {
     return 'ca-app-pub-6925657557995580/3939218968';
   }
 
+  // 경험치(XP) 보상형 광고
   static String get _rewardedAdUnitId {
     if (kIsWeb) return '';
     if (_useTestAds) {
@@ -72,11 +95,25 @@ class AdService {
     return 'ca-app-pub-6925657557995580/2080405446';
   }
 
+  // AI 분석 전용 보상형 광고
+  static String get _aiAnalysisRewardedAdUnitId {
+    if (kIsWeb) return '';
+    if (_useTestAds) {
+      return Platform.isAndroid
+          ? 'ca-app-pub-3940256099942544/5224354917'
+          : 'ca-app-pub-3940256099942544/1712485313';
+    }
+    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/7513305300';
+    return 'ca-app-pub-6925657557995580/2524172276';
+  }
+
   // ── 배너 광고 ─────────────────────────────────────────────────────────
   static bool get adsEnabled => _adsEnabled;
   static String get bannerAdUnitId => _bannerAdUnitId;
   static String get marketAnalysisMidBannerAdUnitId =>
       _marketAnalysisMidBannerAdUnitId;
+  static String get aiAnalysisListBannerAdUnitId =>
+      _aiAnalysisListBannerAdUnitId;
 
   // ── 전면 광고 ─────────────────────────────────────────────────────────
   InterstitialAd? _stockInterstitialAd;
@@ -85,15 +122,21 @@ class AdService {
   InterstitialAd? _indicatorInterstitialAd;
   bool _isIndicatorInterstitialReady = false;
   bool _isIndicatorInterstitialLoading = false;
+  InterstitialAd? _aiAnalysisInterstitialAd;
+  bool _isAiAnalysisInterstitialReady = false;
+  bool _isAiAnalysisInterstitialLoading = false;
   bool _stockInterstitialConsumed = false;
   bool _pendingStockInterstitial = false;
   bool _pendingIndicatorInterstitial = false;
+  bool _pendingAiAnalysisInterstitial = false;
   int _indicatorDetailOpenCount = 0;
+  int _aiAnalysisDetailOpenCount = 0;
   static const int _interstitialEvery = 3; // 3번 중 1번만 전면광고
 
   void loadInterstitial() {
     _loadStockInterstitial();
     _loadIndicatorInterstitial();
+    _loadAiAnalysisInterstitial();
   }
 
   void _loadStockInterstitial() {
@@ -236,14 +279,91 @@ class AdService {
     AnalyticsService.instance.logAdInterstitialShown();
   }
 
-  Future<bool> showRewardedAdAndWaitReward() async {
+  void showAiAnalysisDetailInterstitialIfReady() {
+    if (!_adsEnabled || _shouldBlockByAdmin) return;
+    _aiAnalysisDetailOpenCount++;
+    if (_aiAnalysisDetailOpenCount == 1) return; // 첫 진입은 광고 스킵
+    if ((_aiAnalysisDetailOpenCount - 2) % _interstitialEvery != 0) return;
+    if (!_isAiAnalysisInterstitialReady || _aiAnalysisInterstitialAd == null) {
+      _pendingAiAnalysisInterstitial = true;
+      _loadAiAnalysisInterstitial();
+      return;
+    }
+    _pendingAiAnalysisInterstitial = false;
+    _showLoadedAiAnalysisInterstitial();
+  }
+
+  void _loadAiAnalysisInterstitial() {
+    if (kIsWeb || !_adsEnabled) return;
+    if (_isAiAnalysisInterstitialLoading) return;
+    if (_isAiAnalysisInterstitialReady && _aiAnalysisInterstitialAd != null) {
+      return;
+    }
+    _isAiAnalysisInterstitialLoading = true;
+    InterstitialAd.load(
+      adUnitId: _aiAnalysisInterstitialAdUnitId,
+      request: const AdRequest(),
+      adLoadCallback: InterstitialAdLoadCallback(
+        onAdLoaded: (ad) {
+          _isAiAnalysisInterstitialLoading = false;
+          _aiAnalysisInterstitialAd?.dispose();
+          _aiAnalysisInterstitialAd = ad;
+          _isAiAnalysisInterstitialReady = true;
+          ad.fullScreenContentCallback = FullScreenContentCallback(
+            onAdDismissedFullScreenContent: (ad) {
+              ad.dispose();
+              _aiAnalysisInterstitialAd = null;
+              _isAiAnalysisInterstitialReady = false;
+              _loadAiAnalysisInterstitial();
+            },
+            onAdFailedToShowFullScreenContent: (ad, error) {
+              ad.dispose();
+              _aiAnalysisInterstitialAd = null;
+              _isAiAnalysisInterstitialReady = false;
+              _isAiAnalysisInterstitialLoading = false;
+              _loadAiAnalysisInterstitial();
+            },
+          );
+          if (_pendingAiAnalysisInterstitial &&
+              !_shouldBlockByAdmin &&
+              _adsEnabled) {
+            _pendingAiAnalysisInterstitial = false;
+            _showLoadedAiAnalysisInterstitial();
+          }
+        },
+        onAdFailedToLoad: (_) {
+          _isAiAnalysisInterstitialLoading = false;
+          _isAiAnalysisInterstitialReady = false;
+          _pendingAiAnalysisInterstitial = false;
+        },
+      ),
+    );
+  }
+
+  void _showLoadedAiAnalysisInterstitial() {
+    if (!_isAiAnalysisInterstitialReady || _aiAnalysisInterstitialAd == null) {
+      return;
+    }
+    _aiAnalysisInterstitialAd!.show();
+    AnalyticsService.instance.logAdInterstitialShown();
+  }
+
+  Future<bool> showRewardedAdAndWaitReward() {
+    return _showRewardedAd(_rewardedAdUnitId);
+  }
+
+  Future<bool> showAiAnalysisRewardedAd() {
+    return _showRewardedAd(_aiAnalysisRewardedAdUnitId);
+  }
+
+  Future<bool> _showRewardedAd(String adUnitId) async {
     if (kIsWeb || !_adsEnabled || _shouldBlockByAdmin) return false;
 
     final completer = Completer<bool>();
     var earnedReward = false;
 
     RewardedAd.load(
-      adUnitId: _rewardedAdUnitId,
+      adUnitId: adUnitId,
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) {

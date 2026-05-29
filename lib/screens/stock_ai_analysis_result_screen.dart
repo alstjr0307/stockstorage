@@ -2,13 +2,17 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:ui' as ui;
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/stock_pick.dart';
+import '../services/ai_analysis_ad_gate.dart';
 import '../services/firestore_service.dart';
+// AdGate은 새로고침 버튼에서 사용
 import '../services/stock_price_service.dart';
 
 class StockAiAnalysisResultScreen extends StatefulWidget {
@@ -18,6 +22,10 @@ class StockAiAnalysisResultScreen extends StatefulWidget {
   final List<Map<String, dynamic>> candles;
   final List<StockNews> news;
 
+  /// 진입 시 캐시를 무시하고 곧바로 새 분석을 생성할지 여부.
+  /// 광고 게이트를 이미 통과한 진입(목록 FAB, 종목 상세에서 캐시 없는 경우)에서 true로 넘긴다.
+  final bool forceFresh;
+
   const StockAiAnalysisResultScreen({
     super.key,
     required this.pick,
@@ -25,6 +33,7 @@ class StockAiAnalysisResultScreen extends StatefulWidget {
     this.fundamentals,
     this.candles = const [],
     this.news = const [],
+    this.forceFresh = false,
   });
 
   @override
@@ -126,6 +135,7 @@ class _StockAiAnalysisResultScreenState
     extends State<StockAiAnalysisResultScreen> {
   final _firestore = FirestoreService();
   Timer? _timer;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _backgroundSub;
   StockAiAnalysisResult? _analysis;
   _AiTechnicalMetrics? _technicalMetrics;
   List<Map<String, dynamic>> _analysisCandlesForChart = const [];
@@ -133,6 +143,9 @@ class _StockAiAnalysisResultScreenState
   bool _fromCache = false;
   int _elapsedSeconds = 0;
   String? _error;
+  PriceResult? _price;
+  FundamentalsResult? _fundamentals;
+  List<StockNews> _news = const [];
 
   static const _loadingMessages = [
     '개인 기록에서 기존 분석을 확인하고 있어요',
@@ -148,12 +161,43 @@ class _StockAiAnalysisResultScreenState
   @override
   void initState() {
     super.initState();
-    _loadOrGenerate();
+    _price = widget.price;
+    _fundamentals = widget.fundamentals;
+    _news = widget.news;
+    _loadOrGenerate(forceRefresh: widget.forceFresh);
+    // 리스트/딥링크에서 진입한 경우 price/fundamentals가 비어 있을 수 있으므로
+    // 백그라운드에서 보강 fetch — 분석 본문 로딩과 병렬로 진행.
+    _hydrateMarketDataIfNeeded();
+  }
+
+  Future<void> _hydrateMarketDataIfNeeded() async {
+    if (_price != null && _fundamentals != null) return;
+    final ticker = widget.pick.ticker;
+    final market = widget.pick.market;
+    final futures = <Future<void>>[];
+    if (_price == null) {
+      futures.add(
+        StockPriceService.fetchPrice(ticker, market).then((p) {
+          if (!mounted || p == null) return;
+          setState(() => _price = p);
+        }).catchError((_) {}),
+      );
+    }
+    if (_fundamentals == null) {
+      futures.add(
+        StockPriceService.fetchFundamentals(ticker, market).then((f) {
+          if (!mounted || f == null) return;
+          setState(() => _fundamentals = f);
+        }).catchError((_) {}),
+      );
+    }
+    if (futures.isNotEmpty) await Future.wait(futures);
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _backgroundSub?.cancel();
     super.dispose();
   }
 
@@ -188,9 +232,8 @@ class _StockAiAnalysisResultScreenState
     _startTimer();
 
     try {
-      final candles = await _analysisCandles();
-      final metrics = _AiTechnicalMetrics.fromCandles(candles);
-
+      // 캐시를 먼저 확인 — 있으면 OHLC fetch를 기다리지 않고 즉시 표시하고
+      // 차트용 candles는 백그라운드로 보강한다.
       if (!forceRefresh) {
         final cached = await _firestore.getStockAiAnalysis(
           user.uid,
@@ -201,29 +244,36 @@ class _StockAiAnalysisResultScreenState
           _stopTimer();
           setState(() {
             _analysis = cached;
-            _technicalMetrics = metrics;
-            _analysisCandlesForChart = candles;
             _fromCache = true;
             _loading = false;
           });
+          unawaited(_hydrateCandlesInBackground());
           return;
         }
       }
 
-      final result = await StockPriceService.generateStockAiAnalysis(
-        ticker: widget.pick.ticker,
-        name: widget.pick.name,
-        market: widget.pick.market,
-        price: widget.price,
-        fundamentals: widget.fundamentals,
+      final candles = await _analysisCandles();
+      final metrics = _AiTechnicalMetrics.fromCandles(candles);
+
+      // 뉴스가 비어 있으면 분석 직전에 한 번 가져온다 — 근거 소스의 뉴스 누락 방지.
+      if (_news.isEmpty) {
+        try {
+          final fetched = await StockPriceService.fetchNews(
+            widget.pick.ticker,
+            widget.pick.market,
+            name: widget.pick.name,
+          ).timeout(const Duration(seconds: 6));
+          if (mounted && fetched.isNotEmpty) {
+            setState(() => _news = fetched);
+          }
+        } catch (_) {
+          // 실패해도 분석은 진행 (sourceNews만 비게 됨)
+        }
+      }
+
+      final result = await _generateWithBackgroundFallback(
+        uid: user.uid,
         candles: candles,
-        news: widget.news,
-      );
-      await _firestore.saveStockAiAnalysis(
-        user.uid,
-        _analysisId,
-        result,
-        pick: widget.pick,
       );
       if (!mounted) return;
       _stopTimer();
@@ -243,6 +293,98 @@ class _StockAiAnalysisResultScreenState
         _loading = false;
         _error = 'AI 분석을 불러오지 못했습니다.\n${e.toString()}';
       });
+    }
+  }
+
+  /// 함수 호출과 Firestore 문서 변경을 동시에 기다린다.
+  /// 사용자가 앱을 백그라운드로 보내거나 연결이 끊겨도, 서버는 결과를
+  /// `users/{uid}/stock_ai_analyses/{analysisId}`에 직접 저장하므로
+  /// Firestore 스냅샷이 도착하면 그 값을 사용한다.
+  Future<StockAiAnalysisResult> _generateWithBackgroundFallback({
+    required String uid,
+    required List<Map<String, dynamic>> candles,
+  }) async {
+    final startedAt = DateTime.now();
+    final completer = Completer<StockAiAnalysisResult>();
+
+    final docRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('stock_ai_analyses')
+        .doc(_analysisId);
+
+    await _backgroundSub?.cancel();
+    _backgroundSub = docRef.snapshots().listen((snap) {
+      if (completer.isCompleted) return;
+      final data = snap.data();
+      if (data == null) return;
+      final updatedAt = (data['updatedAt'] as Timestamp?)?.toDate();
+      // 이전에 저장된 캐시는 무시 — 이번 호출보다 새 문서만 사용
+      if (updatedAt == null ||
+          updatedAt.isBefore(
+            startedAt.subtract(const Duration(seconds: 2)),
+          )) {
+        return;
+      }
+      completer.complete(
+        StockAiAnalysisResult.fromMap(Map<String, dynamic>.from(data)),
+      );
+    });
+
+    // 함수 호출은 await 하지 않고 future로 둠 — listener와 경쟁
+    unawaited(
+      StockPriceService.generateStockAiAnalysis(
+        ticker: widget.pick.ticker,
+        name: widget.pick.name,
+        market: widget.pick.market,
+        price: _price ?? widget.price,
+        fundamentals: _fundamentals ?? widget.fundamentals,
+        candles: candles,
+        news: _news,
+      ).then((result) {
+        if (!completer.isCompleted) completer.complete(result);
+      }).catchError((Object e, StackTrace st) {
+        // deadline-exceeded / unavailable 등 전송 계층 에러는 서버가 계속
+        // 실행 중일 가능성이 있으므로 listener를 그대로 두고 기다린다.
+        // 서버 측 에러(internal 등)는 listener가 안 울리므로 아래 timeout이 잡는다.
+        debugPrint(
+          'generateStockAiAnalysis call failed (will keep listening): $e',
+        );
+        if (e is FirebaseFunctionsException) {
+          const transientCodes = {
+            'deadline-exceeded',
+            'unavailable',
+            'cancelled',
+            'aborted',
+            'unknown',
+          };
+          if (!transientCodes.contains(e.code) && !completer.isCompleted) {
+            completer.completeError(e, st);
+          }
+        }
+      }),
+    );
+
+    try {
+      // 서버 타임아웃(540s) + 약간의 버퍼
+      return await completer.future.timeout(const Duration(seconds: 560));
+    } finally {
+      await _backgroundSub?.cancel();
+      _backgroundSub = null;
+    }
+  }
+
+  Future<void> _hydrateCandlesInBackground() async {
+    try {
+      final candles = await _analysisCandles();
+      if (!mounted || candles.isEmpty) return;
+      final metrics = _AiTechnicalMetrics.fromCandles(candles);
+      setState(() {
+        _analysisCandlesForChart = candles;
+        _technicalMetrics = metrics;
+      });
+    } catch (_) {
+      // 차트 보강 실패는 무시 — 본문은 이미 표시됨
     }
   }
 
@@ -317,7 +459,13 @@ class _StockAiAnalysisResultScreenState
                 color: cs.onSurface.withValues(alpha: 0.62),
                 size: 20,
               ),
-              onPressed: () => _loadOrGenerate(forceRefresh: true),
+              onPressed: () async {
+                final user = FirebaseAuth.instance.currentUser;
+                if (user == null) return;
+                final passed = await AiAnalysisAdGate.run(context, user.uid);
+                if (!passed || !mounted) return;
+                await _loadOrGenerate(forceRefresh: true);
+              },
             ),
         ],
       ),
@@ -351,8 +499,8 @@ class _StockAiAnalysisResultScreenState
     return _AnalysisContent(
       pick: widget.pick,
       analysis: analysis,
-      price: widget.price,
-      fundamentals: widget.fundamentals,
+      price: _price ?? widget.price,
+      fundamentals: _fundamentals ?? widget.fundamentals,
       fromCache: _fromCache,
       technicalMetrics: _technicalMetrics,
       candles: _analysisCandlesForChart,
@@ -452,7 +600,7 @@ class _LoadingAnalysisView extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              '$elapsedSeconds초 경과',
+              '$elapsedSeconds초 경과 (평균 1분 소요됨)',
               style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.5),
                 fontSize: 12,

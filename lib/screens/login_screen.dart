@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../services/firestore_service.dart';
+import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.fromOnboarding = false});
+
+  final bool fromOnboarding;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -35,10 +38,33 @@ class _LoginScreenState extends State<LoginScreen> {
       appBar: AppBar(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: cs.onSurface, size: 18),
-          onPressed: () => Navigator.pop(context),
-        ),
+        automaticallyImplyLeading: !widget.fromOnboarding,
+        leading: widget.fromOnboarding
+            ? null
+            : IconButton(
+                icon: Icon(
+                  Icons.arrow_back_ios,
+                  color: cs.onSurface,
+                  size: 18,
+                ),
+                onPressed: () => Navigator.pop(context),
+              ),
+        actions: widget.fromOnboarding
+            ? [
+                TextButton(
+                  onPressed: _skipToHome,
+                  child: Text(
+                    '건너뛰기',
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.55),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ]
+            : null,
       ),
       body: SafeArea(
         child: Padding(
@@ -300,6 +326,22 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  void _onAuthSuccess() {
+    if (widget.fromOnboarding) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    } else {
+      Navigator.pop(context);
+    }
+  }
+
+  void _skipToHome() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+    );
+  }
+
   Future<void> _signInWithGoogle() async {
     setState(() => _isLoading = true);
     try {
@@ -311,7 +353,7 @@ class _LoginScreenState extends State<LoginScreen> {
           await _showNicknameDialog(user.uid);
         }
       }
-      if (mounted) Navigator.pop(context);
+      if (mounted) _onAuthSuccess();
     } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -336,7 +378,7 @@ class _LoginScreenState extends State<LoginScreen> {
           await _showNicknameDialog(user.uid);
         }
       }
-      if (mounted) Navigator.pop(context);
+      if (mounted) _onAuthSuccess();
     } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -361,7 +403,7 @@ class _LoginScreenState extends State<LoginScreen> {
           await _showNicknameDialog(user.uid);
         }
       }
-      if (mounted) Navigator.pop(context);
+      if (mounted) _onAuthSuccess();
     } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -399,7 +441,7 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       }
-      if (mounted) Navigator.pop(context);
+      if (mounted) _onAuthSuccess();
     } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -1604,6 +1604,24 @@ class FirestoreService {
     );
   }
 
+  /// 사용자가 메모를 남긴 모든 종목/픽 ID 집합. AI 분석 카드의 📝 인디케이터용.
+  /// 일반 종목 메모는 `stock_{MARKET}_{TICKER}` prefix로 저장돼 있어 AI 분석 ID
+  /// (`{MARKET}_{TICKER}`)와 매칭시키려면 prefix를 떼고 정규화한다.
+  Stream<Set<String>> watchMemoIds(String uid) {
+    if (uid.isEmpty) return Stream.value(<String>{});
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('memos')
+        .snapshots()
+        .map(
+          (snap) => snap.docs.map((d) {
+            final id = d.id;
+            return id.startsWith('stock_') ? id.substring(6) : id;
+          }).toSet(),
+        );
+  }
+
   // ── 개인별 AI 종목 분석 기록 (users/{uid}/stock_ai_analyses/{pickId}) ─────
   Future<StockAiAnalysisResult?> getStockAiAnalysis(
     String uid,
@@ -1638,6 +1656,47 @@ class FirestoreService {
           'market': pick.market,
           'updatedAt': Timestamp.fromDate(DateTime.now()),
         }, SetOptions(merge: true));
+  }
+
+  /// 특정 종목 AI 분석의 마지막 갱신 시각만 가볍게 스트림으로 받는다.
+  /// 종목 상세 화면에서 "마지막 분석 시각" 표시용.
+  Stream<DateTime?> watchStockAiAnalysisUpdatedAt(
+    String uid,
+    String analysisId,
+  ) {
+    if (uid.isEmpty || analysisId.isEmpty) return Stream.value(null);
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('stock_ai_analyses')
+        .doc(analysisId)
+        .snapshots()
+        .map((doc) => (doc.data()?['updatedAt'] as Timestamp?)?.toDate());
+  }
+
+  Stream<List<StockAiAnalysisSummary>> watchStockAiAnalyses(String uid) {
+    if (uid.isEmpty) return Stream.value(const []);
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('stock_ai_analyses')
+        .orderBy('updatedAt', descending: true)
+        .limit(200)
+        .snapshots()
+        .map(
+          (snap) => snap.docs
+              .map((d) => StockAiAnalysisSummary.fromDoc(d))
+              .toList(),
+        );
+  }
+
+  Future<void> deleteStockAiAnalysis(String uid, String analysisId) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('stock_ai_analyses')
+        .doc(analysisId)
+        .delete();
   }
 
   // ── pick 실시간 스트림 (투표 카운트 반영) ──────────────────────────────────
@@ -2298,5 +2357,48 @@ class FirestoreService {
       if (parsed.topMentions.isNotEmpty) return parsed;
     }
     return null;
+  }
+}
+
+/// AI 분석 목록에서 보여줄 요약 정보. 전체 payload를 파싱하지 않고
+/// 카드에 필요한 필드만 빠르게 읽는다.
+class StockAiAnalysisSummary {
+  final String analysisId;
+  final String ticker;
+  final String name;
+  final String market;
+  final String summary;
+  final double? score;
+  final String scoreLabel;
+  final DateTime? updatedAt;
+  final double? analysisPrice;
+
+  const StockAiAnalysisSummary({
+    required this.analysisId,
+    required this.ticker,
+    required this.name,
+    required this.market,
+    required this.summary,
+    required this.score,
+    required this.scoreLabel,
+    required this.updatedAt,
+    required this.analysisPrice,
+  });
+
+  factory StockAiAnalysisSummary.fromDoc(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data() ?? const <String, dynamic>{};
+    return StockAiAnalysisSummary(
+      analysisId: doc.id,
+      ticker: (data['ticker'] as String? ?? '').trim(),
+      name: (data['name'] as String? ?? '').trim(),
+      market: (data['market'] as String? ?? '').trim(),
+      summary: (data['summary'] as String? ?? '').trim(),
+      score: (data['score'] as num?)?.toDouble(),
+      scoreLabel: (data['scoreLabel'] as String? ?? '').trim(),
+      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
+      analysisPrice: (data['analysisPrice'] as num?)?.toDouble(),
+    );
   }
 }

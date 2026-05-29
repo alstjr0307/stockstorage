@@ -1300,7 +1300,7 @@ class StockPriceService {
     final fn = FirebaseFunctions.instanceFor(region: 'asia-northeast3')
         .httpsCallable(
           'generateStockAiAnalysis',
-          options: HttpsCallableOptions(timeout: const Duration(seconds: 120)),
+          options: HttpsCallableOptions(timeout: const Duration(seconds: 540)),
         );
     final res = await fn.call({
       'stock': {'ticker': ticker, 'name': name, 'market': market},
