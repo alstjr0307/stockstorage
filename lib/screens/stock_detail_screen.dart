@@ -16,6 +16,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/comment.dart';
 import '../models/stock_pick.dart';
 import '../services/ad_service.dart';
+import '../services/ai_analysis_ad_gate.dart';
 import '../services/analytics_service.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
@@ -610,21 +611,41 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   }
 
   Future<void> _openAiAnalysisScreen() async {
-    if (_currentUser == null) {
+    final user = _currentUser;
+    if (user == null) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('로그인 후 AI 분석을 사용할 수 있습니다.')));
       return;
     }
+
+    // 캐시된 분석이 있으면 그대로 보여주고, 없을 때만 광고 + 일일 한도 게이트를 통과시킨다.
+    final analysisId = FirestoreService.favoriteStockKey(
+      widget.pick.market,
+      widget.pick.ticker,
+    );
+    final cached = await FirestoreService().getStockAiAnalysis(
+      user.uid,
+      analysisId,
+    );
+    if (!mounted) return;
+
+    if (cached == null) {
+      final passed = await AiAnalysisAdGate.run(context, user.uid);
+      if (!passed || !mounted) return;
+    }
+
     await Navigator.push(
       context,
       MaterialPageRoute(
+        settings: RouteSettings(name: 'stock-ai-analysis:$analysisId'),
         builder: (_) => StockAiAnalysisResultScreen(
           pick: widget.pick,
           price: _livePrice,
           fundamentals: _fundamentals,
           candles: _analysisCandles(),
           news: _news,
+          forceFresh: cached == null,
         ),
       ),
     );

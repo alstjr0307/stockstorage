@@ -284,23 +284,43 @@ class NotificationService {
   }) async {
     await _waitForNavigatorContext();
     if (ticker.isEmpty) return;
+    final navigator = navigatorKey.currentState;
+    if (navigator == null) return;
+
     final normalizedMarket = market.trim().toUpperCase();
     final normalizedTicker = ticker.trim().toUpperCase();
+    final resolvedMarket = normalizedMarket.isEmpty ? 'KS' : normalizedMarket;
+    final analysisId = '${resolvedMarket}_$normalizedTicker';
+    final routeName = 'stock-ai-analysis:$analysisId';
+
+    // 같은 종목 분석 화면이 이미 스택에 있으면 새로 push하지 않고 그 화면으로 돌아간다.
+    // (분석 중 앱을 백그라운드로 보낸 뒤 푸시 탭 → 같은 화면 두 개 쌓이는 문제 방지)
+    var foundExisting = false;
+    navigator.popUntil((route) {
+      if (route.settings.name == routeName) {
+        foundExisting = true;
+        return true;
+      }
+      return route.isFirst;
+    });
+    if (foundExisting) return;
+
     final pick = StockPick(
-      id: 'stock_${normalizedMarket}_$normalizedTicker',
+      id: 'stock_$analysisId',
       ticker: normalizedTicker,
       name: name.isEmpty ? normalizedTicker : name,
       buyPrice: 0,
       targetPrice: 0,
       reason: '',
       category: '단기',
-      market: normalizedMarket.isEmpty ? 'KS' : normalizedMarket,
+      market: resolvedMarket,
       isPremium: false,
       createdAt: DateTime.now(),
       status: 'active',
     );
-    navigatorKey.currentState?.push(
+    navigator.push(
       MaterialPageRoute(
+        settings: RouteSettings(name: routeName),
         builder: (_) => StockAiAnalysisResultScreen(pick: pick),
       ),
     );

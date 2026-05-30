@@ -140,6 +140,7 @@ class _StockAiAnalysisResultScreenState
   _AiTechnicalMetrics? _technicalMetrics;
   List<Map<String, dynamic>> _analysisCandlesForChart = const [];
   bool _loading = true;
+  bool _isGenerating = false;
   bool _fromCache = false;
   int _elapsedSeconds = 0;
   String? _error;
@@ -164,6 +165,7 @@ class _StockAiAnalysisResultScreenState
     _price = widget.price;
     _fundamentals = widget.fundamentals;
     _news = widget.news;
+    _isGenerating = widget.forceFresh;
     _loadOrGenerate(forceRefresh: widget.forceFresh);
     // 리스트/딥링크에서 진입한 경우 price/fundamentals가 비어 있을 수 있으므로
     // 백그라운드에서 보강 fetch — 분석 본문 로딩과 병렬로 진행.
@@ -226,10 +228,11 @@ class _StockAiAnalysisResultScreenState
 
     setState(() {
       _loading = true;
+      _isGenerating = forceRefresh;
       _error = null;
       _fromCache = false;
     });
-    _startTimer();
+    if (forceRefresh) _startTimer();
 
     try {
       // 캐시를 먼저 확인 — 있으면 OHLC fetch를 기다리지 않고 즉시 표시하고
@@ -250,6 +253,11 @@ class _StockAiAnalysisResultScreenState
           unawaited(_hydrateCandlesInBackground());
           return;
         }
+        // 캐시가 없어 새로 생성하는 단계로 진입 — 이제부터 화려한 로더 표시.
+        if (mounted) {
+          setState(() => _isGenerating = true);
+        }
+        _startTimer();
       }
 
       final candles = await _analysisCandles();
@@ -291,9 +299,22 @@ class _StockAiAnalysisResultScreenState
       _stopTimer();
       setState(() {
         _loading = false;
-        _error = 'AI 분석을 불러오지 못했습니다.\n${e.toString()}';
+        _error = 'AI 분석을 불러오지 못했습니다.\n${_friendlyError(e)}';
       });
     }
+  }
+
+  String _friendlyError(Object e) {
+    if (e is FirebaseFunctionsException) {
+      return e.message ?? '잠시 후 다시 시도해주세요.';
+    }
+    if (e is TimeoutException) {
+      return '응답이 너무 오래 걸려요. 잠시 후 다시 시도해주세요.';
+    }
+    final raw = e.toString();
+    // 스택트레이스가 포함된 메시지는 첫 줄만 사용
+    final firstLine = raw.split('\n').first.trim();
+    return firstLine.isEmpty ? '잠시 후 다시 시도해주세요.' : firstLine;
   }
 
   /// 함수 호출과 Firestore 문서 변경을 동시에 기다린다.
@@ -475,6 +496,16 @@ class _StockAiAnalysisResultScreenState
 
   Widget _buildBody() {
     if (_loading) {
+      if (!_isGenerating) {
+        // 캐시 확인 단계 — 짧은 시간만 노출되므로 가벼운 스피너만 보여준다.
+        return const Center(
+          child: SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(strokeWidth: 2.4),
+          ),
+        );
+      }
       final message =
           _loadingMessages[(_elapsedSeconds ~/ 3) % _loadingMessages.length];
       return _LoadingAnalysisView(

@@ -39,9 +39,11 @@ Future<void> startAiAnalysisFromSearch(
   if (!passed || !context.mounted) return;
 
   final pick = stockPickFromSearchResult(picked);
+  final analysisId = FirestoreService.favoriteStockKey(pick.market, pick.ticker);
   await Navigator.push(
     context,
     MaterialPageRoute(
+      settings: RouteSettings(name: 'stock-ai-analysis:$analysisId'),
       builder: (_) => StockAiAnalysisResultScreen(
         pick: pick,
         forceFresh: true,
@@ -411,6 +413,7 @@ class _StockAiAnalysisListScreenState extends State<StockAiAnalysisListScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
+        settings: RouteSettings(name: 'stock-ai-analysis:${item.analysisId}'),
         builder: (_) => StockAiAnalysisResultScreen(pick: pick),
       ),
     );
