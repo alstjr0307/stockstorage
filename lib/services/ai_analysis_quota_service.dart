@@ -17,10 +17,12 @@ class AiAnalysisQuotaService {
   }
 
   String _todayKey() {
-    final now = DateTime.now();
-    final y = now.year.toString().padLeft(4, '0');
-    final m = now.month.toString().padLeft(2, '0');
-    final d = now.day.toString().padLeft(2, '0');
+    // 서버는 Asia/Seoul 기준 날짜키로 카운트를 기록한다 (functions/index.js seoulDateKey).
+    // 클라이언트도 동일하게 KST(UTC+9, DST 없음)로 고정해 doc 키가 어긋나지 않도록 한다.
+    final seoul = DateTime.now().toUtc().add(const Duration(hours: 9));
+    final y = seoul.year.toString().padLeft(4, '0');
+    final m = seoul.month.toString().padLeft(2, '0');
+    final d = seoul.day.toString().padLeft(2, '0');
     return '$y-$m-$d';
   }
 
@@ -34,22 +36,14 @@ class AiAnalysisQuotaService {
 
   Stream<int> watchUsedToday(String uid) {
     if (uid.isEmpty) return Stream.value(0);
-    return _docRef(uid)
-        .snapshots()
-        .map((doc) => (doc.data()?['count'] as num?)?.toInt() ?? 0);
+    return _docRef(
+      uid,
+    ).snapshots().map((doc) => (doc.data()?['count'] as num?)?.toInt() ?? 0);
   }
 
   Future<int> getUsedToday(String uid) async {
     if (uid.isEmpty) return 0;
     final doc = await _docRef(uid).get();
     return (doc.data()?['count'] as num?)?.toInt() ?? 0;
-  }
-
-  Future<void> consumeOne(String uid) async {
-    if (uid.isEmpty) return;
-    await _docRef(uid).set({
-      'count': FieldValue.increment(1),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
   }
 }

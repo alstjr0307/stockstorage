@@ -33,6 +33,10 @@ class AuthProvider extends ChangeNotifier {
     _notify();
   }
 
+  Future<void> sendPasswordResetEmail(String email) async {
+    await _authService.sendPasswordResetEmail(email);
+  }
+
   Future<User?> signUp(String email, String password) async {
     final cred = await _authService.signUpWithEmail(email, password);
     _notify();

@@ -52,7 +52,7 @@ class _WritePostScreenState extends State<WritePostScreen> {
   final List<Object> _blocks = []; // _TextBlock | _ImageBlock
   _TextBlock? _lastFocused;
   bool _saving = false;
-  static const _maxImages = 5;
+  static const _maxImages = 10;
   static final RegExp _imageRegex = RegExp(r'!\[[^\]]*\]\(([^)]+)\)');
 
   @override
@@ -280,7 +280,9 @@ class _WritePostScreenState extends State<WritePostScreen> {
 
   void _showMaxSnack() => ScaffoldMessenger.of(
     context,
-  ).showSnackBar(const SnackBar(content: Text('사진은 최대 5장까지 첨부할 수 있습니다')));
+  ).showSnackBar(
+    SnackBar(content: Text('사진은 최대 $_maxImages장까지 첨부할 수 있습니다')),
+  );
 
   void _showImageSourceSheet() {
     final cs = Theme.of(context).colorScheme;

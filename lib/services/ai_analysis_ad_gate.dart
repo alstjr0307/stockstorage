@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 
 import 'ad_service.dart';
 import 'ai_analysis_quota_service.dart';
+import 'auth_service.dart';
 import 'firestore_service.dart';
+import 'subscription_service.dart';
 
 /// 새 AI 분석을 실행하기 전 광고 + 쿼터 게이트.
 /// 어느 진입점(목록 FAB / 종목 상세 / 재분석 버튼)에서든 동일하게 사용.
@@ -22,18 +24,24 @@ class AiAnalysisAdGate {
   /// 진행 가능하면 true. 릴리즈 빌드에서 관리자는 우회(디버그에서는 테스트 광고 확인을 위해 정상 진행).
   static Future<bool> run(BuildContext context, String uid) async {
     if (_bypassAll) return true;
-    if (AdService.isAdmin && !kDebugMode) return true;
+    final isAdmin =
+        AdService.isAdmin || AuthService.adminUids.contains(uid);
+    if (isAdmin && !kDebugMode) return true;
 
     final firestore = FirestoreService();
     final quota = AiAnalysisQuotaService.instance;
+    final isPremium = SubscriptionService.instance.isPremium;
 
     final level = await firestore.watchPublicUserLevel(uid).first;
 
     int used = 0;
     int limit = 0;
-    if (!_bypassQuota) {
+    // 운영자는 디버그 빌드에서도 쿼터 검사를 건너뛴다 (광고 노출만 정상 진행).
+    if (!_bypassQuota && !isAdmin) {
       used = await quota.getUsedToday(uid);
-      limit = AiAnalysisQuotaService.dailyLimitForLevel(level);
+      limit = isPremium
+          ? SubscriptionService.premiumDailyAiLimit
+          : AiAnalysisQuotaService.dailyLimitForLevel(level);
       if (!context.mounted) return false;
       if (used >= limit) {
         await _showQuotaExhausted(context, level: level, limit: limit);
@@ -42,6 +50,7 @@ class AiAnalysisAdGate {
     }
 
     if (!context.mounted) return false;
+    if (isPremium) return true;
 
     final confirmed = await _showConfirm(
       context,
@@ -52,20 +61,70 @@ class AiAnalysisAdGate {
     );
     if (confirmed != true || !context.mounted) return false;
 
-    final rewarded = await AdService.instance.showAiAnalysisRewardedAd();
-    if (!rewarded) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('광고를 끝까지 시청해야 분석을 시작할 수 있어요.')),
-        );
-      }
-      return false;
+    final navigator = Navigator.of(context, rootNavigator: true);
+    var loadingShown = true;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: _buildLoadingDialog,
+    );
+
+    void dismissLoadingIfShown() {
+      if (!loadingShown) return;
+      loadingShown = false;
+      if (navigator.canPop()) navigator.pop();
     }
 
-    if (!_bypassQuota) {
-      await quota.consumeOne(uid);
+    final result = await AdService.instance.showAiAnalysisRewardedAd(
+      onAdLoaded: dismissLoadingIfShown,
+    );
+    dismissLoadingIfShown();
+
+    if (result == RewardedAdResult.rewarded) return true;
+
+    if (context.mounted) {
+      final message = switch (result) {
+        RewardedAdResult.failedToLoad =>
+          '지금 광고를 불러올 수 없어요. 잠시 후 다시 시도해주세요.',
+        RewardedAdResult.dismissedEarly => '광고를 끝까지 시청해야 분석을 시작할 수 있어요.',
+        RewardedAdResult.rewarded => '',
+      };
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
-    return true;
+    return false;
+  }
+
+  static Widget _buildLoadingDialog(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return AlertDialog(
+      backgroundColor: isDark ? const Color(0xFF1A2035) : Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      content: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.4,
+              color: Color(0xFF10B981),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Flexible(
+            child: Text(
+              '광고 준비 중…',
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black87,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   static Future<bool?> _showConfirm(
@@ -157,9 +216,7 @@ class AiAnalysisAdGate {
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
               '취소',
-              style: TextStyle(
-                color: isDark ? Colors.white54 : Colors.black45,
-              ),
+              style: TextStyle(color: isDark ? Colors.white54 : Colors.black45),
             ),
           ),
           FilledButton.icon(

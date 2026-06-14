@@ -10,6 +10,7 @@ import 'write_post_screen.dart';
 import '../services/analytics_service.dart';
 import '../services/firestore_service.dart';
 import '../utils/dialogs.dart';
+import '../utils/link_utils.dart';
 import '../widgets/user_level_avatar.dart';
 
 class PostDetailScreen extends StatefulWidget {
@@ -51,6 +52,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   String _nickname = '익명';
   final Set<String> _blockedCommentUids = {};
   late final Stream<List<Comment>> _commentStream;
+  // 댓글 정렬 — true=최신순, false=오래된순(스트림 기본).
+  bool _commentSortNewestFirst = false;
 
   @override
   void initState() {
@@ -211,6 +214,32 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     );
     if (ok != true) return;
     await _firestoreService.deletePostComment(widget.post.id, commentId);
+  }
+
+  /// 본인 댓글 수정. 빈 본문이거나 변경 없으면 무시.
+  /// 성공 시 true 반환 → 타일이 편집 모드를 닫는다.
+  Future<bool> _editComment(Comment original, String newContent) async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isLoggedIn || auth.user!.uid != original.uid) return false;
+    final trimmed = newContent.trim();
+    if (trimmed.isEmpty) return false;
+    if (trimmed == original.content.trim()) return true;
+    try {
+      await _firestoreService.updatePostComment(
+        widget.post.id,
+        original.id,
+        auth.user!.uid,
+        trimmed,
+      );
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('수정 실패: $e')));
+      }
+      return false;
+    }
   }
 
   Future<void> _togglePostCommentNotification(bool enabled) async {
@@ -450,30 +479,59 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               height: 1.32,
                             ),
                           ),
-                          const SizedBox(height: 14),
-                          // 작성자 + 날짜
+                          const SizedBox(height: 16),
+                          // 작성자 카드 — 댓글 가독성 패턴과 통일:
+                          // 아바타 → (닉네임 + 날짜를 stacked) → 팔로우 버튼
                           Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               UserLevelAvatar(
                                 uid: widget.post.uid,
                                 levelOverride: widget.post.authorLevel,
-                                radius: 11.5,
+                                radius: 18,
                                 backgroundColor: cs.onSurface.withValues(
                                   alpha: 0.08,
                                 ),
                                 textStyle: TextStyle(
                                   color: cs.onSurface.withValues(alpha: 0.62),
-                                  fontSize: 9.5,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                widget.post.nickname,
-                                style: TextStyle(
-                                  color: cs.onSurface.withValues(alpha: 0.8),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      widget.post.nickname,
+                                      style: TextStyle(
+                                        color: cs.onSurface.withValues(
+                                          alpha: 0.92,
+                                        ),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: -0.1,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      DateFormat(
+                                        'yyyy.MM.dd HH:mm',
+                                      ).format(widget.post.createdAt),
+                                      style: TextStyle(
+                                        color: cs.onSurface.withValues(
+                                          alpha: 0.42,
+                                        ),
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w500,
+                                        fontFeatures: const [
+                                          FontFeature.tabularFigures(),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                               if (auth.isLoggedIn &&
@@ -551,17 +609,6 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                   },
                                 ),
                               ],
-                              const Spacer(),
-                              Text(
-                                DateFormat(
-                                  'yyyy.MM.dd HH:mm',
-                                ).format(widget.post.createdAt),
-                                style: TextStyle(
-                                  color: cs.onSurface.withValues(alpha: 0.4),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
                             ],
                           ),
                           const SizedBox(height: 20),
@@ -574,6 +621,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           if (widget.post.content.isNotEmpty)
                             MarkdownBody(
                               data: widget.post.content,
+                              onTapLink: (text, href, title) {
+                                if (href != null) openExternalUrl(href);
+                              },
                               sizedImageBuilder: (config) => Padding(
                                 padding: const EdgeInsets.symmetric(
                                   vertical: 8,
@@ -685,7 +735,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               ),
                             ),
                           ],
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 28),
+                          // 본문 영역 종료 신호 — 본문과 좋아요/댓글 사이에 시각 분리.
+                          Divider(
+                            color: cs.onSurface.withValues(alpha: 0.08),
+                            height: 1,
+                          ),
+                          const SizedBox(height: 14),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
@@ -696,7 +752,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 18),
                         ],
                       ),
                     ),
@@ -718,9 +774,13 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                           ),
                         );
                       }
-                      final comments = (snap.data ?? [])
+                      final raw = (snap.data ?? [])
                           .where((c) => !_blockedCommentUids.contains(c.uid))
                           .toList();
+                      // 스트림 기본은 오래된순(asc) — 토글 시 reverse만 한다.
+                      final comments = _commentSortNewestFirst
+                          ? raw.reversed.toList()
+                          : raw;
                       final commentCount = comments.length;
                       if (snap.connectionState != ConnectionState.waiting) {
                         return SliverMainAxisGroup(
@@ -728,43 +788,90 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                             SliverToBoxAdapter(
                               child: Container(
                                 width: double.infinity,
-                                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  14,
+                                  12,
+                                  14,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: cs.onSurface.withValues(alpha: 0.045),
                                   border: Border(
                                     top: BorderSide(
-                                      color: cs.onSurface.withValues(alpha: 0.12),
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.08,
+                                      ),
                                     ),
                                     bottom: BorderSide(
-                                      color: cs.onSurface.withValues(alpha: 0.12),
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.08,
+                                      ),
                                     ),
                                   ),
                                 ),
-                                child: RichText(
-                                  text: TextSpan(
-                                    children: [
-                                      TextSpan(
-                                        text: '댓글',
-                                        style: TextStyle(
-                                          color: cs.onSurface.withValues(alpha: 0.9),
-                                          fontSize: 15,
-                                          height: 1.55,
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      '댓글',
+                                      style: TextStyle(
+                                        color: cs.onSurface.withValues(
+                                          alpha: 0.92,
+                                        ),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: -0.1,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      '$commentCount',
+                                      style: const TextStyle(
+                                        color: Color(0xFF10B981),
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        fontFeatures: [
+                                          FontFeature.tabularFigures(),
+                                        ],
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    InkWell(
+                                      onTap: () => setState(
+                                        () => _commentSortNewestFirst =
+                                            !_commentSortNewestFirst,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              _commentSortNewestFirst
+                                                  ? '최신순'
+                                                  : '오래된순',
+                                              style: TextStyle(
+                                                color: cs.onSurface.withValues(
+                                                  alpha: 0.6,
+                                                ),
+                                                fontSize: 12.5,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                            Icon(
+                                              Icons.keyboard_arrow_down_rounded,
+                                              size: 16,
+                                              color: cs.onSurface.withValues(
+                                                alpha: 0.5,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                      const TextSpan(text: ' '),
-                                      TextSpan(
-                                        text: '$commentCount',
-                                        style: TextStyle(
-                                          color: cs.onSurface.withValues(
-                                            alpha: 0.72,
-                                          ),
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w800,
-                                          letterSpacing: 0.2,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -796,6 +903,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                     comment: c,
                                     isOwn: isOwn,
                                     onDelete: () => _deleteComment(c.id),
+                                    onEdit: isOwn
+                                        ? (newContent) =>
+                                              _editComment(c, newContent)
+                                        : null,
                                     onReport: (!isOwn && auth.isLoggedIn)
                                         ? () => _reportComment(c)
                                         : null,
@@ -887,10 +998,12 @@ class _LikeRow extends StatelessWidget {
 
 // ── 댓글 타일 ──────────────────────────────────────────────────────────────────
 
-class _CommentTile extends StatelessWidget {
+class _CommentTile extends StatefulWidget {
   final Comment comment;
   final bool isOwn;
   final VoidCallback onDelete;
+  // 새 본문을 받아 저장 성공 시 true 반환. true면 편집 모드 종료.
+  final Future<bool> Function(String newContent)? onEdit;
   final VoidCallback? onReport;
   final VoidCallback? onBlock;
 
@@ -898,132 +1011,318 @@ class _CommentTile extends StatelessWidget {
     required this.comment,
     required this.isOwn,
     required this.onDelete,
+    this.onEdit,
     this.onReport,
     this.onBlock,
   });
 
   @override
+  State<_CommentTile> createState() => _CommentTileState();
+}
+
+class _CommentTileState extends State<_CommentTile> {
+  bool _editing = false;
+  bool _saving = false;
+  TextEditingController? _editCtrl;
+
+  Comment get comment => widget.comment;
+  bool get isOwn => widget.isOwn;
+  VoidCallback get onDelete => widget.onDelete;
+  Future<bool> Function(String)? get onEdit => widget.onEdit;
+  VoidCallback? get onReport => widget.onReport;
+  VoidCallback? get onBlock => widget.onBlock;
+
+  @override
+  void dispose() {
+    _editCtrl?.dispose();
+    super.dispose();
+  }
+
+  void _enterEdit() {
+    setState(() {
+      _editing = true;
+      _editCtrl = TextEditingController(text: comment.content);
+    });
+  }
+
+  void _cancelEdit() {
+    setState(() {
+      _editing = false;
+      _editCtrl?.dispose();
+      _editCtrl = null;
+    });
+  }
+
+  Future<void> _saveEdit() async {
+    final handler = onEdit;
+    final ctrl = _editCtrl;
+    if (handler == null || ctrl == null || _saving) return;
+    setState(() => _saving = true);
+    final ok = await handler(ctrl.text);
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      if (ok) {
+        _editing = false;
+        _editCtrl?.dispose();
+        _editCtrl = null;
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    // 가독성 우선: 닉네임 → 본문 → 날짜/액션 순서로 시선이 흐르도록.
+    // 닉네임을 본문보다 굵게/뚜렷이, 날짜는 본문 아래로 내려 메타로 분리한다.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           UserLevelAvatar(
             uid: comment.uid,
-            radius: 12,
+            radius: 14,
             backgroundColor: cs.onSurface.withValues(alpha: 0.07),
             textStyle: TextStyle(
-              color: cs.onSurface.withValues(alpha: 0.55),
-              fontSize: 9.5,
+              color: cs.onSurface.withValues(alpha: 0.6),
+              fontSize: 10.5,
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      comment.nickname,
+                Text(
+                  comment.nickname,
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.92),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                if (_editing)
+                  _buildEditField(cs)
+                else
+                  LinkifiedText(
+                    comment.content,
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.88),
+                      fontSize: 15,
+                      height: 1.6,
+                    ),
+                  ),
+                if (!_editing) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Text(
+                        DateFormat('MM.dd HH:mm').format(comment.createdAt),
+                        style: TextStyle(
+                          color: cs.onSurface.withValues(alpha: 0.4),
+                          fontSize: 11.5,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                      if (comment.editedAt != null) ...[
+                        Text(
+                          ' · 수정됨',
+                          style: TextStyle(
+                            color: cs.onSurface.withValues(alpha: 0.4),
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (!_editing) _buildTrailingMenu(cs),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditField(ColorScheme cs) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        TextField(
+          controller: _editCtrl,
+          autofocus: true,
+          enabled: !_saving,
+          minLines: 1,
+          maxLines: 6,
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.9),
+            fontSize: 15,
+            height: 1.55,
+          ),
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: cs.onSurface.withValues(alpha: 0.05),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: Color(0xFF10B981),
+                width: 1.2,
+              ),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 8,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextButton(
+              onPressed: _saving ? null : _cancelEdit,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                '취소',
+                style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.55),
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            FilledButton(
+              onPressed: _saving ? null : _saveEdit,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: _saving
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text(
+                      '저장',
                       style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.82),
+                        color: Colors.white,
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      DateFormat('MM.dd HH:mm').format(comment.createdAt),
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.38),
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  comment.content,
-                  style: TextStyle(
-                    color: cs.onSurface.withValues(alpha: 0.9),
-                    fontSize: 15,
-                    height: 1.55,
-                  ),
-                ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTrailingMenu(ColorScheme cs) {
+    final canEdit = isOwn && onEdit != null;
+    if (!isOwn && onReport == null && onBlock == null) {
+      return const SizedBox.shrink();
+    }
+    return PopupMenuButton<String>(
+      icon: Icon(
+        Icons.more_vert,
+        size: 16,
+        color: cs.onSurface.withValues(alpha: 0.25),
+      ),
+      padding: EdgeInsets.zero,
+      color: cs.surface,
+      onSelected: (v) {
+        switch (v) {
+          case 'edit':
+            _enterEdit();
+            break;
+          case 'delete':
+            onDelete();
+            break;
+          case 'report':
+            onReport?.call();
+            break;
+          case 'block':
+            onBlock?.call();
+            break;
+        }
+      },
+      itemBuilder: (_) => [
+        if (canEdit)
+          const PopupMenuItem(
+            value: 'edit',
+            child: Row(
+              children: [
+                Icon(Icons.edit_outlined, size: 15, color: Color(0xFF10B981)),
+                SizedBox(width: 8),
+                Text('수정', style: TextStyle(fontSize: 14)),
               ],
             ),
           ),
-          if (isOwn)
-            GestureDetector(
-              onTap: onDelete,
-              child: Padding(
-                padding: const EdgeInsets.only(left: 8, top: 2),
-                child: Icon(
-                  Icons.close,
-                  size: 14,
-                  color: cs.onSurface.withValues(alpha: 0.25),
-                ),
-              ),
-            )
-          else if (onReport != null || onBlock != null)
-            PopupMenuButton<String>(
-              icon: Icon(
-                Icons.more_vert,
-                size: 16,
-                color: cs.onSurface.withValues(alpha: 0.25),
-              ),
-              padding: EdgeInsets.zero,
-              color: cs.surface,
-              onSelected: (v) {
-                if (v == 'report') onReport?.call();
-                if (v == 'block') onBlock?.call();
-              },
-              itemBuilder: (_) => [
-                if (onReport != null)
-                  PopupMenuItem(
-                    value: 'report',
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.flag_outlined,
-                          size: 15,
-                          color: Colors.orangeAccent,
-                        ),
-                        const SizedBox(width: 8),
-                        Text('신고하기', style: TextStyle(fontSize: 14)),
-                      ],
-                    ),
-                  ),
-                if (onBlock != null)
-                  PopupMenuItem(
-                    value: 'block',
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.block,
-                          size: 15,
-                          color: Colors.redAccent,
-                        ),
-                        const SizedBox(width: 8),
-                        Text('차단하기', style: TextStyle(fontSize: 14)),
-                      ],
-                    ),
-                  ),
+        if (isOwn)
+          const PopupMenuItem(
+            value: 'delete',
+            child: Row(
+              children: [
+                Icon(Icons.delete_outline, size: 15, color: Colors.redAccent),
+                SizedBox(width: 8),
+                Text('삭제', style: TextStyle(fontSize: 14)),
               ],
             ),
-        ],
-      ),
+          ),
+        if (onReport != null)
+          const PopupMenuItem(
+            value: 'report',
+            child: Row(
+              children: [
+                Icon(
+                  Icons.flag_outlined,
+                  size: 15,
+                  color: Colors.orangeAccent,
+                ),
+                SizedBox(width: 8),
+                Text('신고하기', style: TextStyle(fontSize: 14)),
+              ],
+            ),
+          ),
+        if (onBlock != null)
+          const PopupMenuItem(
+            value: 'block',
+            child: Row(
+              children: [
+                Icon(Icons.block, size: 15, color: Colors.redAccent),
+                SizedBox(width: 8),
+                Text('차단하기', style: TextStyle(fontSize: 14)),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
 
 // ── 댓글 입력창 ────────────────────────────────────────────────────────────────
 
-class _CommentInput extends StatelessWidget {
+class _CommentInput extends StatefulWidget {
   final TextEditingController controller;
   final AuthProvider auth;
   final bool sending;
@@ -1037,18 +1336,46 @@ class _CommentInput extends StatelessWidget {
   });
 
   @override
+  State<_CommentInput> createState() => _CommentInputState();
+}
+
+class _CommentInputState extends State<_CommentInput> {
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _hasText = widget.controller.text.trim().isNotEmpty;
+    widget.controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onTextChanged);
+    super.dispose();
+  }
+
+  void _onTextChanged() {
+    final has = widget.controller.text.trim().isNotEmpty;
+    if (has != _hasText && mounted) setState(() => _hasText = has);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final pageBg = Theme.of(context).scaffoldBackgroundColor;
     final bottomPad = MediaQuery.of(context).viewInsets.bottom;
     final safeBottom = MediaQuery.of(context).padding.bottom;
+    // 본문 영역과 시각적 분리 — 기존 0.07은 다크에서 거의 안 보임.
+    final dividerAlpha = isDark ? 0.16 : 0.12;
+    final canSend = _hasText && !widget.sending;
 
     return Container(
       decoration: BoxDecoration(
         color: pageBg,
         border: Border(
-          top: BorderSide(color: cs.onSurface.withValues(alpha: 0.07)),
+          top: BorderSide(color: cs.onSurface.withValues(alpha: dividerAlpha)),
         ),
       ),
       padding: EdgeInsets.fromLTRB(
@@ -1057,12 +1384,12 @@ class _CommentInput extends StatelessWidget {
         16,
         (bottomPad > 0 ? bottomPad : safeBottom) + 10,
       ),
-      child: auth.isLoggedIn
+      child: widget.auth.isLoggedIn
           ? Row(
               children: [
                 Expanded(
                   child: TextField(
-                    controller: controller,
+                    controller: widget.controller,
                     maxLines: 4,
                     minLines: 1,
                     textInputAction: TextInputAction.newline,
@@ -1089,7 +1416,7 @@ class _CommentInput extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                sending
+                widget.sending
                     ? const SizedBox(
                         width: 40,
                         height: 40,
@@ -1101,20 +1428,26 @@ class _CommentInput extends StatelessWidget {
                           ),
                         ),
                       )
-                    : GestureDetector(
-                        onTap: onSubmit,
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF10B981),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
+                    : AnimatedContainer(
+                        duration: const Duration(milliseconds: 140),
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: canSend
+                              ? const Color(0xFF10B981)
+                              : cs.onSurface.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          icon: Icon(
                             Icons.send_rounded,
                             size: 18,
-                            color: Colors.white,
+                            color: canSend
+                                ? Colors.white
+                                : cs.onSurface.withValues(alpha: 0.45),
                           ),
+                          onPressed: canSend ? widget.onSubmit : null,
                         ),
                       ),
               ],

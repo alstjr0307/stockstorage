@@ -167,6 +167,9 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   bool _memoChanged = false;
   bool _adminCommentsOnly = false;
   final Set<String> _deletingCommentIds = {};
+  String? _editingCommentId;
+  TextEditingController? _editingCommentCtrl;
+  bool _savingCommentEdit = false;
   bool _revealReady = false;
 
   // 투표
@@ -2952,147 +2955,137 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     final isAdmin = AuthService.adminUids.contains(_currentUser?.uid);
     final cs = Theme.of(context).colorScheme;
 
+    final editing = _editingCommentId == comment.id;
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          child: Column(
+          padding: const EdgeInsets.fromLTRB(0, 14, 0, 14),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  UserLevelAvatar(
-                    uid: comment.uid,
-                    radius: 10,
-                    backgroundColor: cs.onSurface.withValues(alpha: 0.07),
-                    textStyle: TextStyle(
-                      color: cs.onSurface.withValues(alpha: 0.55),
-                      fontSize: 8,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          comment.nickname,
-                          style: TextStyle(
-                            color: cs.onSurface,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Text(
-                          timeago.format(comment.createdAt, locale: 'ko'),
-                          style: TextStyle(
-                            color: cs.onSurface.withValues(alpha: 0.3),
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (isOwn || isAdmin)
-                    GestureDetector(
-                      onTap: _deletingCommentIds.contains(comment.id)
-                          ? null
-                          : () async {
-                              if (_deletingCommentIds.contains(comment.id)) {
-                                return;
-                              }
-                              final confirm = await showDialog<bool>(
-                                context: context,
-                                builder: (ctx) => AlertDialog(
-                                  backgroundColor: Theme.of(
-                                    context,
-                                  ).colorScheme.surface,
-                                  title: Text(
-                                    '댓글 삭제',
-                                    style: TextStyle(
-                                      color: cs.onSurface,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  content: Text(
-                                    '이 댓글을 삭제하시겠습니까?',
-                                    style: TextStyle(
-                                      color: cs.onSurface.withValues(
-                                        alpha: 0.7,
-                                      ),
-                                    ),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.pop(ctx, false),
-                                      child: Text(
-                                        '취소',
-                                        style: TextStyle(
-                                          color: cs.onSurface.withValues(
-                                            alpha: 0.54,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(ctx, true),
-                                      child: Text(
-                                        '삭제',
-                                        style: TextStyle(
-                                          color: Colors.redAccent,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                              if (confirm != true) return;
-                              setState(
-                                () => _deletingCommentIds.add(comment.id),
-                              );
-                              await _firestoreService.deleteComment(
-                                widget.pick.id,
-                                comment.id,
-                                uid: comment.uid,
-                              );
-                              if (mounted) {
-                                setState(
-                                  () => _deletingCommentIds.remove(comment.id),
-                                );
-                              }
-                            },
-                      child: _deletingCommentIds.contains(comment.id)
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 1.5,
-                                color: Color(0xFF10B981),
-                              ),
-                            )
-                          : Icon(
-                              Icons.close,
-                              color: cs.onSurface.withValues(alpha: 0.2),
-                              size: 16,
-                            ),
-                    ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 34, top: 8),
-                child: Text(
-                  comment.content,
-                  style: TextStyle(
-                    color: cs.onSurface.withValues(alpha: 0.85),
-                    fontSize: 14,
-                    height: 1.55,
-                  ),
+              UserLevelAvatar(
+                uid: comment.uid,
+                radius: 14,
+                backgroundColor: cs.onSurface.withValues(alpha: 0.07),
+                textStyle: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.6),
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      comment.nickname,
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.92),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.1,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    if (editing)
+                      _commentEditField(comment, cs)
+                    else
+                      Text(
+                        comment.content,
+                        style: TextStyle(
+                          color: cs.onSurface.withValues(alpha: 0.88),
+                          fontSize: 15,
+                          height: 1.6,
+                        ),
+                      ),
+                    if (!editing) ...[
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Text(
+                            timeago.format(comment.createdAt, locale: 'ko'),
+                            style: TextStyle(
+                              color: cs.onSurface.withValues(alpha: 0.4),
+                              fontSize: 11.5,
+                            ),
+                          ),
+                          if (comment.editedAt != null)
+                            Text(
+                              ' · 수정됨',
+                              style: TextStyle(
+                                color: cs.onSurface.withValues(alpha: 0.4),
+                                fontSize: 11.5,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (_deletingCommentIds.contains(comment.id))
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    color: Color(0xFF10B981),
+                  ),
+                )
+              else if (isOwn && !editing)
+                PopupMenuButton<String>(
+                  icon: Icon(
+                    Icons.more_vert,
+                    size: 16,
+                    color: cs.onSurface.withValues(alpha: 0.25),
+                  ),
+                  padding: EdgeInsets.zero,
+                  color: cs.surface,
+                  onSelected: (v) {
+                    if (v == 'edit') _startEditComment(comment);
+                    if (v == 'delete') _confirmAndDeleteComment(comment);
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.edit_outlined,
+                            size: 15,
+                            color: Color(0xFF10B981),
+                          ),
+                          SizedBox(width: 8),
+                          Text('수정', style: TextStyle(fontSize: 14)),
+                        ],
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.delete_outline,
+                            size: 15,
+                            color: Colors.redAccent,
+                          ),
+                          SizedBox(width: 8),
+                          Text('삭제', style: TextStyle(fontSize: 14)),
+                        ],
+                      ),
+                    ),
+                  ],
+                )
+              else if (isAdmin && !editing)
+                GestureDetector(
+                  onTap: () => _confirmAndDeleteComment(comment),
+                  child: Icon(
+                    Icons.close,
+                    color: cs.onSurface.withValues(alpha: 0.2),
+                    size: 16,
+                  ),
+                ),
             ],
           ),
         ),
@@ -3197,6 +3190,185 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         ],
       ),
     );
+  }
+
+  Widget _commentEditField(Comment c, ColorScheme cs) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        TextField(
+          controller: _editingCommentCtrl,
+          autofocus: true,
+          enabled: !_savingCommentEdit,
+          minLines: 1,
+          maxLines: 6,
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.9),
+            fontSize: 14,
+            height: 1.55,
+          ),
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: cs.onSurface.withValues(alpha: 0.05),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: Color(0xFF10B981),
+                width: 1.2,
+              ),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 8,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextButton(
+              onPressed: _savingCommentEdit ? null : _cancelEditComment,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                '취소',
+                style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.55),
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            FilledButton(
+              onPressed: _savingCommentEdit ? null : () => _saveEditComment(c),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: _savingCommentEdit
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text(
+                      '저장',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _startEditComment(Comment c) {
+    _editingCommentCtrl?.dispose();
+    setState(() {
+      _editingCommentId = c.id;
+      _editingCommentCtrl = TextEditingController(text: c.content);
+    });
+  }
+
+  void _cancelEditComment() {
+    _editingCommentCtrl?.dispose();
+    setState(() {
+      _editingCommentId = null;
+      _editingCommentCtrl = null;
+      _savingCommentEdit = false;
+    });
+  }
+
+  Future<void> _saveEditComment(Comment c) async {
+    final ctrl = _editingCommentCtrl;
+    if (ctrl == null || _savingCommentEdit) return;
+    final trimmed = ctrl.text.trim();
+    if (trimmed.isEmpty) return;
+    if (trimmed == c.content.trim()) {
+      _cancelEditComment();
+      return;
+    }
+    setState(() => _savingCommentEdit = true);
+    try {
+      await _firestoreService.updateComment(
+        widget.pick.id,
+        c.id,
+        c.uid,
+        trimmed,
+      );
+      if (mounted) _cancelEditComment();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _savingCommentEdit = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('수정 실패: $e')));
+      }
+    }
+  }
+
+  Future<void> _confirmAndDeleteComment(Comment comment) async {
+    if (_deletingCommentIds.contains(comment.id)) return;
+    final cs = Theme.of(context).colorScheme;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: cs.surface,
+        title: Text(
+          '댓글 삭제',
+          style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700),
+        ),
+        content: Text(
+          '이 댓글을 삭제하시겠습니까?',
+          style: TextStyle(color: cs.onSurface.withValues(alpha: 0.7)),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              '취소',
+              style: TextStyle(color: cs.onSurface.withValues(alpha: 0.54)),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              '삭제',
+              style: TextStyle(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    setState(() => _deletingCommentIds.add(comment.id));
+    await _firestoreService.deleteComment(
+      widget.pick.id,
+      comment.id,
+      uid: comment.uid,
+    );
+    if (mounted) setState(() => _deletingCommentIds.remove(comment.id));
   }
 
   Future<void> _submitComment(User user) async {

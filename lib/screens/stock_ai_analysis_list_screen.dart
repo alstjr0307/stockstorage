@@ -12,24 +12,21 @@ import '../services/firestore_service.dart';
 import '../widgets/banner_ad_widget.dart';
 import '../services/stock_price_service.dart'
     show PriceResult, StockPriceService, StockSearchResult;
+import '../services/subscription_service.dart';
 import 'stock_ai_analysis_result_screen.dart';
 import 'stock_detail_screen.dart' show stockPickFromSearchResult;
 import 'stock_search_screen.dart';
 
 /// 검색 → 광고 게이트 → AI 분석 결과 화면 으로 이어지는 새 분석 흐름.
 /// 홈 카드, 리스트 화면 FAB 등 어디서든 동일 동작을 재사용한다.
-Future<void> startAiAnalysisFromSearch(
-  BuildContext context,
-  String uid,
-) async {
+Future<void> startAiAnalysisFromSearch(BuildContext context, String uid) async {
   final picked = await Navigator.push<StockSearchResult>(
     context,
     MaterialPageRoute(
       builder: (pickerCtx) => StockSearchScreen(
         title: '분석할 종목',
         subtitle: '선택하면 AI 분석을 새로 시작해요.',
-        onPick: (result) =>
-            Navigator.pop<StockSearchResult>(pickerCtx, result),
+        onPick: (result) => Navigator.pop<StockSearchResult>(pickerCtx, result),
       ),
     ),
   );
@@ -39,15 +36,15 @@ Future<void> startAiAnalysisFromSearch(
   if (!passed || !context.mounted) return;
 
   final pick = stockPickFromSearchResult(picked);
-  final analysisId = FirestoreService.favoriteStockKey(pick.market, pick.ticker);
+  final analysisId = FirestoreService.favoriteStockKey(
+    pick.market,
+    pick.ticker,
+  );
   await Navigator.push(
     context,
     MaterialPageRoute(
       settings: RouteSettings(name: 'stock-ai-analysis:$analysisId'),
-      builder: (_) => StockAiAnalysisResultScreen(
-        pick: pick,
-        forceFresh: true,
-      ),
+      builder: (_) => StockAiAnalysisResultScreen(pick: pick, forceFresh: true),
     ),
   );
 }
@@ -101,6 +98,20 @@ class _StockAiAnalysisListScreenState extends State<StockAiAnalysisListScreen> {
   final Map<String, PriceResult?> _prices = {};
   final Set<String> _loadingPrices = {};
 
+  // Firestore 스트림은 uid별로 1회만 만들어 캐시한다.
+  // 매 빌드마다 새 Stream을 만들면 StreamBuilder가 ConnectionState.waiting로
+  // 리셋되면서 리스트가 깜빡인다.
+  String? _streamUid;
+  Stream<List<StockAiAnalysisSummary>>? _analysesStream;
+
+  Stream<List<StockAiAnalysisSummary>> _analysesStreamFor(String uid) {
+    if (_streamUid != uid || _analysesStream == null) {
+      _streamUid = uid;
+      _analysesStream = _firestore.watchStockAiAnalyses(uid);
+    }
+    return _analysesStream!;
+  }
+
   @override
   void dispose() {
     _searchCtrl.dispose();
@@ -117,19 +128,21 @@ class _StockAiAnalysisListScreenState extends State<StockAiAnalysisListScreen> {
     final key = _priceKey(market, ticker);
     if (_prices.containsKey(key) || _loadingPrices.contains(key)) return;
     _loadingPrices.add(key);
-    StockPriceService.fetchPrice(ticker, market).then((result) {
-      if (!mounted) return;
-      setState(() {
-        _prices[key] = result;
-        _loadingPrices.remove(key);
-      });
-    }).catchError((_) {
-      if (!mounted) return;
-      setState(() {
-        _prices[key] = null;
-        _loadingPrices.remove(key);
-      });
-    });
+    StockPriceService.fetchPrice(ticker, market)
+        .then((result) {
+          if (!mounted) return;
+          setState(() {
+            _prices[key] = result;
+            _loadingPrices.remove(key);
+          });
+        })
+        .catchError((_) {
+          if (!mounted) return;
+          setState(() {
+            _prices[key] = null;
+            _loadingPrices.remove(key);
+          });
+        });
   }
 
   @override
@@ -229,9 +242,12 @@ class _StockAiAnalysisListScreenState extends State<StockAiAnalysisListScreen> {
         ),
         Expanded(
           child: StreamBuilder<List<StockAiAnalysisSummary>>(
-            stream: _firestore.watchStockAiAnalyses(uid),
+            stream: _analysesStreamFor(uid),
             builder: (context, analysesSnap) {
-              if (analysesSnap.connectionState == ConnectionState.waiting) {
+              // 최초 진입 때만 스피너. 이미 데이터를 받은 뒤에는
+              // 스트림이 잠깐 waiting로 돌아가도 직전 데이터를 유지해
+              // 화면이 깜빡이지 않도록 한다.
+              if (!analysesSnap.hasData && !analysesSnap.hasError) {
                 return const Center(
                   child: CircularProgressIndicator(color: Color(0xFF10B981)),
                 );
@@ -310,9 +326,9 @@ class _StockAiAnalysisListScreenState extends State<StockAiAnalysisListScreen> {
         final v = s.score;
         if (v == null) return _scoreFilter == 'bad';
         return switch (_scoreFilter) {
-          'good' => v >= 75,
-          'neutral' => v >= 55 && v < 75,
-          'bad' => v < 55,
+          'good' => v >= 70,
+          'neutral' => v >= 50 && v < 70,
+          'bad' => v < 50,
           _ => true,
         };
       });
@@ -419,10 +435,7 @@ class _StockAiAnalysisListScreenState extends State<StockAiAnalysisListScreen> {
     );
   }
 
-  Future<void> _confirmDelete(
-    String uid,
-    StockAiAnalysisSummary item,
-  ) async {
+  Future<void> _confirmDelete(String uid, StockAiAnalysisSummary item) async {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -449,9 +462,7 @@ class _StockAiAnalysisListScreenState extends State<StockAiAnalysisListScreen> {
             onPressed: () => Navigator.pop(ctx, false),
             child: Text(
               '취소',
-              style: TextStyle(
-                color: isDark ? Colors.white54 : Colors.black45,
-              ),
+              style: TextStyle(color: isDark ? Colors.white54 : Colors.black45),
             ),
           ),
           TextButton(
@@ -479,7 +490,7 @@ class _StockAiAnalysisListScreenState extends State<StockAiAnalysisListScreen> {
   }
 }
 
-class _QuotaBanner extends StatelessWidget {
+class _QuotaBanner extends StatefulWidget {
   const _QuotaBanner({
     required this.uid,
     required this.isDark,
@@ -490,16 +501,41 @@ class _QuotaBanner extends StatelessWidget {
   final FirestoreService firestore;
 
   @override
+  State<_QuotaBanner> createState() => _QuotaBannerState();
+}
+
+class _QuotaBannerState extends State<_QuotaBanner> {
+  // uid가 바뀔 때만 새로 만들고, 그 외 빌드에서는 같은 Stream 인스턴스를
+  // 반환해야 StreamBuilder가 initialData로 리셋되지 않는다.
+  late Stream<int> _levelStream = widget.firestore.watchPublicUserLevel(widget.uid);
+  late Stream<int> _usedStream =
+      AiAnalysisQuotaService.instance.watchUsedToday(widget.uid);
+
+  @override
+  void didUpdateWidget(covariant _QuotaBanner oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.uid != widget.uid) {
+      _levelStream = widget.firestore.watchPublicUserLevel(widget.uid);
+      _usedStream = AiAnalysisQuotaService.instance.watchUsedToday(widget.uid);
+    }
+  }
+
+  bool get isDark => widget.isDark;
+
+  @override
   Widget build(BuildContext context) {
     if (!AiAnalysisAdGate.isQuotaActive) return const SizedBox.shrink();
     return StreamBuilder<int>(
-      stream: firestore.watchPublicUserLevel(uid),
+      stream: _levelStream,
       initialData: 1,
       builder: (context, levelSnap) {
         final level = levelSnap.data ?? 1;
-        final limit = AiAnalysisQuotaService.dailyLimitForLevel(level);
+        final isPremium = SubscriptionService.instance.isPremium;
+        final limit = isPremium
+            ? SubscriptionService.premiumDailyAiLimit
+            : AiAnalysisQuotaService.dailyLimitForLevel(level);
         return StreamBuilder<int>(
-          stream: AiAnalysisQuotaService.instance.watchUsedToday(uid),
+          stream: _usedStream,
           initialData: 0,
           builder: (context, usedSnap) {
             final used = usedSnap.data ?? 0;
@@ -578,7 +614,7 @@ class _QuotaBanner extends StatelessWidget {
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
-                            'Lv.$level',
+                            isPremium ? 'PREMIUM' : 'Lv.$level',
                             style: const TextStyle(
                               color: Color(0xFF10B981),
                               fontSize: 10,
@@ -825,18 +861,18 @@ Widget _chipShell({
   final bg = active
       ? const Color(0xFF10B981).withValues(alpha: 0.15)
       : isDark
-          ? const Color(0xFF1A2035)
-          : Colors.white;
+      ? const Color(0xFF1A2035)
+      : Colors.white;
   final fg = active
       ? const Color(0xFF10B981)
       : isDark
-          ? Colors.white70
-          : Colors.black87;
+      ? Colors.white70
+      : Colors.black87;
   final borderColor = active
       ? const Color(0xFF10B981).withValues(alpha: 0.4)
       : isDark
-          ? Colors.white.withValues(alpha: 0.08)
-          : Colors.black.withValues(alpha: 0.06);
+      ? Colors.white.withValues(alpha: 0.08)
+      : Colors.black.withValues(alpha: 0.06);
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
     decoration: BoxDecoration(
@@ -914,16 +950,16 @@ class _AiAnalysisCardState extends State<_AiAnalysisCard> {
   Color get _scoreColor {
     final s = summary.score;
     if (s == null) return const Color(0xFF64748B);
-    if (s >= 75) return const Color(0xFF10B981);
-    if (s >= 55) return const Color(0xFFF59E0B);
+    if (s >= 70) return const Color(0xFF10B981);
+    if (s >= 50) return const Color(0xFFF59E0B);
     return const Color(0xFFF04452);
   }
 
   String get _scoreCaption {
     final s = summary.score;
     if (s == null) return '대기';
-    if (s >= 75) return '우호적';
-    if (s >= 55) return '중립';
+    if (s >= 70) return '우호적';
+    if (s >= 50) return '중립';
     return '주의';
   }
 
@@ -934,9 +970,7 @@ class _AiAnalysisCardState extends State<_AiAnalysisCard> {
       return null;
     }
     final pct = (live / baseline - 1) * 100;
-    final color = pct >= 0
-        ? const Color(0xFFF04452)
-        : const Color(0xFF4D9BFF);
+    final color = pct >= 0 ? const Color(0xFFF04452) : const Color(0xFF4D9BFF);
     return (pct: pct, color: color);
   }
 
@@ -1011,9 +1045,7 @@ class _AiAnalysisCardState extends State<_AiAnalysisCard> {
                             Text(
                               updatedLabel,
                               style: TextStyle(
-                                color: isDark
-                                    ? Colors.white38
-                                    : Colors.black38,
+                                color: isDark ? Colors.white38 : Colors.black38,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -1058,8 +1090,9 @@ class _AiAnalysisCardState extends State<_AiAnalysisCard> {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFB923C)
-                                  .withValues(alpha: 0.15),
+                              color: const Color(
+                                0xFFFB923C,
+                              ).withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: const Row(

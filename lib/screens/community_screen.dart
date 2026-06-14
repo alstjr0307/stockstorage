@@ -1323,100 +1323,75 @@ class _JournalCardState extends State<_JournalCard>
   Widget _shareFooter(Color tone) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    // 박스 칩 3개 대신: 좌측엔 차트보기를 텍스트 링크처럼, 우측엔 좋아요/댓글을
+    // 평평한 아이콘 행으로 둬서 카드의 정보 밀도를 낮춘다.
+    final muted = isDark
+        ? Colors.white.withValues(alpha: 0.55)
+        : cs.onSurface.withValues(alpha: 0.55);
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Expanded(
-          child: InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: _canOpenChart(widget.journal) ? _openChart : null,
-            child: Container(
-              height: 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: tone.withValues(alpha: 0.13),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: tone.withValues(alpha: 0.34)),
+        if (_canOpenChart(widget.journal))
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: _openChart,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 4,
+                vertical: 6,
               ),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.show_chart_rounded, size: 16, color: tone),
-                  const SizedBox(width: 7),
+                  Icon(Icons.show_chart_rounded, size: 15, color: tone),
+                  const SizedBox(width: 6),
                   Text(
-                    '매매기록 차트보기',
+                    '자세히',
                     style: TextStyle(
                       color: tone,
-                      fontSize: 12,
+                      fontSize: 12.5,
                       fontWeight: FontWeight.w800,
+                      letterSpacing: -0.1,
                     ),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 15,
+                    color: tone.withValues(alpha: 0.7),
                   ),
                 ],
               ),
             ),
           ),
+        const Spacer(),
+        InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: widget.onLike,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: _LikeButton(
+              isLiked: widget.isLiked,
+              isLoading: widget.isLoadingLike,
+              count: widget.likeCount,
+              onTap: null,
+              inactiveIconColor: muted,
+              inactiveCountColor: muted,
+            ),
+          ),
         ),
-        const SizedBox(width: 10),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            InkWell(
-              borderRadius: BorderRadius.circular(10),
-              onTap: widget.onLike,
-              child: Container(
-                height: 44,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.06)
-                      : cs.onSurface.withValues(alpha: 0.04),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : cs.onSurface.withValues(alpha: 0.08),
-                  ),
-                ),
-                child: _LikeButton(
-                  isLiked: widget.isLiked,
-                  isLoading: widget.isLoadingLike,
-                  count: widget.likeCount,
-                  onTap: null,
-                  inactiveIconColor: isDark
-                      ? Colors.white.withValues(alpha: 0.72)
-                      : cs.onSurface.withValues(alpha: 0.55),
-                  inactiveCountColor: isDark
-                      ? Colors.white.withValues(alpha: 0.82)
-                      : cs.onSurface.withValues(alpha: 0.7),
-                ),
-              ),
+        const SizedBox(width: 4),
+        InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => _openComments(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: _CommentButton(
+              onTap: null,
+              count: widget.commentCount,
+              plain: true,
             ),
-            const SizedBox(width: 8),
-            InkWell(
-              borderRadius: BorderRadius.circular(10),
-              onTap: () => _openComments(context),
-              child: Container(
-                height: 44,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.06)
-                      : cs.onSurface.withValues(alpha: 0.04),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : cs.onSurface.withValues(alpha: 0.08),
-                  ),
-                ),
-                child: _CommentButton(
-                  onTap: null,
-                  count: widget.commentCount,
-                  plain: true,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
+          ),
         ),
       ],
     );
@@ -1451,248 +1426,228 @@ class _JournalCardState extends State<_JournalCard>
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Stack(
           children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 9),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.03)
-                    : cs.onSurface.withValues(alpha: 0.03),
-                border: Border(
-                  bottom: BorderSide(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.06)
-                        : cs.onSurface.withValues(alpha: 0.08),
-                  ),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Text(
-                    '거래일 $tradeDateText',
-                    style: TextStyle(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.72)
-                          : cs.onSurface.withValues(alpha: 0.72),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (isNewlyPublished) _buildNewBadge(),
-                ],
-              ),
+            // 좌측 액센트 스트라이프 — IntrinsicHeight 없이 Positioned로.
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: Container(width: 3, color: tone),
             ),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    tone.withValues(alpha: 0.13),
-                    tone.withValues(alpha: 0.03),
-                  ],
-                ),
-                border: Border(
-                  bottom: BorderSide(color: tone.withValues(alpha: 0.25)),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: widget.onTapAuthor,
-                          behavior: HitTestBehavior.opaque,
-                          child: Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 작성자 + 액션 + 거래일을 한 영역으로 통합 (별도 거래일 바 제거).
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          GestureDetector(
+                            onTap: widget.onTapAuthor,
+                            behavior: HitTestBehavior.opaque,
+                            child: UserLevelAvatar(
+                              uid: journal.uid,
+                              radius: 14,
+                              backgroundColor: tone.withValues(alpha: 0.12),
+                              textStyle: TextStyle(
+                                color: tone,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: widget.onTapAuthor,
+                              behavior: HitTestBehavior.opaque,
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          journal.nickname,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: isDark
+                                                ? Colors.white
+                                                : cs.onSurface,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: -0.1,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 7,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: tone.withValues(alpha: 0.13),
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                        ),
+                                        child: Text(
+                                          actionLabel,
+                                          style: TextStyle(
+                                            color: tone,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w900,
+                                            letterSpacing: 0.2,
+                                          ),
+                                        ),
+                                      ),
+                                      if (isNewlyPublished) ...[
+                                        const SizedBox(width: 6),
+                                        _buildNewBadge(),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    '거래일 $tradeDateText',
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? Colors.white.withValues(
+                                              alpha: 0.42,
+                                            )
+                                          : cs.onSurface.withValues(
+                                              alpha: 0.5,
+                                            ),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (widget.onTapAuthor != null)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: Icon(
+                                Icons.chevron_right_rounded,
+                                size: 18,
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.32)
+                                    : cs.onSurface.withValues(alpha: 0.32),
+                              ),
+                            ),
+                          if (widget.onReport != null ||
+                              widget.onBlock != null)
+                            _MoreMenu(
+                              onReport: widget.onReport,
+                              onBlock: widget.onBlock,
+                              iconColor: isDark
+                                  ? Colors.white.withValues(alpha: 0.55)
+                                  : cs.onSurface.withValues(alpha: 0.45),
+                            ),
+                        ],
+                      ),
+                    ),
+                    // Hero 영역: 그라데이션 제거, 좌측 스트라이프와 라벨로 톤 표현.
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (tickerText.isNotEmpty)
+                            Text(
+                              tickerText,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: tone.withValues(alpha: 0.85),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          const SizedBox(height: 2),
+                          Text(
+                            journal.stockName.isNotEmpty
+                                ? journal.stockName
+                                : '기타 메모',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isDark ? Colors.white : cs.onSurface,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                              height: 1.15,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
                             children: [
-                              UserLevelAvatar(
-                                uid: journal.uid,
-                                radius: 12,
-                                backgroundColor: tone.withValues(alpha: 0.12),
-                                textStyle: TextStyle(
-                                  color: tone,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w800,
+                              Text(
+                                headlineLabel,
+                                style: TextStyle(
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.42)
+                                      : cs.onSurface.withValues(alpha: 0.5),
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.2,
                                 ),
                               ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
-                                  journal.nickname,
+                                  headlineValue,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color: isDark ? Colors.white : cs.onSurface,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w800,
+                                    color: accent,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: -0.5,
+                                    height: 1.0,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
                                   ),
                                 ),
                               ),
-                              if (widget.onTapAuthor != null) ...[
-                                const SizedBox(width: 8),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 2,
-                                    vertical: 3,
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        '더보기',
-                                        style: TextStyle(
-                                          color: isDark
-                                              ? Colors.white
-                                              : cs.onSurface,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 2),
-                                      Icon(
-                                        Icons.chevron_right_rounded,
-                                        size: 13,
-                                        color: isDark
-                                            ? Colors.white
-                                            : cs.onSurface,
-                                      ),
-                                    ],
+                              if (headlineBadge != null) ...[
+                                const SizedBox(width: 6),
+                                Text(
+                                  headlineBadge,
+                                  style: TextStyle(
+                                    color: accent.withValues(alpha: 0.85),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.2,
                                   ),
                                 ),
                               ],
                             ],
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
-                        alignment: WrapAlignment.end,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 3,
-                            ),
-                            decoration: BoxDecoration(
-                              color: tone.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: tone.withValues(alpha: 0.25),
-                              ),
-                            ),
-                            child: Text(
-                              actionLabel,
-                              style: TextStyle(
-                                color: tone,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
                         ],
                       ),
-                      if (widget.onReport != null ||
-                          widget.onBlock != null) ...[
-                        const SizedBox(width: 4),
-                        _MoreMenu(
-                          onReport: widget.onReport,
-                          onBlock: widget.onBlock,
-                          iconColor: isDark
-                              ? Colors.white.withValues(alpha: 0.72)
-                              : cs.onSurface.withValues(alpha: 0.55),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  if (tickerText.isNotEmpty) ...[
-                    Text(
-                      tickerText,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: tone.withValues(alpha: 0.82),
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                      ),
                     ),
-                    const SizedBox(height: 3),
-                  ],
-                  Text(
-                    journal.stockName.isNotEmpty ? journal.stockName : '기타 메모',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: isDark ? Colors.white : cs.onSurface,
-                      fontSize: 21,
-                      fontWeight: FontWeight.w900,
-                      height: 1.1,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    headlineLabel,
-                    style: TextStyle(
+                    // 본문 영역과 hero 사이 얇은 구분선 — 종전 두꺼운 tone 보더 대신.
+                    Divider(
+                      height: 1,
+                      thickness: 1,
                       color: isDark
-                          ? Colors.white.withValues(alpha: 0.34)
-                          : cs.onSurface.withValues(alpha: 0.45),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
+                          ? Colors.white.withValues(alpha: 0.06)
+                          : cs.onSurface.withValues(alpha: 0.07),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          headlineValue,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: accent,
-                            fontSize: 25,
-                            fontWeight: FontWeight.w900,
-                            height: 1.0,
-                          ),
-                        ),
-                      ),
-                      if (headlineBadge != null)
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 1),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: accent.withValues(alpha: 0.13),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            headlineBadge,
-                            style: TextStyle(
-                              color: accent,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 13, 16, 14),
               child: Column(
@@ -1754,10 +1709,10 @@ class _JournalCardState extends State<_JournalCard>
                       ),
                     ),
                   ],
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   _shareFooter(tone),
                   if (widget.isOwn && widget.onTogglePrivate != null) ...[
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     GestureDetector(
                       onTap: _confirmTogglePrivate,
                       child: Align(
@@ -1777,6 +1732,8 @@ class _JournalCardState extends State<_JournalCard>
                   ],
                 ],
               ),
+            ),
+              ],
             ),
           ],
         ),
@@ -3444,6 +3401,9 @@ class _CommentSheetState extends State<_CommentSheet> {
   bool _sending = false;
   final Set<String> _blockedUids = {};
   late final Stream<List<Comment>> _stream;
+  String? _editingId;
+  TextEditingController? _editingCtrl;
+  bool _savingEdit = false;
 
   @override
   void initState() {
@@ -3463,7 +3423,145 @@ class _CommentSheetState extends State<_CommentSheet> {
   @override
   void dispose() {
     _ctrl.dispose();
+    _editingCtrl?.dispose();
     super.dispose();
+  }
+
+  void _startEdit(Comment c) {
+    _editingCtrl?.dispose();
+    setState(() {
+      _editingId = c.id;
+      _editingCtrl = TextEditingController(text: c.content);
+    });
+  }
+
+  void _cancelEdit() {
+    _editingCtrl?.dispose();
+    setState(() {
+      _editingId = null;
+      _editingCtrl = null;
+      _savingEdit = false;
+    });
+  }
+
+  Future<void> _saveEdit(Comment c) async {
+    final ctrl = _editingCtrl;
+    if (ctrl == null || _savingEdit) return;
+    final trimmed = ctrl.text.trim();
+    if (trimmed.isEmpty) return;
+    if (trimmed == c.content.trim()) {
+      _cancelEdit();
+      return;
+    }
+    setState(() => _savingEdit = true);
+    try {
+      if (widget.collection == 'posts') {
+        await widget.firestoreService.updatePostComment(
+          widget.docId,
+          c.id,
+          c.uid,
+          trimmed,
+        );
+      } else {
+        await widget.firestoreService.updateJournalComment(
+          widget.docId,
+          c.id,
+          trimmed,
+        );
+      }
+      if (mounted) _cancelEdit();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _savingEdit = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('수정 실패: $e')));
+      }
+    }
+  }
+
+  Widget _buildEditField(Comment c, ColorScheme cs) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        TextField(
+          controller: _editingCtrl,
+          autofocus: true,
+          enabled: !_savingEdit,
+          minLines: 1,
+          maxLines: 6,
+          style: TextStyle(color: cs.onSurface, fontSize: 14, height: 1.5),
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: cs.onSurface.withValues(alpha: 0.05),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: Color(0xFF10B981),
+                width: 1.2,
+              ),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 8,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextButton(
+              onPressed: _savingEdit ? null : _cancelEdit,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                '취소',
+                style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.55),
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            FilledButton(
+              onPressed: _savingEdit ? null : () => _saveEdit(c),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: _savingEdit
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text(
+                      '저장',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   Future<void> _handleReport(Comment c) async {
@@ -3638,15 +3736,16 @@ class _CommentSheetState extends State<_CommentSheet> {
                     shrinkWrap: true,
                     itemCount: visible.length,
                     separatorBuilder: (context, i) => Divider(
-                      height: 16,
+                      height: 18,
                       thickness: 1,
                       color: cs.onSurface.withValues(alpha: 0.08),
                     ),
                     itemBuilder: (_, i) {
                       final c = visible[i];
                       final isOwn = widget.auth.user?.uid == c.uid;
+                      final editing = _editingId == c.id;
                       return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -3658,67 +3757,125 @@ class _CommentSheetState extends State<_CommentSheet> {
                               ),
                               textStyle: TextStyle(
                                 color: cs.onSurface.withValues(alpha: 0.6),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w700,
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w800,
                               ),
                             ),
-                            const SizedBox(width: 10),
+                            const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        c.nickname,
-                                        style: TextStyle(
-                                          color: cs.onSurface.withValues(
-                                            alpha: 0.7,
-                                          ),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        DateFormat(
-                                          'MM.dd HH:mm',
-                                        ).format(c.createdAt),
-                                        style: TextStyle(
-                                          color: cs.onSurface.withValues(
-                                            alpha: 0.3,
-                                          ),
-                                          fontSize: 11,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
                                   Text(
-                                    c.content,
+                                    c.nickname,
                                     style: TextStyle(
-                                      color: cs.onSurface,
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.92,
+                                      ),
                                       fontSize: 14,
-                                      height: 1.5,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.1,
                                     ),
                                   ),
+                                  const SizedBox(height: 6),
+                                  if (editing)
+                                    _buildEditField(c, cs)
+                                  else
+                                    Text(
+                                      c.content,
+                                      style: TextStyle(
+                                        color: cs.onSurface.withValues(
+                                          alpha: 0.88,
+                                        ),
+                                        fontSize: 15,
+                                        height: 1.6,
+                                      ),
+                                    ),
+                                  if (!editing) ...[
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: [
+                                        Text(
+                                          DateFormat(
+                                            'MM.dd HH:mm',
+                                          ).format(c.createdAt),
+                                          style: TextStyle(
+                                            color: cs.onSurface.withValues(
+                                              alpha: 0.4,
+                                            ),
+                                            fontSize: 11.5,
+                                            fontFeatures: const [
+                                              FontFeature.tabularFigures(),
+                                            ],
+                                          ),
+                                        ),
+                                        if (c.editedAt != null)
+                                          Text(
+                                            ' · 수정됨',
+                                            style: TextStyle(
+                                              color: cs.onSurface.withValues(
+                                                alpha: 0.4,
+                                              ),
+                                              fontSize: 11.5,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
-                            if (isOwn)
-                              GestureDetector(
-                                onTap: () => _delete(c.id),
-                                child: Padding(
-                                  padding: const EdgeInsets.only(
-                                    left: 8,
-                                    top: 2,
-                                  ),
-                                  child: Icon(
-                                    Icons.close,
-                                    size: 14,
-                                    color: cs.onSurface.withValues(alpha: 0.25),
-                                  ),
+                            if (_editingId == c.id)
+                              const SizedBox.shrink()
+                            else if (isOwn)
+                              PopupMenuButton<String>(
+                                icon: Icon(
+                                  Icons.more_vert,
+                                  size: 16,
+                                  color: cs.onSurface.withValues(alpha: 0.25),
                                 ),
+                                padding: EdgeInsets.zero,
+                                color: cs.surface,
+                                onSelected: (v) {
+                                  if (v == 'edit') _startEdit(c);
+                                  if (v == 'delete') _delete(c.id);
+                                },
+                                itemBuilder: (_) => const [
+                                  PopupMenuItem(
+                                    value: 'edit',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.edit_outlined,
+                                          size: 15,
+                                          color: Color(0xFF10B981),
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          '수정',
+                                          style: TextStyle(fontSize: 13),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.delete_outline,
+                                          size: 15,
+                                          color: Colors.redAccent,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          '삭제',
+                                          style: TextStyle(fontSize: 13),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               )
                             else if (widget.auth.isLoggedIn)
                               PopupMenuButton<String>(

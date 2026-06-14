@@ -1,6 +1,6 @@
 /**
  * AI 한 줄 시황 즉시 생성 스크립트
- * 사용법: node generate_brief_now.js sk-ant-xxxxxxx
+ * 사용법: node generate_brief_now.js sk-...
  */
 
 const axios = require('axios');
@@ -9,12 +9,11 @@ const path = require('path');
 const fs = require('fs');
 const { initializeApp, getApps, cert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
-const Anthropic = require('@anthropic-ai/sdk');
 
 // ── 설정 ─────────────────────────────────────────────────────────────────────
-const ANTHROPIC_API_KEY = process.argv[2];
-if (!ANTHROPIC_API_KEY || !ANTHROPIC_API_KEY.startsWith('sk-ant')) {
-  console.error('사용법: node generate_brief_now.js sk-ant-xxxxx');
+const OPENAI_API_KEY = process.argv[2];
+if (!OPENAI_API_KEY || !OPENAI_API_KEY.startsWith('sk-')) {
+  console.error('사용법: node generate_brief_now.js sk-...');
   process.exit(1);
 }
 
@@ -357,9 +356,8 @@ async function fetchInvestorFlow() {
   } catch (_) { return null; }
 }
 
-// ── Claude로 시황 생성 ───────────────────────────────────────────────────────
+// ── OpenAI(gpt-5-mini)로 시황 생성 ───────────────────────────────────────────
 async function generateBrief(marketData, sectorData, breadthData, investorFlow, news, usMarketData, slot) {
-  const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
   const { kospi, kosdaq } = marketData;
   const slotMeta = getAiBriefSlotMeta(slot);
 
@@ -368,12 +366,16 @@ async function generateBrief(marketData, sectorData, breadthData, investorFlow, 
     const fi = investorFlow;
     const fKospi = fi.kospi?.foreignNet != null ? (fi.kospi.foreignNet / 1e8).toFixed(0) + '억원' : null;
     const iKospi = fi.kospi?.institutionNet != null ? (fi.kospi.institutionNet / 1e8).toFixed(0) + '억원' : null;
+    const rKospi = fi.kospi?.retailNet != null ? (fi.kospi.retailNet / 1e8).toFixed(0) + '억원' : null;
     const fKosdaq = fi.kosdaq?.foreignNet != null ? (fi.kosdaq.foreignNet / 1e8).toFixed(0) + '억원' : null;
-    if (fKospi || iKospi || fKosdaq) {
+    const iKosdaq = fi.kosdaq?.institutionNet != null ? (fi.kosdaq.institutionNet / 1e8).toFixed(0) + '억원' : null;
+    if (fKospi || iKospi || fKosdaq || iKosdaq || rKospi) {
       investorContext = '\n\n[매매동향]';
       if (fKospi) investorContext += `\n- KOSPI 외국인 순매수: ${fKospi}`;
       if (iKospi) investorContext += `\n- KOSPI 기관 순매수: ${iKospi}`;
+      if (rKospi) investorContext += `\n- KOSPI 개인 순매수: ${rKospi}`;
       if (fKosdaq) investorContext += `\n- KOSDAQ 외국인 순매수: ${fKosdaq}`;
+      if (iKosdaq) investorContext += `\n- KOSDAQ 기관 순매수: ${iKosdaq}`;
     }
   }
 
@@ -413,7 +415,7 @@ async function generateBrief(marketData, sectorData, breadthData, investorFlow, 
     usContext = `\n\n[전일 미국장]\n- 기준일: ${usMarketData.latestDate || '확인 불가'}${staleNote}\n- ${fmt}`;
   }
 
-  const prompt = `지금은 한국 주식시장 ${slotMeta.label}입니다. 아래 데이터와 뉴스 헤드라인을 바탕으로 투자자를 위한 시황 브리핑을 작성해주세요.
+  const prompt = `지금은 한국 주식시장 ${slotMeta.label}입니다. 아래 데이터와 뉴스 헤드라인을 바탕으로, 투자자가 읽었을 때 "오늘 장이 왜 이렇게 움직였는지" 머릿속에 그림이 그려질 만큼 자세하고 구체적인 시황 브리핑을 작성하세요.
 
 [시간대별 작성 관점]
 ${slotMeta.focus}
@@ -422,30 +424,54 @@ ${slotMeta.focus}
 - 코스피: ${kospi.price.toLocaleString('ko-KR')}pt (${kospi.isUp ? '▲' : '▼'}${Math.abs(kospi.changeRate).toFixed(2)}%, ${kospi.change >= 0 ? '+' : ''}${kospi.change.toFixed(2)}pt)
 - 코스닥: ${kosdaq.price.toLocaleString('ko-KR')}pt (${kosdaq.isUp ? '▲' : '▼'}${Math.abs(kosdaq.changeRate).toFixed(2)}%, ${kosdaq.change >= 0 ? '+' : ''}${kosdaq.change.toFixed(2)}pt)${usContext}${sectorContext}${breadthContext}${investorContext}${newsContext}
 
-[작성 형식 — 반드시 아래 3개 문단을 빈 줄로 구분해서 출력]
+[작성 형식 — 반드시 아래 4개 문단을 빈 줄로 구분해서 출력]
 
-문단1 (핵심 흐름): 시간대별 작성 관점을 반영해 가장 중요한 흐름부터 서술. 09시는 전일 미국장과 국내장 출발 연결, 12시는 국내 장중 흐름, 15:30은 장 마감 결과를 우선하세요.
+문단1 (지수 흐름과 배경): 코스피·코스닥의 종가/현재가와 등락률·등락폭 숫자를 그대로 인용하면서, 시간대별 관점에 맞춰 상승·하락 배경을 풀어 쓰세요. 09시는 전일 미국장(S&P 500·NASDAQ·Dow)의 등락률과 핵심 이슈를 국내장 출발과 연결, 12시는 오전 흐름이 어떻게 펼쳐졌는지, 15:30은 종가 기준 마감 결과와 장중 변동성을 정리합니다. 단순히 "상승했습니다/하락했습니다"가 아니라, 어느 정도의 폭으로 어떤 분위기였는지 가늠되게 서술하세요. 3~4문장.
 
-문단2 (업종): 가장 두드러진 상승·하락 업종을 등락률 숫자와 함께 구체적으로 서술. 가능하면 상승 업종 1~2개와 하락 업종 1~2개를 모두 언급하고, "얼마나 올랐는지/내렸는지"가 보이게 작성. 업종 간 대조 포함. (제공된 데이터에 없는 업종명 절대 사용 금지)
+문단2 (업종 색깔): 제공된 [업종 등락] 데이터의 상승 업종 2개와 하락 업종 2개를 등락률 숫자와 함께 구체적으로 언급하고, "왜 이쪽이 강하고 저쪽이 약한지" 뉴스/매크로 흐름과 자연스럽게 엮어 설명하세요. KOSPI와 KOSDAQ의 업종 색깔이 다르면 그 대조도 짚어 주세요. 업종명은 제공된 데이터에 있는 것만 사용하고, 데이터에 없는 업종을 만들어내지 마세요. 3~4문장.
 
-문단3 (정리): 09시는 개장 초 체크할 이슈, 12시는 오후장으로 이어질 장중 포인트, 15:30은 하루를 마무리하는 정리 멘트로 작성. 뉴스가 있으면 핵심 뉴스 헤드라인의 구체 키워드(예: 미국증시, S&P500, 환율, 금리, 실적 등)를 포함하되, "투자심리에 우호적/부정적", "작용했습니다"처럼 딱딱하거나 단정적인 표현은 피하세요. "미국증시 강세 전망도 함께 거론됐습니다", "S&P500 목표치 상향 소식도 눈에 띄었습니다"처럼 자연스럽게 연결하고, 단순 헤드라인 나열은 하지 마세요.
+문단3 (수급과 시장 폭): [매매동향] 데이터의 외국인·기관(가능하면 개인) 순매수 금액(억원)을 인용하면서 매수 주체가 어디인지 명시하세요. 12시·15:30 슬롯이면 [시장 폭: ETF/ETN 제외]의 KOSPI·KOSDAQ 상승/하락 종목 수를 그대로 인용해 "지수는 ○○했지만 종목 분포는 ○○"식의 시장 폭 코멘트를 한 문장 이상 넣어 주세요. 09시 슬롯이고 매매동향·시장 폭 데이터가 없으면 환율·금리·전일 미국장 수급 톤 등 거시 배경을 대신 다루세요. 3~4문장.
+
+문단4 (정리와 체크포인트): 시간대에 맞춰 마무리합니다. 09시는 개장 초 지켜볼 이슈와 키 레벨, 12시는 오후장에서 이어질 변수, 15:30은 하루 정리와 다음 거래일에 봐야 할 포인트로 마무리하세요. 뉴스 헤드라인이 있으면 구체 키워드(미국증시, S&P500, 환율, 금리, 실적, FOMC 등)를 자연스럽게 녹이되, "투자심리에 우호적/부정적", "작용했습니다"처럼 딱딱하거나 단정적인 표현은 피하고 "거론됐습니다", "눈에 띄었습니다", "관전 포인트로 꼽힙니다"처럼 부드럽게 쓰세요. 단순 헤드라인 나열은 금지. 3~4문장.
 
 [공통 규칙]
-- 각 문단은 2~3문장
-- 12시와 15:30 브리핑은 기존 지수·업종·수급·뉴스 설명을 유지하고, [시장 폭: ETF/ETN 제외]의 KOSPI·KOSDAQ 상승/하락 종목 수는 보조 근거로 한 문장 안에 짧게 덧붙일 것
+- 4개 문단, 각 3~4문장, 전체 분량은 약 500~700자
+- 등락률·등락폭·수급 금액·종목 수 등 제공된 숫자는 반드시 본문에 등장시킬 것 (인용 부호 없이 자연스럽게)
 - 반드시 높임말(~습니다/~네요/~보입니다) 사용
-- 사실 기반 서술만, 투자 권유·예측 금지
-- 마침표로 끝낼 것
-- "오늘은", "현재" 등으로 시작하지 말 것
+- 사실 기반 서술만, 투자 권유·매수/매도 추천·미래 단정 예측 금지
+- 제공된 데이터에 없는 종목명·업종명·지표는 만들어내지 말 것
+- 각 문장은 마침표로 끝낼 것
+- "오늘은", "현재" 같은 막연한 도입부로 시작하지 말 것
 
-3개 문단만 출력 (제목·번호·다른 설명 없이, 문단 사이 빈 줄 하나):`;
+4개 문단만 출력하세요 (제목·번호·머리말 없이, 문단 사이 빈 줄 하나로 구분):`;
 
-  const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 900,
-    messages: [{ role: 'user', content: prompt }],
-  });
-  return message.content[0].text.trim();
+  const response = await axios.post(
+    'https://api.openai.com/v1/responses',
+    {
+      model: 'gpt-5-mini',
+      input: prompt,
+      max_output_tokens: 2000,
+      reasoning: { effort: 'low' },
+      text: { verbosity: 'medium' },
+    },
+    {
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 90000,
+    }
+  );
+
+  const body = response.data;
+  const text = (body?.output_text || (body?.output || [])
+    .flatMap((item) => item?.content || [])
+    .map((part) => part?.text || '')
+    .filter(Boolean)
+    .join('\n'))
+    .trim();
+  if (!text) throw new Error('OpenAI 응답이 비어 있습니다.');
+  return text;
 }
 
 // ── Firestore 저장 ───────────────────────────────────────────────────────────
@@ -536,7 +562,7 @@ async function saveMarketClosedBrief(slot, closedInfo, marketData = null) {
     const [investorFlow, news, usMarketData] = await Promise.all([fetchInvestorFlow(), fetchMarketNews(), fetchUsMarketData()]);
     console.log(investorFlow ? '  매매동향 데이터 있음' : '  매매동향 데이터 없음 (지수만 사용)');
 
-    console.log(`\n🤖 Claude Haiku로 시황 생성 중... (슬롯: ${getAiBriefSlotMeta(slot).timeLabel})`);
+    console.log(`\n🤖 GPT-5-mini로 시황 생성 중... (슬롯: ${getAiBriefSlotMeta(slot).timeLabel})`);
     const brief = await generateBrief(marketData, sectorData, breadthData, investorFlow, news, usMarketData, slot);
     console.log(`\n✅ 생성된 시황:\n  "${brief}"`);
 

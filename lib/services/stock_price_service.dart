@@ -2134,6 +2134,7 @@ class StockAiAnalysisResult {
   final String companyOverview;
   final String summary;
   final double? score;
+  final StockAiSubScores? subScores;
   final String scoreLabel;
   final String theme;
   final String sector;
@@ -2167,6 +2168,7 @@ class StockAiAnalysisResult {
     this.companyOverview = '',
     required this.summary,
     required this.score,
+    this.subScores,
     required this.scoreLabel,
     required this.theme,
     required this.sector,
@@ -2212,6 +2214,11 @@ class StockAiAnalysisResult {
       companyOverview: text('companyOverview'),
       summary: text('summary'),
       score: (map['score'] as num?)?.toDouble(),
+      subScores: map['subScores'] is Map
+          ? StockAiSubScores.fromMap(
+              Map<String, dynamic>.from(map['subScores'] as Map),
+            )
+          : null,
       scoreLabel: text('scoreLabel'),
       theme: text('theme'),
       sector: text('sector'),
@@ -2311,6 +2318,7 @@ class StockAiAnalysisResult {
       'companyOverview': companyOverview,
       'summary': summary,
       'score': score,
+      'subScores': subScores?.toMap(),
       'scoreLabel': scoreLabel,
       'theme': theme,
       'sector': sector,
@@ -2776,6 +2784,42 @@ class StockAiFinancialItem {
       'current': current,
       'previous': previous,
       'statement': statement,
+    };
+  }
+}
+
+class StockAiSubScores {
+  final double? priceTrend;
+  final double? newsImpact;
+  final double? fundamentals;
+  final double? momentumFlow;
+  final double? riskLevel;
+
+  const StockAiSubScores({
+    this.priceTrend,
+    this.newsImpact,
+    this.fundamentals,
+    this.momentumFlow,
+    this.riskLevel,
+  });
+
+  factory StockAiSubScores.fromMap(Map<String, dynamic> map) {
+    return StockAiSubScores(
+      priceTrend: (map['priceTrend'] as num?)?.toDouble(),
+      newsImpact: (map['newsImpact'] as num?)?.toDouble(),
+      fundamentals: (map['fundamentals'] as num?)?.toDouble(),
+      momentumFlow: (map['momentumFlow'] as num?)?.toDouble(),
+      riskLevel: (map['riskLevel'] as num?)?.toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'priceTrend': priceTrend,
+      'newsImpact': newsImpact,
+      'fundamentals': fundamentals,
+      'momentumFlow': momentumFlow,
+      'riskLevel': riskLevel,
     };
   }
 }

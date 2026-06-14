@@ -14,9 +14,9 @@ const WebSocket = require('ws');
 const AdmZip = require('adm-zip');
 const eucKrDecoder = new TextDecoder('euc-kr');
 
-const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 const OPENAI_API_KEY = defineSecret('OPENAI_API_KEY');
 const DART_API_KEY = defineSecret('DART_API_KEY');
+const REVENUECAT_SECRET_API_KEY = defineSecret('REVENUECAT_SECRET_API_KEY');
 const {
   crawlDailyInvestorFlow,
   collectDailyInvestorFlow,
@@ -154,16 +154,6 @@ async function filterUsersByGlobalSetting(db, uidSet, key) {
       if (isNotificationEnabled(d.data(), key)) allowed.add(d.id);
     });
   }
-  return allowed;
-}
-
-async function getAllUserUidsByGlobalSetting(db, key, excludeUid) {
-  const snap = await db.collection('users').get();
-  const allowed = new Set();
-  snap.docs.forEach((d) => {
-    if (d.id === excludeUid) return;
-    if (isNotificationEnabled(d.data(), key)) allowed.add(d.id);
-  });
   return allowed;
 }
 
@@ -737,8 +727,32 @@ exports.sendPushOnNotificationQueue = onDocumentCreated(
     let recipientUids = new Set();
     let tokens = [];
     if (topic === 'new_pick_alerts') {
-      recipientUids = await getAllUserUidsByGlobalSetting(db, 'newPick');
-      tokens = await getTokensByUids(db, recipientUids);
+      // Only token holders can receive pushes, so use fcm_tokens as the
+      // candidate set and then filter by the user's notification setting.
+      // Avoids scanning the entire users collection on every push.
+      const tokensSnap = await db.collection('fcm_tokens').get();
+      const tokensByUid = new Map();
+      tokensSnap.docs.forEach((d) => {
+        const data = d.data();
+        const uid = data.uid;
+        const token = data.token;
+        if (typeof uid !== 'string' || !uid) return;
+        if (typeof token !== 'string' || !token) return;
+        if (!tokensByUid.has(uid)) tokensByUid.set(uid, []);
+        tokensByUid.get(uid).push(token);
+      });
+
+      recipientUids = await filterUsersByGlobalSetting(
+        db,
+        new Set(tokensByUid.keys()),
+        'newPick'
+      );
+
+      const tokenSet = new Set();
+      recipientUids.forEach((uid) => {
+        (tokensByUid.get(uid) || []).forEach((t) => tokenSet.add(t));
+      });
+      tokens = Array.from(tokenSet);
     } else {
       const tokensSnap = await db.collection('fcm_tokens').get();
       const tokenSet = new Set();
@@ -2029,10 +2043,7 @@ async function fetchInvestorFlowSummary(db) {
   } catch (_) { return null; }
 }
 
-async function generateBriefWithClaude(apiKey, marketData, sectorData, breadthData, investorFlow, news, usMarketData, slot) {
-  const Anthropic = require('@anthropic-ai/sdk');
-  const client = new Anthropic({ apiKey });
-
+function buildAiBriefPrompt(marketData, sectorData, breadthData, investorFlow, news, usMarketData, slot) {
   const { kospi, kosdaq } = marketData;
   const slotMeta = getAiBriefSlotMeta(slot);
 
@@ -2041,12 +2052,16 @@ async function generateBriefWithClaude(apiKey, marketData, sectorData, breadthDa
     const fi = investorFlow;
     const fKospi = fi.kospi?.foreignNet != null ? (fi.kospi.foreignNet / 1e8).toFixed(0) + '억원' : null;
     const iKospi = fi.kospi?.institutionNet != null ? (fi.kospi.institutionNet / 1e8).toFixed(0) + '억원' : null;
+    const rKospi = fi.kospi?.retailNet != null ? (fi.kospi.retailNet / 1e8).toFixed(0) + '억원' : null;
     const fKosdaq = fi.kosdaq?.foreignNet != null ? (fi.kosdaq.foreignNet / 1e8).toFixed(0) + '억원' : null;
-    if (fKospi || iKospi || fKosdaq) {
+    const iKosdaq = fi.kosdaq?.institutionNet != null ? (fi.kosdaq.institutionNet / 1e8).toFixed(0) + '억원' : null;
+    if (fKospi || iKospi || fKosdaq || iKosdaq || rKospi) {
       investorContext = '\n\n[매매동향]';
       if (fKospi) investorContext += `\n- KOSPI 외국인 순매수: ${fKospi}`;
       if (iKospi) investorContext += `\n- KOSPI 기관 순매수: ${iKospi}`;
+      if (rKospi) investorContext += `\n- KOSPI 개인 순매수: ${rKospi}`;
       if (fKosdaq) investorContext += `\n- KOSDAQ 외국인 순매수: ${fKosdaq}`;
+      if (iKosdaq) investorContext += `\n- KOSDAQ 기관 순매수: ${iKosdaq}`;
     }
   }
 
@@ -2086,7 +2101,7 @@ async function generateBriefWithClaude(apiKey, marketData, sectorData, breadthDa
     usContext = `\n\n[전일 미국장]\n- 기준일: ${usMarketData.latestDate || '확인 불가'}${staleNote}\n- ${fmt}`;
   }
 
-  const prompt = `지금은 한국 주식시장 ${slotMeta.label}입니다. 아래 데이터와 뉴스 헤드라인을 바탕으로 투자자를 위한 시황 브리핑을 작성해주세요.
+  return `지금은 한국 주식시장 ${slotMeta.label}입니다. 아래 데이터와 뉴스 헤드라인을 바탕으로, 투자자가 읽었을 때 "오늘 장이 왜 이렇게 움직였는지" 머릿속에 그림이 그려질 만큼 자세하고 구체적인 시황 브리핑을 작성하세요.
 
 [시간대별 작성 관점]
 ${slotMeta.focus}
@@ -2095,30 +2110,61 @@ ${slotMeta.focus}
 - 코스피: ${kospi.price.toLocaleString('ko-KR')}pt (${kospi.isUp ? '▲' : '▼'}${Math.abs(kospi.changeRate).toFixed(2)}%, ${kospi.change >= 0 ? '+' : ''}${kospi.change.toFixed(2)}pt)
 - 코스닥: ${kosdaq.price.toLocaleString('ko-KR')}pt (${kosdaq.isUp ? '▲' : '▼'}${Math.abs(kosdaq.changeRate).toFixed(2)}%, ${kosdaq.change >= 0 ? '+' : ''}${kosdaq.change.toFixed(2)}pt)${usContext}${sectorContext}${breadthContext}${investorContext}${newsContext}
 
-[작성 형식 — 반드시 아래 3개 문단을 빈 줄로 구분해서 출력]
+[작성 형식 — 반드시 아래 4개 문단을 빈 줄로 구분해서 출력]
 
-문단1 (핵심 흐름): 시간대별 작성 관점을 반영해 가장 중요한 흐름부터 서술. 09시는 전일 미국장과 국내장 출발 연결, 12시는 국내 장중 흐름, 15:30은 장 마감 결과를 우선하세요.
+문단1 (지수 흐름과 배경): 코스피·코스닥의 종가/현재가와 등락률·등락폭 숫자를 그대로 인용하면서, 시간대별 관점에 맞춰 상승·하락 배경을 풀어 쓰세요. 09시는 전일 미국장(S&P 500·NASDAQ·Dow)의 등락률과 핵심 이슈를 국내장 출발과 연결, 12시는 오전 흐름이 어떻게 펼쳐졌는지, 15:30은 종가 기준 마감 결과와 장중 변동성을 정리합니다. 단순히 "상승했습니다/하락했습니다"가 아니라, 어느 정도의 폭으로 어떤 분위기였는지 가늠되게 서술하세요. 3~4문장.
 
-문단2 (업종): 가장 두드러진 상승·하락 업종을 등락률 숫자와 함께 구체적으로 서술. 가능하면 상승 업종 1~2개와 하락 업종 1~2개를 모두 언급하고, "얼마나 올랐는지/내렸는지"가 보이게 작성. 업종 간 대조 포함. (제공된 데이터에 없는 업종명 절대 사용 금지)
+문단2 (업종 색깔): 제공된 [업종 등락] 데이터의 상승 업종 2개와 하락 업종 2개를 등락률 숫자와 함께 구체적으로 언급하고, "왜 이쪽이 강하고 저쪽이 약한지" 뉴스/매크로 흐름과 자연스럽게 엮어 설명하세요. KOSPI와 KOSDAQ의 업종 색깔이 다르면 그 대조도 짚어 주세요. 업종명은 제공된 데이터에 있는 것만 사용하고, 데이터에 없는 업종을 만들어내지 마세요. 3~4문장.
 
-문단3 (정리): 09시는 개장 초 체크할 이슈, 12시는 오후장으로 이어질 장중 포인트, 15:30은 하루를 마무리하는 정리 멘트로 작성. 뉴스가 있으면 핵심 뉴스 헤드라인의 구체 키워드(예: 미국증시, S&P500, 환율, 금리, 실적 등)를 포함하되, "투자심리에 우호적/부정적", "작용했습니다"처럼 딱딱하거나 단정적인 표현은 피하세요. "미국증시 강세 전망도 함께 거론됐습니다", "S&P500 목표치 상향 소식도 눈에 띄었습니다"처럼 자연스럽게 연결하고, 단순 헤드라인 나열은 하지 마세요.
+문단3 (수급과 시장 폭): [매매동향] 데이터의 외국인·기관(가능하면 개인) 순매수 금액(억원)을 인용하면서 매수 주체가 어디인지 명시하세요. 12시·15:30 슬롯이면 [시장 폭: ETF/ETN 제외]의 KOSPI·KOSDAQ 상승/하락 종목 수를 그대로 인용해 "지수는 ○○했지만 종목 분포는 ○○"식의 시장 폭 코멘트를 한 문장 이상 넣어 주세요. 09시 슬롯이고 매매동향·시장 폭 데이터가 없으면 환율·금리·전일 미국장 수급 톤 등 거시 배경을 대신 다루세요. 3~4문장.
+
+문단4 (정리와 체크포인트): 시간대에 맞춰 마무리합니다. 09시는 개장 초 지켜볼 이슈와 키 레벨, 12시는 오후장에서 이어질 변수, 15:30은 하루 정리와 다음 거래일에 봐야 할 포인트로 마무리하세요. 뉴스 헤드라인이 있으면 구체 키워드(미국증시, S&P500, 환율, 금리, 실적, FOMC 등)를 자연스럽게 녹이되, "투자심리에 우호적/부정적", "작용했습니다"처럼 딱딱하거나 단정적인 표현은 피하고 "거론됐습니다", "눈에 띄었습니다", "관전 포인트로 꼽힙니다"처럼 부드럽게 쓰세요. 단순 헤드라인 나열은 금지. 3~4문장.
 
 [공통 규칙]
-- 각 문단은 2~3문장
-- 12시와 15:30 브리핑은 기존 지수·업종·수급·뉴스 설명을 유지하고, [시장 폭: ETF/ETN 제외]의 KOSPI·KOSDAQ 상승/하락 종목 수는 보조 근거로 한 문장 안에 짧게 덧붙일 것
+- 4개 문단, 각 3~4문장, 전체 분량은 약 500~700자
+- 등락률·등락폭·수급 금액·종목 수 등 제공된 숫자는 반드시 본문에 등장시킬 것 (인용 부호 없이 자연스럽게)
 - 반드시 높임말(~습니다/~네요/~보입니다) 사용
-- 사실 기반 서술만, 투자 권유·예측 금지
-- 마침표로 끝낼 것
-- "오늘은", "현재" 등으로 시작하지 말 것
+- 사실 기반 서술만, 투자 권유·매수/매도 추천·미래 단정 예측 금지
+- 제공된 데이터에 없는 종목명·업종명·지표는 만들어내지 말 것
+- 각 문장은 마침표로 끝낼 것
+- "오늘은", "현재" 같은 막연한 도입부로 시작하지 말 것
 
-3개 문단만 출력 (제목·번호·다른 설명 없이, 문단 사이 빈 줄 하나):`;
+4개 문단만 출력하세요 (제목·번호·머리말 없이, 문단 사이 빈 줄 하나로 구분):`;
+}
 
-  const message = await client.messages.create({
-    model: 'claude-haiku-4-5-20251001',
-    max_tokens: 900,
-    messages: [{ role: 'user', content: prompt }],
+async function generateBriefWithOpenAi(apiKey, marketData, sectorData, breadthData, investorFlow, news, usMarketData, slot) {
+  const prompt = buildAiBriefPrompt(marketData, sectorData, breadthData, investorFlow, news, usMarketData, slot);
+
+  const response = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-5-mini',
+      input: prompt,
+      max_output_tokens: 2000,
+      reasoning: { effort: 'low' },
+      text: { verbosity: 'medium' },
+    }),
   });
-  return message.content[0].text.trim();
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    const detail = body?.error?.message || response.statusText || 'OpenAI API request failed';
+    throw new Error(`[AiBrief] OpenAI 호출 실패: ${detail}`);
+  }
+
+  const text = (body?.output_text || (body?.output || [])
+    .flatMap((item) => item?.content || [])
+    .map((part) => part?.text || '')
+    .filter(Boolean)
+    .join('\n'))
+    .trim();
+
+  if (!text) throw new Error('[AiBrief] OpenAI 응답이 비어 있습니다.');
+  return text;
 }
 
 async function runAiBriefGeneration(apiKey, slot) {
@@ -2175,7 +2221,7 @@ async function runAiBriefGeneration(apiKey, slot) {
   const marketClosed = getMarketClosedInfo(marketData);
   if (marketClosed) return saveMarketClosedBrief(marketClosed, marketData);
 
-  const brief = await generateBriefWithClaude(apiKey, marketData, sectorData, breadthData, investorFlow, news, usMarketData, slot);
+  const brief = await generateBriefWithOpenAi(apiKey, marketData, sectorData, breadthData, investorFlow, news, usMarketData, slot);
 
   const slotLabel = getAiBriefSlotMeta(slot).timeLabel;
   const payload = {
@@ -2200,25 +2246,25 @@ async function runAiBriefGeneration(apiKey, slot) {
 
 // ── AI 시황 스케줄 (평일 09:00 KST) ─────────────────────────────────────────
 exports.generateAiBriefMorning = onSchedule(
-  { schedule: '0 9 * * 1-5', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 120, secrets: [ANTHROPIC_API_KEY] },
-  async () => { await runAiBriefGeneration(ANTHROPIC_API_KEY.value(), '09'); }
+  { schedule: '0 9 * * 1-5', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 180, secrets: [OPENAI_API_KEY] },
+  async () => { await runAiBriefGeneration(OPENAI_API_KEY.value(), '09'); }
 );
 
 // ── AI 시황 스케줄 (평일 12:00 KST) ─────────────────────────────────────────
 exports.generateAiBriefMidday = onSchedule(
-  { schedule: '0 12 * * 1-5', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 120, secrets: [ANTHROPIC_API_KEY] },
-  async () => { await runAiBriefGeneration(ANTHROPIC_API_KEY.value(), '12'); }
+  { schedule: '0 12 * * 1-5', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 180, secrets: [OPENAI_API_KEY] },
+  async () => { await runAiBriefGeneration(OPENAI_API_KEY.value(), '12'); }
 );
 
 // ── AI 시황 스케줄 (평일 15:30 KST) ─────────────────────────────────────────
 exports.generateAiBriefAfternoon = onSchedule(
-  { schedule: '30 15 * * 1-5', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 120, secrets: [ANTHROPIC_API_KEY] },
-  async () => { await runAiBriefGeneration(ANTHROPIC_API_KEY.value(), '15'); }
+  { schedule: '30 15 * * 1-5', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 180, secrets: [OPENAI_API_KEY] },
+  async () => { await runAiBriefGeneration(OPENAI_API_KEY.value(), '15'); }
 );
 
 // ── AI 시황 수동 트리거 (테스트용, 관리자만) ─────────────────────────────────
 exports.generateAiBriefNow = onRequest(
-  { region: 'asia-northeast3', timeoutSeconds: 120, secrets: [ANTHROPIC_API_KEY] },
+  { region: 'asia-northeast3', timeoutSeconds: 180, secrets: [OPENAI_API_KEY] },
   async (req, res) => {
     try {
       const db = getFirestore();
@@ -2236,7 +2282,7 @@ exports.generateAiBriefNow = onRequest(
       }).format(now));
       const slot = kstHour < 11 ? '09' : kstHour < 14 ? '12' : '15';
 
-      const brief = await runAiBriefGeneration(ANTHROPIC_API_KEY.value(), slot);
+      const brief = await runAiBriefGeneration(OPENAI_API_KEY.value(), slot);
       res.json({ ok: true, brief, slot });
     } catch (e) {
       console.error('[generateAiBriefNow]', e);
@@ -2347,6 +2393,15 @@ function normalizeStockAnalysisPayload(parsed) {
   return {
     companyOverview: clampStockAnalysisInput(parsed.companyOverview, 600),
     summary: clampStockAnalysisInput(parsed.summary, 1200),
+    subScores: parsed.subScores && typeof parsed.subScores === 'object'
+      ? {
+          priceTrend: clampSubScore(parsed.subScores.priceTrend),
+          newsImpact: clampSubScore(parsed.subScores.newsImpact),
+          fundamentals: clampSubScore(parsed.subScores.fundamentals),
+          momentumFlow: clampSubScore(parsed.subScores.momentumFlow),
+          riskLevel: clampSubScore(parsed.subScores.riskLevel),
+        }
+      : null,
     score: Number.isFinite(Number(parsed.score)) ? Math.max(0, Math.min(100, Number(parsed.score))) : null,
     scoreLabel: clampStockAnalysisInput(parsed.scoreLabel, 80),
     theme: clampStockAnalysisInput(parsed.theme, 600),
@@ -2450,6 +2505,363 @@ function attachStockAnalysisSources(payload, sources) {
     sourceReports: sources?.sourceReports || [],
     sourceEpsTimeline: sources?.sourceEpsTimeline || [],
   };
+}
+
+/**
+ * 결정론적 valuation sub-score (0~100).
+ * 입력 데이터로 신호 1개 이상 잡히면 결과 반환, 아니면 null.
+ * - signalCount: 잡힌 신호 수 (블렌딩 가중치 결정용)
+ * - signals: 디버그/추후 표시용 신호 목록
+ */
+function computeValuationDeterministicScore({
+  trailingPer,
+  forwardPer,
+  sectorPer,
+  epsTimeline,
+  brokerTargets,
+  currentPrice,
+  dartFinancials,
+}) {
+  const signals = [];
+  let signalCount = 0;
+  let score = 50;
+  // "실적 회복/둔화"를 다른 각도에서 본 신호들 — double counting 방지 위해
+  // 합산해서 별도 cap 적용 후 score에 더한다.
+  // 포함: (1) forward PER ratio (회복/둔화), (3) EPS 시계열, (6) 영업이익 YoY 전환
+  let recoveryDelta = 0;
+  const addRecovery = (delta, label) => {
+    recoveryDelta += delta;
+    signals.push(label);
+  };
+
+  // (1) forward PER vs trailing PER — 실적 회복/둔화 시그널 (recovery group)
+  if (
+    Number.isFinite(forwardPer) && forwardPer > 0 &&
+    Number.isFinite(trailingPer) && trailingPer > 0
+  ) {
+    const ratio = forwardPer / trailingPer;
+    if (ratio < 0.5) {
+      addRecovery(22, 'forward PER이 trailing PER의 50% 미만 — 강한 실적 회복');
+    } else if (ratio < 0.7) {
+      addRecovery(14, 'forward PER이 trailing PER의 70% 미만 — 실적 개선');
+    } else if (ratio < 0.85) {
+      addRecovery(6, 'forward PER 소폭 개선');
+    } else if (ratio > 1.4) {
+      addRecovery(-16, 'forward PER이 trailing PER 1.4배 초과 — 실적 둔화');
+    } else if (ratio > 1.15) {
+      addRecovery(-8, 'forward PER이 trailing PER을 상회 — 둔화 우려');
+    }
+    signalCount++;
+  }
+
+  // (2) forward PER vs 업종평균 PER — 할인/프리미엄
+  if (
+    Number.isFinite(forwardPer) && forwardPer > 0 &&
+    Number.isFinite(sectorPer) && sectorPer > 0
+  ) {
+    const discount = (sectorPer - forwardPer) / sectorPer;
+    if (discount > 0.35) {
+      score += 10;
+      signals.push('forward PER이 업종평균 대비 35%+ 할인');
+    } else if (discount > 0.15) {
+      score += 5;
+      signals.push('forward PER이 업종평균 대비 할인');
+    } else if (discount < -0.35) {
+      score -= 10;
+      signals.push('forward PER이 업종평균 대비 35%+ 프리미엄');
+    } else if (discount < -0.15) {
+      score -= 5;
+      signals.push('forward PER이 업종평균 대비 프리미엄');
+    }
+    signalCount++;
+  }
+
+  // (3) EPS 시계열 추세 — 가장 오래된 vs 가장 최신 추정 (recovery group)
+  if (Array.isArray(epsTimeline) && epsTimeline.length >= 2) {
+    const valid = epsTimeline.filter((r) => Number.isFinite(r?.eps));
+    if (valid.length >= 2) {
+      const first = valid[0].eps;
+      const last = valid[valid.length - 1].eps;
+      if (first > 0 && last > 0) {
+        const totalGrowth = (last - first) / first;
+        if (totalGrowth > 0.6) {
+          addRecovery(10, 'EPS 시계열 60%+ 누적 증가');
+        } else if (totalGrowth > 0.25) {
+          addRecovery(5, 'EPS 시계열 25%+ 누적 증가');
+        } else if (totalGrowth < -0.3) {
+          addRecovery(-10, 'EPS 시계열 30%+ 누적 감소');
+        } else if (totalGrowth < -0.1) {
+          addRecovery(-5, 'EPS 시계열 감소 추세');
+        }
+        signalCount++;
+      } else if (first < 0 && last > 0) {
+        addRecovery(18, 'EPS 적자→흑자 전환');
+        signalCount++;
+      } else if (first > 0 && last < 0) {
+        addRecovery(-18, 'EPS 흑자→적자 전환');
+        signalCount++;
+      }
+    }
+  }
+
+  // (4) 증권사 평균 목표가 vs 현재가
+  // 한국 시장 baseline이 +20% 정도라 그 위로 strict threshold.
+  // broker 최소 2개 이상일 때만 신뢰.
+  if (
+    Array.isArray(brokerTargets) &&
+    Number.isFinite(currentPrice) && currentPrice > 0
+  ) {
+    const validTargets = brokerTargets.filter((t) => Number.isFinite(t) && t > 0);
+    if (validTargets.length >= 2) {
+      const avgTarget = validTargets.reduce((a, b) => a + b, 0) / validTargets.length;
+      const upside = (avgTarget - currentPrice) / currentPrice;
+      if (upside > 0.40) {
+        score += 6;
+        signals.push('증권사 평균 목표가 +40% 이상 상회');
+      } else if (upside > 0.25) {
+        score += 3;
+        signals.push('증권사 평균 목표가 baseline 위 상회');
+      } else if (upside < -0.05) {
+        score -= 8;
+        signals.push('증권사 평균 목표가가 현재가 아래 — 강한 부정');
+      } else if (upside < 0.05) {
+        score -= 3;
+        signals.push('증권사 평균 목표가가 현재가 근처 — 상승여력 제한');
+      }
+      signalCount++;
+    }
+  }
+
+  // (5) DART 영업이익 YoY — current vs previous (전년 동기) (recovery group)
+  if (Array.isArray(dartFinancials) && dartFinancials.length) {
+    const opRow = dartFinancials.find((f) => f?.account === '영업이익');
+    const cur = parseDartAmount(opRow?.current);
+    const prev = parseDartAmount(opRow?.previous);
+    if (Number.isFinite(cur) && Number.isFinite(prev)) {
+      if (prev < 0 && cur > 0) {
+        addRecovery(10, '영업이익 적자→흑자 전환 (YoY)');
+        signalCount++;
+      } else if (prev > 0 && cur < 0) {
+        addRecovery(-10, '영업이익 흑자→적자 전환 (YoY)');
+        signalCount++;
+      } else if (prev > 0 && cur > 0) {
+        const yoy = (cur - prev) / prev;
+        if (yoy > 0.30) {
+          addRecovery(5, '영업이익 YoY +30% 이상');
+          signalCount++;
+        } else if (yoy > 0.10) {
+          addRecovery(2, '영업이익 YoY +10% 이상');
+          signalCount++;
+        } else if (yoy < -0.30) {
+          addRecovery(-6, '영업이익 YoY -30% 이하');
+          signalCount++;
+        } else if (yoy < -0.10) {
+          addRecovery(-3, '영업이익 YoY -10% 이하');
+          signalCount++;
+        }
+      } else if (prev < 0 && cur < 0) {
+        // 적자 → 적자: 적자폭 축소면 가산, 확대면 감점.
+        const reduction = (Math.abs(prev) - Math.abs(cur)) / Math.abs(prev);
+        if (reduction > 0.30) {
+          addRecovery(3, '영업적자 30%+ 축소');
+          signalCount++;
+        } else if (reduction < -0.30) {
+          addRecovery(-5, '영업적자 30%+ 확대');
+          signalCount++;
+        }
+      }
+    }
+  }
+
+  if (signalCount === 0) return null;
+
+  // Recovery group cap — 같은 회복/둔화 추세가 3축에서 동시에 잡혀도
+  // 합쳐서 ±25점 이내로 제한해 double counting 완화.
+  const cappedRecovery = Math.max(-25, Math.min(25, recoveryDelta));
+  score += cappedRecovery;
+  if (recoveryDelta !== cappedRecovery) {
+    signals.push(`(회복 신호 합산 ${recoveryDelta > 0 ? '+' : ''}${recoveryDelta} → cap ${cappedRecovery > 0 ? '+' : ''}${cappedRecovery})`);
+  }
+
+  score = Math.max(0, Math.min(100, score));
+  return { score, signals, signalCount };
+}
+
+/**
+ * DART 보고서 금액 문자열을 숫자로. 한국 단위(콤마, 음수 괄호) 처리.
+ * 예: "1,234,567" → 1234567
+ *     "(1,234)" → -1234
+ *     "-1,234" → -1234
+ */
+function parseDartAmount(raw) {
+  if (raw == null) return null;
+  let s = String(raw).trim();
+  if (!s) return null;
+  let sign = 1;
+  // 회계 표기 음수: (1,234)
+  if (/^\(.*\)$/.test(s)) {
+    sign = -1;
+    s = s.slice(1, -1);
+  }
+  // 명시적 음수 부호
+  if (s.startsWith('-')) {
+    sign = sign * -1;
+    s = s.slice(1);
+  }
+  // 콤마/공백 제거
+  s = s.replace(/[,\s]/g, '');
+  if (!/^\d+(?:\.\d+)?$/.test(s)) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n * sign : null;
+}
+
+/**
+ * 모델 점수와 결정론적 valuation 점수를 보수적으로 블렌딩.
+ * - 신호 1개: 10%, 2개: 18%, 3+: 25% 가중치
+ * - 모델 점수에서 ±maxDelta(=10)점 이내로만 이동 (action band 한 칸 정도)
+ */
+function blendStockAnalysisScore({
+  modelScore,
+  valuationScore,
+  signalCount,
+  maxDelta = 15,
+}) {
+  if (!Number.isFinite(modelScore)) return null;
+  if (!Number.isFinite(valuationScore)) return modelScore;
+  // 신호가 많을수록 결정론 가중치 ↑ — 차별화 강화.
+  const weight = signalCount >= 4
+    ? 0.40
+    : signalCount >= 3
+      ? 0.32
+      : signalCount >= 2
+        ? 0.22
+        : 0.12;
+  const blended = modelScore * (1 - weight) + valuationScore * weight;
+  const delta = Math.max(-maxDelta, Math.min(maxDelta, blended - modelScore));
+  return Math.round(Math.max(0, Math.min(100, modelScore + delta)));
+}
+
+/**
+ * 모델이 출력한 sub-score 5개를 가중합해 score를 재계산.
+ *
+ * 정책: 비대칭 보정.
+ * - 모델 score < 가중합 - 3: 모델이 종합점수를 안전한 60대로 내린 경우.
+ *   → 가중합으로 교체해서 sub-score가 보여주는 우호 신호를 종합점수에도 반영.
+ * - 모델 score > 가중합 + 3: 모델이 holistic 판단으로 종합점수를 위로 올린 경우.
+ *   → 모델의 conviction을 일부 존중. 가중합 + 6까지는 허용 (그 이상은 가중합+6으로 cap).
+ * - 차이 ±3 이내: 모델 score 유지.
+ *
+ * "80+ 점수가 거의 안 나온다"는 문제는 모델이 sub 평균보다 위로 못 가는
+ * 대칭 규칙 때문이었음. holistic 신호(여러 축이 함께 강할 때 시너지)는
+ * 가중합만으로 잡히지 않으므로, 위쪽에만 약간의 여유를 둔다.
+ */
+function recomputeScoreFromSubScores(payload) {
+  const sub = payload?.subScores;
+  if (!sub || typeof sub !== 'object') return payload;
+  const weights = {
+    priceTrend: 0.25,
+    newsImpact: 0.20,
+    fundamentals: 0.20,
+    momentumFlow: 0.20,
+    riskLevel: 0.15,
+  };
+  let total = 0;
+  let weightSum = 0;
+  for (const [key, weight] of Object.entries(weights)) {
+    const v = Number(sub[key]);
+    if (Number.isFinite(v) && v >= 0 && v <= 100) {
+      total += v * weight;
+      weightSum += weight;
+    }
+  }
+  if (weightSum < 0.5) return payload; // sub-score가 절반 이상 비었으면 패스
+  const computed = Math.round(total / weightSum);
+  const modelScore = Number(payload.score);
+  if (!Number.isFinite(modelScore)) {
+    return { ...payload, score: computed };
+  }
+  const delta = modelScore - computed;
+  if (delta < -3) {
+    // 모델이 sub 평균보다 아래로 도망침 → 가중합으로 끌어올림
+    return { ...payload, score: computed };
+  }
+  if (delta > 6) {
+    // 모델이 너무 위로 올림 → 가중합 + 6으로 cap
+    return { ...payload, score: computed + 6 };
+  }
+  // 차이 ±3~+6 → 모델 conviction 존중
+  return payload;
+}
+
+/**
+ * 점수가 결정론 보정으로 이동했을 때 timing.action이 점수 밴드에서
+ * 벗어났는지 검사하고 보정.
+ *
+ * 점수가 70인데 매수보류, 점수가 65인데 분할매수처럼 사용자가 느낄
+ * "당연한 어긋남"을 막는다. 모델이 고른 action이 밴드 내 허용 범위면
+ * 그대로 두고, 밴드를 벗어났을 때만 밴드의 default 값으로 교체.
+ *
+ * 데이터 핵심 결측 표지(timing.action이 이미 '판단보류')는 건드리지 않음.
+ */
+function reconcileAction(action, finalScore) {
+  if (!Number.isFinite(finalScore)) return action;
+  if (action === '판단보류') return action;
+
+  const cur = typeof action === 'string' ? action.trim() : '';
+  // 각 밴드의 허용 액션 집합 (밴드 default 첫 번째 + 인접 허용 옵션)
+  let band;
+  if (finalScore >= 80) {
+    band = { allow: ['비중확대', '분할매수'], def: '비중확대' };
+  } else if (finalScore >= 70) {
+    band = { allow: ['분할매수', '비중확대', '매수보류'], def: '분할매수' };
+  } else if (finalScore >= 60) {
+    band = { allow: ['매수보류', '분할매수', '관망'], def: '매수보류' };
+  } else if (finalScore >= 50) {
+    band = { allow: ['관망', '매수보류'], def: '관망' };
+  } else if (finalScore >= 40) {
+    band = { allow: ['매수보류', '비중축소', '관망'], def: '매수보류' };
+  } else if (finalScore >= 30) {
+    band = { allow: ['비중축소', '매수보류'], def: '비중축소' };
+  } else {
+    band = { allow: ['비중축소'], def: '비중축소' };
+  }
+
+  if (band.allow.includes(cur)) return cur;
+  return band.def;
+}
+
+/**
+ * 점수가 결정론 보정으로 이동했을 때 scoreLabel(우호/중립/주의)이
+ * 새 구간과 어긋나지 않도록 가볍게 재정렬.
+ * 모델이 적은 "이유 한 문장"은 그대로 유지하고 라벨만 교체.
+ */
+function reconcileScoreLabel(scoreLabel, finalScore) {
+  if (!Number.isFinite(finalScore)) return scoreLabel;
+  // 클라이언트 _scoreColor 임계값(70/50)과 정렬.
+  const expected = finalScore >= 70 ? '우호' : finalScore >= 50 ? '중립' : '주의';
+  const current = typeof scoreLabel === 'string' ? scoreLabel : '';
+  if (!current) return expected;
+  const has = (k) => current.includes(k);
+  // 라벨이 새 구간과 같은 카테고리면 그대로 유지
+  if (
+    (expected === '우호' && has('우호')) ||
+    (expected === '중립' && has('중립')) ||
+    (expected === '주의' && has('주의'))
+  ) {
+    return current;
+  }
+  // 어긋났으면 라벨만 갈아끼우고 모델이 적은 사유는 보존
+  return current
+    .replace(/(우호|중립|주의)/, expected)
+    .replace(/^[^.]*/, (head) =>
+      /(우호|중립|주의)/.test(head) ? head : expected,
+    );
+}
+
+function clampSubScore(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.min(100, Math.round(n)));
 }
 
 function applyNaverValuationFallback(payload, naverValuation) {
@@ -2756,12 +3168,130 @@ function buildTechnicalSnapshot(candles) {
   };
 }
 
+function seoulDateKey() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+function freeDailyAiLimit(level) {
+  if (level >= 20) return 5;
+  if (level >= 10) return 3;
+  if (level >= 5) return 2;
+  return 1;
+}
+
+async function hasRevenueCatPremium(uid, secretApiKey) {
+  const apiKey = (secretApiKey || '').trim();
+  if (!apiKey) return false;
+  try {
+    const response = await axios.get(
+      `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(uid)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 5000,
+      }
+    );
+    const premium = response.data?.subscriber?.entitlements?.premium;
+    if (!premium) return false;
+    if (!premium.expires_date) return true;
+    return Date.parse(premium.expires_date) > Date.now();
+  } catch (error) {
+    console.warn('[RevenueCat] premium lookup failed:', error?.message || error);
+    return false;
+  }
+}
+
+// 클라이언트(AuthService.adminUids)와 동일하게 유지할 것.
+const ADMIN_UIDS = new Set([
+  '1KzEXKZMoFaYOymYyoI283AR3Y32',
+  'v4a3ClF3FhWGXsGnZ29wyvQNSCX2',
+]);
+
+async function isAdminUid(uid) {
+  if (!uid) return false;
+  if (ADMIN_UIDS.has(uid)) return true;
+  try {
+    const snap = await getFirestore().collection('config').doc('admin').get();
+    const data = snap.data() || {};
+    if (data.uid && data.uid === uid) return true;
+    if (Array.isArray(data.uids) && data.uids.includes(uid)) return true;
+    return false;
+  } catch (e) {
+    console.warn('[isAdminUid] lookup failed:', e?.message || e);
+    return false;
+  }
+}
+
+async function consumeStockAiAnalysisQuota(uid, revenueCatSecretApiKey) {
+  if (await isAdminUid(uid)) return null;
+  const db = getFirestore();
+  const isPremium = await hasRevenueCatPremium(uid, revenueCatSecretApiKey);
+  const dateKey = seoulDateKey();
+  const quotaRef = db.collection('users').doc(uid).collection('ai_quota').doc(dateKey);
+  const publicRef = db.collection('user_public').doc(uid);
+
+  await db.runTransaction(async (tx) => {
+    const [quotaSnap, publicSnap] = await Promise.all([
+      tx.get(quotaRef),
+      tx.get(publicRef),
+    ]);
+    const used = Number(quotaSnap.data()?.count || 0);
+    const level = Number(publicSnap.data()?.level || 1);
+    const limit = isPremium ? 3 : freeDailyAiLimit(level);
+    if (used >= limit) {
+      throw new HttpsError(
+        'resource-exhausted',
+        isPremium
+          ? '프리미엄 AI 분석은 하루 3회까지 사용할 수 있습니다.'
+          : `현재 레벨에서는 AI 분석을 하루 ${limit}회까지 사용할 수 있습니다.`
+      );
+    }
+    tx.set(
+      quotaRef,
+      {
+        count: used + 1,
+        updatedAt: new Date(),
+        lastAccess: isPremium ? 'premium' : 'free',
+      },
+      { merge: true }
+    );
+  });
+  return dateKey;
+}
+
+async function refundStockAiAnalysisQuota(uid, dateKey) {
+  if (!uid || !dateKey) return;
+  try {
+    const db = getFirestore();
+    const quotaRef = db.collection('users').doc(uid).collection('ai_quota').doc(dateKey);
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(quotaRef);
+      const used = Number(snap.data()?.count || 0);
+      if (used <= 0) return;
+      tx.set(
+        quotaRef,
+        { count: used - 1, updatedAt: new Date() },
+        { merge: true }
+      );
+    });
+  } catch (e) {
+    console.warn('[generateStockAiAnalysis] quota refund failed:', e?.message || e);
+  }
+}
+
 exports.generateStockAiAnalysis = onCall(
   {
     region: 'asia-northeast3',
     timeoutSeconds: 540,
     memory: '1GiB',
-    secrets: [OPENAI_API_KEY, DART_API_KEY],
+    secrets: [OPENAI_API_KEY, DART_API_KEY, REVENUECAT_SECRET_API_KEY],
   },
   async (request) => {
     if (!request.auth?.uid) {
@@ -2781,6 +3311,11 @@ exports.generateStockAiAnalysis = onCall(
     if (!ticker || !name) {
       throw new HttpsError('invalid-argument', '종목명과 티커가 필요합니다.');
     }
+    const quotaDateKey = await consumeStockAiAnalysisQuota(
+      request.auth.uid,
+      REVENUECAT_SECRET_API_KEY.value()
+    );
+    try {
     const isDomesticStock = /^\d{6}$/.test(ticker) && ['KS', 'KQ'].includes(market.toUpperCase());
 
     const candleLines = candles.map((c) => {
@@ -2802,7 +3337,7 @@ exports.generateStockAiAnalysis = onCall(
     }).filter(Boolean).join('\n');
 
     const [kisSnapshot, dartContext, investorFlow, dailyInvestorFlow, newsStorySnippets, naverValuation, epsTimeline] = isDomesticStock
-      ? await Promise.all([
+      ? (await Promise.allSettled([
           fetchKisDomesticSnapshot(ticker),
           fetchDartContext(ticker, (DART_API_KEY.value() || '').trim()),
           fetchInvestorFlowForStock(ticker, market.toUpperCase()),
@@ -2810,7 +3345,11 @@ exports.generateStockAiAnalysis = onCall(
           fetchNewsStorySnippets(news),
           fetchNaverDomesticValuation(ticker),
           fetchNaverEpsTimeline(ticker),
-        ])
+        ])).map((r, i) => {
+          if (r.status === 'fulfilled') return r.value;
+          console.warn(`[generateStockAiAnalysis] external fetch #${i} failed:`, r.reason?.message || r.reason);
+          return i === 4 ? [] : null;
+        })
       : [null, null, null, null, [], null, null];
 
     const kisLines = kisSnapshot
@@ -3073,18 +3612,43 @@ ${newsStoryLines}
 0~100점으로 평가하세요. 기준은 다음 가중치입니다.
 - 가격/추세/기술적 흐름 25점: 최근 캔들, 5/20/60/120일 이동평균 추정, 추세, 변동성, 지지/저항
 - 뉴스/당일 재료 20점: 최근 뉴스 방향성, 등락 설명력, 테마성, 이벤트 신뢰도
-- 재무/밸류에이션 20점: 현재 PER, 선행 PER 산출 가능성, 향후 1~2년 이익 개선 여부, 동종업계 비교, PBR, BPS, 시총, EPS, 데이터 결측 한계
+- 재무/밸류에이션 20점: 다음을 종합해 평가하세요.
+  * (a) trailing PER 단독으로 고평가/저평가 결론 금지. **forward PER 또는 1~2년 EPS 추정 기반 PER**을 1차 기준으로 사용.
+  * (b) forward PER이 trailing PER보다 의미 있게 낮으면(예: 70% 이하) 실적 회복 시그널로 가산, 30% 이상 낮으면 강한 가산. 반대로 forward PER이 trailing PER을 크게 상회하면 둔화로 감점.
+  * (c) forward PER이 업종평균 PER 대비 할인이면 가산, 프리미엄이면 감점.
+  * (d) EPS 시계열에서 향후 1~2년 EPS가 증가 추세면 가산, 감소면 감점. **적자→흑자 전환은 강한 가산**.
+  * (e) PBR/BPS/시총은 참고용 보조 지표로만 사용.
+  * Forward PER이 N/A여도 EPS 시계열에서 직접 추정해 반영하세요.
 - 모멘텀/수급 추정 20점: 단기 모멘텀, 거래량/변동성 단서, 과열/눌림
 - 리스크 15점: 데이터 부족, 밸류 부담, 뉴스 노이즈, 기술적 이탈 가능성
 
-[점수 분포 규칙 — 매우 중요]
-점수를 50~65 구간에 몰지 마세요. 종목마다 차이가 분명히 드러나야 합니다.
-- 75점 이상: 가격/추세, 뉴스, 재무, 모멘텀 중 3개 이상이 분명히 우호적이고 큰 리스크가 없을 때
-- 60~74점: 일부 요소가 우호적이지만 한두 항목에 약점·과열·노이즈가 섞일 때
-- 45~59점: 우호/주의 요소가 비슷하게 섞여 방향이 모호할 때 (진짜 중립일 때만)
-- 30~44점: 가격/추세나 재무 또는 뉴스 흐름에 분명한 약점이 있을 때
-- 30점 미만: 다수 요소에서 부정 신호가 누적되거나 큰 리스크가 두드러질 때
-"애매하면 일단 55~60점"으로 도망치지 말고, 가중치별 점수를 머릿속으로 합산해 그대로 반영하세요. 동점은 피하고 1점 단위로 차별화하세요.
+[점수 산출 절차 — 반드시 다음 순서대로]
+1단계: 다섯 축 sub-score를 각각 0~100으로 결정. 각 축을 **독립적으로** 평가하고, 약한 신호엔 35~50, 보통 신호엔 50~65, 강한 신호엔 65~85, 매우 강한 신호엔 85+ 범위에서 정확한 정수값을 매기세요.
+  - priceTrend (가중 25%): 추세/모멘텀/지지저항 위치
+  - newsImpact (가중 20%): 뉴스 방향성/재료 신뢰도
+  - fundamentals (가중 20%): 위 [점수 산정 프레임] 재무 규칙대로
+  - momentumFlow (가중 20%): 단기 모멘텀/수급 추정
+  - riskLevel (가중 15%): 데이터 결측·밸류 부담·뉴스 노이즈가 적을수록 **높은** 값 (즉 100 = 리스크 거의 없음)
+
+2단계: 종합 score = round(priceTrend*0.25 + newsImpact*0.20 + fundamentals*0.20 + momentumFlow*0.20 + riskLevel*0.15)
+이 계산값에서 ±3 이내로만 조정 가능. 그 이상 벗어나면 안 됩니다.
+
+[점수 분포 강제 규칙 — 위반 금지]
+- 60~65 구간을 default로 쓰지 마세요. 진짜 양방향 혼조가 아니라면 피하세요.
+- 다섯 sub-score가 모두 55~65에 몰리면 안 됩니다 — 어느 한 축은 분명히 70 이상이거나 50 이하여야 합니다 (정말 평탄한 종목이 아닌 한).
+- 두 종목의 한 축에서 30점 이상 차이나면 → 종합 점수도 **5점 이상** 차이나야 합니다.
+- "확인 필요"라는 이유로 회피하지 말고, 데이터가 보여주는 방향으로 25~90 범위 안에서 명확히 결정하세요.
+- 동점 금지, 1점 단위 차별화.
+- **상단 분포 강제**: 신호가 다축으로 함께 강한 종목(추세+모멘텀+재료가 모두 우호)에서는 종합 80+를 피하지 마세요. 100개 분석 중 5~15개는 80점대가 나와야 정상 분포입니다. 75에서 멈추지 말고 강한 종목은 82, 85, 88까지 올리세요. 90+는 정말 드물지만 가능합니다.
+- **하단 분포 강제**: 다축이 함께 약한 종목(추세 하락 + 실적 둔화 + 리스크 큼)도 35~45 구간을 피하지 말고 명확히 점수에 반영하세요.
+- 종합점수는 sub-score 가중평균에서 ±3 이내가 원칙이지만, 다축이 동시에 강하면(시너지) 가중평균 +5점까지 위로 줄 수 있고, 다축이 동시에 약하면 -5점까지 아래로 줄 수 있습니다 — 단, sub-score 자체를 그 방향으로 명확히 매긴 다음 종합점수를 조정하세요.
+
+[점수 구간 가이드]
+- 80+: 다수 축이 강하게 우호적이고 큰 리스크 없을 때
+- 65~79: 주축이 우호적이지만 일부 약점/노이즈 섞임
+- 50~64: 우호/주의 요소가 균형 — **진짜 혼조일 때만**
+- 35~49: 분명한 약점 있음
+- <35: 다수 부정 신호 누적
 
 [필수 분석 관점]
 1. 테마/섹터: 기업명, 시장, 뉴스 헤드라인으로 추정하되 불확실하면 명시.
@@ -3122,18 +3686,30 @@ sections에는 아래 제목을 가능하면 모두 포함하세요. 각 body는
 13. 기술 상세(technicalDetail): 지지선·저항선은 추정 가격(예: "135,000원 근처")으로 쓰고 단정적이지 않게 "추정", "근처"를 붙이세요. 패턴은 보이지 않으면 "뚜렷한 패턴 미확인"이라고 쓰세요.
 14. 시나리오(scenarios): 강세(bull)/기본(base)/약세(bear) 3개를 모두 작성하고 probability 세 값의 합이 정확히 1.0이 되도록 하세요. priceTarget은 "+8~12%" 또는 "165,000원 근처"처럼 범위/근사로 쓰고 단정적 목표가는 금지. narrative는 시나리오 트리거와 신호를 2~3문장.
 15. 구조화 리스크(risksDetailed): 기존 risks 문자열 배열과 별개로 카테고리·심각도·발생가능성·대응법을 구조화해 3~5개 작성하세요. category는 재무/시장/규제/사업/기술/수급 중 하나, severity·probability는 높음/보통/낮음 중 하나.
-16. 타이밍·액션(timing): action은 "분할매수/관망/매수보류/비중확대/비중축소/판단보류" 중 하나만 고르되, 점수와 데이터 방향에 따라 다음 가이드를 따르세요. "관망"은 정말 양방향 혼조일 때만 쓰고, "판단보류"는 핵심 데이터(실적·뉴스·가격)가 결측된 경우에만 쓰세요. 어느 쪽으로든 신호가 우세하면 반드시 방향성 있는 액션을 고르세요.
-  - score ≥ 70: 분할매수 또는 비중확대 (재료 신뢰도가 높고 추세가 살아 있으면 비중확대, 단기 변동 위험이 있으면 분할매수)
-  - score 55~69: 모멘텀·재료가 우세하면 분할매수, 과열·고PER 우려면 매수보류, 진짜 혼조면 관망
-  - score 40~54: 매수보류가 기본, 약점이 더 두드러지면 비중축소, 데이터가 정말 양방향이면 관망
-  - score < 40: 비중축소 또는 매수보류 (큰 약점이 분명하면 비중축소)
-  - 핵심 데이터(가격/실적/뉴스 중 2개 이상) 결측: 판단보류
+16. 타이밍·액션(timing): action은 "분할매수/관망/매수보류/비중확대/비중축소/판단보류" 중 하나만 고르되, 점수와 신호 강도에 따라 **반드시 다양하게** 분포되도록 다음 가이드를 따르세요. **"분할매수"를 default로 선택하지 마세요** — 신호가 정말 우세할 때만 매수 액션을, 그 외에는 관망/매수보류를 우선 고려.
+  - score ≥ 80: **비중확대** (재료 신뢰도 높음 + 추세 우호 + 리스크 작음, 세 조건 모두 충족 시)
+  - score 70~79: **분할매수** (주축 신호 우호적이고 단기 변동만 우려될 때) 또는 **비중확대** (재료 신뢰도 매우 높을 때)
+  - score 60~69: **매수보류**가 기본 (양호하지만 단기 과열·고PER 우려), 모멘텀+재료가 모두 명확히 우세하면 **분할매수**
+  - score 50~59: **관망**이 기본 (혼조), 약점이 두드러지면 **매수보류**
+  - score 40~49: **매수보류** 또는 **비중축소** (약점이 더 명확하면 비중축소)
+  - score 30~39: **비중축소**
+  - score < 30: **비중축소** (즉시 대응)
+  - 핵심 데이터(가격/실적/뉴스 중 2개 이상) 결측: **판단보류**
+
+  **분포 강제**: 같은 점수 구간에서도 신호 강도에 따라 다른 액션을 선택하세요. 70~79 구간이라고 무조건 "분할매수" 출력 금지 — 신호가 매우 강하면 "비중확대"를, 단기 우려가 강하면 "매수보류"를 골라 다양성을 확보하세요.
 actionReason은 "단정적 매수·매도 권유"로 들리지 않되 방향은 명확히 드러나도록 작성하세요. shortTerm은 1~2주, midTerm은 1~3개월 관점으로 2~3문장씩.
 
 반드시 아래 JSON 객체만 출력하세요. 첫 글자는 {, 마지막 글자는 } 이어야 합니다. 마크다운 코드블록, 앞뒤 설명, 주석 금지.
 {
   "companyOverview": "이 회사가 어떤 사업을 하는지 3~4문장으로 소개. 다음을 포함하세요: (1) 주력 사업/제품 — 매출 비중 큰 사업부문이나 대표 제품 1~3개 (2) 산업 내 포지션 — 시장점유율·경쟁사 대비 위치·강점 (3) 주요 고객사·수요처 또는 사업 모델 핵심 (4) 최근 사업 변화나 신성장 동력이 있으면 한 문장. DART 사업 스토리 근거와 종목명/섹터 정보를 적극 활용하세요. 단정적 미래 표현 금지. 마지막 문장은 사실적 회사 정보로 끝내세요.",
   "summary": "5~6개의 짧은 문장으로 구성한 풍부한 핵심 요약. 각 문장 끝에 반드시 '\\n\\n'(두 줄바꿈)을 넣어 사용자 화면에서 문단 단위로 보이게 하세요. 다음 요소를 한 문장씩 차례로 작성: (1) 최근 등락의 가장 큰 배경 — 어떤 재료·실적·테마가 가격을 움직였는지 구체적으로 (2) 밸류에이션 위치 — 현재 PER/PBR이 업종 평균(숫자) 대비 어디인지 (3) 기술/모멘텀 — 추세 단계와 과열 여부 (4) 가장 중요한 리스크 1개 (5) 다음에 확인해야 할 포인트. **첫 문장 맨 앞에 '핵심 원인은', '중립 성향의 리포트입니다', '본 리포트는', '이 분석은' 같은 메타 코멘트 절대 금지** — 바로 본론으로 들어가세요. 형식적이지 않게 자연스러운 한국어로 작성.",
+  "subScores": {
+    "priceTrend": 0,
+    "newsImpact": 0,
+    "fundamentals": 0,
+    "momentumFlow": 0,
+    "riskLevel": 0
+  },
   "score": 0,
   "scoreLabel": "점수 구간 해석. 우호, 중립, 주의 중 하나만 고르고 그 이유를 1문장",
   "theme": "핵심 테마 1~3개만 사용자에게 보이는 문장으로 작성. 근거 설명보다 어떤 테마인지가 먼저 보이게 작성",
@@ -3227,6 +3803,7 @@ actionReason은 "단정적 매수·매도 권유"로 들리지 않되 방향은 
               required: [
                 'companyOverview',
                 'summary',
+                'subScores',
                 'score',
                 'scoreLabel',
                 'theme',
@@ -3250,6 +3827,18 @@ actionReason은 "단정적 매수·매도 권유"로 들리지 않되 방향은 
               properties: {
                 companyOverview: { type: 'string' },
                 summary: { type: 'string' },
+                subScores: {
+                  type: 'object',
+                  additionalProperties: false,
+                  required: ['priceTrend', 'newsImpact', 'fundamentals', 'momentumFlow', 'riskLevel'],
+                  properties: {
+                    priceTrend: { type: 'number', minimum: 0, maximum: 100 },
+                    newsImpact: { type: 'number', minimum: 0, maximum: 100 },
+                    fundamentals: { type: 'number', minimum: 0, maximum: 100 },
+                    momentumFlow: { type: 'number', minimum: 0, maximum: 100 },
+                    riskLevel: { type: 'number', minimum: 0, maximum: 100 },
+                  },
+                },
                 score: { type: 'number', minimum: 0, maximum: 100 },
                 scoreLabel: { type: 'string' },
                 theme: { type: 'string' },
@@ -3469,6 +4058,17 @@ actionReason은 "단정적 매수·매도 권유"로 들리지 않되 방향은 
       .join('\n'))
       .trim();
 
+    // 응답이 비었거나 추론 토큰만 소진된 채 끝난 경우 → 잘못된 fallback 페이로드를
+    // 저장하는 대신 명확히 실패시켜 쿼터를 환불받게 한다.
+    if (!text) {
+      const status = body?.status || '';
+      const incomplete = body?.incomplete_details?.reason || '';
+      console.warn(
+        `[generateStockAiAnalysis] empty OpenAI output (status=${status}, incomplete=${incomplete})`
+      );
+      throw new HttpsError('internal', 'AI 분석 응답이 비어있어요. 잠시 후 다시 시도해주세요.');
+    }
+
     let payload;
     try {
       const parsed = extractJsonObject(text);
@@ -3489,6 +4089,125 @@ actionReason은 "단정적 매수·매도 권유"로 들리지 않되 방향은 
         ),
         sourcePayload
       );
+    }
+
+    // sub-score 가중합으로 종합 점수 재계산. 모델이 sub-score는 분포 있게
+    // 매겼는데 종합만 "안전한 60대"로 도망친 경우 가중합으로 교체.
+    if (payload) {
+      const before = payload.score;
+      payload = recomputeScoreFromSubScores(payload);
+      if (payload.score !== before) {
+        console.log(
+          `[generateStockAiAnalysis] sub-score recompute ${ticker}: ` +
+          `model=${before} -> ${payload.score} ` +
+          `(sub: ${JSON.stringify(payload.subScores)})`,
+        );
+      }
+    }
+
+    // 결정론적 valuation 보정.
+    // 트레일링 PER만으로 점수를 깎는 모델 편향을 줄이기 위해 forward PER /
+    // EPS 시계열 기반 valuation 점수를 계산하되, **종합점수가 아닌
+    // fundamentals sub-score에 흡수**시킨다. 그러면 화면에 보이는
+    // "sub-score × 가중치 = 종합점수" 식이 항상 성립해 괴리감이 사라진다.
+    // valuation 보정의 본질이 펀더멘털 신호 보정이므로 의미적으로도 맞다.
+    try {
+      const trailingPerNum = Number.isFinite(Number(fundamentals?.per))
+        ? Number(fundamentals.per)
+        : null;
+      const brokerTargets = Array.isArray(naverValuation?.reports)
+        ? naverValuation.reports
+            .map((r) => Number(r?.targetPrice))
+            .filter((n) => Number.isFinite(n) && n > 0)
+        : [];
+      const currentPriceNum = Number(price?.currentPrice);
+      const dartFinancials = Array.isArray(dartContext?.financials)
+        ? dartContext.financials
+        : [];
+      const valuationCalc = computeValuationDeterministicScore({
+        trailingPer: trailingPerNum,
+        forwardPer: Number.isFinite(providedForwardPer) ? providedForwardPer : null,
+        sectorPer: Number.isFinite(providedSectorAveragePer) ? providedSectorAveragePer : null,
+        epsTimeline,
+        brokerTargets,
+        currentPrice: Number.isFinite(currentPriceNum) ? currentPriceNum : null,
+        dartFinancials,
+      });
+      const sub = payload?.subScores;
+      if (
+        valuationCalc &&
+        Number.isFinite(valuationCalc.score) &&
+        sub &&
+        Number.isFinite(Number(sub.fundamentals))
+      ) {
+        const signalCount = valuationCalc.signalCount;
+        // 신호 강도 → fundamentals 보정 강도 (기존 blendStockAnalysisScore 가중치 표 차용)
+        const w =
+          signalCount >= 4 ? 0.4
+          : signalCount >= 3 ? 0.32
+          : signalCount >= 2 ? 0.22
+          : signalCount >= 1 ? 0.12
+          : 0;
+        if (w > 0) {
+          const oldFund = Math.round(Number(sub.fundamentals));
+          const newFund = Math.round(
+            Math.max(0, Math.min(100, oldFund * (1 - w) + valuationCalc.score * w))
+          );
+          if (newFund !== oldFund) {
+            payload.subScores.fundamentals = newFund;
+            // 종합점수도 sub × 가중치 가중평균으로 다시 계산.
+            const weights = {
+              priceTrend: 0.25,
+              newsImpact: 0.20,
+              fundamentals: 0.20,
+              momentumFlow: 0.20,
+              riskLevel: 0.15,
+            };
+            let total = 0;
+            let weightSum = 0;
+            for (const [k, ww] of Object.entries(weights)) {
+              const v = Number(payload.subScores[k]);
+              if (Number.isFinite(v) && v >= 0 && v <= 100) {
+                total += v * ww;
+                weightSum += ww;
+              }
+            }
+            if (weightSum >= 0.5) {
+              const newTotal = Math.round(total / weightSum);
+              const beforeTotal = payload.score;
+              payload.score = newTotal;
+              payload.scoreLabel = reconcileScoreLabel(payload.scoreLabel, newTotal);
+              console.log(
+                `[generateStockAiAnalysis] valuation absorbed into fundamentals ${ticker}: ` +
+                `fund=${oldFund}->${newFund} val=${valuationCalc.score} ` +
+                `signals=${signalCount} w=${w.toFixed(2)} ` +
+                `total=${beforeTotal}->${newTotal} ` +
+                `(${valuationCalc.signals.join(', ')})`,
+              );
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[generateStockAiAnalysis] valuation absorb failed:', e?.message || e);
+    }
+
+    // 최종 score 확정 후 timing.action이 점수 밴드와 어긋났는지 검사.
+    // "70점인데 매수보류", "65점인데 분할매수" 같은 어긋남을 막는다.
+    try {
+      if (payload?.timing && Number.isFinite(payload?.score)) {
+        const before = payload.timing.action;
+        const after = reconcileAction(before, payload.score);
+        if (after && after !== before) {
+          payload.timing.action = after;
+          console.log(
+            `[generateStockAiAnalysis] action reconciled ${ticker}: ` +
+            `score=${payload.score} ${before} -> ${after}`,
+          );
+        }
+      }
+    } catch (e) {
+      console.warn('[generateStockAiAnalysis] action reconcile failed:', e?.message || e);
     }
 
     // 클라이언트가 백그라운드/연결 종료 상태여도 결과가 유실되지 않도록
@@ -3583,5 +4302,9 @@ actionReason은 "단정적 매수·매도 권유"로 들리지 않되 방향은 
     }
 
     return payload;
+    } catch (err) {
+      await refundStockAiAnalysisQuota(request.auth.uid, quotaDateKey);
+      throw err;
+    }
   }
 );

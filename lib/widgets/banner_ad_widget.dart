@@ -24,7 +24,12 @@ class BannerAdWidget extends StatefulWidget {
     String? adUnitId,
     String? fallbackAdUnitId,
   }) {
-    if (kIsWeb || !AdService.adsEnabled || AdService.isAdmin) return;
+    if (kIsWeb ||
+        !AdService.adsEnabled ||
+        AdService.isAdmin ||
+        AdService.isPremium) {
+      return;
+    }
     final unitId = adUnitId ?? AdService.bannerAdUnitId;
     if (unitId.isEmpty) return;
     final cacheKey = '$slotId::$unitId';
@@ -59,6 +64,7 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
     if (kIsWeb ||
         !AdService.adsEnabled ||
         AdService.isAdmin ||
+        AdService.isPremium ||
         _unitId.isEmpty) {
       return;
     }
@@ -79,7 +85,17 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
 
   @override
   Widget build(BuildContext context) {
-    if (kIsWeb || !AdService.adsEnabled || AdService.isAdmin) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: AdService.premiumListenable,
+      builder: (_, _, _) => _buildAd(),
+    );
+  }
+
+  Widget _buildAd() {
+    if (kIsWeb ||
+        !AdService.adsEnabled ||
+        AdService.isAdmin ||
+        AdService.isPremium) {
       if (kDebugMode) {
         debugPrint(
           '[BannerAd] hidden slot=${widget.slotId} '

@@ -29,6 +29,10 @@ class AuthService {
     return result;
   }
 
+  Future<void> sendPasswordResetEmail(String email) async {
+    await _auth.sendPasswordResetEmail(email: email);
+  }
+
   Future<UserCredential> signUpWithEmail(String email, String password) async {
     final result = await _auth.createUserWithEmailAndPassword(
       email: email,

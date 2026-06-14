@@ -12,9 +12,34 @@ class AdService {
   static final instance = AdService._();
 
   static bool _isAdmin = false;
+  static bool _isPremium = false;
+  static final ValueNotifier<bool> premiumListenable = ValueNotifier(false);
   static bool get isAdmin => _isAdmin;
+  static bool get isPremium => _isPremium;
   static void setAdmin(bool value) => _isAdmin = value;
-  bool get _shouldBlockByAdmin => _isAdmin && !_useTestAds;
+  static void setPremium(bool value) {
+    if (_isPremium == value) return;
+    _isPremium = value;
+    premiumListenable.value = value;
+    if (value) instance._clearPendingAds();
+  }
+
+  bool get _shouldBlockAds => _isPremium || (_isAdmin && !_useTestAds);
+
+  void _clearPendingAds() {
+    _pendingStockInterstitial = false;
+    _pendingIndicatorInterstitial = false;
+    _pendingAiAnalysisInterstitial = false;
+    _stockInterstitialAd?.dispose();
+    _indicatorInterstitialAd?.dispose();
+    _aiAnalysisInterstitialAd?.dispose();
+    _stockInterstitialAd = null;
+    _indicatorInterstitialAd = null;
+    _aiAnalysisInterstitialAd = null;
+    _isStockInterstitialReady = false;
+    _isIndicatorInterstitialReady = false;
+    _isAiAnalysisInterstitialReady = false;
+  }
 
   // ── 광고 단위 ID ────────────────────────────────────────────────────────
   static String get _bannerAdUnitId {
@@ -140,7 +165,7 @@ class AdService {
   }
 
   void _loadStockInterstitial() {
-    if (kIsWeb || !_adsEnabled) return;
+    if (kIsWeb || !_adsEnabled || _isPremium) return;
     if (_isStockInterstitialLoading) return;
     if (_isStockInterstitialReady && _stockInterstitialAd != null) return;
     _isStockInterstitialLoading = true;
@@ -172,7 +197,7 @@ class AdService {
             },
           );
           if (_pendingStockInterstitial &&
-              !_shouldBlockByAdmin &&
+              !_shouldBlockAds &&
               _adsEnabled &&
               !_stockInterstitialConsumed) {
             _pendingStockInterstitial = false;
@@ -193,7 +218,7 @@ class AdService {
   }
 
   void showInterstitialIfReady() {
-    if (!_adsEnabled || _shouldBlockByAdmin) return;
+    if (!_adsEnabled || _shouldBlockAds) return;
     if (_stockInterstitialConsumed) return; // 추천주 상세 첫 노출 1회만 허용
     if (!_isStockInterstitialReady || _stockInterstitialAd == null) {
       _pendingStockInterstitial = true;
@@ -205,7 +230,7 @@ class AdService {
   }
 
   void showIndicatorDetailInterstitialIfReady() {
-    if (!_adsEnabled || _shouldBlockByAdmin) return;
+    if (!_adsEnabled || _shouldBlockAds) return;
     _indicatorDetailOpenCount++;
     if (_indicatorDetailOpenCount == 1) return; // 첫 진입은 광고 스킵
     if ((_indicatorDetailOpenCount - 2) % _interstitialEvery != 0) return;
@@ -219,7 +244,7 @@ class AdService {
   }
 
   void _loadIndicatorInterstitial() {
-    if (kIsWeb || !_adsEnabled) return;
+    if (kIsWeb || !_adsEnabled || _isPremium) return;
     if (_isIndicatorInterstitialLoading) return;
     if (_isIndicatorInterstitialReady && _indicatorInterstitialAd != null) {
       return;
@@ -250,7 +275,7 @@ class AdService {
             },
           );
           if (_pendingIndicatorInterstitial &&
-              !_shouldBlockByAdmin &&
+              !_shouldBlockAds &&
               _adsEnabled) {
             _pendingIndicatorInterstitial = false;
             _showLoadedIndicatorInterstitial();
@@ -280,7 +305,7 @@ class AdService {
   }
 
   void showAiAnalysisDetailInterstitialIfReady() {
-    if (!_adsEnabled || _shouldBlockByAdmin) return;
+    if (!_adsEnabled || _shouldBlockAds) return;
     _aiAnalysisDetailOpenCount++;
     if (_aiAnalysisDetailOpenCount == 1) return; // 첫 진입은 광고 스킵
     if ((_aiAnalysisDetailOpenCount - 2) % _interstitialEvery != 0) return;
@@ -294,7 +319,7 @@ class AdService {
   }
 
   void _loadAiAnalysisInterstitial() {
-    if (kIsWeb || !_adsEnabled) return;
+    if (kIsWeb || !_adsEnabled || _isPremium) return;
     if (_isAiAnalysisInterstitialLoading) return;
     if (_isAiAnalysisInterstitialReady && _aiAnalysisInterstitialAd != null) {
       return;
@@ -325,7 +350,7 @@ class AdService {
             },
           );
           if (_pendingAiAnalysisInterstitial &&
-              !_shouldBlockByAdmin &&
+              !_shouldBlockAds &&
               _adsEnabled) {
             _pendingAiAnalysisInterstitial = false;
             _showLoadedAiAnalysisInterstitial();
@@ -348,18 +373,29 @@ class AdService {
     AnalyticsService.instance.logAdInterstitialShown();
   }
 
-  Future<bool> showRewardedAdAndWaitReward() {
-    return _showRewardedAd(_rewardedAdUnitId);
+  Future<bool> showRewardedAdAndWaitReward() async {
+    final result = await _showRewardedAd(_rewardedAdUnitId);
+    return result == RewardedAdResult.rewarded;
   }
 
-  Future<bool> showAiAnalysisRewardedAd() {
-    return _showRewardedAd(_aiAnalysisRewardedAdUnitId);
+  Future<RewardedAdResult> showAiAnalysisRewardedAd({
+    VoidCallback? onAdLoaded,
+  }) {
+    return _showRewardedAd(
+      _aiAnalysisRewardedAdUnitId,
+      onAdLoaded: onAdLoaded,
+    );
   }
 
-  Future<bool> _showRewardedAd(String adUnitId) async {
-    if (kIsWeb || !_adsEnabled || _shouldBlockByAdmin) return false;
+  Future<RewardedAdResult> _showRewardedAd(
+    String adUnitId, {
+    VoidCallback? onAdLoaded,
+  }) async {
+    if (kIsWeb || !_adsEnabled || _shouldBlockAds) {
+      return RewardedAdResult.failedToLoad;
+    }
 
-    final completer = Completer<bool>();
+    final completer = Completer<RewardedAdResult>();
     var earnedReward = false;
 
     RewardedAd.load(
@@ -367,14 +403,23 @@ class AdService {
       request: const AdRequest(),
       rewardedAdLoadCallback: RewardedAdLoadCallback(
         onAdLoaded: (ad) {
+          onAdLoaded?.call();
           ad.fullScreenContentCallback = FullScreenContentCallback(
             onAdDismissedFullScreenContent: (ad) {
               ad.dispose();
-              if (!completer.isCompleted) completer.complete(earnedReward);
+              if (!completer.isCompleted) {
+                completer.complete(
+                  earnedReward
+                      ? RewardedAdResult.rewarded
+                      : RewardedAdResult.dismissedEarly,
+                );
+              }
             },
             onAdFailedToShowFullScreenContent: (ad, error) {
               ad.dispose();
-              if (!completer.isCompleted) completer.complete(false);
+              if (!completer.isCompleted) {
+                completer.complete(RewardedAdResult.failedToLoad);
+              }
             },
           );
           ad.show(
@@ -384,7 +429,9 @@ class AdService {
           );
         },
         onAdFailedToLoad: (_) {
-          if (!completer.isCompleted) completer.complete(false);
+          if (!completer.isCompleted) {
+            completer.complete(RewardedAdResult.failedToLoad);
+          }
         },
       ),
     );
@@ -392,3 +439,5 @@ class AdService {
     return completer.future;
   }
 }
+
+enum RewardedAdResult { rewarded, failedToLoad, dismissedEarly }

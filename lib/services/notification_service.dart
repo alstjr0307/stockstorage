@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
+import '../models/post.dart';
 import '../models/stock_pick.dart';
 import '../models/trading_journal.dart';
 import '../screens/home_screen.dart';
@@ -126,6 +127,25 @@ class NotificationService {
     _initialized = true;
     final messaging = FirebaseMessaging.instance;
 
+    // 종료 상태에서 알림을 눌러 진입한 경우는 가장 먼저 처리한다.
+    // (다른 await들 뒤로 밀리면 콜드스타트 시 라우팅이 지연/유실될 수 있음)
+    messaging
+        .getInitialMessage()
+        .then((initialMessage) {
+          debugPrint(
+            '[fcm] getInitialMessage (early) = ${initialMessage == null ? 'null' : initialMessage.data}',
+          );
+          if (initialMessage == null) return;
+          _saveRemoteMessageHistory(
+            initialMessage,
+            source: 'opened_from_terminated',
+          ).catchError((_) {});
+          _handleNotificationTap(initialMessage);
+        })
+        .catchError((Object e) {
+          debugPrint('[fcm] getInitialMessage (early) error: $e');
+        });
+
     // iOS 권한 요청
     await messaging.requestPermission(alert: true, badge: true, sound: true);
 
@@ -229,15 +249,7 @@ class NotificationService {
       _handleNotificationTap(message);
     });
 
-    // 종료 상태에서 알림을 눌러 진입
-    final initialMessage = await messaging.getInitialMessage();
-    if (initialMessage != null) {
-      _saveRemoteMessageHistory(
-        initialMessage,
-        source: 'opened_from_terminated',
-      ).catchError((_) {});
-      _handleNotificationTap(initialMessage);
-    }
+    // 종료 상태 진입 처리는 init() 진입 직후로 이동했다. 여기서는 더 하지 않는다.
   }
 
   Future<BuildContext?> _waitForNavigatorContext() async {
@@ -251,29 +263,34 @@ class NotificationService {
 
   Future<void> _handleNotificationTap(RemoteMessage message) async {
     final data = message.data;
+    debugPrint('[fcm] handleTap data=$data');
     final type = (data['type'] ?? '').toString();
     final postId = (data['postId'] ?? '').toString();
     final pickId = (data['pickId'] ?? '').toString();
     final journalId = (data['journalId'] ?? '').toString();
 
-    if (type == 'ai_analysis_complete') {
-      await _openAiAnalysisResult(
-        ticker: (data['ticker'] ?? '').toString(),
-        market: (data['market'] ?? '').toString(),
-        name: (data['name'] ?? '').toString(),
-      );
-      return;
-    }
-    if (postId.isNotEmpty) {
-      await _openPost(postId);
-      return;
-    }
-    if (pickId.isNotEmpty) {
-      await _openPickList();
-      return;
-    }
-    if (journalId.isNotEmpty) {
-      await _openJournal(journalId);
+    try {
+      if (type == 'ai_analysis_complete') {
+        await _openAiAnalysisResult(
+          ticker: (data['ticker'] ?? '').toString(),
+          market: (data['market'] ?? '').toString(),
+          name: (data['name'] ?? '').toString(),
+        );
+        return;
+      }
+      if (postId.isNotEmpty) {
+        await _openPost(postId);
+        return;
+      }
+      if (pickId.isNotEmpty) {
+        await _openPickList();
+        return;
+      }
+      if (journalId.isNotEmpty) {
+        await _openJournal(journalId);
+      }
+    } catch (e, st) {
+      debugPrint('[fcm] handleTap error: $e\n$st');
     }
   }
 
@@ -327,9 +344,20 @@ class NotificationService {
   }
 
   Future<void> _openPost(String postId) async {
+    debugPrint('[fcm] _openPost start postId=$postId');
     final context = await _waitForNavigatorContext();
-    if (context == null) return;
-    final post = await _firestoreService.getPostOnce(postId);
+    if (context == null) {
+      debugPrint('[fcm] _openPost: navigator context not ready');
+      return;
+    }
+    Post? post;
+    try {
+      post = await _firestoreService.getPostOnce(postId);
+    } catch (e) {
+      debugPrint('[fcm] _openPost: getPostOnce threw: $e');
+      return;
+    }
+    debugPrint('[fcm] _openPost: post=${post == null ? 'null' : post.id}');
     if (post == null) {
       if (context.mounted) {
         ScaffoldMessenger.of(
@@ -340,18 +368,25 @@ class NotificationService {
     }
 
     final uid = FirebaseAuth.instance.currentUser?.uid;
-    final isLiked = uid == null || uid.isEmpty
-        ? false
-        : await _firestoreService.hasLikedPost(post.id, uid);
-    navigatorKey.currentState?.push(
+    bool isLiked = false;
+    if (uid != null && uid.isNotEmpty) {
+      try {
+        isLiked = await _firestoreService.hasLikedPost(post.id, uid);
+      } catch (e) {
+        debugPrint('[fcm] _openPost: hasLikedPost threw (ignored): $e');
+      }
+    }
+    final navState = navigatorKey.currentState;
+    debugPrint('[fcm] _openPost: pushing PostDetailScreen, navState=$navState');
+    navState?.push(
       MaterialPageRoute(
         builder: (_) => PostDetailScreen(
-          post: post,
+          post: post!,
           isOwn: uid != null && uid == post.uid,
           isLiked: isLiked,
           likeCount: post.likes,
           onDelete: uid != null && uid == post.uid
-              ? () => _firestoreService.deletePost(post.id)
+              ? () => _firestoreService.deletePost(post!.id)
               : null,
         ),
       ),

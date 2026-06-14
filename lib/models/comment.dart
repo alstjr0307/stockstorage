@@ -6,6 +6,7 @@ class Comment {
   final String nickname;
   final String content;
   final DateTime createdAt;
+  final DateTime? editedAt;
 
   Comment({
     required this.id,
@@ -13,6 +14,7 @@ class Comment {
     required this.nickname,
     required this.content,
     required this.createdAt,
+    this.editedAt,
   });
 
   factory Comment.fromFirestore(DocumentSnapshot doc) {
@@ -23,6 +25,7 @@ class Comment {
       nickname: d['nickname'] as String? ?? '익명',
       content: d['content'] as String? ?? '',
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      editedAt: (d['editedAt'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -31,5 +34,6 @@ class Comment {
     'nickname': nickname,
     'content': content,
     'createdAt': Timestamp.fromDate(createdAt),
+    if (editedAt != null) 'editedAt': Timestamp.fromDate(editedAt!),
   };
 }

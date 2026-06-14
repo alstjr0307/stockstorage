@@ -11,6 +11,7 @@ import '../providers/auth_provider.dart';
 import '../services/auth_service.dart';
 import '../services/deep_link_service.dart';
 import '../services/firestore_service.dart';
+import '../utils/link_utils.dart';
 import '../widgets/user_level_avatar.dart';
 
 class MarketAnalysisDetailScreen extends StatefulWidget {
@@ -115,6 +116,29 @@ class _MarketAnalysisDetailScreenState
     await _firestoreService.deleteMarketAnalysisComment(analysis.id, commentId);
   }
 
+  Future<bool> _editComment(Comment c, String newContent) async {
+    final auth = context.read<AuthProvider>();
+    if (!auth.isLoggedIn || auth.user!.uid != c.uid) return false;
+    final trimmed = newContent.trim();
+    if (trimmed.isEmpty) return false;
+    if (trimmed == c.content.trim()) return true;
+    try {
+      await _firestoreService.updateMarketAnalysisComment(
+        analysis.id,
+        c.id,
+        trimmed,
+      );
+      return true;
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('수정 실패: $e')));
+      }
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -208,6 +232,11 @@ class _MarketAnalysisDetailScreenState
                                       selectable: true,
                                       softLineBreak: true,
                                       shrinkWrap: true,
+                                      onTapLink: (text, href, title) {
+                                        if (href != null) {
+                                          openExternalUrl(href);
+                                        }
+                                      },
                                       sizedImageBuilder: (config) => Padding(
                                         padding: const EdgeInsets.symmetric(
                                           vertical: 14,
@@ -241,6 +270,7 @@ class _MarketAnalysisDetailScreenState
                     _AnalysisCommentSection(
                       stream: _commentStream,
                       onDelete: _deleteComment,
+                      onEdit: _editComment,
                     ),
                     const SizedBox(height: 28),
                   ],
@@ -546,10 +576,15 @@ class _TopActionButton extends StatelessWidget {
 }
 
 class _AnalysisCommentSection extends StatelessWidget {
-  const _AnalysisCommentSection({required this.stream, required this.onDelete});
+  const _AnalysisCommentSection({
+    required this.stream,
+    required this.onDelete,
+    required this.onEdit,
+  });
 
   final Stream<List<Comment>> stream;
   final Future<void> Function(String commentId) onDelete;
+  final Future<bool> Function(Comment comment, String newContent) onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -628,10 +663,14 @@ class _AnalysisCommentSection extends StatelessWidget {
               for (final comment in comments) ...[
                 _AnalysisCommentTile(
                   comment: comment,
+                  isOwn: auth.user?.uid == comment.uid,
                   canDelete:
                       auth.user?.uid == comment.uid ||
                       AuthService.adminUids.contains(auth.user?.uid),
                   onDelete: () => onDelete(comment.id),
+                  onEdit: auth.user?.uid == comment.uid
+                      ? (newContent) => onEdit(comment, newContent)
+                      : null,
                 ),
               ],
           ],
@@ -641,86 +680,286 @@ class _AnalysisCommentSection extends StatelessWidget {
   }
 }
 
-class _AnalysisCommentTile extends StatelessWidget {
+class _AnalysisCommentTile extends StatefulWidget {
   const _AnalysisCommentTile({
     required this.comment,
+    required this.isOwn,
     required this.canDelete,
     required this.onDelete,
+    required this.onEdit,
   });
 
   final Comment comment;
+  final bool isOwn;
   final bool canDelete;
   final VoidCallback onDelete;
+  // null이면 메뉴에서 "수정" 미노출 (본인 댓글이 아닌 경우).
+  final Future<bool> Function(String newContent)? onEdit;
+
+  @override
+  State<_AnalysisCommentTile> createState() => _AnalysisCommentTileState();
+}
+
+class _AnalysisCommentTileState extends State<_AnalysisCommentTile> {
+  bool _editing = false;
+  bool _saving = false;
+  TextEditingController? _ctrl;
+
+  Comment get comment => widget.comment;
+
+  @override
+  void dispose() {
+    _ctrl?.dispose();
+    super.dispose();
+  }
+
+  void _enter() {
+    setState(() {
+      _editing = true;
+      _ctrl = TextEditingController(text: comment.content);
+    });
+  }
+
+  void _cancel() {
+    setState(() {
+      _editing = false;
+      _ctrl?.dispose();
+      _ctrl = null;
+    });
+  }
+
+  Future<void> _save() async {
+    final handler = widget.onEdit;
+    final ctrl = _ctrl;
+    if (handler == null || ctrl == null || _saving) return;
+    setState(() => _saving = true);
+    final ok = await handler(ctrl.text);
+    if (!mounted) return;
+    setState(() {
+      _saving = false;
+      if (ok) {
+        _editing = false;
+        _ctrl?.dispose();
+        _ctrl = null;
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           UserLevelAvatar(
             uid: comment.uid,
-            radius: 12,
+            radius: 14,
             backgroundColor: cs.onSurface.withValues(alpha: 0.07),
             textStyle: TextStyle(
-              color: cs.onSurface.withValues(alpha: 0.55),
-              fontSize: 9.5,
+              color: cs.onSurface.withValues(alpha: 0.6),
+              fontSize: 10.5,
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      comment.nickname,
+                Text(
+                  comment.nickname,
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.92),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                if (_editing)
+                  _buildEditField(cs)
+                else
+                  LinkifiedText(
+                    comment.content,
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.88),
+                      fontSize: 15,
+                      height: 1.6,
+                    ),
+                  ),
+                if (!_editing) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Text(
+                        DateFormat('MM.dd HH:mm').format(comment.createdAt),
+                        style: TextStyle(
+                          color: cs.onSurface.withValues(alpha: 0.4),
+                          fontSize: 11.5,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                      if (comment.editedAt != null)
+                        Text(
+                          ' · 수정됨',
+                          style: TextStyle(
+                            color: cs.onSurface.withValues(alpha: 0.4),
+                            fontSize: 11.5,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (!_editing) _buildTrailing(cs),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrailing(ColorScheme cs) {
+    final canEdit = widget.isOwn && widget.onEdit != null;
+    if (!canEdit && !widget.canDelete) return const SizedBox.shrink();
+    // 본인 댓글이면 수정+삭제 메뉴, 관리자만 삭제 가능한 경우엔 X 아이콘.
+    if (canEdit) {
+      return PopupMenuButton<String>(
+        icon: Icon(
+          Icons.more_vert,
+          size: 16,
+          color: cs.onSurface.withValues(alpha: 0.25),
+        ),
+        padding: EdgeInsets.zero,
+        color: cs.surface,
+        onSelected: (v) {
+          if (v == 'edit') _enter();
+          if (v == 'delete') widget.onDelete();
+        },
+        itemBuilder: (_) => const [
+          PopupMenuItem(
+            value: 'edit',
+            child: Row(
+              children: [
+                Icon(Icons.edit_outlined, size: 15, color: Color(0xFF10B981)),
+                SizedBox(width: 8),
+                Text('수정', style: TextStyle(fontSize: 14)),
+              ],
+            ),
+          ),
+          PopupMenuItem(
+            value: 'delete',
+            child: Row(
+              children: [
+                Icon(Icons.delete_outline, size: 15, color: Colors.redAccent),
+                SizedBox(width: 8),
+                Text('삭제', style: TextStyle(fontSize: 14)),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+    return GestureDetector(
+      onTap: widget.onDelete,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 8, top: 2),
+        child: Icon(
+          Icons.close,
+          size: 14,
+          color: cs.onSurface.withValues(alpha: 0.25),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditField(ColorScheme cs) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        TextField(
+          controller: _ctrl,
+          autofocus: true,
+          enabled: !_saving,
+          minLines: 1,
+          maxLines: 6,
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.9),
+            fontSize: 15,
+            height: 1.55,
+          ),
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: cs.onSurface.withValues(alpha: 0.05),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(
+                color: Color(0xFF10B981),
+                width: 1.2,
+              ),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 8,
+            ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextButton(
+              onPressed: _saving ? null : _cancel,
+              style: TextButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                '취소',
+                style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.55),
+                  fontSize: 13,
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            FilledButton(
+              onPressed: _saving ? null : _save,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: _saving
+                  ? const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Text(
+                      '저장',
                       style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.82),
+                        color: Colors.white,
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      DateFormat('MM.dd HH:mm').format(comment.createdAt),
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.36),
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  comment.content,
-                  style: TextStyle(
-                    color: cs.onSurface.withValues(alpha: 0.9),
-                    fontSize: 15,
-                    height: 1.55,
-                  ),
-                ),
-              ],
             ),
-          ),
-          if (canDelete)
-            GestureDetector(
-              onTap: onDelete,
-              child: Padding(
-                padding: const EdgeInsets.only(left: 8, top: 2),
-                child: Icon(
-                  Icons.close,
-                  size: 14,
-                  color: cs.onSurface.withValues(alpha: 0.25),
-                ),
-              ),
-            ),
-        ],
-      ),
+          ],
+        ),
+      ],
     );
   }
 }

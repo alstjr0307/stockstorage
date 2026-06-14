@@ -16,6 +16,7 @@ import '../services/ad_service.dart';
 import '../services/analytics_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
+import '../services/subscription_service.dart';
 import '../widgets/banner_ad_widget.dart';
 import '../widgets/stock_card.dart';
 import '../widgets/user_level_avatar.dart';
@@ -36,6 +37,7 @@ import 'stock_ai_analysis_list_screen.dart';
 import 'stock_compare_screen.dart';
 import 'stock_detail_screen.dart';
 import 'stock_search_screen.dart';
+import 'subscription_screen.dart';
 import 'index_detail_screen.dart';
 import '../main.dart' show initAds;
 
@@ -129,82 +131,14 @@ class _HomeScreenState extends State<HomeScreen>
     final uid = auth.user!.uid;
     final nickname = await _firestoreService.getNickname(uid);
     if ((nickname == null || nickname.isEmpty) && mounted) {
-      final ctrl = TextEditingController();
-      await showDialog(
+      await showDialog<void>(
         context: context,
         barrierDismissible: false,
-        builder: (ctx) {
-          final cs = Theme.of(ctx).colorScheme;
-          return AlertDialog(
-            title: Text(
-              '닉네임 설정',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '댓글에 표시될 닉네임을 입력해주세요.',
-                  style: TextStyle(
-                    color: cs.onSurface.withValues(alpha: 0.55),
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: ctrl,
-                  autofocus: true,
-                  style: TextStyle(color: cs.onSurface),
-                  decoration: InputDecoration(
-                    hintText: '닉네임',
-                    hintStyle: TextStyle(
-                      color: cs.onSurface.withValues(alpha: 0.3),
-                    ),
-                    filled: true,
-                    fillColor: cs.onSurface.withValues(alpha: 0.05),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF10B981),
-                        width: 1.5,
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () async {
-                  final nick = ctrl.text.trim();
-                  await _firestoreService.setNickname(
-                    uid,
-                    nick.isEmpty ? '익명' : nick,
-                  );
-                  if (ctx.mounted) Navigator.pop(ctx);
-                },
-                child: Text(
-                  '확인',
-                  style: TextStyle(
-                    color: const Color(0xFF10B981),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
+        builder: (ctx) => _NicknameSetupDialog(
+          uid: uid,
+          firestoreService: _firestoreService,
+        ),
       );
-      ctrl.dispose();
     }
   }
 
@@ -675,8 +609,8 @@ class _HomeScreenState extends State<HomeScreen>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (_) => Consumer<ThemeProvider>(
-        builder: (ctx, themeProvider, _) => Stack(
+      builder: (_) => Consumer2<ThemeProvider, SubscriptionService>(
+        builder: (ctx, themeProvider, subscription, _) => Stack(
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
@@ -851,96 +785,100 @@ class _HomeScreenState extends State<HomeScreen>
                                     ),
                                   ),
                                   const SizedBox(height: 10),
-                                  StreamBuilder<Map<String, int>>(
-                                    stream: _firestoreService
-                                        .watchRewardAdStatus(uid),
-                                    builder: (context, rewardSnap) {
-                                      final status = rewardSnap.data;
-                                      final canWatchToday =
-                                          (status?['canWatchToday'] ?? 1) == 1;
-                                      final remainingCount =
-                                          status?['remainingCount'] ?? 3;
-                                      final dailyLimit =
-                                          status?['dailyLimit'] ?? 3;
-                                      return Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          SizedBox(
-                                            width: double.infinity,
-                                            child: ElevatedButton.icon(
-                                              style: ElevatedButton.styleFrom(
-                                                elevation: 0,
-                                                backgroundColor: const Color(
-                                                  0xFF10B981,
+                                  if (!subscription.isPremium)
+                                    StreamBuilder<Map<String, int>>(
+                                      stream: _firestoreService
+                                          .watchRewardAdStatus(uid),
+                                      builder: (context, rewardSnap) {
+                                        final status = rewardSnap.data;
+                                        final canWatchToday =
+                                            (status?['canWatchToday'] ?? 1) ==
+                                            1;
+                                        final remainingCount =
+                                            status?['remainingCount'] ?? 3;
+                                        final dailyLimit =
+                                            status?['dailyLimit'] ?? 3;
+                                        return Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            SizedBox(
+                                              width: double.infinity,
+                                              child: ElevatedButton.icon(
+                                                style: ElevatedButton.styleFrom(
+                                                  elevation: 0,
+                                                  backgroundColor: const Color(
+                                                    0xFF10B981,
+                                                  ),
+                                                  foregroundColor: const Color(
+                                                    0xFF07120E,
+                                                  ),
+                                                  disabledBackgroundColor:
+                                                      const Color(
+                                                        0xFF10B981,
+                                                      ).withValues(alpha: 0.4),
+                                                  disabledForegroundColor:
+                                                      const Color(
+                                                        0xFF07120E,
+                                                      ).withValues(alpha: 0.6),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          10,
+                                                        ),
+                                                  ),
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        vertical: 10,
+                                                      ),
                                                 ),
-                                                foregroundColor: const Color(
-                                                  0xFF07120E,
-                                                ),
-                                                disabledBackgroundColor:
-                                                    const Color(
-                                                      0xFF10B981,
-                                                    ).withValues(alpha: 0.4),
-                                                disabledForegroundColor:
-                                                    const Color(
-                                                      0xFF07120E,
-                                                    ).withValues(alpha: 0.6),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(10),
-                                                ),
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      vertical: 10,
-                                                    ),
-                                              ),
-                                              onPressed:
-                                                  canWatchToday &&
-                                                      !_rewardAdLoading
-                                                  ? () =>
-                                                        _confirmAndWatchRewardAd(
-                                                          auth,
-                                                        )
-                                                  : null,
-                                              icon: _rewardAdLoading
-                                                  ? const SizedBox(
-                                                      width: 14,
-                                                      height: 14,
-                                                      child:
-                                                          CircularProgressIndicator(
-                                                            strokeWidth: 2,
-                                                          ),
-                                                    )
-                                                  : const Icon(
-                                                      Icons.ondemand_video,
-                                                      size: 16,
-                                                    ),
-                                              label: Text(
-                                                _rewardAdLoading
-                                                    ? '광고 준비 중...'
-                                                    : '리워드 광고 보고 +5 XP',
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w700,
+                                                onPressed:
+                                                    canWatchToday &&
+                                                        !_rewardAdLoading
+                                                    ? () =>
+                                                          _confirmAndWatchRewardAd(
+                                                            auth,
+                                                          )
+                                                    : null,
+                                                icon: _rewardAdLoading
+                                                    ? const SizedBox(
+                                                        width: 14,
+                                                        height: 14,
+                                                        child:
+                                                            CircularProgressIndicator(
+                                                              strokeWidth: 2,
+                                                            ),
+                                                      )
+                                                    : const Icon(
+                                                        Icons.ondemand_video,
+                                                        size: 16,
+                                                      ),
+                                                label: Text(
+                                                  _rewardAdLoading
+                                                      ? '광고 준비 중...'
+                                                      : '리워드 광고 보고 +5 XP',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            '오늘 보상 광고: $remainingCount/$dailyLimit회 남음',
-                                            style: TextStyle(
-                                              color: isDark
-                                                  ? Colors.white38
-                                                  : Colors.black45,
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w500,
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              '오늘 보상 광고: $remainingCount/$dailyLimit회 남음',
+                                              style: TextStyle(
+                                                color: isDark
+                                                    ? Colors.white38
+                                                    : Colors.black45,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w500,
+                                              ),
                                             ),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  ),
+                                          ],
+                                        );
+                                      },
+                                    ),
                                 ],
                               ),
                             ),
@@ -972,6 +910,36 @@ class _HomeScreenState extends State<HomeScreen>
                       },
                     ),
                     const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: subscription.isPremium
+                              ? const Color(0xFFF5B547)
+                              : const Color(0xFF10B981),
+                          foregroundColor: const Color(0xFF07120E),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        icon: const Icon(
+                          Icons.workspace_premium_rounded,
+                          size: 17,
+                        ),
+                        label: Text(
+                          subscription.isPremium ? '프리미엄 이용 중' : '프리미엄 멤버십',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const SubscriptionScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     // 내 댓글
                     SizedBox(
                       width: double.infinity,
@@ -1253,119 +1221,12 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _showNicknameDialog(AuthProvider auth, String? currentNickname) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final uid = auth.user!.uid;
-    final controller = TextEditingController(text: currentNickname ?? '');
-    String? errorMsg;
-    bool checking = false;
-
-    showDialog(
+    showDialog<void>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) {
-          final cardColor = isDark ? const Color(0xFF1A2035) : Colors.white;
-          return AlertDialog(
-            backgroundColor: cardColor,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: Text(
-              '닉네임 설정',
-              style: TextStyle(
-                color: isDark ? Colors.white : Colors.black87,
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-              ),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: controller,
-                  style: TextStyle(
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: '닉네임 입력 (2~12자)',
-                    hintStyle: TextStyle(
-                      color: isDark ? Colors.white38 : Colors.black38,
-                      fontSize: 13,
-                    ),
-                    filled: true,
-                    fillColor: isDark
-                        ? Colors.white.withValues(alpha: 0.05)
-                        : Colors.black.withValues(alpha: 0.04),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide.none,
-                    ),
-                    errorText: errorMsg,
-                  ),
-                  onChanged: (_) {
-                    if (errorMsg != null) {
-                      setDialogState(() => errorMsg = null);
-                    }
-                  },
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(
-                  '취소',
-                  style: TextStyle(
-                    color: isDark ? Colors.white54 : Colors.black45,
-                  ),
-                ),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
-                  foregroundColor: Colors.black,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                onPressed: checking
-                    ? null
-                    : () async {
-                        final nick = controller.text.trim();
-                        if (nick.length < 2 || nick.length > 12) {
-                          setDialogState(() => errorMsg = '닉네임은 2~12자여야 합니다');
-                          return;
-                        }
-                        setDialogState(() => checking = true);
-                        final taken = await _firestoreService.isNicknameTaken(
-                          nick,
-                          uid,
-                        );
-                        if (taken) {
-                          setDialogState(() {
-                            errorMsg = '이미 사용 중인 닉네임입니다';
-                            checking = false;
-                          });
-                          return;
-                        }
-                        await _firestoreService.setNickname(uid, nick);
-                        if (ctx.mounted) Navigator.pop(ctx);
-                      },
-                child: checking
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.black,
-                        ),
-                      )
-                    : Text('저장', style: TextStyle(fontWeight: FontWeight.w600)),
-              ),
-            ],
-          );
-        },
+      builder: (ctx) => _NicknameChangeDialog(
+        uid: auth.user!.uid,
+        initialNickname: currentNickname ?? '',
+        firestoreService: _firestoreService,
       ),
     );
   }
@@ -1811,10 +1672,7 @@ class _AiAnalysisPromptCard extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
-              colors: [
-                _homeAccent.withValues(alpha: 0.08),
-                _homeCard,
-              ],
+              colors: [_homeAccent.withValues(alpha: 0.08), _homeCard],
             ),
           ),
           child: Row(
@@ -1861,11 +1719,7 @@ class _AiAnalysisPromptCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Icon(
-                Icons.chevron_right_rounded,
-                size: 20,
-                color: _homeFaint,
-              ),
+              Icon(Icons.chevron_right_rounded, size: 20, color: _homeFaint),
             ],
           ),
         ),
@@ -6398,6 +6252,306 @@ class _AnnouncementCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 닉네임 입력/검증 다이얼로그.
+/// TextEditingController를 State에서 소유해 dialog dismiss 시 안전하게 dispose.
+class _NicknameSetupDialog extends StatefulWidget {
+  const _NicknameSetupDialog({
+    required this.uid,
+    required this.firestoreService,
+  });
+  final String uid;
+  final FirestoreService firestoreService;
+
+  @override
+  State<_NicknameSetupDialog> createState() => _NicknameSetupDialogState();
+}
+
+class _NicknameSetupDialogState extends State<_NicknameSetupDialog> {
+  final _ctrl = TextEditingController();
+  String? _errorMsg;
+  bool _checking = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final nick = _ctrl.text.trim();
+    if (nick.isEmpty) {
+      setState(() => _errorMsg = '닉네임을 입력하세요');
+      return;
+    }
+    if (nick.length < 2 || nick.length > 12) {
+      setState(() => _errorMsg = '닉네임은 2~12자여야 합니다');
+      return;
+    }
+    setState(() {
+      _errorMsg = null;
+      _checking = true;
+    });
+    final taken = await widget.firestoreService.isNicknameTaken(
+      nick,
+      widget.uid,
+    );
+    if (!mounted) return;
+    if (taken) {
+      setState(() {
+        _errorMsg = '이미 사용 중인 닉네임입니다';
+        _checking = false;
+      });
+      return;
+    }
+    try {
+      await widget.firestoreService.setNickname(widget.uid, nick);
+      if (mounted) Navigator.pop(context);
+    } on NicknameTakenException {
+      if (!mounted) return;
+      setState(() {
+        _errorMsg = '방금 다른 사용자에게 점유되었어요. 다른 닉네임을 시도해주세요';
+        _checking = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMsg = '저장에 실패했어요. 잠시 후 다시 시도해주세요';
+        _checking = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+      title: const Text(
+        '닉네임 설정',
+        style: TextStyle(fontWeight: FontWeight.w700),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '댓글 등 활동에 표시될 닉네임을 먼저 설정해주세요. (2~12자)',
+            style: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.55),
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _ctrl,
+            autofocus: true,
+            enabled: !_checking,
+            style: TextStyle(color: cs.onSurface),
+            decoration: InputDecoration(
+              hintText: '닉네임',
+              hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.3)),
+              errorText: _errorMsg,
+              filled: true,
+              fillColor: cs.onSurface.withValues(alpha: 0.05),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(
+                  color: Color(0xFF10B981),
+                  width: 1.5,
+                ),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _checking ? null : _submit,
+          child: _checking
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF10B981),
+                  ),
+                )
+              : const Text(
+                  '확인',
+                  style: TextStyle(
+                    color: Color(0xFF10B981),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+        ),
+      ],
+    ),
+    );
+  }
+}
+
+/// 닉네임 변경 다이얼로그 (현재 닉네임 prefill, 취소 가능).
+/// TextEditingController를 State에서 소유해 dialog dismiss 시 안전하게 dispose.
+class _NicknameChangeDialog extends StatefulWidget {
+  const _NicknameChangeDialog({
+    required this.uid,
+    required this.initialNickname,
+    required this.firestoreService,
+  });
+  final String uid;
+  final String initialNickname;
+  final FirestoreService firestoreService;
+
+  @override
+  State<_NicknameChangeDialog> createState() => _NicknameChangeDialogState();
+}
+
+class _NicknameChangeDialogState extends State<_NicknameChangeDialog> {
+  late final TextEditingController _ctrl;
+  String? _errorMsg;
+  bool _checking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.initialNickname);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final nick = _ctrl.text.trim();
+    if (nick.length < 2 || nick.length > 12) {
+      setState(() => _errorMsg = '닉네임은 2~12자여야 합니다');
+      return;
+    }
+    setState(() => _checking = true);
+    final taken = await widget.firestoreService.isNicknameTaken(
+      nick,
+      widget.uid,
+    );
+    if (!mounted) return;
+    if (taken) {
+      setState(() {
+        _errorMsg = '이미 사용 중인 닉네임입니다';
+        _checking = false;
+      });
+      return;
+    }
+    try {
+      await widget.firestoreService.setNickname(widget.uid, nick);
+      if (mounted) Navigator.pop(context);
+    } on NicknameTakenException {
+      if (!mounted) return;
+      setState(() {
+        _errorMsg = '방금 다른 사용자에게 점유되었어요. 다른 닉네임을 시도해주세요';
+        _checking = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMsg = '저장에 실패했어요. 잠시 후 다시 시도해주세요';
+        _checking = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardColor = isDark ? const Color(0xFF1A2035) : Colors.white;
+    return AlertDialog(
+      backgroundColor: cardColor,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        '닉네임 설정',
+        style: TextStyle(
+          color: isDark ? Colors.white : Colors.black87,
+          fontWeight: FontWeight.w700,
+          fontSize: 16,
+        ),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _ctrl,
+            enabled: !_checking,
+            style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+            decoration: InputDecoration(
+              hintText: '닉네임 입력 (2~12자)',
+              hintStyle: TextStyle(
+                color: isDark ? Colors.white38 : Colors.black38,
+                fontSize: 13,
+              ),
+              filled: true,
+              fillColor: isDark
+                  ? Colors.white.withValues(alpha: 0.05)
+                  : Colors.black.withValues(alpha: 0.04),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
+              ),
+              errorText: _errorMsg,
+            ),
+            onChanged: (_) {
+              if (_errorMsg != null) {
+                setState(() => _errorMsg = null);
+              }
+            },
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _checking ? null : () => Navigator.pop(context),
+          child: Text(
+            '취소',
+            style: TextStyle(
+              color: isDark ? Colors.white54 : Colors.black45,
+            ),
+          ),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF10B981),
+            foregroundColor: Colors.black,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+          onPressed: _checking ? null : _save,
+          child: _checking
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.black,
+                  ),
+                )
+              : const Text('저장', style: TextStyle(fontWeight: FontWeight.w600)),
+        ),
+      ],
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
 
@@ -6,7 +7,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/stock_pick.dart';
@@ -98,7 +101,12 @@ class StockAiAnalysisResultScreen extends StatefulWidget {
     );
     text = text.replaceAll(RegExp(r'\s*(KIS|OpenDART)\s*기준\s*'), ' ');
     text = _stripSourceReferences(text);
-    text = text.replaceAll(RegExp(r'\s+'), ' ');
+    // 줄바꿈(\n)은 _SummaryParagraphs가 문단 분리 신호로 쓰므로 보존.
+    // 공백/탭/non-breaking space만 하나로 압축.
+    text = text.replaceAll(RegExp(r'[ \t ]+'), ' ');
+    // 줄바꿈 주변 공백 정리 + 연속 줄바꿈은 빈 줄(\n\n) 하나로 통일
+    text = text.replaceAll(RegExp(r'[ \t]*\n[ \t]*'), '\n');
+    text = text.replaceAll(RegExp(r'\n{2,}'), '\n\n');
     return text.trim();
   }
 
@@ -134,6 +142,8 @@ class StockAiAnalysisResultScreen extends StatefulWidget {
 class _StockAiAnalysisResultScreenState
     extends State<StockAiAnalysisResultScreen> {
   final _firestore = FirestoreService();
+  final GlobalKey<_AnalysisContentState> _contentKey =
+      GlobalKey<_AnalysisContentState>();
   Timer? _timer;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _backgroundSub;
   StockAiAnalysisResult? _analysis;
@@ -179,18 +189,22 @@ class _StockAiAnalysisResultScreenState
     final futures = <Future<void>>[];
     if (_price == null) {
       futures.add(
-        StockPriceService.fetchPrice(ticker, market).then((p) {
-          if (!mounted || p == null) return;
-          setState(() => _price = p);
-        }).catchError((_) {}),
+        StockPriceService.fetchPrice(ticker, market)
+            .then((p) {
+              if (!mounted || p == null) return;
+              setState(() => _price = p);
+            })
+            .catchError((_) {}),
       );
     }
     if (_fundamentals == null) {
       futures.add(
-        StockPriceService.fetchFundamentals(ticker, market).then((f) {
-          if (!mounted || f == null) return;
-          setState(() => _fundamentals = f);
-        }).catchError((_) {}),
+        StockPriceService.fetchFundamentals(ticker, market)
+            .then((f) {
+              if (!mounted || f == null) return;
+              setState(() => _fundamentals = f);
+            })
+            .catchError((_) {}),
       );
     }
     if (futures.isNotEmpty) await Future.wait(futures);
@@ -342,9 +356,7 @@ class _StockAiAnalysisResultScreenState
       final updatedAt = (data['updatedAt'] as Timestamp?)?.toDate();
       // 이전에 저장된 캐시는 무시 — 이번 호출보다 새 문서만 사용
       if (updatedAt == null ||
-          updatedAt.isBefore(
-            startedAt.subtract(const Duration(seconds: 2)),
-          )) {
+          updatedAt.isBefore(startedAt.subtract(const Duration(seconds: 2)))) {
         return;
       }
       completer.complete(
@@ -355,35 +367,37 @@ class _StockAiAnalysisResultScreenState
     // 함수 호출은 await 하지 않고 future로 둠 — listener와 경쟁
     unawaited(
       StockPriceService.generateStockAiAnalysis(
-        ticker: widget.pick.ticker,
-        name: widget.pick.name,
-        market: widget.pick.market,
-        price: _price ?? widget.price,
-        fundamentals: _fundamentals ?? widget.fundamentals,
-        candles: candles,
-        news: _news,
-      ).then((result) {
-        if (!completer.isCompleted) completer.complete(result);
-      }).catchError((Object e, StackTrace st) {
-        // deadline-exceeded / unavailable 등 전송 계층 에러는 서버가 계속
-        // 실행 중일 가능성이 있으므로 listener를 그대로 두고 기다린다.
-        // 서버 측 에러(internal 등)는 listener가 안 울리므로 아래 timeout이 잡는다.
-        debugPrint(
-          'generateStockAiAnalysis call failed (will keep listening): $e',
-        );
-        if (e is FirebaseFunctionsException) {
-          const transientCodes = {
-            'deadline-exceeded',
-            'unavailable',
-            'cancelled',
-            'aborted',
-            'unknown',
-          };
-          if (!transientCodes.contains(e.code) && !completer.isCompleted) {
-            completer.completeError(e, st);
-          }
-        }
-      }),
+            ticker: widget.pick.ticker,
+            name: widget.pick.name,
+            market: widget.pick.market,
+            price: _price ?? widget.price,
+            fundamentals: _fundamentals ?? widget.fundamentals,
+            candles: candles,
+            news: _news,
+          )
+          .then((result) {
+            if (!completer.isCompleted) completer.complete(result);
+          })
+          .catchError((Object e, StackTrace st) {
+            // deadline-exceeded / unavailable 등 전송 계층 에러는 서버가 계속
+            // 실행 중일 가능성이 있으므로 listener를 그대로 두고 기다린다.
+            // 서버 측 에러(internal 등)는 listener가 안 울리므로 아래 timeout이 잡는다.
+            debugPrint(
+              'generateStockAiAnalysis call failed (will keep listening): $e',
+            );
+            if (e is FirebaseFunctionsException) {
+              const transientCodes = {
+                'deadline-exceeded',
+                'unavailable',
+                'cancelled',
+                'aborted',
+                'unknown',
+              };
+              if (!transientCodes.contains(e.code) && !completer.isCompleted) {
+                completer.completeError(e, st);
+              }
+            }
+          }),
     );
 
     try {
@@ -473,6 +487,46 @@ class _StockAiAnalysisResultScreenState
         ),
         actions: [
           if (!_loading && _analysis != null)
+            PopupMenuButton<String>(
+              tooltip: '공유',
+              icon: Icon(
+                Icons.ios_share,
+                color: cs.onSurface.withValues(alpha: 0.62),
+                size: 20,
+              ),
+              onSelected: (value) {
+                final state = _contentKey.currentState;
+                if (state == null) return;
+                if (value == 'text') {
+                  state.shareAsText();
+                } else if (value == 'image') {
+                  state.shareAllCards();
+                }
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'text',
+                  child: Row(
+                    children: [
+                      Icon(Icons.notes, size: 18),
+                      SizedBox(width: 10),
+                      Text('텍스트로 공유'),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'image',
+                  child: Row(
+                    children: [
+                      Icon(Icons.image_outlined, size: 18),
+                      SizedBox(width: 10),
+                      Text('카드 이미지로 공유'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          if (!_loading && _analysis != null)
             IconButton(
               tooltip: '새로 분석',
               icon: Icon(
@@ -528,6 +582,7 @@ class _StockAiAnalysisResultScreenState
     }
 
     return _AnalysisContent(
+      key: _contentKey,
       pick: widget.pick,
       analysis: analysis,
       price: _price ?? widget.price,
@@ -554,9 +609,7 @@ class _LoadingAnalysisView extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accent = isDark
-        ? const Color(0xFF34D399)
-        : const Color(0xFF10B981);
+    final accent = isDark ? const Color(0xFF34D399) : const Color(0xFF10B981);
     final progress = ((elapsedSeconds % 24) + 1) / 24;
 
     final steps = [
@@ -680,8 +733,8 @@ class _LoadingAnalysisView extends StatelessWidget {
           _ChecklistRow(
             label: steps[i].$1,
             done: elapsedSeconds >= steps[i].$3,
-            active: elapsedSeconds >= steps[i].$2 &&
-                elapsedSeconds < steps[i].$3,
+            active:
+                elapsedSeconds >= steps[i].$2 && elapsedSeconds < steps[i].$3,
             accent: accent,
           ),
           if (i < steps.length - 1) const SizedBox(height: 14),
@@ -697,6 +750,38 @@ class _LoadingAnalysisView extends StatelessWidget {
             height: 1.6,
             fontWeight: FontWeight.w500,
             letterSpacing: 0.1,
+          ),
+        ),
+
+        const SizedBox(height: 24),
+
+        // 분석은 서버에서 돌고 결과는 푸시로 알림 → 화면을 떠나도 안전하다는 안내.
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: isDark ? 0.12 : 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: accent.withValues(alpha: 0.28)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline_rounded, size: 18, color: accent),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '분석은 백그라운드에서 계속 진행돼요.\n'
+                  '다른 화면으로 이동해도 괜찮아요. 완료되면 알림으로 알려드릴게요.',
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.78),
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    height: 1.5,
+                    letterSpacing: 0.1,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -758,8 +843,8 @@ class _ChecklistRowState extends State<_ChecklistRow>
     final color = widget.done
         ? cs.onSurface.withValues(alpha: 0.92)
         : widget.active
-            ? cs.onSurface.withValues(alpha: 0.78)
-            : cs.onSurface.withValues(alpha: 0.32);
+        ? cs.onSurface.withValues(alpha: 0.78)
+        : cs.onSurface.withValues(alpha: 0.32);
     return Row(
       children: [
         SizedBox(
@@ -769,28 +854,28 @@ class _ChecklistRowState extends State<_ChecklistRow>
             child: widget.done
                 ? Icon(Icons.check_rounded, size: 16, color: widget.accent)
                 : widget.active
-                    ? AnimatedBuilder(
-                        animation: _pulse,
-                        builder: (_, _) {
-                          final t = 0.35 + 0.65 * _pulse.value;
-                          return Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                              color: widget.accent.withValues(alpha: t),
-                              shape: BoxShape.circle,
-                            ),
-                          );
-                        },
-                      )
-                    : Container(
-                        width: 6,
-                        height: 6,
+                ? AnimatedBuilder(
+                    animation: _pulse,
+                    builder: (_, _) {
+                      final t = 0.35 + 0.65 * _pulse.value;
+                      return Container(
+                        width: 8,
+                        height: 8,
                         decoration: BoxDecoration(
-                          color: cs.onSurface.withValues(alpha: 0.16),
+                          color: widget.accent.withValues(alpha: t),
                           shape: BoxShape.circle,
                         ),
-                      ),
+                      );
+                    },
+                  )
+                : Container(
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: cs.onSurface.withValues(alpha: 0.16),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
           ),
         ),
         const SizedBox(width: 14),
@@ -859,7 +944,7 @@ class _ErrorView extends StatelessWidget {
   }
 }
 
-class _AnalysisContent extends StatelessWidget {
+class _AnalysisContent extends StatefulWidget {
   final StockPick pick;
   final StockAiAnalysisResult analysis;
   final PriceResult? price;
@@ -869,6 +954,7 @@ class _AnalysisContent extends StatelessWidget {
   final List<Map<String, dynamic>> candles;
 
   const _AnalysisContent({
+    super.key,
     required this.pick,
     required this.analysis,
     required this.price,
@@ -879,7 +965,476 @@ class _AnalysisContent extends StatelessWidget {
   });
 
   @override
+  State<_AnalysisContent> createState() => _AnalysisContentState();
+}
+
+class _AnalysisContentState extends State<_AnalysisContent> {
+  bool _sharing = false;
+
+  Future<void> shareAsText() async {
+    if (_sharing) return;
+    _sharing = true;
+    try {
+      final text = _buildShareText();
+      final box = context.findRenderObject() as RenderBox?;
+      final origin = box == null
+          ? null
+          : box.localToGlobal(Offset.zero) & box.size;
+      await Share.share(
+        text,
+        subject:
+            '${widget.pick.name} (${widget.pick.ticker}) AI 종목 분석',
+        sharePositionOrigin: origin,
+      );
+    } finally {
+      _sharing = false;
+    }
+  }
+
+  String _buildShareText() {
+    final pick = widget.pick;
+    final a = widget.analysis;
+    final price = widget.price;
+    final fundamentals = widget.fundamentals;
+
+    const divider = '━━━━━━━━━━━━━━━━━━━━';
+    final sections = <String>[];
+
+    // 헤더
+    {
+      final lines = <String>['📊 ${pick.name} (${pick.ticker})'];
+      final headerBits = <String>[];
+      if (pick.market.isNotEmpty) headerBits.add(_marketLabel(pick.market));
+      if (a.sector.isNotEmpty) {
+        headerBits.add(StockAiAnalysisResultScreen.cleanText(a.sector));
+      }
+      if (a.theme.isNotEmpty) {
+        headerBits.add(StockAiAnalysisResultScreen.cleanText(a.theme));
+      }
+      if (headerBits.isNotEmpty) lines.add(headerBits.join(' · '));
+      if (price != null) {
+        final priceStr = _formatPrice(price.price, price.currency);
+        final sign = price.change >= 0 ? '▲' : '▼';
+        final ratePct = (price.changeRate * 100).abs().toStringAsFixed(2);
+        lines.add('현재가  $priceStr  $sign $ratePct%');
+      }
+      if (a.score != null) {
+        final scoreLabel = a.scoreLabel.isNotEmpty ? ' · ${a.scoreLabel}' : '';
+        lines.add('AI 점수  ${a.score!.toStringAsFixed(1)}/100$scoreLabel');
+      }
+      if (a.generatedAt != null) {
+        lines.add(
+          '생성  ${DateFormat('yyyy.MM.dd HH:mm').format(a.generatedAt!)}',
+        );
+      }
+      sections.add(lines.join('\n'));
+    }
+
+    String? section(String title, List<String> body) {
+      final filtered = body.where((l) => l.isNotEmpty).toList();
+      if (filtered.isEmpty) return null;
+      return '$title\n$divider\n${filtered.join('\n')}';
+    }
+
+    void add(String? s) {
+      if (s != null && s.isNotEmpty) sections.add(s);
+    }
+
+    // 핵심 요약
+    final summary = StockAiAnalysisResultScreen.cleanSummaryText(a.summary);
+    add(section('💡 핵심 요약', [summary]));
+
+    // 오늘의 포인트
+    final today = StockAiAnalysisResultScreen.cleanText(a.todayReason);
+    add(section('🗓 오늘의 포인트', [today]));
+
+    // 4대 지표
+    final indicators = <String>[];
+    void addIndicator(String label, String value) {
+      final cleaned = StockAiAnalysisResultScreen.cleanText(value);
+      if (cleaned.isNotEmpty) indicators.add('• $label: $cleaned');
+    }
+    addIndicator('펀더멘털', a.fundamentals);
+    addIndicator('기술적', a.technical);
+    addIndicator('뉴스/이벤트', a.news);
+    addIndicator('수급/모멘텀', a.momentum);
+    add(section('📈 4대 지표', indicators));
+
+    // 밸류에이션
+    if (fundamentals != null) {
+      final valLines = <String>[];
+      if (fundamentals.per != null) {
+        valLines.add('PER ${fundamentals.per!.toStringAsFixed(2)}');
+      }
+      if (fundamentals.pbr != null) {
+        valLines.add('PBR ${fundamentals.pbr!.toStringAsFixed(2)}');
+      }
+      if (a.sourceEps != null) {
+        valLines.add('EPS ${a.sourceEps!.toStringAsFixed(0)}');
+      }
+      if (fundamentals.bps != null) {
+        valLines.add('BPS ${fundamentals.bps!.toStringAsFixed(0)}');
+      }
+      if (valLines.isNotEmpty) {
+        final body = <String>[valLines.join('  ·  ')];
+        if (a.peerPerAverage.isNotEmpty) {
+          body.add('동종업계 평균 PER ${a.peerPerAverage}');
+        }
+        add(section('🔢 밸류에이션', body));
+      }
+    }
+
+    // 카탈리스트
+    if (a.catalysts.isNotEmpty) {
+      final lines = <String>[];
+      for (final c in a.catalysts) {
+        final title = StockAiAnalysisResultScreen.cleanText(c.title);
+        if (title.isEmpty) continue;
+        final meta = <String>[];
+        if (c.impact.isNotEmpty) meta.add('영향 ${c.impact}');
+        if (c.timeline.isNotEmpty) meta.add(c.timeline);
+        if (c.confidence.isNotEmpty) meta.add('확신 ${c.confidence}');
+        lines.add('• $title${meta.isEmpty ? '' : ' (${meta.join(', ')})'}');
+        final detail = StockAiAnalysisResultScreen.cleanText(c.detail);
+        if (detail.isNotEmpty) lines.add('   $detail');
+      }
+      add(section('🚀 주요 카탈리스트', lines));
+    }
+
+    // 시나리오
+    final scenarios = a.scenarios;
+    if (scenarios != null) {
+      final blocks = <String>[];
+      void addScenario(String label, StockAiScenario? s) {
+        if (s == null) return;
+        final narrative = StockAiAnalysisResultScreen.cleanText(s.narrative);
+        final trigger = StockAiAnalysisResultScreen.cleanText(s.trigger);
+        final target = StockAiAnalysisResultScreen.cleanText(s.priceTarget);
+        if (narrative.isEmpty && trigger.isEmpty && target.isEmpty) return;
+        final probStr = s.probability == null
+            ? ''
+            : ' · 확률 ${(s.probability! * 100).toStringAsFixed(0)}%';
+        final parts = <String>['【$label$probStr】'];
+        if (target.isNotEmpty) parts.add('목표가 $target');
+        if (trigger.isNotEmpty) parts.add('트리거: $trigger');
+        if (narrative.isNotEmpty) parts.add(narrative);
+        blocks.add(parts.join('\n'));
+      }
+      addScenario('Bull', scenarios.bull);
+      addScenario('Base', scenarios.base);
+      addScenario('Bear', scenarios.bear);
+      if (blocks.isNotEmpty) {
+        add(section('🎯 시나리오', [blocks.join('\n\n')]));
+      }
+    }
+
+    // 매매 타이밍
+    final timing = a.timing;
+    if (timing != null) {
+      final timingLines = <String>[];
+      void addTiming(String label, String value) {
+        final cleaned = StockAiAnalysisResultScreen.cleanText(value);
+        if (cleaned.isNotEmpty) timingLines.add('• $label: $cleaned');
+      }
+      addTiming('단기', timing.shortTerm);
+      addTiming('중기', timing.midTerm);
+      addTiming('액션', timing.action);
+      addTiming('근거', timing.actionReason);
+      add(section('⏱ 매매 타이밍', timingLines));
+    }
+
+    // 리스크
+    final risksDetailed = a.risksDetailed
+        .where(
+          (r) =>
+              r.description.trim().isNotEmpty || r.mitigant.trim().isNotEmpty,
+        )
+        .toList();
+    if (risksDetailed.isNotEmpty) {
+      final lines = <String>[];
+      for (final r in risksDetailed) {
+        final desc = StockAiAnalysisResultScreen.cleanText(r.description);
+        if (desc.isEmpty) continue;
+        final meta = <String>[];
+        if (r.category.isNotEmpty) meta.add(r.category);
+        if (r.severity.isNotEmpty) meta.add('심각도 ${r.severity}');
+        if (r.probability.isNotEmpty) meta.add('확률 ${r.probability}');
+        lines.add('• ${meta.isEmpty ? '' : '[${meta.join(' · ')}] '}$desc');
+        final mit = StockAiAnalysisResultScreen.cleanText(r.mitigant);
+        if (mit.isNotEmpty) lines.add('   대응: $mit');
+      }
+      add(section('⚠️ 리스크', lines));
+    } else if (a.risks.isNotEmpty) {
+      final lines = a.risks
+          .map((r) => StockAiAnalysisResultScreen.cleanText(r))
+          .where((r) => r.isNotEmpty)
+          .map((r) => '• $r')
+          .toList();
+      add(section('⚠️ 리스크', lines));
+    }
+
+    // 관련 종목
+    if (a.themePeers.isNotEmpty) {
+      add(section('🔗 관련 종목', [a.themePeers.take(8).join(', ')]));
+    }
+
+    // 푸터 — 앱 안내 페이지 + 면책
+    sections.add(
+      '$divider\n'
+      '주식저장소 · AI 종목 분석\n'
+      '📱 앱 다운로드  https://tofusoft-software.github.io/Stockstorage/\n'
+      '\n'
+      '※ AI 분석은 참고용입니다.\n'
+      '   투자 판단과 결과의 책임은 본인에게 있습니다.',
+    );
+
+    return sections.join('\n\n\n');
+  }
+
+  String _marketLabel(String market) {
+    switch (market.toUpperCase()) {
+      case 'KS':
+        return 'KOSPI';
+      case 'KQ':
+        return 'KOSDAQ';
+      case 'US':
+        return 'US';
+      default:
+        return market;
+    }
+  }
+
+  String _formatPrice(double price, String currency) {
+    final formatter = NumberFormat('#,##0.##');
+    final symbol = currency == 'USD' ? '\$' : '₩';
+    return '$symbol${formatter.format(price)}';
+  }
+
+  Future<void> shareAllCards() async {
+    if (_sharing) return;
+    _sharing = true;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.showSnackBar(
+      const SnackBar(
+        content: Text('카드별 이미지를 만들고 있어요...'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+
+    final overlayState = Overlay.maybeOf(context, rootOverlay: true);
+    if (overlayState == null) {
+      _sharing = false;
+      return;
+    }
+
+    final specs = _buildShareCardSpecs();
+    final keys = List<GlobalKey>.generate(specs.length, (_) => GlobalKey());
+
+    OverlayEntry? entry;
+    entry = OverlayEntry(
+      builder: (_) {
+        return Positioned(
+          left: -100000,
+          top: 0,
+          child: Directionality(
+            textDirection: ui.TextDirection.ltr,
+            child: MediaQuery(
+              data: MediaQueryData.fromView(View.of(context)),
+              child: Theme(
+                data: _shareDarkTheme(),
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: SizedBox(
+                    width: _ShareCardChrome.width,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (var i = 0; i < specs.length; i++)
+                          RepaintBoundary(
+                            key: keys[i],
+                            child: _ShareCardChrome(
+                              pick: widget.pick,
+                              analysis: widget.analysis,
+                              page: i + 1,
+                              total: specs.length,
+                              child: specs[i],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    overlayState.insert(entry);
+
+    final files = <XFile>[];
+    try {
+      // Layout + paint이 끝날 때까지 대기 — 카드가 여러 장이면 한 번 더.
+      await WidgetsBinding.instance.endOfFrame;
+      await Future.delayed(const Duration(milliseconds: 60));
+      await WidgetsBinding.instance.endOfFrame;
+
+      final tickerSafe = widget.pick.ticker.replaceAll(
+        RegExp(r'[^A-Za-z0-9가-힣_-]'),
+        '',
+      );
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+
+      for (var i = 0; i < keys.length; i++) {
+        final ro = keys[i].currentContext?.findRenderObject();
+        if (ro is! RenderRepaintBoundary) continue;
+        try {
+          final image = await ro.toImage(pixelRatio: 2.7);
+          final byteData = await image.toByteData(
+            format: ui.ImageByteFormat.png,
+          );
+          if (byteData == null) continue;
+          final file = File(
+            '${Directory.systemTemp.path}/ai_${tickerSafe}_${stamp}_${i + 1}.png',
+          );
+          await file.writeAsBytes(byteData.buffer.asUint8List());
+          files.add(XFile(file.path));
+        } catch (e) {
+          debugPrint('share capture failed at $i: $e');
+        }
+      }
+    } finally {
+      entry.remove();
+    }
+
+    if (!mounted) {
+      _sharing = false;
+      return;
+    }
+    if (files.isEmpty) {
+      messenger?.showSnackBar(
+        const SnackBar(content: Text('이미지를 만들지 못했어요. 다시 시도해주세요.')),
+      );
+      _sharing = false;
+      return;
+    }
+
+    final box = context.findRenderObject() as RenderBox?;
+    final origin = box == null
+        ? null
+        : box.localToGlobal(Offset.zero) & box.size;
+    await Share.shareXFiles(
+      files,
+      text: '${widget.pick.name} (${widget.pick.ticker}) AI 종목 분석',
+      sharePositionOrigin: origin,
+    );
+    _sharing = false;
+  }
+
+  List<Widget> _buildShareCardSpecs() {
+    final a = widget.analysis;
+    final pick = widget.pick;
+    final price = widget.price;
+    final fundamentals = widget.fundamentals;
+    final technicalMetrics = widget.technicalMetrics;
+    final candles = widget.candles;
+    final summaryText = StockAiAnalysisResultScreen.cleanSummaryText(
+      a.summary,
+    );
+    final generatedText = a.generatedAt == null
+        ? null
+        : DateFormat('yyyy.MM.dd HH:mm').format(a.generatedAt!);
+
+    final cards = <Widget>[];
+
+    // 화면의 _AnalysisContent 와 동일한 순서로 실제 카드를 그대로 사용.
+    cards.add(
+      _ReportHeroCard(
+        pick: pick,
+        price: price,
+        analysis: a,
+        summary: summaryText,
+        generatedText: generatedText,
+        candles: candles,
+      ),
+    );
+    cards.add(
+      _ScoreBoardCard(
+        analysis: a,
+        fundamentals: fundamentals,
+        currentPrice: price?.price,
+      ),
+    );
+    cards.add(
+      _SnapshotGrid(
+        analysis: a,
+        price: price,
+        fundamentals: fundamentals,
+        technicalMetrics: technicalMetrics,
+      ),
+    );
+    if (a.catalysts.isNotEmpty) {
+      cards.add(_CatalystsCard(catalysts: a.catalysts));
+    } else if (_hasReadableSignalContent(a)) {
+      cards.add(_SignalGridCard(analysis: a));
+    }
+    final peers = _relatedPeers(a);
+    if (peers.isNotEmpty) {
+      cards.add(_ThemePeersCard(peers: peers));
+    }
+    final scenarios = a.scenarios;
+    if (scenarios != null &&
+        (scenarios.bull != null ||
+            scenarios.base != null ||
+            scenarios.bear != null)) {
+      cards.add(_ScenariosCard(scenarios: scenarios));
+    }
+    final timing = a.timing;
+    if (timing != null &&
+        (timing.shortTerm.isNotEmpty ||
+            timing.midTerm.isNotEmpty ||
+            timing.action.isNotEmpty)) {
+      cards.add(_TimingCard(timing: timing));
+    }
+    for (var i = 0; i < 3; i++) {
+      cards.add(
+        _DataRoomCard(
+          fundamentals: fundamentals,
+          analysis: a,
+          technicalMetrics: technicalMetrics,
+          forceTabIndex: i,
+        ),
+      );
+    }
+    final renderableSections = a.sections
+        .where((s) => s.title.isNotEmpty && s.body.trim().isNotEmpty)
+        .toList();
+    if (renderableSections.isNotEmpty) {
+      cards.add(_SectionsCard(sections: renderableSections));
+    }
+    final risksDetailed = a.risksDetailed
+        .where(
+          (r) =>
+              r.description.trim().isNotEmpty || r.mitigant.trim().isNotEmpty,
+        )
+        .toList();
+    if (risksDetailed.isNotEmpty) {
+      cards.add(_RisksDetailedCard(risks: risksDetailed));
+    }
+    cards.add(_SourceEvidenceCard(analysis: a));
+
+    return cards;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final pick = widget.pick;
+    final analysis = widget.analysis;
+    final price = widget.price;
+    final fundamentals = widget.fundamentals;
+    final fromCache = widget.fromCache;
+    final technicalMetrics = widget.technicalMetrics;
+    final candles = widget.candles;
     final cs = Theme.of(context).colorScheme;
     final generatedText = analysis.generatedAt == null
         ? null
@@ -927,7 +1482,11 @@ class _AnalysisContent extends StatelessWidget {
       gap: 0,
     );
     addSection(
-      _ScoreBoardCard(analysis: analysis, fundamentals: fundamentals),
+      _ScoreBoardCard(
+        analysis: analysis,
+        fundamentals: fundamentals,
+        currentPrice: price?.price,
+      ),
       gap: 22,
     );
     addSection(
@@ -1091,8 +1650,10 @@ class _SummaryParagraphs extends StatelessWidget {
         .where((p) => p.isNotEmpty)
         .toList();
     if (byBlankLines.length > 1) return byBlankLines;
-    // 2순위: 마침표·물음표·느낌표 뒤 공백 기준 split (단, 숫자 소수점은 제외)
-    final regex = RegExp(r'(?<=[.!?다요])\s+(?=[가-힣A-Za-z0-9])');
+    // 2순위: 종결어미(다./요.) 또는 마침표·물음표·느낌표 뒤 공백 기준 split.
+    // 주의: "다"·"요" 단독으로 split하면 명사(주요/수요/필요/중요)의 끝글자
+    // "요"가 잘못 매치되어 명사 중간에서 끊김. 종결어미 + 종결부호 조합으로 제한.
+    final regex = RegExp(r'(?<=(?:다|요|니다|어요|에요|예요)[.!?])\s+(?=[가-힣A-Za-z0-9])');
     final sentences = text
         .split(regex)
         .map((s) => s.trim())
@@ -1126,11 +1687,13 @@ class _ReportHeroCard extends StatelessWidget {
     final scoreColor = _scoreColor(score);
     final scoreValue = score?.round();
     final scoreText = scoreValue == null ? '--' : scoreValue.toString();
+    // 색(_scoreColor)과 컷오프를 정확히 일치시킴 — "중립인데 초록" 같은
+    // 어긋남을 방지. 한 곳 바꾸면 둘 다 함께 바뀐다.
     final scoreCaption = scoreValue == null
         ? '대기'
-        : scoreValue >= 75
+        : scoreValue >= 70
         ? '우호적'
-        : scoreValue >= 55
+        : scoreValue >= 50
         ? '중립'
         : '주의';
     final priceChange = price?.change ?? 0;
@@ -1347,9 +1910,7 @@ class _CompanyOverviewCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: accent.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(12),
-        border: const Border(
-          left: BorderSide(color: accent, width: 3),
-        ),
+        border: const Border(left: BorderSide(color: accent, width: 3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1816,18 +2377,50 @@ class _SnapshotItem {
 class _ScoreBoardCard extends StatelessWidget {
   final StockAiAnalysisResult analysis;
   final FundamentalsResult? fundamentals;
+  final double? currentPrice;
 
-  const _ScoreBoardCard({required this.analysis, required this.fundamentals});
+  const _ScoreBoardCard({
+    required this.analysis,
+    required this.fundamentals,
+    this.currentPrice,
+  });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final base = analysis.score ?? 50;
+    // 신규 분석은 모델이 subScores를 직접 출력. 텍스트 키워드 카운팅 없이 그대로 표시.
+    // 구 분석은 텍스트 기반 fallback 사용.
+    final sub = analysis.subScores;
+    final newsValue = sub?.newsImpact ?? _scoreFromText(analysis.news, base);
+    final priceValue =
+        sub?.priceTrend ?? _scoreFromText(analysis.technical, base);
+    final momentumValue =
+        sub?.momentumFlow ?? _scoreFromText(analysis.momentum, base);
+    final fundamentalsValue = sub?.fundamentals ??
+        _fundamentalScore(
+          fundamentals,
+          base,
+          valuation: analysis.valuation,
+          epsTimeline: analysis.sourceEpsTimeline,
+          reports: analysis.sourceReports,
+          financials: analysis.sourceFinancials,
+          currentPrice: currentPrice,
+        );
+    // 서버 가중치: priceTrend 25%, newsImpact 20%, fundamentals 20%,
+    // momentumFlow 20%, riskLevel 15%. 가중평균이 종합 점수가 됨.
+    // riskLevel: 100 = 리스크 거의 없음(우호), 0 = 리스크 매우 큼(부정).
     final items = <_ScoreItem>[
-      _ScoreItem(label: '뉴스', value: _scoreFromText(analysis.news, base)),
-      _ScoreItem(label: '차트', value: _scoreFromText(analysis.technical, base)),
-      _ScoreItem(label: '재무', value: _fundamentalScore(fundamentals, base)),
-      _ScoreItem(label: '모멘텀', value: _scoreFromText(analysis.momentum, base)),
+      _ScoreItem(label: '차트', value: priceValue, weightPercent: 25),
+      _ScoreItem(label: '뉴스', value: newsValue, weightPercent: 20),
+      _ScoreItem(label: '재무', value: fundamentalsValue, weightPercent: 20),
+      _ScoreItem(label: '모멘텀', value: momentumValue, weightPercent: 20),
+      if (sub?.riskLevel != null)
+        _ScoreItem(
+          label: '리스크',
+          value: sub!.riskLevel!,
+          weightPercent: 15,
+        ),
     ];
 
     return Column(
@@ -1846,6 +2439,20 @@ class _ScoreBoardCard extends StatelessWidget {
               for (var i = 0; i < items.length; i++)
                 _ScoreTile(item: items[i], showBorder: i < items.length - 1),
             ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text(
+            '종합 점수는 각 항목 ×가중치(%)의 합으로 계산돼요. '
+            '단순 평균이 아니라 가중평균이에요.',
+            style: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.42),
+              fontSize: 11,
+              height: 1.5,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ],
@@ -1875,15 +2482,33 @@ class _ScoreTile extends StatelessWidget {
       child: Row(
         children: [
           SizedBox(
-            width: 42,
-            child: Text(
-              item.label,
-              style: TextStyle(
-                color: cs.onSurface.withValues(alpha: 0.68),
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.2,
-              ),
+            width: 60,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(
+                  item.label,
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.72),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                if (item.weightPercent != null) ...[
+                  const SizedBox(width: 3),
+                  Text(
+                    '${item.weightPercent}%',
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.34),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.1,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           Expanded(
@@ -2532,11 +3157,14 @@ class _DataRoomCard extends StatefulWidget {
   final FundamentalsResult? fundamentals;
   final StockAiAnalysisResult analysis;
   final _AiTechnicalMetrics? technicalMetrics;
+  // 공유 캡쳐용 — 지정한 탭만 보여주고 스위처는 숨긴다.
+  final int? forceTabIndex;
 
   const _DataRoomCard({
     required this.fundamentals,
     required this.analysis,
     required this.technicalMetrics,
+    this.forceTabIndex,
   });
 
   @override
@@ -2663,20 +3291,16 @@ class _DataRoomCardState extends State<_DataRoomCard> {
     final hasEpsTimeline = epsTimeline.isNotEmpty;
     final valuationFooter = (hasValuationFooter || hasEpsTimeline)
         ? Column(
-            children: [
-              if (hasValuationFooter)
-                _PeerComparisonFooter(valuation: valuation),
-              if (hasEpsTimeline)
-                _EpsTimelineFooter(timeline: epsTimeline),
-            ],
-          ) as Widget?
+                children: [
+                  if (hasValuationFooter)
+                    _PeerComparisonFooter(valuation: valuation),
+                  if (hasEpsTimeline) _EpsTimelineFooter(timeline: epsTimeline),
+                ],
+              )
+              as Widget?
         : null;
     final tabs = [
-      (
-        label: '밸류에이션',
-        rows: valuationRows,
-        footer: valuationFooter,
-      ),
+      (label: '밸류에이션', rows: valuationRows, footer: valuationFooter),
       (
         label: '기술 지표',
         rows: technicalRows,
@@ -2700,6 +3324,18 @@ class _DataRoomCardState extends State<_DataRoomCard> {
         ),
       ),
     ];
+    if (widget.forceTabIndex != null) {
+      final idx = widget.forceTabIndex!.clamp(0, tabs.length - 1);
+      final tab = tabs[idx];
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionLabel('데이터 보드 · ${tab.label}'),
+          _MetricPanel(rows: tab.rows, footer: tab.footer),
+        ],
+      );
+    }
+
     final active = tabs[_tabIndex.clamp(0, tabs.length - 1)];
 
     return Column(
@@ -2809,7 +3445,10 @@ class _EpsTimelineFooter extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 10,
+            runSpacing: 4,
             children: [
               Text(
                 'EPS·PER 컨센서스 추이',
@@ -2820,7 +3459,6 @@ class _EpsTimelineFooter extends StatelessWidget {
                   letterSpacing: -0.2,
                 ),
               ),
-              const Spacer(),
               if (growthLabel != null)
                 Text(
                   growthLabel,
@@ -2876,7 +3514,9 @@ class _EpsPointChip extends StatelessWidget {
         ? '-'
         : NumberFormat('#,###').format(eps.round());
     final per = point.per;
-    final perText = per == null ? null : '${per.toStringAsFixed(per.abs() < 100 ? 2 : 1)}배';
+    final perText = per == null
+        ? null
+        : '${per.toStringAsFixed(per.abs() < 100 ? 2 : 1)}배';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
@@ -3075,7 +3715,10 @@ class _ValuationKpiBox extends StatelessWidget {
     required this.color,
   });
 
-  static (String headline, String qualifier) _split(String label, String value) {
+  static (String headline, String qualifier) _split(
+    String label,
+    String value,
+  ) {
     final clean = value.trim();
     if (clean.isEmpty) return ('-', '');
     final numRe = RegExp(
@@ -3968,8 +4611,13 @@ class _MetricRow extends StatelessWidget {
 class _ScoreItem {
   final String label;
   final double value;
+  final int? weightPercent;
 
-  const _ScoreItem({required this.label, required this.value});
+  const _ScoreItem({
+    required this.label,
+    required this.value,
+    this.weightPercent,
+  });
 }
 
 class _SignalItem {
@@ -4348,6 +4996,7 @@ class _ScenarioRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
@@ -4370,9 +5019,11 @@ class _ScenarioRow extends StatelessWidget {
                 Expanded(
                   child: Text(
                     scenario.priceTarget,
+                    softWrap: true,
                     style: TextStyle(
                       color: cs.onSurface,
                       fontSize: 14,
+                      height: 1.35,
                       fontWeight: FontWeight.w900,
                       letterSpacing: -0.3,
                     ),
@@ -4381,12 +5032,15 @@ class _ScenarioRow extends StatelessWidget {
               else
                 const Spacer(),
               if (probPercent != null)
-                Text(
-                  '$probPercent%',
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
+                Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text(
+                    '$probPercent%',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
             ],
@@ -4578,10 +5232,12 @@ Color _actionColor(String action) {
     case '비중확대':
     case '분할매수':
       return const Color(0xFF10B981);
+    // 매수보류는 "사지 마라"가 아니라 "지금은 보류"라는 중립 신호.
+    // 70점대가 매수보류일 수도 있으므로 red가 아니라 amber로.
     case '관망':
     case '판단보류':
-      return const Color(0xFFF59E0B);
     case '매수보류':
+      return const Color(0xFFF59E0B);
     case '비중축소':
       return const Color(0xFFF04452);
     default:
@@ -4664,10 +5320,7 @@ class _SectionTile extends StatelessWidget {
                 padding: EdgeInsets.only(
                   bottom: i < segments.length - 1 ? 7 : 0,
                 ),
-                child: _SectionSegmentRow(
-                  segment: segments[i],
-                  accent: accent,
-                ),
+                child: _SectionSegmentRow(segment: segments[i], accent: accent),
               ),
           ],
         ],
@@ -5080,8 +5733,8 @@ BoxDecoration _cardDecoration(ColorScheme cs) {
 
 Color _scoreColor(double? score) {
   if (score == null) return const Color(0xFF64748B);
-  if (score >= 75) return const Color(0xFF10B981);
-  if (score >= 55) return const Color(0xFFF59E0B);
+  if (score >= 70) return const Color(0xFF10B981);
+  if (score >= 50) return const Color(0xFFF59E0B);
   return const Color(0xFFF04452);
 }
 
@@ -5099,22 +5752,240 @@ double _scoreFromText(String text, double fallback) {
   return score.clamp(0, 100).toDouble();
 }
 
-double _fundamentalScore(FundamentalsResult? fundamentals, double fallback) {
-  if (fundamentals == null) return fallback;
+double _fundamentalScore(
+  FundamentalsResult? fundamentals,
+  double fallback, {
+  StockAiValuation? valuation,
+  List<StockAiEpsPoint> epsTimeline = const [],
+  List<StockAiSourceItem> reports = const [],
+  List<StockAiFinancialItem> financials = const [],
+  double? currentPrice,
+}) {
   var score = fallback;
-  final per = fundamentals.per;
-  final pbr = fundamentals.pbr;
-  if (per != null) {
-    if (per > 0 && per <= 12) score += 8;
-    if (per >= 25) score -= 8;
+  var anySignal = false;
+
+  // (1) 모델이 종합 판단한 perVerdict / pbrVerdict — 가장 큰 가중치.
+  // 모델은 trailing/forward/업종평균을 모두 보고 판단하므로 우선 반영.
+  if (valuation != null) {
+    final perVerdict = valuation.perVerdict.trim();
+    switch (perVerdict) {
+      case '낮음':
+        score += 10;
+        anySignal = true;
+        break;
+      case '높음':
+        score -= 10;
+        anySignal = true;
+        break;
+      case '적정':
+        score += 2;
+        anySignal = true;
+        break;
+    }
+    final pbrVerdict = valuation.pbrVerdict.trim();
+    switch (pbrVerdict) {
+      case '낮음':
+        score += 5;
+        anySignal = true;
+        break;
+      case '높음':
+        score -= 5;
+        anySignal = true;
+        break;
+    }
+
+    // (2) forwardPer 텍스트에서 숫자 추출 — sector 평균 대비 할인이면 가산.
+    final forwardPer = _extractFirstNumber(valuation.forwardPer);
+    final sectorPer = _extractFirstNumber(valuation.sectorAveragePer);
+    if (forwardPer != null && sectorPer != null && sectorPer > 0) {
+      final discount = (sectorPer - forwardPer) / sectorPer;
+      if (discount > 0.35) {
+        score += 8;
+        anySignal = true;
+      } else if (discount > 0.15) {
+        score += 4;
+        anySignal = true;
+      } else if (discount < -0.35) {
+        score -= 8;
+        anySignal = true;
+      } else if (discount < -0.15) {
+        score -= 4;
+        anySignal = true;
+      }
+    }
+
+    // (3) forward PER이 trailing PER 대비 의미 있게 낮으면 회복 시그널.
+    final trailingPer = fundamentals?.per;
+    if (forwardPer != null && trailingPer != null && trailingPer > 0) {
+      final ratio = forwardPer / trailingPer;
+      if (ratio < 0.5) {
+        score += 12;
+        anySignal = true;
+      } else if (ratio < 0.7) {
+        score += 6;
+        anySignal = true;
+      } else if (ratio > 1.4) {
+        score -= 10;
+        anySignal = true;
+      } else if (ratio > 1.15) {
+        score -= 5;
+        anySignal = true;
+      }
+    }
   }
-  if (pbr != null) {
-    if (pbr > 0 && pbr <= 1.2) score += 6;
-    if (pbr >= 3) score -= 7;
+
+  // (4) EPS 시계열 추세 — 미래 실적 신호.
+  // sourceEpsTimeline은 오래된 → 최신 순서. 적자→흑자 전환 / 누적 성장 / 감소를
+  // 직접 점수화해서 forward PER 신호와 별개로 가산·감점.
+  final epsValid = epsTimeline.where((p) => p.eps != null).toList();
+  if (epsValid.length >= 2) {
+    final first = epsValid.first.eps!;
+    final last = epsValid.last.eps!;
+    if (first < 0 && last > 0) {
+      score += 12;
+      anySignal = true;
+    } else if (first > 0 && last < 0) {
+      score -= 12;
+      anySignal = true;
+    } else if (first > 0 && last > 0) {
+      final growth = (last - first) / first;
+      if (growth > 0.6) {
+        score += 8;
+        anySignal = true;
+      } else if (growth > 0.25) {
+        score += 4;
+        anySignal = true;
+      } else if (growth < -0.3) {
+        score -= 8;
+        anySignal = true;
+      } else if (growth < -0.1) {
+        score -= 4;
+        anySignal = true;
+      }
+    }
   }
+
+  // (5) 증권사 평균 목표가 vs 현재가 — broker 2개 이상일 때만.
+  if (currentPrice != null && currentPrice > 0) {
+    final targets = reports
+        .map((r) => r.targetPrice)
+        .where((t) => t != null && t > 0)
+        .cast<double>()
+        .toList();
+    if (targets.length >= 2) {
+      final avgTarget = targets.reduce((a, b) => a + b) / targets.length;
+      final upside = (avgTarget - currentPrice) / currentPrice;
+      if (upside > 0.40) {
+        score += 6;
+        anySignal = true;
+      } else if (upside > 0.25) {
+        score += 3;
+        anySignal = true;
+      } else if (upside < -0.05) {
+        score -= 8;
+        anySignal = true;
+      } else if (upside < 0.05) {
+        score -= 3;
+        anySignal = true;
+      }
+    }
+  }
+
+  // (6) DART 영업이익 YoY — current vs previous (전년 동기).
+  final opRow = financials.firstWhere(
+    (f) => f.account == '영업이익',
+    orElse: () => const StockAiFinancialItem(account: ''),
+  );
+  if (opRow.account.isNotEmpty) {
+    final cur = _parseDartAmount(opRow.current);
+    final prev = _parseDartAmount(opRow.previous);
+    if (cur != null && prev != null) {
+      if (prev < 0 && cur > 0) {
+        score += 10;
+        anySignal = true;
+      } else if (prev > 0 && cur < 0) {
+        score -= 10;
+        anySignal = true;
+      } else if (prev > 0 && cur > 0) {
+        final yoy = (cur - prev) / prev;
+        if (yoy > 0.30) {
+          score += 5;
+          anySignal = true;
+        } else if (yoy > 0.10) {
+          score += 2;
+          anySignal = true;
+        } else if (yoy < -0.30) {
+          score -= 6;
+          anySignal = true;
+        } else if (yoy < -0.10) {
+          score -= 3;
+          anySignal = true;
+        }
+      } else if (prev < 0 && cur < 0) {
+        final reduction = (prev.abs() - cur.abs()) / prev.abs();
+        if (reduction > 0.30) {
+          score += 3;
+          anySignal = true;
+        } else if (reduction < -0.30) {
+          score -= 5;
+          anySignal = true;
+        }
+      }
+    }
+  }
+
+  // (7) 모델 신호가 전혀 없을 때만 trailing PER/PBR를 최후 보조로 사용.
+  // 모델이 verdict를 채워주면 trailing 단독 페널티는 적용하지 않는다.
+  if (!anySignal && fundamentals != null) {
+    final per = fundamentals.per;
+    final pbr = fundamentals.pbr;
+    if (per != null) {
+      if (per > 0 && per <= 12) score += 8;
+      if (per >= 25) score -= 8;
+    }
+    if (pbr != null) {
+      if (pbr > 0 && pbr <= 1.2) score += 6;
+      if (pbr >= 3) score -= 7;
+    }
+  }
+
   return score.clamp(0, 100).toDouble();
 }
 
+/// DART 금액 문자열 정규화 (서버 parseDartAmount과 동일 규칙).
+/// "1,234,567" → 1234567, "(1,234)" → -1234, "-1234" → -1234.
+double? _parseDartAmount(String? raw) {
+  if (raw == null) return null;
+  var s = raw.trim();
+  if (s.isEmpty) return null;
+  var sign = 1;
+  if (RegExp(r'^\(.*\)$').hasMatch(s)) {
+    sign = -1;
+    s = s.substring(1, s.length - 1);
+  }
+  if (s.startsWith('-')) {
+    sign = sign * -1;
+    s = s.substring(1);
+  }
+  s = s.replaceAll(RegExp(r'[,\s]'), '');
+  if (!RegExp(r'^\d+(?:\.\d+)?$').hasMatch(s)) return null;
+  final n = double.tryParse(s);
+  if (n == null || !n.isFinite) return null;
+  return n * sign;
+}
+
+double? _extractFirstNumber(String? text) {
+  if (text == null) return null;
+  final t = text.trim();
+  if (t.isEmpty) return null;
+  final m = RegExp(r'-?\d+(?:\.\d+)?').firstMatch(t);
+  if (m == null) return null;
+  final v = double.tryParse(m.group(0)!);
+  return (v != null && v.isFinite) ? v : null;
+}
+
+/// 섹션별 시그널 라벨 — _scoreFromText (워드 빈도 기반, 55 베이스)에 맞춘
+/// 자체 컷오프. 종합 점수의 70/50 컷오프와 다른 스케일이라 의도적으로 분리.
 String _signalLabel(String text) {
   final score = _scoreFromText(text, 55);
   if (score >= 68) return '우호적';
@@ -5483,4 +6354,155 @@ String _sanitizeDisplayLine(String value) {
   text = text.replaceAll(RegExp(r'\s+'), ' ');
   text = text.replaceAll(RegExp(r'\s+([,.])'), r'$1');
   return text.trim();
+}
+
+// ===========================================================================
+// 공유용 카드 캡쳐 chrome — 실제 화면 카드 위젯을 동일하게 다크 테마로 감싼다.
+// ===========================================================================
+
+ThemeData _shareDarkTheme() {
+  return ThemeData(
+    brightness: Brightness.dark,
+    fontFamily: 'Pretendard',
+    textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'Pretendard'),
+    scaffoldBackgroundColor: const Color(0xFF0A0E1A),
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: const Color(0xFF10B981),
+      brightness: Brightness.dark,
+      surface: const Color(0xFF1A2035),
+    ),
+  );
+}
+
+class _ShareCardChrome extends StatelessWidget {
+  static const double width = 400; // logical, ×2.7 ≈ 1080px
+  static const Color bg = Color(0xFF0A0E1A);
+  static const Color accent = Color(0xFF10B981);
+
+  final StockPick pick;
+  final StockAiAnalysisResult analysis;
+  final int page;
+  final int total;
+  final Widget child;
+
+  const _ShareCardChrome({
+    required this.pick,
+    required this.analysis,
+    required this.page,
+    required this.total,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final generated = analysis.generatedAt;
+    final generatedText = generated == null
+        ? null
+        : DateFormat('yyyy.MM.dd HH:mm').format(generated);
+    return Container(
+      width: width,
+      decoration: const BoxDecoration(color: bg),
+      // 화면 ListView의 가로 padding 20에 맞춤.
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (page == 1)
+            Row(
+              children: [
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: const BoxDecoration(
+                    color: accent,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text(
+                  '주식저장소  ·  AI 종목 분석',
+                  style: TextStyle(
+                    color: accent,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.8,
+                    fontFamily: 'Pretendard',
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '$page / $total',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.4),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5,
+                    fontFamily: 'Pretendard',
+                  ),
+                ),
+              ],
+            ),
+          if (page == 1) ...[
+            const SizedBox(height: 12),
+            Text(
+              pick.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.5,
+                height: 1.15,
+                fontFamily: 'Pretendard',
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              '${pick.ticker} · ${pick.market}',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.42),
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.2,
+                fontFamily: 'Pretendard',
+              ),
+            ),
+          ],
+          const SizedBox(height: 18),
+          child,
+          if (page == total) ...[
+            const SizedBox(height: 18),
+            Container(height: 1, color: Colors.white.withValues(alpha: 0.08)),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                if (generatedText != null)
+                  Text(
+                    '$generatedText 생성',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.3),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: 'Pretendard',
+                    ),
+                  ),
+                const Spacer(),
+                Text(
+                  '투자 책임은 본인에게 있습니다',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.3),
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'Pretendard',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }

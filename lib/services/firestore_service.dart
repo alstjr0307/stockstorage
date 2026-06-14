@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/announcement.dart';
 import '../models/comment.dart';
 import '../models/fmkorea_stock_mention.dart';
@@ -8,6 +9,13 @@ import '../models/post.dart';
 import '../models/stock_pick.dart';
 import '../models/trading_journal.dart';
 import 'stock_price_service.dart';
+
+class NicknameTakenException implements Exception {
+  final String nickname;
+  const NicknameTakenException(this.nickname);
+  @override
+  String toString() => '이미 사용 중인 닉네임입니다: $nickname';
+}
 
 class FirestoreService {
   final _db = FirebaseFirestore.instance;
@@ -492,20 +500,34 @@ class FirestoreService {
     return doc.data()?['nickname'] as String?;
   }
 
+  /// 닉네임 등록/변경. 트랜잭션으로 처리해 동시 신청 시 한 명만 차지.
+  /// 다른 uid가 이미 점유 중이면 [NicknameTakenException] 던짐.
   Future<void> setNickname(String uid, String nickname) async {
-    // 기존 닉네임 삭제 후 새 닉네임 등록
-    final userDoc = await _db.collection('users').doc(uid).get();
-    final oldNickname = userDoc.data()?['nickname'] as String?;
-    if (oldNickname != null && oldNickname != nickname) {
-      await _db.collection('nicknames').doc(oldNickname).delete();
-    }
-    await _db.collection('nicknames').doc(nickname).set({'uid': uid});
-    await _db.collection('users').doc(uid).set({
-      'nickname': nickname,
-    }, SetOptions(merge: true));
-    await _db.collection('user_public').doc(uid).set({
-      'nickname': nickname,
-    }, SetOptions(merge: true));
+    final newRef = _db.collection('nicknames').doc(nickname);
+    final userRef = _db.collection('users').doc(uid);
+    final publicRef = _db.collection('user_public').doc(uid);
+
+    String? oldNicknameToDelete;
+    await _db.runTransaction((tx) async {
+      final newDoc = await tx.get(newRef);
+      if (newDoc.exists) {
+        final existingUid = newDoc.data()?['uid'] as String?;
+        if (existingUid != null && existingUid != uid) {
+          throw NicknameTakenException(nickname);
+        }
+      }
+      final userDoc = await tx.get(userRef);
+      final oldNickname = userDoc.data()?['nickname'] as String?;
+      if (oldNickname != null && oldNickname != nickname) {
+        oldNicknameToDelete = oldNickname;
+      }
+      if (oldNicknameToDelete != null) {
+        tx.delete(_db.collection('nicknames').doc(oldNicknameToDelete!));
+      }
+      tx.set(newRef, {'uid': uid});
+      tx.set(userRef, {'nickname': nickname}, SetOptions(merge: true));
+      tx.set(publicRef, {'nickname': nickname}, SetOptions(merge: true));
+    });
   }
 
   Future<bool> isNicknameTaken(String nickname, String currentUid) async {
@@ -768,6 +790,22 @@ class FirestoreService {
     await recordCommentCreated(comment.uid);
   }
 
+  Future<void> updateMarketAnalysisComment(
+    String analysisId,
+    String commentId,
+    String newContent,
+  ) async {
+    await _db
+        .collection('market_analyses')
+        .doc(analysisId)
+        .collection('comments')
+        .doc(commentId)
+        .update({
+          'content': newContent,
+          'editedAt': Timestamp.fromDate(DateTime.now()),
+        });
+  }
+
   Future<void> deleteMarketAnalysisComment(
     String analysisId,
     String commentId,
@@ -858,6 +896,35 @@ class FirestoreService {
     }, SetOptions(merge: true));
     await batch.commit();
     await recordCommentCreated(comment.uid);
+  }
+
+  /// 추천주 댓글 수정. 본인 댓글만 가능(rules로 강제). myComments 미러도 동기화.
+  Future<void> updateComment(
+    String pickId,
+    String commentId,
+    String uid,
+    String newContent,
+  ) async {
+    final now = DateTime.now();
+    final batch = _db.batch();
+    batch.update(
+      _db
+          .collection('stock_picks')
+          .doc(pickId)
+          .collection('comments')
+          .doc(commentId),
+      {'content': newContent, 'editedAt': Timestamp.fromDate(now)},
+    );
+    batch.set(
+      _db
+          .collection('users')
+          .doc(uid)
+          .collection('myComments')
+          .doc(commentId),
+      {'text': newContent, 'editedAt': Timestamp.fromDate(now)},
+      SetOptions(merge: true),
+    );
+    await batch.commit();
   }
 
   Future<void> deleteComment(
@@ -966,26 +1033,11 @@ class FirestoreService {
               (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
         ));
       }
-    } catch (_) {
-      final postsSnap = await _db.collection('posts').get();
-
-      for (final postDoc in postsSnap.docs) {
-        final commentsSnap = await postDoc.reference
-            .collection('comments')
-            .where('uid', isEqualTo: uid)
-            .get();
-
-        for (final commentDoc in commentsSnap.docs) {
-          final data = commentDoc.data();
-          items.add((
-            commentId: commentDoc.id,
-            postId: postDoc.id,
-            text: data['content'] as String? ?? '',
-            createdAt:
-                (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-          ));
-        }
-      }
+    } catch (e) {
+      // Primary query needs collectionGroup index on comments.uid.
+      // If it's missing or still building, return what we have rather than
+      // fanning out a full posts scan with N+1 comment fetches.
+      debugPrint('comments collectionGroup query failed: $e');
     }
 
     items.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -1826,17 +1878,6 @@ class FirestoreService {
         );
   }
 
-  Stream<List<TradingJournal>> getPublicJournals() {
-    return _db
-        .collection('trading_journal')
-        .where('isPublic', isEqualTo: true)
-        .orderBy('publishedAt', descending: true)
-        .snapshots()
-        .map(
-          (s) => s.docs.map((d) => TradingJournal.fromFirestore(d)).toList(),
-        );
-  }
-
   Future<List<TradingJournal>> getMyJournalsByUidOnce(String uid) async {
     final snap = await _db
         .collection('trading_journal')
@@ -2181,6 +2222,35 @@ class FirestoreService {
     await recordCommentCreated(comment.uid);
   }
 
+  /// 자유게시판 댓글 수정. 본인 댓글만 가능(rules로 강제). myPostComments 미러 동기화.
+  Future<void> updatePostComment(
+    String postId,
+    String commentId,
+    String uid,
+    String newContent,
+  ) async {
+    final now = DateTime.now();
+    final batch = _db.batch();
+    batch.update(
+      _db
+          .collection('posts')
+          .doc(postId)
+          .collection('comments')
+          .doc(commentId),
+      {'content': newContent, 'editedAt': Timestamp.fromDate(now)},
+    );
+    batch.set(
+      _db
+          .collection('users')
+          .doc(uid)
+          .collection('myPostComments')
+          .doc(commentId),
+      {'text': newContent, 'editedAt': Timestamp.fromDate(now)},
+      SetOptions(merge: true),
+    );
+    await batch.commit();
+  }
+
   Future<void> deletePostComment(String postId, String commentId) async {
     final commentRef = _db
         .collection('posts')
@@ -2236,6 +2306,22 @@ class FirestoreService {
         .collection('comments')
         .add(comment.toFirestore());
     await recordCommentCreated(comment.uid);
+  }
+
+  Future<void> updateJournalComment(
+    String journalId,
+    String commentId,
+    String newContent,
+  ) async {
+    await _db
+        .collection('trading_journal')
+        .doc(journalId)
+        .collection('comments')
+        .doc(commentId)
+        .update({
+          'content': newContent,
+          'editedAt': Timestamp.fromDate(DateTime.now()),
+        });
   }
 
   Future<void> deleteJournalComment(String journalId, String commentId) async {

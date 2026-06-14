@@ -1648,6 +1648,11 @@ function buildMarketFeatureStocks(stock, rows) {
     last.close >= previous60High * 1.005
   ) {
     const isYearHigh = previous240High && last.close >= previous240High * 1.005;
+    // 라벨만 다르고 설명이 똑같으면 사용자 입장에선 두 카테고리가 같아 보이므로,
+    // 신고가는 240거래일(≈1년) 기준을, 전고점은 60거래일 기준을 본문에 인용한다.
+    const refHigh = isYearHigh ? previous240High : previous60High;
+    const refLabel = isYearHigh ? '약 1년(240거래일)' : '최근 60거래일';
+    const breakoutPct = (((last.close / refHigh) - 1) * 100).toFixed(1);
     items.push(
       makeFeatureItem(
         stock,
@@ -1655,7 +1660,9 @@ function buildMarketFeatureStocks(stock, rows) {
         'high_breakout',
         isYearHigh ? 'new_52w_high' : 'prior_high_breakout',
         isYearHigh ? '신고가 돌파' : '전고점 돌파',
-        `종가가 최근 60거래일 고점을 ${(((last.close / previous60High) - 1) * 100).toFixed(1)}% 상회했습니다. 거래량도 20거래일 평균 대비 ${volumeRatio.toFixed(1)}배로 늘어 ${isYearHigh ? '신고가 돌파' : '전고점 돌파'} 흐름으로 포착했습니다.`,
+        isYearHigh
+          ? `종가가 ${refLabel} 고점을 ${breakoutPct}% 상회하며 신고가를 새로 썼습니다. 거래량도 20거래일 평균 대비 ${volumeRatio.toFixed(1)}배로 늘어 신고가 돌파 흐름으로 포착했습니다.`
+          : `종가가 ${refLabel} 고점을 ${breakoutPct}% 넘어섰습니다. 거래량도 20거래일 평균 대비 ${volumeRatio.toFixed(1)}배로 늘어 중기 전고점 돌파 흐름으로 포착했습니다.`,
         50 + (isYearHigh ? 15 : 5) + Math.min(20, volumeRatio * 5) + Math.min(15, oneDayRate * 100),
       ),
     );

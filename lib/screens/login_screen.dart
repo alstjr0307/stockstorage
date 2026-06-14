@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuthException;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
@@ -67,8 +68,15 @@ class _LoginScreenState extends State<LoginScreen> {
             : null,
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          // 시스템 폰트 크기를 크게 설정한 단말에서도 콘텐츠가 잘리지 않도록
+          // 스크롤 가능하게 하고, 키보드가 올라오면 그만큼 추가 패딩.
+          padding: EdgeInsets.fromLTRB(
+            24,
+            24,
+            24,
+            24 + MediaQuery.viewInsetsOf(context).bottom,
+          ),
           child: Form(
             key: _formKey,
             child: Column(
@@ -85,7 +93,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '추천주 상세 정보를 확인하세요',
+                  '주식저장소의 모든 서비스를 이용해보세요',
                   style: TextStyle(
                     color: cs.onSurface.withValues(alpha: 0.38),
                     fontSize: 14,
@@ -102,8 +110,35 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 if (!_isLogin) ...[
                   const SizedBox(height: 14),
-                  _buildField('닉네임', _nicknameController, hint: '댓글에 표시될 닉네임'),
+                  _buildField(
+                    '닉네임',
+                    _nicknameController,
+                    hint: '댓글에 표시될 닉네임 (2~12자)',
+                    validator: _validateNicknameFormat,
+                  ),
                 ],
+                if (_isLogin)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: _isLoading ? null : _showResetPasswordDialog,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        '비밀번호를 잊으셨나요?',
+                        style: TextStyle(
+                          color: cs.onSurface.withValues(alpha: 0.54),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 30),
                 SizedBox(
                   width: double.infinity,
@@ -281,6 +316,7 @@ class _LoginScreenState extends State<LoginScreen> {
     TextEditingController controller, {
     String? hint,
     bool isPassword = false,
+    String? Function(String?)? validator,
   }) {
     final cs = Theme.of(context).colorScheme;
     return Column(
@@ -302,7 +338,7 @@ class _LoginScreenState extends State<LoginScreen> {
             hintText: hint,
             hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.24)),
             filled: true,
-            fillColor: const Color(0xFF1A2035),
+            fillColor: cs.surfaceContainerHighest,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -319,11 +355,113 @@ class _LoginScreenState extends State<LoginScreen> {
               vertical: 14,
             ),
           ),
-          validator: (val) =>
+          validator: validator ?? (val) =>
               val == null || val.isEmpty ? '$label을 입력하세요' : null,
         ),
       ],
     );
+  }
+
+  /// 인증/네트워크 예외를 사용자 친화 문구로 변환.
+  /// Firebase Auth 에러 코드 + 자체 throw 문구 + 사용자 취소 케이스 처리.
+  String _friendlyAuthError(Object error) {
+    if (error is NicknameTakenException) {
+      return '이미 사용 중인 닉네임이에요. 다른 닉네임을 선택해주세요.';
+    }
+    if (error is FirebaseAuthException) {
+      switch (error.code) {
+        case 'invalid-email':
+          return '이메일 형식이 올바르지 않아요.';
+        case 'user-disabled':
+          return '사용이 중단된 계정이에요. 고객센터에 문의해주세요.';
+        case 'user-not-found':
+          return '가입되지 않은 이메일이에요. 회원가입을 진행해주세요.';
+        case 'wrong-password':
+        case 'invalid-credential':
+        case 'invalid-login-credentials':
+          return '이메일 또는 비밀번호가 올바르지 않아요.';
+        case 'email-already-in-use':
+          return '이미 가입된 이메일이에요. 로그인을 시도해보세요.';
+        case 'weak-password':
+          return '비밀번호는 6자 이상으로 설정해주세요.';
+        case 'too-many-requests':
+          return '잠시 후 다시 시도해주세요. 너무 자주 시도하면 임시로 차단돼요.';
+        case 'network-request-failed':
+          return '인터넷 연결을 확인하고 다시 시도해주세요.';
+        case 'operation-not-allowed':
+          return '현재 이 로그인 방식은 사용할 수 없어요.';
+        case 'account-exists-with-different-credential':
+          return '같은 이메일로 다른 방식의 계정이 있어요. 기존 방식으로 로그인해주세요.';
+        case 'requires-recent-login':
+          return '보안을 위해 다시 로그인해주세요.';
+        case 'expired-action-code':
+        case 'invalid-action-code':
+          return '인증 링크가 만료됐어요. 다시 요청해주세요.';
+        default:
+          return error.message ?? '로그인 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.';
+      }
+    }
+    final raw = error.toString();
+    // 사용자가 소셜 로그인 창을 직접 닫은 경우 — 알림 노이즈 줄이기.
+    final lower = raw.toLowerCase();
+    if (lower.contains('cancel') ||
+        lower.contains('aborted') ||
+        lower.contains('user closed')) {
+      return '로그인을 취소했어요.';
+    }
+    if (lower.contains('network') ||
+        lower.contains('socket') ||
+        lower.contains('timeout')) {
+      return '인터넷 연결을 확인하고 다시 시도해주세요.';
+    }
+    // 카카오 로그인 실패: 메시지 일반화.
+    if (raw.contains('카카오 로그인 실패')) {
+      return '카카오 로그인에 실패했어요. 잠시 후 다시 시도해주세요.';
+    }
+    return '로그인 중 문제가 발생했어요. 잠시 후 다시 시도해주세요.';
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFFE53E3E),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  void _showInfo(String message, {Color? color}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color ?? const Color(0xFF10B981),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  /// 닉네임 형식 검증 — 2~12자, 공백 양 끝 trim.
+  String? _validateNicknameFormat(String? raw) {
+    final v = (raw ?? '').trim();
+    if (v.isEmpty) return '닉네임을 입력하세요';
+    if (v.length < 2) return '닉네임은 2자 이상이어야 합니다';
+    if (v.length > 12) return '닉네임은 12자 이하여야 합니다';
+    return null;
   }
 
   void _onAuthSuccess() {
@@ -347,22 +485,12 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final user = await context.read<AuthProvider>().signInWithGoogle();
       if (user != null && mounted) {
-        // 닉네임 미설정 시 다이얼로그
-        final existing = await _firestoreService.getNickname(user.uid);
-        if (existing == null && mounted) {
-          await _showNicknameDialog(user.uid);
-        }
+        final ok = await _ensureNickname(user.uid);
+        if (!ok) return;
       }
       if (mounted) _onAuthSuccess();
-    } on Exception catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+    } catch (e) {
+      _showError(_friendlyAuthError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -373,21 +501,12 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final user = await context.read<AuthProvider>().signInWithApple();
       if (user != null && mounted) {
-        final existing = await _firestoreService.getNickname(user.uid);
-        if (existing == null && mounted) {
-          await _showNicknameDialog(user.uid);
-        }
+        final ok = await _ensureNickname(user.uid);
+        if (!ok) return;
       }
       if (mounted) _onAuthSuccess();
-    } on Exception catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+    } catch (e) {
+      _showError(_friendlyAuthError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -398,23 +517,29 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final user = await context.read<AuthProvider>().signInWithKakao();
       if (user != null && mounted) {
-        final existing = await _firestoreService.getNickname(user.uid);
-        if (existing == null && mounted) {
-          await _showNicknameDialog(user.uid);
-        }
+        final ok = await _ensureNickname(user.uid);
+        if (!ok) return;
       }
       if (mounted) _onAuthSuccess();
-    } on Exception catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+    } catch (e) {
+      _showError(_friendlyAuthError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _showResetPasswordDialog() async {
+    final initial = _emailController.text.trim();
+    final email = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _ResetPasswordDialog(initialEmail: initial),
+    );
+    if (email == null || email.isEmpty || !mounted) return;
+    try {
+      await context.read<AuthProvider>().sendPasswordResetEmail(email);
+      _showInfo('$email 로 재설정 메일을 보냈어요. 받은편지함을 확인해주세요.');
+    } catch (e) {
+      _showError(_friendlyAuthError(e));
     }
   }
 
@@ -428,48 +553,240 @@ class _LoginScreenState extends State<LoginScreen> {
           _emailController.text.trim(),
           _passwordController.text,
         );
+        if (mounted) _onAuthSuccess();
       } else {
+        // 회원가입은 닉네임 중복을 먼저 확인. Firebase Auth 계정만 만들어진 채로
+        // 닉네임 충돌이 일어나면 사용자가 어디로도 못 가는 상태가 되므로.
+        final nickname = _nicknameController.text.trim();
+        // 임시 uid가 없으므로 빈 문자열로 체크 (자기 자신 검사 무력화).
+        final taken = await _firestoreService.isNicknameTaken(nickname, '');
+        if (taken) {
+          _showError('이미 사용 중인 닉네임이에요. 다른 닉네임을 선택해주세요.');
+          return;
+        }
         final user = await auth.signUp(
           _emailController.text.trim(),
           _passwordController.text,
         );
         if (user != null) {
-          final nickname = _nicknameController.text.trim();
-          await _firestoreService.setNickname(
-            user.uid,
-            nickname.isEmpty ? '익명' : nickname,
-          );
+          try {
+            await _firestoreService.setNickname(user.uid, nickname);
+          } on NicknameTakenException {
+            // 가입과 setNickname 사이 race로 점유당한 경우 — 안내 후 재입력 유도.
+            _showInfo(
+              '방금 다른 사용자가 닉네임을 차지했어요. 홈에서 다른 닉네임으로 설정해주세요.',
+              color: const Color(0xFFF59E0B),
+            );
+          }
         }
+        if (mounted) _onAuthSuccess();
       }
-      if (mounted) _onAuthSuccess();
-    } on Exception catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString()),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
+    } catch (e) {
+      _showError(_friendlyAuthError(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  // 닉네임이 설정될 때까지 다이얼로그를 반복해서 띄운다.
+  // 백 버튼 등으로 닫혀도 닉네임 없는 유저가 홈에 도달하는 일이 없도록 한다.
+  // 반환값: true면 닉네임 보장됨(또는 이미 있음), false면 unmount 등으로 중단.
+  Future<bool> _ensureNickname(String uid) async {
+    while (true) {
+      if (!mounted) return false;
+      final existing = await _firestoreService.getNickname(uid);
+      if (existing != null && existing.isNotEmpty) return true;
+      if (!mounted) return false;
+      await _showNicknameDialog(uid);
+    }
+  }
+
   Future<void> _showNicknameDialog(String uid) async {
-    final controller = TextEditingController();
-    await showDialog(
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1A2035),
+      builder: (ctx) => _NicknameDialog(
+        uid: uid,
+        firestoreService: _firestoreService,
+        validateFormat: _validateNicknameFormat,
+      ),
+    );
+  }
+}
+
+/// 비밀번호 재설정 이메일 입력 다이얼로그.
+/// TextEditingController를 State에서 소유해 dispose 타이밍을 보장.
+class _ResetPasswordDialog extends StatefulWidget {
+  const _ResetPasswordDialog({required this.initialEmail});
+  final String initialEmail;
+
+  @override
+  State<_ResetPasswordDialog> createState() => _ResetPasswordDialogState();
+}
+
+class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialEmail);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AlertDialog(
+      backgroundColor: cs.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        '비밀번호 재설정',
+        style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '가입하신 이메일로 재설정 링크를 보내드립니다.',
+            style: TextStyle(
+              color: cs.onSurface.withValues(alpha: 0.54),
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _controller,
+            autofocus: true,
+            keyboardType: TextInputType.emailAddress,
+            style: TextStyle(color: cs.onSurface),
+            decoration: InputDecoration(
+              hintText: 'email@example.com',
+              hintStyle: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.24),
+              ),
+              filled: true,
+              fillColor: cs.surfaceContainerHighest,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(
+            '취소',
+            style: TextStyle(color: cs.onSurface.withValues(alpha: 0.54)),
+          ),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, _controller.text.trim()),
+          child: const Text(
+            '전송',
+            style: TextStyle(
+              color: Color(0xFF10B981),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 소셜 로그인 직후 닉네임 입력 다이얼로그.
+/// TextEditingController를 State에서 소유해 dispose 타이밍을 보장.
+class _NicknameDialog extends StatefulWidget {
+  const _NicknameDialog({
+    required this.uid,
+    required this.firestoreService,
+    required this.validateFormat,
+  });
+  final String uid;
+  final FirestoreService firestoreService;
+  final String? Function(String?) validateFormat;
+
+  @override
+  State<_NicknameDialog> createState() => _NicknameDialogState();
+}
+
+class _NicknameDialogState extends State<_NicknameDialog> {
+  final _controller = TextEditingController();
+  String? _errorMsg;
+  bool _checking = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final nickname = _controller.text.trim();
+    final formatError = widget.validateFormat(nickname);
+    if (formatError != null) {
+      setState(() => _errorMsg = formatError);
+      return;
+    }
+    setState(() {
+      _errorMsg = null;
+      _checking = true;
+    });
+    final taken = await widget.firestoreService.isNicknameTaken(
+      nickname,
+      widget.uid,
+    );
+    if (!mounted) return;
+    if (taken) {
+      setState(() {
+        _errorMsg = '이미 사용 중인 닉네임입니다';
+        _checking = false;
+      });
+      return;
+    }
+    try {
+      await widget.firestoreService.setNickname(widget.uid, nickname);
+      if (mounted) Navigator.pop(context);
+    } on NicknameTakenException {
+      if (!mounted) return;
+      setState(() {
+        _errorMsg = '방금 다른 사용자에게 점유되었어요. 다른 닉네임을 시도해주세요';
+        _checking = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMsg = '저장에 실패했어요. 잠시 후 다시 시도해주세요';
+        _checking = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        backgroundColor: cs.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           '닉네임 설정',
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface,
-            fontWeight: FontWeight.w700,
-          ),
+          style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700),
         ),
         content: SingleChildScrollView(
           child: Column(
@@ -477,30 +794,26 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '댓글에 표시될 닉네임을 입력하세요.',
+                '댓글에 표시될 닉네임을 입력하세요. (2~12자)',
                 style: TextStyle(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.54),
+                  color: cs.onSurface.withValues(alpha: 0.54),
                   fontSize: 13,
                 ),
               ),
               const SizedBox(height: 14),
               TextField(
-                controller: controller,
+                controller: _controller,
                 autofocus: true,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
+                enabled: !_checking,
+                style: TextStyle(color: cs.onSurface),
                 decoration: InputDecoration(
                   hintText: '닉네임',
                   hintStyle: TextStyle(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.24),
+                    color: cs.onSurface.withValues(alpha: 0.24),
                   ),
+                  errorText: _errorMsg,
                   filled: true,
-                  fillColor: const Color(0xFF0A0E1A),
+                  fillColor: cs.surfaceContainerHighest,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
@@ -523,26 +836,27 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () async {
-              final nickname = controller.text.trim();
-              await _firestoreService.setNickname(
-                uid,
-                nickname.isEmpty ? '익명' : nickname,
-              );
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: Text(
-              '확인',
-              style: TextStyle(
-                color: const Color(0xFF10B981),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+            onPressed: _checking ? null : _submit,
+            child: _checking
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFF10B981),
+                    ),
+                  )
+                : const Text(
+                    '확인',
+                    style: TextStyle(
+                      color: Color(0xFF10B981),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
           ),
         ],
       ),
     );
-    controller.dispose();
   }
 }
 
