@@ -125,7 +125,7 @@ class _JournalTabState extends State<_JournalTab> {
   final List<TradingJournal> _journals = [];
   String _searchQuery = '';
   DocumentSnapshot? _lastDoc;
-  bool _loading = false;
+  bool _loading = true;
   bool _hasMore = true;
   bool _searchLoading = false;
   int _searchTargetCount = 0;
@@ -142,7 +142,7 @@ class _JournalTabState extends State<_JournalTab> {
         final blocked = await _firestoreService.getBlockedUids(auth.user!.uid);
         if (mounted) setState(() => _blockedUids.addAll(blocked));
       }
-      _loadMore();
+      _loadMore(initialLoad: true);
     });
     _scrollController.addListener(() {
       final pos = _scrollController.position;
@@ -247,9 +247,9 @@ class _JournalTabState extends State<_JournalTab> {
     }
   }
 
-  Future<void> _loadMore() async {
-    if (_loading || !_hasMore) return;
-    setState(() => _loading = true);
+  Future<void> _loadMore({bool initialLoad = false}) async {
+    if ((!initialLoad && _loading) || !_hasMore) return;
+    if (!initialLoad) setState(() => _loading = true);
     try {
       final auth = context.read<AuthProvider>();
       final (items, lastDoc) = await _firestoreService.getPublicJournalsPaged(
@@ -599,7 +599,7 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
 
   final List<Post> _posts = [];
   DocumentSnapshot? _lastDoc;
-  bool _loading = false;
+  bool _loading = true;
   bool _hasMore = true;
 
   static const _pageSize = 15;
@@ -613,7 +613,7 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
         final blocked = await _firestoreService.getBlockedUids(auth.user!.uid);
         if (mounted) setState(() => _blockedUids.addAll(blocked));
       }
-      _loadMore();
+      _loadMore(initialLoad: true);
     });
     _scrollController.addListener(() {
       final pos = _scrollController.position;
@@ -629,9 +629,9 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
     super.dispose();
   }
 
-  Future<void> _loadMore() async {
-    if (_loading || !_hasMore) return;
-    setState(() => _loading = true);
+  Future<void> _loadMore({bool initialLoad = false}) async {
+    if ((!initialLoad && _loading) || !_hasMore) return;
+    if (!initialLoad) setState(() => _loading = true);
     try {
       final auth = context.read<AuthProvider>();
       final (items, lastDoc) = await _firestoreService.getPostsPaged(
