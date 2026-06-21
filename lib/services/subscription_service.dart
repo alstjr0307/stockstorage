@@ -15,7 +15,7 @@ class SubscriptionService extends ChangeNotifier {
 
   static const entitlementId = 'premium';
   static const productId = 'stockstorage_premium_monthly';
-  static const premiumDailyAiLimit = 3;
+  static const premiumDailyAiLimit = 5;
   static const androidApiKey = String.fromEnvironment('RC_ANDROID_API_KEY');
   static const iosApiKey = String.fromEnvironment('RC_IOS_API_KEY');
 
@@ -32,7 +32,7 @@ class SubscriptionService extends ChangeNotifier {
   String? get error => _error;
   Package? get monthlyPackage => _monthlyPackage;
   String get displayPrice =>
-      _monthlyPackage?.storeProduct.priceString ?? '월 23,000원';
+      _monthlyPackage?.storeProduct.priceString ?? '월 15,000원';
 
   Future<void> initialize() async {
     if (kIsWeb || !(Platform.isAndroid || Platform.isIOS)) return;

@@ -44,6 +44,9 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# RevenueCat SDK keys (dart-define-from-file). Commit dart_defines.example.json only.
+dart_defines.json
+
 # Firebase - do not commit sensitive keys
 lib/firebase_options.dart
 ios/Runner/GoogleService-Info.plist

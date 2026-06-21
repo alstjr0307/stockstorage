@@ -43,4 +43,34 @@ post_install do |installer|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
     end
   end
+
+  # Add Run Script phase to fix IOSSIMULATOR-tagged frameworks (App Store error 91169)
+  runner_project_path = File.expand_path('../Runner.xcodeproj', __FILE__)
+  runner_project = Xcodeproj::Project.open(runner_project_path)
+  runner_project.targets.each do |target|
+    next unless target.name == 'Runner'
+    target.build_phases.delete_if do |phase|
+      phase.is_a?(Xcodeproj::Project::Object::PBXShellScriptBuildPhase) &&
+        phase.name == 'Fix Simulator Platform Tags'
+    end
+    phase = target.new_shell_script_build_phase('Fix Simulator Platform Tags')
+    phase.shell_script = <<~'SHELL'
+      if [ "${PLATFORM_NAME}" = "iphonesimulator" ]; then
+        echo "Skipping Fix Simulator Platform Tags on simulator build"
+        exit 0
+      fi
+      find "${CODESIGNING_FOLDER_PATH}/Frameworks" -name "*.framework" -type d | while read framework; do
+        binary="${framework}/$(basename ${framework} .framework)"
+        if [ ! -f "${binary}" ]; then continue; fi
+        platform=$(vtool -show-build "${binary}" 2>/dev/null | awk '/platform/{print $2}')
+        if [ "${platform}" = "IOSSIMULATOR" ]; then
+          minos="${IPHONEOS_DEPLOYMENT_TARGET:-14.0}"
+          vtool -set-build-version ios ${minos} ${minos} -replace -output "${binary}" "${binary}"
+          codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY}" --preserve-metadata=entitlements "${framework}"
+        fi
+      done
+    SHELL
+    phase.run_only_for_deployment_postprocessing = '0'
+  end
+  runner_project.save
 end

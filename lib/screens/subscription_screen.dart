@@ -56,7 +56,7 @@ class SubscriptionScreen extends StatelessWidget {
                 const SizedBox(height: 20),
                 const _BenefitRow(text: '앱의 모든 광고 제거'),
                 const SizedBox(height: 12),
-                const _BenefitRow(text: 'AI 종목 분석 하루 3회 광고 없이 이용'),
+                const _BenefitRow(text: 'AI 종목 분석 하루 5회 광고 없이 이용'),
                 const SizedBox(height: 12),
                 const _BenefitRow(text: '언제든 스토어에서 해지 가능'),
                 const SizedBox(height: 22),
