@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/comment.dart';
 import '../models/post.dart';
 import '../providers/auth_provider.dart';
+import '../services/auth_service.dart';
 import 'write_post_screen.dart';
 import '../services/analytics_service.dart';
 import '../services/firestore_service.dart';
@@ -899,18 +900,20 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 delegate: SliverChildBuilderDelegate((_, i) {
                                   final c = comments[i];
                                   final isOwn = auth.user?.uid == c.uid;
+                                  final isAdmin = AuthService.adminUids.contains(auth.user?.uid ?? '');
                                   return _CommentTile(
                                     comment: c,
                                     isOwn: isOwn,
+                                    isAdmin: isAdmin,
                                     onDelete: () => _deleteComment(c.id),
                                     onEdit: isOwn
                                         ? (newContent) =>
                                               _editComment(c, newContent)
                                         : null,
-                                    onReport: (!isOwn && auth.isLoggedIn)
+                                    onReport: (!isOwn && !isAdmin && auth.isLoggedIn)
                                         ? () => _reportComment(c)
                                         : null,
-                                    onBlock: (!isOwn && auth.isLoggedIn)
+                                    onBlock: (!isOwn && !isAdmin && auth.isLoggedIn)
                                         ? () => _blockFromComment(c)
                                         : null,
                                   );
@@ -1001,6 +1004,7 @@ class _LikeRow extends StatelessWidget {
 class _CommentTile extends StatefulWidget {
   final Comment comment;
   final bool isOwn;
+  final bool isAdmin;
   final VoidCallback onDelete;
   // 새 본문을 받아 저장 성공 시 true 반환. true면 편집 모드 종료.
   final Future<bool> Function(String newContent)? onEdit;
@@ -1010,6 +1014,7 @@ class _CommentTile extends StatefulWidget {
   const _CommentTile({
     required this.comment,
     required this.isOwn,
+    required this.isAdmin,
     required this.onDelete,
     this.onEdit,
     this.onReport,
@@ -1027,6 +1032,7 @@ class _CommentTileState extends State<_CommentTile> {
 
   Comment get comment => widget.comment;
   bool get isOwn => widget.isOwn;
+  bool get isAdmin => widget.isAdmin;
   VoidCallback get onDelete => widget.onDelete;
   Future<bool> Function(String)? get onEdit => widget.onEdit;
   VoidCallback? get onReport => widget.onReport;
@@ -1239,7 +1245,8 @@ class _CommentTileState extends State<_CommentTile> {
 
   Widget _buildTrailingMenu(ColorScheme cs) {
     final canEdit = isOwn && onEdit != null;
-    if (!isOwn && onReport == null && onBlock == null) {
+    final canDelete = isOwn || isAdmin;
+    if (!canDelete && onReport == null && onBlock == null) {
       return const SizedBox.shrink();
     }
     return PopupMenuButton<String>(
@@ -1278,7 +1285,7 @@ class _CommentTileState extends State<_CommentTile> {
               ],
             ),
           ),
-        if (isOwn)
+        if (canDelete)
           const PopupMenuItem(
             value: 'delete',
             child: Row(

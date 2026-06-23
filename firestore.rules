@@ -45,12 +45,12 @@ service cloud.firestore {
 
     match /users/{userId}/myComments/{commentId} {
       allow read: if isAdmin() || (request.auth != null && request.auth.uid == userId);
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if isAdmin() || (request.auth != null && request.auth.uid == userId);
     }
 
     match /users/{userId}/myPostComments/{commentId} {
       allow read: if isAdmin() || (request.auth != null && request.auth.uid == userId);
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if isAdmin() || (request.auth != null && request.auth.uid == userId);
     }
 
     // Announcements
@@ -180,10 +180,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Night futures prices
+    // Night futures prices (KOSPI200 + KOSDAQ150)
     match /night_futures_prices/{docId} {
       allow read: if true;
       allow write: if false; // Cloud Function admin SDK bypasses rules
+    }
+    match /night_futures_prices_kosdaq/{docId} {
+      allow read: if true;
+      allow write: if false;
     }
 
     // Free board posts

@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'ad_service.dart';
+import 'auth_service.dart';
 
 class SubscriptionService extends ChangeNotifier {
   SubscriptionService._();
@@ -22,14 +25,20 @@ class SubscriptionService extends ChangeNotifier {
   StreamSubscription<User?>? _authSubscription;
   bool _configured = false;
   bool _isPremium = false;
+  bool? _mirroredPremium; // user_public에 마지막으로 기록한 값 (중복 쓰기 방지)
   bool _loading = false;
   String? _error;
+  String? _lastPurchaseError;
   Package? _monthlyPackage;
 
   bool get isConfigured => _configured;
-  bool get isPremium => _isPremium;
+  // 관리자 계정은 결제 없이도 프리미엄으로 취급(디버그/내부 검증용).
+  bool get isPremium =>
+      _isPremium ||
+      AuthService.adminUids.contains(FirebaseAuth.instance.currentUser?.uid);
   bool get loading => _loading;
   String? get error => _error;
+  String? get lastPurchaseError => _lastPurchaseError;
   Package? get monthlyPackage => _monthlyPackage;
   String get displayPrice =>
       _monthlyPackage?.storeProduct.priceString ?? '월 15,000원';
@@ -59,6 +68,7 @@ class SubscriptionService extends ChangeNotifier {
 
   Future<void> _syncUser(User? user) async {
     if (!_configured) return;
+    _mirroredPremium = null; // 계정 전환 시 재미러링 허용
     try {
       final info = user == null
           ? await Purchases.logOut()
@@ -99,13 +109,34 @@ class SubscriptionService extends ChangeNotifier {
 
   Future<bool> purchaseMonthly() async {
     final package = _monthlyPackage;
-    if (!_configured || package == null) return false;
+    if (!_configured || package == null) {
+      _lastPurchaseError = '스토어 상품을 아직 불러오지 못했어요.';
+      notifyListeners();
+      return false;
+    }
     _setLoading(true);
     try {
+      _lastPurchaseError = null;
       final result = await Purchases.purchase(PurchaseParams.package(package));
       _applyCustomerInfo(result.customerInfo);
       return _isPremium;
-    } catch (_) {
+    } on PlatformException catch (e) {
+      final code = PurchasesErrorHelper.getErrorCode(e);
+      if (code == PurchasesErrorCode.purchaseCancelledError) {
+        _lastPurchaseError = '결제가 취소되었습니다.';
+      } else {
+        _lastPurchaseError = _purchaseErrorMessage(code, e);
+        debugPrint(
+          '[SubscriptionService] purchase failed: '
+          'code=$code platformCode=${e.code} message=${e.message} details=${e.details}',
+        );
+      }
+      notifyListeners();
+      return false;
+    } catch (e) {
+      _lastPurchaseError = '결제를 완료하지 못했어요. 잠시 후 다시 시도해 주세요.';
+      debugPrint('[SubscriptionService] purchase failed: $e');
+      notifyListeners();
       return false;
     } finally {
       _setLoading(false);
@@ -137,15 +168,69 @@ class SubscriptionService extends ChangeNotifier {
 
   void _applyCustomerInfo(CustomerInfo info) {
     final next = info.entitlements.active.containsKey(entitlementId);
+    // 구독 변동(만료 포함)을 공개 프로필에 반영해 다른 유저 아바타 왕관과 동기화.
+    _mirrorPremiumToPublic(next);
     if (_isPremium == next) return;
     _isPremium = next;
     AdService.setPremium(next);
     notifyListeners();
   }
 
+  // 본인 프리미엄 여부를 user_public/{uid}.isPremium 으로 미러링.
+  void _mirrorPremiumToPublic(bool value) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return;
+    if (_mirroredPremium == value) return;
+    _mirroredPremium = value;
+    FirebaseFirestore.instance
+        .collection('user_public')
+        .doc(uid)
+        .set({'isPremium': value}, SetOptions(merge: true))
+        .catchError((_) => _mirroredPremium = null);
+  }
+
   void _setLoading(bool value) {
     _loading = value;
     notifyListeners();
+  }
+
+  String _purchaseErrorMessage(PurchasesErrorCode code, PlatformException e) {
+    final detail = _compactPurchaseErrorDetail(e);
+    final base = switch (code) {
+      PurchasesErrorCode.productNotAvailableForPurchaseError =>
+        '구독 상품이 현재 구매 가능한 상태가 아니에요. Play Console 상품/트랙 설정을 확인해 주세요.',
+      PurchasesErrorCode.purchaseNotAllowedError =>
+        '이 Google Play 계정에서는 결제가 허용되지 않았어요.',
+      PurchasesErrorCode.purchaseInvalidError ||
+      PurchasesErrorCode.storeProblemError =>
+        'Google Play 결제가 완료되지 않았어요. 테스트 결제수단과 Play 계정 상태를 확인해 주세요.',
+      PurchasesErrorCode.paymentPendingError =>
+        '결제가 대기 중입니다. Google Play에서 결제 상태가 확정되면 자동 반영됩니다.',
+      PurchasesErrorCode.productAlreadyPurchasedError =>
+        '이미 구매한 구독이 있어요. 구매 복원을 눌러 상태를 갱신해 주세요.',
+      PurchasesErrorCode.networkError ||
+      PurchasesErrorCode.offlineConnectionError =>
+        '네트워크 연결 문제로 결제를 확인하지 못했어요.',
+      PurchasesErrorCode.configurationError ||
+      PurchasesErrorCode.invalidCredentialsError =>
+        '구독 설정을 확인해야 합니다. RevenueCat/Play Store 연결 상태를 점검해 주세요.',
+      _ =>
+        '결제를 완료하지 못했어요. Google Play 결제 상태를 확인해 주세요.',
+    };
+    return '$base (${code.name}${detail == null ? '' : ': $detail'})';
+  }
+
+  String? _compactPurchaseErrorDetail(PlatformException e) {
+    final raw = [
+      e.message,
+      if (e.details != null) e.details.toString(),
+    ]
+        .whereType<String>()
+        .map((value) => value.replaceAll(RegExp(r'\s+'), ' ').trim())
+        .where((value) => value.isNotEmpty)
+        .join(' / ');
+    if (raw.isEmpty) return null;
+    return raw.length <= 120 ? raw : '${raw.substring(0, 120)}...';
   }
 
   @override

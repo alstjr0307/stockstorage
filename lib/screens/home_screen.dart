@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,7 +12,6 @@ import '../models/stock_pick.dart';
 import '../models/announcement.dart';
 import '../models/market_feature_stock.dart';
 import '../providers/auth_provider.dart';
-import '../providers/theme_provider.dart';
 import '../services/ad_service.dart';
 import '../services/analytics_service.dart';
 import '../services/firestore_service.dart';
@@ -29,19 +29,25 @@ import 'market_sentiment_screen.dart';
 import 'market_feature_stock_detail_screen.dart';
 import 'market_feature_stocks_screen.dart';
 import 'portfolio_screen.dart';
-import 'my_comments_screen.dart';
-import 'my_posts_screen.dart';
 import 'notification_history_screen.dart';
 import 'post_detail_screen.dart';
+import 'profile_screen.dart';
+import 'stock_ai_analysis_result_screen.dart';
 import 'stock_ai_analysis_list_screen.dart';
 import 'stock_compare_screen.dart';
 import 'stock_detail_screen.dart';
 import 'stock_search_screen.dart';
-import 'subscription_screen.dart';
 import 'index_detail_screen.dart';
+import 'night_futures_chart_screen.dart';
 import '../main.dart' show initAds;
 
 bool _homeLightMode = false;
+
+bool _syncHomeLightMode(BuildContext context) {
+  final isLight = Theme.of(context).brightness == Brightness.light;
+  _homeLightMode = isLight;
+  return isLight;
+}
 
 Color get _homeBg0 =>
     _homeLightMode ? const Color(0xFFF6F8FB) : const Color(0xFF0A0E1A);
@@ -50,11 +56,27 @@ Color get _homeBg2 =>
 Color get _homeBg3 =>
     _homeLightMode ? const Color(0xFFF0F4F8) : const Color(0xFF161E2E);
 Color get _homeCard =>
-    _homeLightMode ? const Color(0xFFFFFFFF) : const Color(0xFF0F1520);
-Color get _homeCardHi =>
-    _homeLightMode ? const Color(0xFFF8FBFF) : const Color(0xFF141B2A);
+    _homeLightMode ? const Color(0xFFFFFFFF) : const Color(0xFF161D2E);
 Color get _homeBorder =>
-    _homeLightMode ? const Color(0x140F172A) : const Color(0x12FFFFFF);
+    _homeLightMode ? const Color(0x1A0F172A) : const Color(0x24FFFFFF);
+
+/// Soft drop shadow that lifts cards off the (now flat) background so their
+/// edges read clearly without the old gradient. Subtle in light, deeper in dark.
+List<BoxShadow> get _homeCardShadow => _homeLightMode
+    ? const [
+        BoxShadow(
+          color: Color(0x141A2540),
+          blurRadius: 16,
+          offset: Offset(0, 6),
+        ),
+      ]
+    : const [
+        BoxShadow(
+          color: Color(0x66000000),
+          blurRadius: 18,
+          offset: Offset(0, 8),
+        ),
+      ];
 Color get _homeLabel =>
     _homeLightMode ? const Color(0xFF172033) : const Color(0xFFEEF2FF);
 Color get _homeMuted =>
@@ -134,10 +156,8 @@ class _HomeScreenState extends State<HomeScreen>
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
-        builder: (ctx) => _NicknameSetupDialog(
-          uid: uid,
-          firestoreService: _firestoreService,
-        ),
+        builder: (ctx) =>
+            _NicknameSetupDialog(uid: uid, firestoreService: _firestoreService),
       );
     }
   }
@@ -328,7 +348,10 @@ class _HomeScreenState extends State<HomeScreen>
         ),
         onPressed: () {
           if (auth.isLoggedIn) {
-            _showProfileMenu(context, auth);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => ProfileScreen(auth: auth)),
+            );
           } else {
             Navigator.push(
               context,
@@ -343,8 +366,7 @@ class _HomeScreenState extends State<HomeScreen>
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    _homeLightMode = !isDark;
+    final isDark = !_syncHomeLightMode(context);
     final isHome = _currentPage == 0;
     final hideHomeAppBar = isHome && !_showSearch;
     final bgColor = isHome
@@ -388,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen>
                   : null,
               actions: _buildTopActions(
                 auth,
-                isDarkSurface: isHome || isDark,
+                isDarkSurface: isDark,
                 showSearchButton: true,
               ),
             ),
@@ -462,7 +484,9 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildDashboardPage(AuthProvider auth) {
+    final themeName = Theme.of(context).brightness.name;
     return _DashboardHomePage(
+      key: ValueKey('dashboard-home-$themeName'),
       auth: auth,
       firestoreService: _firestoreService,
       openCommunity: () {
@@ -548,7 +572,11 @@ class _HomeScreenState extends State<HomeScreen>
       onTopStateChanged: (_) {},
       topActions: _showSearch
           ? const []
-          : _buildTopActions(auth, isDarkSurface: true, showSearchButton: true),
+          : _buildTopActions(
+              auth,
+              isDarkSurface: Theme.of(context).brightness == Brightness.dark,
+              showSearchButton: true,
+            ),
     );
   }
 
@@ -594,648 +622,13 @@ class _HomeScreenState extends State<HomeScreen>
       firestoreService: _firestoreService,
     );
   }
-
-  // ─── 프로필 메뉴 ──────────────────────────────────────────────────────────
-
-  void _showProfileMenu(BuildContext context, AuthProvider auth) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? const Color(0xFF1A2035) : Colors.white;
-    final uid = auth.user!.uid;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: cardColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => Consumer2<ThemeProvider, SubscriptionService>(
-        builder: (ctx, themeProvider, subscription, _) => Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: const Color(
-                        0xFF10B981,
-                      ).withValues(alpha: 0.15),
-                      radius: 28,
-                      child: const Icon(
-                        Icons.person,
-                        color: Color(0xFF10B981),
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    FutureBuilder<String?>(
-                      future: _firestoreService.getNickname(uid),
-                      builder: (ctx, snap) {
-                        final nickname = snap.data;
-                        return Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              nickname ?? '닉네임 없음',
-                              style: TextStyle(
-                                color: nickname != null
-                                    ? (isDark ? Colors.white : Colors.black87)
-                                    : (isDark
-                                          ? Colors.white38
-                                          : Colors.black38),
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            GestureDetector(
-                              onTap: () {
-                                Navigator.pop(context);
-                                _showNicknameDialog(auth, nickname);
-                              },
-                              child: Icon(
-                                Icons.edit_outlined,
-                                size: 16,
-                                color: isDark ? Colors.white38 : Colors.black38,
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      auth.user?.email ?? '',
-                      style: TextStyle(
-                        color: isDark ? Colors.white38 : Colors.black38,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    StreamBuilder<Map<String, int>>(
-                      stream: _firestoreService.watchUserLevelInfo(uid),
-                      builder: (ctx, snap) {
-                        final stats =
-                            snap.data ??
-                            const {
-                              'level': 1,
-                              'postCount': 0,
-                              'commentCount': 0,
-                              'attendanceCount': 0,
-                              'bonusXp': 0,
-                            };
-                        final level = stats['level'] ?? 1;
-                        final postCount = stats['postCount'] ?? 0;
-                        final commentCount = stats['commentCount'] ?? 0;
-                        final attendanceCount = stats['attendanceCount'] ?? 0;
-                        final bonusXp = stats['bonusXp'] ?? 0;
-                        final progressInfo = _firestoreService
-                            .calculateLevelProgress(
-                              postCount: postCount,
-                              commentCount: commentCount,
-                              attendanceCount: attendanceCount,
-                              bonusXp: bonusXp,
-                            );
-                        final currentXp =
-                            (progressInfo['currentXpInLevel'] ?? 0).toInt();
-                        final needXp = (progressInfo['xpForNextLevel'] ?? 1)
-                            .toInt();
-                        final remainXp = (progressInfo['remainingXp'] ?? 0)
-                            .toInt();
-                        final progress = (progressInfo['progress'] ?? 0)
-                            .toDouble();
-
-                        return Column(
-                          children: [
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.fromLTRB(
-                                14,
-                                12,
-                                14,
-                                12,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isDark
-                                    ? Colors.white.withValues(alpha: 0.06)
-                                    : Colors.black.withValues(alpha: 0.03),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: isDark
-                                      ? Colors.white.withValues(alpha: 0.12)
-                                      : Colors.black.withValues(alpha: 0.08),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(
-                                        'Lv.$level',
-                                        style: TextStyle(
-                                          color: const Color(0xFF10B981),
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                      const Spacer(),
-                                      Text(
-                                        '$currentXp / $needXp XP',
-                                        style: TextStyle(
-                                          color: isDark
-                                              ? Colors.white60
-                                              : Colors.black54,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(999),
-                                    child: LinearProgressIndicator(
-                                      value: progress,
-                                      minHeight: 7,
-                                      backgroundColor: isDark
-                                          ? Colors.white.withValues(alpha: 0.1)
-                                          : Colors.black.withValues(
-                                              alpha: 0.08,
-                                            ),
-                                      valueColor: const AlwaysStoppedAnimation(
-                                        Color(0xFF10B981),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: Text(
-                                      '다음 레벨까지 $remainXp XP',
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? Colors.white38
-                                            : Colors.black45,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  if (!subscription.isPremium)
-                                    StreamBuilder<Map<String, int>>(
-                                      stream: _firestoreService
-                                          .watchRewardAdStatus(uid),
-                                      builder: (context, rewardSnap) {
-                                        final status = rewardSnap.data;
-                                        final canWatchToday =
-                                            (status?['canWatchToday'] ?? 1) ==
-                                            1;
-                                        final remainingCount =
-                                            status?['remainingCount'] ?? 3;
-                                        final dailyLimit =
-                                            status?['dailyLimit'] ?? 3;
-                                        return Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            SizedBox(
-                                              width: double.infinity,
-                                              child: ElevatedButton.icon(
-                                                style: ElevatedButton.styleFrom(
-                                                  elevation: 0,
-                                                  backgroundColor: const Color(
-                                                    0xFF10B981,
-                                                  ),
-                                                  foregroundColor: const Color(
-                                                    0xFF07120E,
-                                                  ),
-                                                  disabledBackgroundColor:
-                                                      const Color(
-                                                        0xFF10B981,
-                                                      ).withValues(alpha: 0.4),
-                                                  disabledForegroundColor:
-                                                      const Color(
-                                                        0xFF07120E,
-                                                      ).withValues(alpha: 0.6),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          10,
-                                                        ),
-                                                  ),
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        vertical: 10,
-                                                      ),
-                                                ),
-                                                onPressed:
-                                                    canWatchToday &&
-                                                        !_rewardAdLoading
-                                                    ? () =>
-                                                          _confirmAndWatchRewardAd(
-                                                            auth,
-                                                          )
-                                                    : null,
-                                                icon: _rewardAdLoading
-                                                    ? const SizedBox(
-                                                        width: 14,
-                                                        height: 14,
-                                                        child:
-                                                            CircularProgressIndicator(
-                                                              strokeWidth: 2,
-                                                            ),
-                                                      )
-                                                    : const Icon(
-                                                        Icons.ondemand_video,
-                                                        size: 16,
-                                                      ),
-                                                label: Text(
-                                                  _rewardAdLoading
-                                                      ? '광고 준비 중...'
-                                                      : '리워드 광고 보고 +5 XP',
-                                                  style: TextStyle(
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w700,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              '오늘 보상 광고: $remainingCount/$dailyLimit회 남음',
-                                              style: TextStyle(
-                                                color: isDark
-                                                    ? Colors.white38
-                                                    : Colors.black45,
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              alignment: WrapAlignment.center,
-                              children: [
-                                _buildProfileStatChip(
-                                  label: '글/일지 $postCount',
-                                  icon: Icons.edit_note_outlined,
-                                  isDark: isDark,
-                                ),
-                                _buildProfileStatChip(
-                                  label: '댓글 $commentCount',
-                                  icon: Icons.chat_bubble_outline,
-                                  isDark: isDark,
-                                ),
-                                _buildProfileStatChip(
-                                  label: '출석 $attendanceCount',
-                                  icon: Icons.calendar_today_outlined,
-                                  isDark: isDark,
-                                ),
-                              ],
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: subscription.isPremium
-                              ? const Color(0xFFF5B547)
-                              : const Color(0xFF10B981),
-                          foregroundColor: const Color(0xFF07120E),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        icon: const Icon(
-                          Icons.workspace_premium_rounded,
-                          size: 17,
-                        ),
-                        label: Text(
-                          subscription.isPremium ? '프리미엄 이용 중' : '프리미엄 멤버십',
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const SubscriptionScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    // 내 댓글
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: isDark
-                              ? Colors.white70
-                              : Colors.black54,
-                          side: BorderSide(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.1)
-                                : Colors.black.withValues(alpha: 0.1),
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        icon: const Icon(Icons.favorite_border, size: 16),
-                        label: Text(
-                          '관심 추천주',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const FavoritesPicksScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: isDark
-                              ? Colors.white70
-                              : Colors.black54,
-                          side: BorderSide(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.1)
-                                : Colors.black.withValues(alpha: 0.1),
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        icon: const Icon(Icons.article_outlined, size: 16),
-                        label: Text(
-                          '내가 쓴 글',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => MyPostsScreen(uid: uid),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: isDark
-                              ? Colors.white70
-                              : Colors.black54,
-                          side: BorderSide(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.1)
-                                : Colors.black.withValues(alpha: 0.1),
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                        label: Text(
-                          '내 댓글',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => MyCommentsScreen(uid: uid),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.redAccent.withValues(
-                            alpha: 0.15,
-                          ),
-                          foregroundColor: Colors.redAccent,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          auth.signOut();
-                        },
-                        child: Text(
-                          '로그아웃',
-                          style: TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: TextButton(
-                        style: TextButton.styleFrom(
-                          foregroundColor: isDark
-                              ? Colors.white24
-                              : Colors.black26,
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _showDeleteAccountDialog(auth);
-                        },
-                        child: Text('계정 삭제', style: TextStyle(fontSize: 13)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            // 다크모드 토글 — 오른쪽 상단
-            Positioned(
-              top: 12,
-              right: 8,
-              child: GestureDetector(
-                onTap: themeProvider.toggle,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      themeProvider.isDark ? '라이트 모드' : '다크 모드',
-                      style: TextStyle(
-                        color: isDark ? Colors.white38 : Colors.black38,
-                        fontSize: 11,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      themeProvider.isDark
-                          ? Icons.wb_sunny_outlined
-                          : Icons.dark_mode_outlined,
-                      size: 18,
-                      color: isDark ? Colors.white38 : Colors.black38,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProfileStatChip({
-    required String label,
-    required IconData icon,
-    required bool isDark,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withValues(alpha: 0.06)
-            : Colors.black.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withValues(alpha: 0.12)
-              : Colors.black.withValues(alpha: 0.08),
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: const Color(0xFF10B981)),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: isDark ? Colors.white70 : Colors.black87,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showDeleteAccountDialog(AuthProvider auth) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1A2035) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          '계정 삭제',
-          style: TextStyle(
-            color: isDark ? Colors.white : Colors.black87,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        content: Text(
-          '계정을 삭제하면 모든 데이터(관심 추천주, 메모, 댓글 등)가 영구적으로 삭제됩니다.\n\n정말 삭제하시겠습니까?',
-          style: TextStyle(
-            color: isDark ? Colors.white70 : Colors.black54,
-            fontSize: 14,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              '취소',
-              style: TextStyle(color: isDark ? Colors.white54 : Colors.black45),
-            ),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                await auth.deleteAccount();
-              } on Exception catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('삭제 실패: $e')));
-                }
-              }
-            },
-            child: Text(
-              '삭제',
-              style: TextStyle(
-                color: Colors.redAccent,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showNicknameDialog(AuthProvider auth, String? currentNickname) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => _NicknameChangeDialog(
-        uid: auth.user!.uid,
-        initialNickname: currentNickname ?? '',
-        firestoreService: _firestoreService,
-      ),
-    );
-  }
 }
 
 // ─── 홈 피드 ───────────────────────────────────────────────────────────────
 
 class _DashboardHomePage extends StatefulWidget {
   const _DashboardHomePage({
+    super.key,
     required this.auth,
     required this.firestoreService,
     required this.openCommunity,
@@ -1292,7 +685,6 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
   late Future<Map<String, PriceResult?>> _indicesFuture;
   late Stream<Announcement?> _latestAnnouncementStream;
   late Stream<List<MarketFeatureStock>> _featureStocksStream;
-  late Stream<List<StockPick>> _stockPicksStream;
 
   static const _homeIndices = [
     ('KOSPI', '^KS11'),
@@ -1315,7 +707,6 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
       group: 'chart_capture',
       limit: 40,
     );
-    _stockPicksStream = widget.firestoreService.getAllStockPicks();
   }
 
   Future<void> _refresh() async {
@@ -1340,6 +731,7 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    _syncHomeLightMode(context);
     return RefreshIndicator(
       color: const Color(0xFF10B981),
       onRefresh: _refresh,
@@ -1351,15 +743,7 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
           return false;
         },
         child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: _homeBg0,
-            gradient: RadialGradient(
-              center: Alignment(0.7, -1.05),
-              radius: 1.2,
-              colors: [Color(0x1500D68F), _homeBg0],
-              stops: [0, 0.62],
-            ),
-          ),
+          decoration: BoxDecoration(color: _homeBg0),
           child: SafeArea(
             top: true,
             bottom: false,
@@ -1367,18 +751,18 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
               cacheExtent: 900,
               padding: const EdgeInsets.fromLTRB(16, 10, 16, 88),
               children: [
-                _fixedH(
-                  180,
-                  _HomeReveal(
-                    order: 0,
-                    child: _HomeHeroGreeting(
-                      auth: widget.auth,
-                      firestoreService: widget.firestoreService,
-                      topActions: widget.topActions,
-                    ),
+                _HomeReveal(
+                  order: 0,
+                  child: _HomeHeroGreeting(
+                    auth: widget.auth,
+                    firestoreService: widget.firestoreService,
+                    topActions: widget.topActions,
+                    onWatchAd: widget.watchRewardAd,
+                    openCommunity: widget.openCommunity,
+                    openJournal: widget.openJournal,
                   ),
                 ),
-                const SizedBox(height: 14),
+                const _HomeCardBreak(),
                 _fixedH(
                   52,
                   _HomeReveal(
@@ -1389,31 +773,18 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
-                _fixedH(
-                  292,
-                  _HomeReveal(
-                    order: 2,
-                    child: _DailyMissionCard(
-                      auth: widget.auth,
-                      firestoreService: widget.firestoreService,
-                      onWatchAd: widget.watchRewardAd,
-                      openCommunity: widget.openCommunity,
-                      openJournal: widget.openJournal,
-                    ),
+                const _HomeCardBreak(),
+                _HomeReveal(
+                  order: 2,
+                  child: _AiAnalysisPromptCard(
+                    auth: widget.auth,
+                    firestoreService: widget.firestoreService,
+                    onTap: widget.openAiAnalysisSearch,
                   ),
                 ),
-                const SizedBox(height: 14),
-                _fixedH(
-                  84,
-                  _HomeReveal(
-                    order: 2,
-                    child: _AiAnalysisPromptCard(
-                      onTap: widget.openAiAnalysisSearch,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 28),
+                const _HomeCardBreak(),
+                // 야간선물 — 야간세션(18:00~05:00 KST)에만 노출, 실시간 시장 위
+                const _NightFuturesSection(),
                 _fixedH(
                   360,
                   _HomeReveal(
@@ -1428,12 +799,12 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const _HomeCardBreak(),
                 _fixedH(
                   220,
                   _HomeReveal(order: 4, child: const _AIBriefCard()),
                 ),
-                const SizedBox(height: 14),
+                const _HomeCardBreak(),
                 _fixedH(
                   220,
                   _HomeReveal(
@@ -1444,7 +815,7 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const _HomeCardBreak(),
                 _fixedH(
                   452,
                   _HomeReveal(
@@ -1461,27 +832,11 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
-                _fixedH(
-                  498,
-                  _HomeReveal(
-                    order: 7,
-                    child: _DarkHomeSection(
-                      title: '❤️ 내 관심 추천주',
-                      child: _FavoritePicksPreview(
-                        firestoreService: widget.firestoreService,
-                        picksStream: _stockPicksStream,
-                        auth: widget.auth,
-                        openStockPicks: widget.openFavoritePicks,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 14),
+                const _HomeCardBreak(),
                 _fixedH(
                   422,
                   _HomeReveal(
-                    order: 8,
+                    order: 7,
                     child: _DarkHomeSection(
                       title: '⭐ 관심종목',
                       child: _FavoriteStocksPreview(
@@ -1492,9 +847,9 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const _HomeCardBreak(),
                 _HomeReveal(
-                  order: 9,
+                  order: 8,
                   child: _QuickMenu(
                     openMarketAnalysis: widget.openMarketAnalysis,
                     openFeatureStocks: widget.openFeatureStocks,
@@ -1518,6 +873,15 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
   }
 }
 
+class _HomeCardBreak extends StatelessWidget {
+  const _HomeCardBreak();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(height: 18);
+  }
+}
+
 class _DarkHomeSection extends StatelessWidget {
   const _DarkHomeSection({
     required this.title,
@@ -1535,6 +899,7 @@ class _DarkHomeSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    _syncHomeLightMode(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1567,11 +932,9 @@ class _DarkHomeSection extends StatelessWidget {
 }
 
 class _DarkCard extends StatelessWidget {
-  const _DarkCard({required this.child, this.color, this.borderColor});
+  const _DarkCard({required this.child});
 
   final Widget child;
-  final Color? color;
-  final Color? borderColor;
 
   @override
   Widget build(BuildContext context) {
@@ -1579,9 +942,10 @@ class _DarkCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color ?? _homeCard,
+        color: _homeCard,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor ?? _homeBorder),
+        border: Border.all(color: _homeBorder),
+        boxShadow: _homeCardShadow,
       ),
       child: child,
     );
@@ -1611,6 +975,7 @@ class _LatestAnnouncementStrip extends StatelessWidget {
               color: _homeCard,
               borderRadius: BorderRadius.circular(13),
               border: Border.all(color: _homeBorder),
+              boxShadow: _homeCardShadow,
             ),
             child: Row(
               children: [
@@ -1649,80 +1014,309 @@ class _LatestAnnouncementStrip extends StatelessWidget {
 }
 
 class _AiAnalysisPromptCard extends StatelessWidget {
-  const _AiAnalysisPromptCard({required this.onTap});
+  const _AiAnalysisPromptCard({
+    required this.auth,
+    required this.firestoreService,
+    required this.onTap,
+  });
 
+  final AuthProvider auth;
+  final FirestoreService firestoreService;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: _homeCard,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: _homeAccent.withValues(alpha: 0.35),
-              width: 1,
-            ),
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [_homeAccent.withValues(alpha: 0.08), _homeCard],
-            ),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _homeCard,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: _homeCardShadow,
+          border: Border.all(
+            color: _homeAccent.withValues(alpha: 0.32),
+            width: 1,
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: _homeAccent.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: Icon(
-                  Icons.auto_awesome_rounded,
-                  size: 20,
-                  color: _homeAccent,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
+        ),
+        child: Column(
+          children: [
+            InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(14),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(2, 0, 2, 2),
+                child: Row(
                   children: [
-                    Text(
-                      'AI 종목 분석 받아보기',
-                      style: _homeText(
-                        color: _homeLabel,
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w800,
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF10B981), Color(0xFF38BDF8)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x3310B981),
+                            blurRadius: 14,
+                            offset: Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.auto_awesome_rounded,
+                        size: 22,
+                        color: Colors.white,
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '관심 가는 종목, AI가 점수와 리포트로 정리해줘요',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: _homeText(
-                        color: _homeMuted,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'AI 종목 분석 받아보기',
+                            style: _homeText(
+                              color: _homeLabel,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '점수, 리스크, 뉴스 근거까지 한 번에 정리해요',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _homeText(
+                              color: _homeMuted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: _homeAccent.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 18,
+                        color: _homeAccent,
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Icon(Icons.chevron_right_rounded, size: 20, color: _homeFaint),
-            ],
-          ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(2, 12, 2, 10),
+              child: Container(
+                height: 1,
+                color: _homeBorder.withValues(alpha: 0.55),
+              ),
+            ),
+            _RecentAiAnalysisPreview(
+              auth: auth,
+              firestoreService: firestoreService,
+            ),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+class _RecentAiAnalysisPreview extends StatelessWidget {
+  const _RecentAiAnalysisPreview({
+    required this.auth,
+    required this.firestoreService,
+  });
+
+  final AuthProvider auth;
+  final FirestoreService firestoreService;
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = auth.user?.uid;
+    if (uid == null || uid.isEmpty) {
+      return const _RecentAiAnalysisEmpty(text: '로그인하면 최근 분석 기록이 여기에 표시돼요');
+    }
+    return StreamBuilder<List<StockAiAnalysisSummary>>(
+      stream: firestoreService.watchStockAiAnalyses(uid),
+      builder: (context, snapshot) {
+        final recent =
+            (snapshot.data ?? const <StockAiAnalysisSummary>[]).firstOrNull;
+        if (recent == null) {
+          return const _RecentAiAnalysisEmpty(text: '아직 받은 분석이 없어요');
+        }
+        return InkWell(
+          onTap: () => _openRecentAnalysis(context, recent),
+          borderRadius: BorderRadius.circular(10),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(2, 2, 0, 0),
+            child: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: _scoreAccent(recent).withValues(alpha: 0.45),
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      _scoreText(recent),
+                      style: _homeNumber(
+                        color: _scoreAccent(recent),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _analysisTitle(recent),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: _homeText(
+                                color: _homeLabel,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _updatedLabel(recent.updatedAt),
+                            style: _homeText(
+                              color: _homeFaint,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _compactSummary(recent.summary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _homeText(
+                          color: _homeFaint,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(Icons.chevron_right_rounded, size: 18, color: _homeMuted),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openRecentAnalysis(BuildContext context, StockAiAnalysisSummary item) {
+    final pick = StockPick(
+      id: item.analysisId,
+      ticker: item.ticker,
+      name: item.name.isEmpty ? item.ticker : item.name,
+      buyPrice: item.analysisPrice ?? 0,
+      targetPrice: 0,
+      reason: '',
+      category: 'AI',
+      market: item.market.isEmpty ? 'KS' : item.market,
+      isPremium: false,
+      createdAt: item.updatedAt ?? DateTime.now(),
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        settings: RouteSettings(name: 'stock-ai-analysis:${item.analysisId}'),
+        builder: (_) => StockAiAnalysisResultScreen(pick: pick),
+      ),
+    );
+  }
+
+  String _analysisTitle(StockAiAnalysisSummary item) {
+    final name = item.name.isEmpty ? item.ticker : item.name;
+    return item.ticker.isEmpty ? name : '$name ${item.ticker}';
+  }
+
+  String _compactSummary(String value) {
+    final compact = value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return compact.isEmpty ? '최근 AI 분석 결과 보기' : compact;
+  }
+
+  String _updatedLabel(DateTime? updatedAt) {
+    if (updatedAt == null) return '최근';
+    return DateFormat('MM.dd').format(updatedAt);
+  }
+
+  String _scoreText(StockAiAnalysisSummary item) {
+    final score = item.score;
+    if (score == null) return 'AI';
+    return score.round().toString();
+  }
+
+  Color _scoreAccent(StockAiAnalysisSummary item) {
+    final score = item.score ?? 0;
+    if (score >= 70) return _homeUp;
+    if (score <= 45 && score > 0) return _homeDown;
+    return _homeAccent;
+  }
+}
+
+class _RecentAiAnalysisEmpty extends StatelessWidget {
+  const _RecentAiAnalysisEmpty({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 2, 0, 0),
+      child: Row(
+        children: [
+          Icon(Icons.history_rounded, size: 16, color: _homeFaint),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _homeText(
+                color: _homeMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1949,55 +1543,15 @@ class _AnimatedProgressBar extends StatelessWidget {
   }
 }
 
-class _ShimmerText extends StatefulWidget {
+class _ShimmerText extends StatelessWidget {
   const _ShimmerText({required this.text, required this.style});
 
   final String text;
   final TextStyle style;
 
   @override
-  State<_ShimmerText> createState() => _ShimmerTextState();
-}
-
-class _ShimmerTextState extends State<_ShimmerText>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2200),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        return ShaderMask(
-          blendMode: BlendMode.srcIn,
-          shaderCallback: (rect) {
-            final width = rect.width == 0 ? 1.0 : rect.width;
-            final dx = rect.left - width + (width * 2 * _controller.value);
-            return LinearGradient(
-              colors: [_homeAccent, const Color(0xFFFFFFFF), _homeAccent],
-              stops: const [0, 0.48, 1],
-            ).createShader(Rect.fromLTWH(dx, rect.top, width, rect.height));
-          },
-          child: child,
-        );
-      },
-      child: Text(widget.text, style: widget.style),
-    );
+    return Text(text, style: style);
   }
 }
 
@@ -2044,14 +1598,21 @@ class _HomeHeroGreeting extends StatelessWidget {
     required this.auth,
     required this.firestoreService,
     required this.topActions,
+    required this.onWatchAd,
+    required this.openCommunity,
+    required this.openJournal,
   });
 
   final AuthProvider auth;
   final FirestoreService firestoreService;
   final List<Widget> topActions;
+  final VoidCallback onWatchAd;
+  final VoidCallback openCommunity;
+  final VoidCallback openJournal;
 
   @override
   Widget build(BuildContext context) {
+    final isPremium = context.watch<SubscriptionService>().isPremium;
     final uid = auth.user?.uid;
     if (uid == null || uid.isEmpty) {
       return _HeroShell(
@@ -2061,6 +1622,12 @@ class _HomeHeroGreeting extends StatelessWidget {
         xpForNext: 10,
         streak: 0,
         topActions: topActions,
+        isPremium: false,
+        auth: auth,
+        firestoreService: firestoreService,
+        onWatchAd: onWatchAd,
+        openCommunity: openCommunity,
+        openJournal: openJournal,
       );
     }
     return StreamBuilder<Map<String, int>>(
@@ -2084,10 +1651,104 @@ class _HomeHeroGreeting extends StatelessWidget {
               xpForNext: progress['xpForNextLevel']?.toInt() ?? 10,
               streak: data['attendanceCount'] ?? 0,
               topActions: topActions,
+              isPremium: isPremium,
+              auth: auth,
+              firestoreService: firestoreService,
+              onWatchAd: onWatchAd,
+              openCommunity: openCommunity,
+              openJournal: openJournal,
             );
           },
         );
       },
+    );
+  }
+}
+
+class _HomePremiumBadge extends StatelessWidget {
+  const _HomePremiumBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFF8D772), Color(0xFFE5A82E)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFFFF1B8), width: 0.8),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x2EF5B547),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.workspace_premium_rounded,
+            size: 13,
+            color: Color(0xFF5D3B00),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'PREMIUM',
+            style: _homeText(
+              color: const Color(0xFF4B3000),
+              fontSize: 10.5,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeMiniStatChip extends StatelessWidget {
+  const _HomeMiniStatChip({
+    required this.label,
+    required this.color,
+    required this.icon,
+  });
+
+  final String label;
+  final Color color;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: color),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: _homeText(
+              color: color,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -2100,6 +1761,12 @@ class _HeroShell extends StatelessWidget {
     required this.xpForNext,
     required this.streak,
     required this.topActions,
+    required this.isPremium,
+    required this.auth,
+    required this.firestoreService,
+    required this.onWatchAd,
+    required this.openCommunity,
+    required this.openJournal,
   });
 
   final String nickname;
@@ -2108,6 +1775,12 @@ class _HeroShell extends StatelessWidget {
   final int xpForNext;
   final int streak;
   final List<Widget> topActions;
+  final bool isPremium;
+  final AuthProvider auth;
+  final FirestoreService firestoreService;
+  final VoidCallback onWatchAd;
+  final VoidCallback openCommunity;
+  final VoidCallback openJournal;
 
   @override
   Widget build(BuildContext context) {
@@ -2121,14 +1794,27 @@ class _HeroShell extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  '주식저장소',
-                  style: _homeText(
-                    color: _homeLabel,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w900,
-                    height: 1.12,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        '주식저장소',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _homeText(
+                          color: _homeLabel,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          height: 1.12,
+                        ),
+                      ),
+                    ),
+                    if (isPremium) ...[
+                      const SizedBox(width: 8),
+                      const _HomePremiumBadge(),
+                    ],
+                  ],
                 ),
               ),
               const SizedBox(width: 8),
@@ -2149,123 +1835,70 @@ class _HeroShell extends StatelessWidget {
         Container(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [_homeCardHi, _homeCard],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            color: _homeCard,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: _homeBorder),
+            boxShadow: _homeCardShadow,
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              RepaintBoundary(
-                child: _Breathing(
-                  child: Container(
-                    width: 62,
-                    height: 62,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [_homeAccent, const Color(0xFF00A86F)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _homeAccent.withValues(alpha: 0.22),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text('🔥', style: TextStyle(fontSize: 18)),
-                          Text(
-                            '$streak',
-                            style: _homeNumber(
-                              color: const Color(0xFF031A12),
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          Text(
-                            'DAYS',
-                            style: _homeText(
-                              color: const Color(0xB3031A12),
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
+              Row(
+                children: [
+                  const Text('🔥', style: TextStyle(fontSize: 13)),
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: _ShimmerText(
+                      text: streak > 0 ? '$streak일 연속 접속 중' : '오늘부터 투자 루틴 시작',
+                      style: _homeText(
+                        color: _homeLabel,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
                   ),
-                ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _ShimmerText(
-                      text: streak > 0 ? '$streak일 연속 접속 중' : '오늘부터 투자 루틴 시작',
-                      style: _homeText(
-                        color: _homeAccent,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w800,
-                      ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  _HomeMiniStatChip(
+                    label: 'Lv.$level',
+                    color: _homeGold,
+                    icon: Icons.workspace_premium_rounded,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$xpInLevel/$xpForNext XP',
+                    style: _homeNumber(
+                      color: _homeFaint,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '댓글, 기록, 출석으로 레벨을 올려보세요',
-                      style: _homeText(color: _homeFaint, fontSize: 13),
-                    ),
-                    const SizedBox(height: 9),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _homeGold.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'Lv.$level',
-                            style: _homeText(
-                              color: _homeGold,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '$xpInLevel/$xpForNext XP',
-                          style: _homeNumber(
-                            color: _homeFaint,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    _AnimatedProgressBar(
-                      value: pct,
-                      color: _homeAccent,
-                      backgroundColor: _homeBg3,
-                      minHeight: 5,
-                    ),
-                  ],
-                ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 7),
+              Text(
+                '댓글, 기록, 출석으로 레벨을 올려보세요',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _homeText(color: _homeFaint, fontSize: 12.5),
+              ),
+              const SizedBox(height: 5),
+              _AnimatedProgressBar(
+                value: pct,
+                color: _homeAccent,
+                backgroundColor: _homeBg3,
+                minHeight: 5,
+              ),
+              const SizedBox(height: 8),
+              _DailyMissionButton(
+                auth: auth,
+                firestoreService: firestoreService,
+                onWatchAd: onWatchAd,
+                openCommunity: openCommunity,
+                openJournal: openJournal,
               ),
             ],
           ),
@@ -2275,8 +1908,64 @@ class _HeroShell extends StatelessWidget {
   }
 }
 
-class _DailyMissionCard extends StatelessWidget {
-  const _DailyMissionCard({
+typedef _DailyMissionStatus = ({
+  bool commentDone,
+  bool memoDone,
+  int adRemaining,
+  int adLimit,
+});
+
+typedef _DailyMissionItem = ({
+  IconData icon,
+  String label,
+  String xp,
+  bool done,
+  VoidCallback? onTap,
+});
+
+_DailyMissionStatus _defaultMissionStatus() =>
+    (commentDone: false, memoDone: false, adRemaining: 3, adLimit: 3);
+
+List<_DailyMissionItem> _dailyMissionItems(
+  _DailyMissionStatus status, {
+  required VoidCallback onWatchAd,
+  required VoidCallback openCommunity,
+  required VoidCallback openJournal,
+}) {
+  return [
+    (
+      icon: Icons.check_rounded,
+      label: '출석 체크',
+      xp: '+5 XP',
+      done: true,
+      onTap: null,
+    ),
+    (
+      icon: Icons.ondemand_video_rounded,
+      label: '광고 보기 (${status.adRemaining}/${status.adLimit})',
+      xp: '+5 XP',
+      done: status.adRemaining <= 0,
+      onTap: status.adRemaining > 0 ? onWatchAd : null,
+    ),
+    (
+      icon: Icons.mode_comment_outlined,
+      label: '댓글 1개 남기기',
+      xp: '+3 XP',
+      done: status.commentDone,
+      onTap: status.commentDone ? null : openCommunity,
+    ),
+    (
+      icon: Icons.edit_note_rounded,
+      label: '매매일지 작성',
+      xp: '+5 XP',
+      done: status.memoDone,
+      onTap: status.memoDone ? null : openJournal,
+    ),
+  ];
+}
+
+class _DailyMissionButton extends StatelessWidget {
+  const _DailyMissionButton({
     required this.auth,
     required this.firestoreService,
     required this.onWatchAd,
@@ -2293,75 +1982,211 @@ class _DailyMissionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final uid = auth.user?.uid;
-    return StreamBuilder<
-      ({bool commentDone, bool memoDone, int adRemaining, int adLimit})
-    >(
+    return StreamBuilder<_DailyMissionStatus>(
       stream: uid == null || uid.isEmpty
-          ? Stream.value((
-              commentDone: false,
-              memoDone: false,
-              adRemaining: 3,
-              adLimit: 3,
-            ))
+          ? Stream.value(_defaultMissionStatus())
           : firestoreService.watchDailyMissions(uid),
       builder: (context, snapshot) {
-        final status =
-            snapshot.data ??
-            (commentDone: false, memoDone: false, adRemaining: 3, adLimit: 3);
-        final missions =
-            <
-              ({
-                IconData icon,
-                String label,
-                String xp,
-                bool done,
-                VoidCallback? onTap,
-              })
-            >[
-              (
-                icon: Icons.check_rounded,
-                label: '출석 체크',
-                xp: '+5 XP',
-                done: true,
-                onTap: null,
-              ),
-              (
-                icon: Icons.ondemand_video_rounded,
-                label: '광고 보기 (${status.adRemaining}/${status.adLimit})',
-                xp: '+5 XP',
-                done: status.adRemaining <= 0,
-                onTap: status.adRemaining > 0 ? onWatchAd : null,
-              ),
-              (
-                icon: Icons.mode_comment_outlined,
-                label: '댓글 1개 남기기',
-                xp: '+3 XP',
-                done: status.commentDone,
-                onTap: status.commentDone ? null : openCommunity,
-              ),
-              (
-                icon: Icons.edit_note_rounded,
-                label: '매매일지 작성',
-                xp: '+5 XP',
-                done: status.memoDone,
-                onTap: status.memoDone ? null : openJournal,
-              ),
-            ];
+        final status = snapshot.data ?? _defaultMissionStatus();
+        final missions = _dailyMissionItems(
+          status,
+          onWatchAd: onWatchAd,
+          openCommunity: openCommunity,
+          openJournal: openJournal,
+        );
         final doneCount = missions.where((m) => m.done).length;
         final allDone = doneCount == missions.length;
 
-        return _DarkHomeSection(
-          title: '✅ 오늘의 미션',
-          trailing: Text(
-            allDone ? '완료🎉' : '$doneCount/${missions.length}',
-            style: _homeNumber(
-              color: _homeAccent,
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
+        return InkWell(
+          onTap: () => _showDailyMissionPopup(context),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 42),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: allDone ? _homeAccent.withValues(alpha: 0.14) : _homeBg2,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: allDone
+                    ? _homeAccent.withValues(alpha: 0.34)
+                    : _homeBorder,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  allDone
+                      ? Icons.check_circle_rounded
+                      : Icons.flag_circle_rounded,
+                  size: 18,
+                  color: _homeAccent,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '오늘의 미션',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _homeText(
+                      color: _homeLabel,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
+                  ),
+                ),
+                Text(
+                  allDone ? '완료' : '$doneCount/${missions.length}',
+                  style: _homeNumber(
+                    color: _homeAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right_rounded, size: 18, color: _homeFaint),
+              ],
             ),
           ),
-          child: Column(
+        );
+      },
+    );
+  }
+
+  void _showDailyMissionPopup(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _DailyMissionPanel(
+        auth: auth,
+        firestoreService: firestoreService,
+        onWatchAd: onWatchAd,
+        openCommunity: () {
+          Navigator.pop(sheetContext);
+          openCommunity();
+        },
+        openJournal: () {
+          Navigator.pop(sheetContext);
+          openJournal();
+        },
+      ),
+    );
+  }
+}
+
+class _DailyMissionPanel extends StatelessWidget {
+  const _DailyMissionPanel({
+    required this.auth,
+    required this.firestoreService,
+    required this.onWatchAd,
+    required this.openCommunity,
+    required this.openJournal,
+  });
+
+  final AuthProvider auth;
+  final FirestoreService firestoreService;
+  final VoidCallback onWatchAd;
+  final VoidCallback openCommunity;
+  final VoidCallback openJournal;
+
+  @override
+  Widget build(BuildContext context) {
+    _syncHomeLightMode(context);
+    final uid = auth.user?.uid;
+    final bottom = MediaQuery.paddingOf(context).bottom;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + bottom),
+      decoration: BoxDecoration(
+        color: _homeCard,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _homeBorder),
+        boxShadow: _homeCardShadow,
+      ),
+      child: StreamBuilder<_DailyMissionStatus>(
+        stream: uid == null || uid.isEmpty
+            ? Stream.value(_defaultMissionStatus())
+            : firestoreService.watchDailyMissions(uid),
+        builder: (context, snapshot) {
+          final status = snapshot.data ?? _defaultMissionStatus();
+          final missions = _dailyMissionItems(
+            status,
+            onWatchAd: onWatchAd,
+            openCommunity: openCommunity,
+            openJournal: openJournal,
+          );
+          final doneCount = missions.where((m) => m.done).length;
+          final allDone = doneCount == missions.length;
+
+          return Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
+              Container(
+                width: 38,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 14),
+                decoration: BoxDecoration(
+                  color: _homeFaint.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: _homeAccent.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: Icon(
+                      allDone
+                          ? Icons.verified_rounded
+                          : Icons.flag_circle_rounded,
+                      color: _homeAccent,
+                      size: 19,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '오늘의 미션',
+                          style: _homeText(
+                            color: _homeLabel,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          allDone
+                              ? '모든 미션 완료'
+                              : '$doneCount/${missions.length} 완료',
+                          style: _homeNumber(
+                            color: _homeAccent,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: Icon(
+                      Icons.close_rounded,
+                      color: _homeFaint,
+                      size: 20,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               for (var i = 0; i < missions.length; i++) ...[
                 _MissionRow(
                   icon: missions[i].icon,
@@ -2374,9 +2199,9 @@ class _DailyMissionCard extends StatelessWidget {
                   Divider(height: 1, color: _homeBorder),
               ],
             ],
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
@@ -2494,6 +2319,64 @@ class _LiveStatusChip extends StatelessWidget {
   }
 }
 
+// ── 서버시각 동기화 (기기 시계가 틀려도 실제 KST 계산) ──────────────────────
+int _serverClockOffsetMs = 0;
+
+Future<void> _ensureServerClock() async {
+  try {
+    final res = await FirebaseFunctions.instanceFor(region: 'asia-northeast3')
+        .httpsCallable(
+          'getServerTime',
+          options: HttpsCallableOptions(timeout: const Duration(seconds: 6)),
+        )
+        .call();
+    final serverMs = (res.data['ms'] as num).toInt();
+    _serverClockOffsetMs = serverMs - DateTime.now().millisecondsSinceEpoch;
+  } catch (_) {
+    // 실패 시 기기 시계 그대로 사용
+  }
+}
+
+DateTime _nowKstCorrected() {
+  final kst = DateTime.now()
+      .add(Duration(milliseconds: _serverClockOffsetMs))
+      .toUtc()
+      .add(const Duration(hours: 9));
+  return DateTime.utc(
+    kst.year,
+    kst.month,
+    kst.day,
+    kst.hour,
+    kst.minute,
+    kst.second,
+  );
+}
+
+// 야간선물 세션: 평일 야간 18:00~익일 05:00 (KST)
+bool _isNightFuturesSession([DateTime? kstNow]) {
+  final n = kstNow ?? _nowKstCorrected();
+  final h = n.hour;
+  final wd = n.weekday; // Mon=1 ... Sun=7
+  if (h >= 18) return wd >= DateTime.monday && wd <= DateTime.friday;
+  if (h < 5) return wd >= DateTime.tuesday && wd <= DateTime.saturday;
+  return false;
+}
+
+// 현재 야간 세션의 시작 시각(실제 UTC). 세션은 KST 18:00에 시작하며,
+// 자정 이후(0~5시)면 전날 18:00에 시작된 세션이다. 세션 경계에서 직전(어제)
+// 세션 데이터가 차트에 섞이지 않도록 이 시각 이전 문서를 걸러내는 데 쓴다.
+DateTime _nightSessionStartUtc([DateTime? kstNow]) {
+  final n = kstNow ?? _nowKstCorrected(); // KST 벽시계값을 담은 DateTime.utc
+  final base = n.hour < 18 ? n.subtract(const Duration(days: 1)) : n;
+  // KST 18:00 = UTC 09:00 → 실제 UTC 순간으로 변환
+  return DateTime.utc(
+    base.year,
+    base.month,
+    base.day,
+    18,
+  ).subtract(const Duration(hours: 9));
+}
+
 class _MarketClock extends StatefulWidget {
   const _MarketClock({required this.builder});
 
@@ -2511,9 +2394,12 @@ class _MarketClockState extends State<_MarketClock> {
   @override
   void initState() {
     super.initState();
-    _now = _nowInKst();
+    _now = _nowKstCorrected();
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) setState(() => _now = _nowInKst());
+      if (mounted) setState(() => _now = _nowKstCorrected());
+    });
+    _ensureServerClock().then((_) {
+      if (mounted) setState(() => _now = _nowKstCorrected());
     });
   }
 
@@ -2526,20 +2412,6 @@ class _MarketClockState extends State<_MarketClock> {
   @override
   Widget build(BuildContext context) {
     return widget.builder(context, _MarketSessionStatus.from(_now));
-  }
-
-  DateTime _nowInKst() {
-    final kst = DateTime.now().toUtc().add(const Duration(hours: 9));
-    return DateTime.utc(
-      kst.year,
-      kst.month,
-      kst.day,
-      kst.hour,
-      kst.minute,
-      kst.second,
-      kst.millisecond,
-      kst.microsecond,
-    );
   }
 }
 
@@ -2718,30 +2590,344 @@ class _MarketLiveCard extends StatelessWidget {
   }
 }
 
-class _AIBriefCard extends StatelessWidget {
-  const _AIBriefCard();
+// 야간세션(18:00~05:00 KST)에만 노출되는 야간선물 섹션 (홈). 그 외엔 숨김.
+class _NightFuturesSection extends StatefulWidget {
+  const _NightFuturesSection();
 
-  static const double _contentHeight = 188;
+  @override
+  State<_NightFuturesSection> createState() => _NightFuturesSectionState();
+}
 
-  String _formatSlotTime(String? slotLabel, dynamic generatedAt) {
-    if (slotLabel != null) return '🤖 AI 간단 시황 · 오늘 $slotLabel';
-    if (generatedAt == null) return '🤖 AI 간단 시황';
-    try {
-      final dt = (generatedAt as Timestamp).toDate().toLocal();
-      final h = dt.hour.toString().padLeft(2, '0');
-      final m = dt.minute.toString().padLeft(2, '0');
-      return '🤖 AI 간단 시황 · 오늘 $h:$m';
-    } catch (_) {
-      return '🤖 AI 간단 시황';
-    }
+class _NightFuturesSectionState extends State<_NightFuturesSection> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureServerClock().then((_) {
+      if (mounted) setState(() {});
+    });
+    // 세션 경계에서 자동으로 나타나고/사라지도록 주기 갱신
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!_isNightFuturesSession()) return const SizedBox.shrink();
+    return const Column(
+      children: [
+        _HomeReveal(order: 2, child: _NightFuturesGroup(live: true)),
+        _HomeCardBreak(),
+      ],
+    );
+  }
+}
+
+// 야간선물 제목 + 코스피/코스닥 타일 (재사용 — 홈/지수 전체보기 공통)
+class _NightFuturesGroup extends StatelessWidget {
+  const _NightFuturesGroup({this.live = false});
+
+  // live=true면 'LIVE' 배지, false면 운영시간 안내 표시
+  final bool live;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            children: [
+              Text(
+                '🌙 야간선물',
+                style: _homeText(
+                  color: _homeLabel,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  height: 1.25,
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (live)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _homeUp.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'LIVE',
+                    style: _homeText(
+                      color: _homeUp,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  '평일 18:00~05:00',
+                  style: _homeText(
+                    color: _homeFaint,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        const SizedBox(
+          height: 168,
+          child: Row(
+            children: [
+              Expanded(
+                child: _NightFuturesTile(
+                  collection: 'night_futures_prices',
+                  name: '코스피 야간',
+                  title: '코스피 야간선물',
+                  accent: Color(0xFF6366F1),
+                ),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: _NightFuturesTile(
+                  collection: 'night_futures_prices_kosdaq',
+                  name: '코스닥 야간',
+                  title: '코스닥 야간선물',
+                  accent: Color(0xFF8B5CF6),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _NightFuturesTile extends StatelessWidget {
+  const _NightFuturesTile({
+    required this.collection,
+    required this.name,
+    required this.title,
+    required this.accent,
+  });
+
+  final String collection;
+  final String name;
+  final String title;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final isLightHome = _syncHomeLightMode(context);
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection(collection)
+          .orderBy('timestamp', descending: true)
+          .limit(40)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final allDocs = snapshot.data?.docs ?? const [];
+        // 현재 야간 세션의 데이터만 사용 (직전 세션 꼬리 데이터 제거)
+        final sessionStart = _nightSessionStartUtc();
+        final docs = allDocs.where((d) {
+          final t = d.data()['timestamp'];
+          return t is Timestamp && !t.toDate().toUtc().isBefore(sessionStart);
+        }).toList();
+        final latest = docs.isNotEmpty ? docs.first.data() : null;
+        final price = (latest?['price'] as num?)?.toDouble();
+        final change = (latest?['change'] as num?)?.toDouble() ?? 0;
+        final rate = (latest?['changeRate'] as num?)?.toDouble() ?? 0;
+        final ts = latest?['timestamp'];
+        final isUp = change >= 0;
+        final moveColor = price == null
+            ? _homeFaint
+            : (isUp ? _homeUp : _homeDown);
+
+        // 과거→현재 순서의 가격들로 스파크라인
+        final spark = docs.reversed
+            .map((d) => (d.data()['price'] as num?)?.toDouble() ?? 0)
+            .where((v) => v > 0)
+            .toList();
+
+        String timeText = '집계 대기 중';
+        if (ts is Timestamp) {
+          final dt = ts.toDate().toUtc().add(const Duration(hours: 9));
+          timeText =
+              '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')} 기준 (KST)';
+        }
+
+        return GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => NightFuturesChartScreen(
+                initialPrice: price ?? 0,
+                initialChange: change,
+                initialChangeRate: rate,
+                collection: collection,
+                title: title,
+                accent: accent,
+              ),
+            ),
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                stops: const [0.0, 0.52, 1.0],
+                colors: [
+                  isLightHome ? Colors.white : const Color(0xFF1C2437),
+                  Color.lerp(
+                    isLightHome
+                        ? const Color(0xFFF8FAFC)
+                        : const Color(0xFF151C2B),
+                    accent,
+                    isLightHome ? 0.08 : 0.18,
+                  )!,
+                  isLightHome
+                      ? const Color(0xFFF4F7FB)
+                      : const Color(0xFF101725),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: accent.withValues(alpha: isLightHome ? 0.18 : 0.28),
+              ),
+              boxShadow: [
+                ..._homeCardShadow,
+                BoxShadow(
+                  color: accent.withValues(alpha: isLightHome ? 0.05 : 0.10),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.fromLTRB(13, 12, 13, 11),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: accent,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    Expanded(
+                      child: Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _homeText(
+                          color: _homeLabel,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: _homeFaint,
+                      size: 16,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  price != null ? price.toStringAsFixed(2) : '–',
+                  style: _homeNumber(
+                    color: _homeLabel,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Icon(
+                      isUp
+                          ? Icons.arrow_drop_up_rounded
+                          : Icons.arrow_drop_down_rounded,
+                      color: moveColor,
+                      size: 18,
+                    ),
+                    Flexible(
+                      child: Text(
+                        price == null
+                            ? '—'
+                            : '${change.abs().toStringAsFixed(2)} (${isUp ? '+' : '-'}${rate.abs().toStringAsFixed(2)}%)',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: _homeNumber(
+                          color: moveColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                SizedBox(
+                  height: 26,
+                  width: double.infinity,
+                  child: spark.length >= 2
+                      ? TweenAnimationBuilder<double>(
+                          tween: Tween<double>(begin: 0, end: 1),
+                          duration: const Duration(milliseconds: 700),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, progress, _) => CustomPaint(
+                            painter: _SparklinePainter(
+                              values: spark,
+                              color: moveColor,
+                              progress: progress,
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  timeText,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _homeText(color: _homeFaint, fontSize: 10),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AIBriefCard extends StatelessWidget {
+  const _AIBriefCard();
+
+  @override
+  Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? _homeCard : const Color(0xFFEFFAF5);
-    final borderColor = isDark ? _homeBorder : const Color(0x3310B981);
-    final titleColor = isDark ? _homeAccent : const Color(0xFF047857);
     final bodyColor = isDark ? _homeLabel : const Color(0xFF172033);
     final skeletonColor = isDark ? _homeBorder : const Color(0xFFE1E8F0);
 
@@ -2757,128 +2943,170 @@ class _AIBriefCard extends StatelessWidget {
 
         final brief = data?['brief'] as String?;
         final slotLabel = data?['slotLabel'] as String?;
-        final generatedAt = data?['generatedAt'];
+        final sections = data?['sections'] as Map<String, dynamic>?;
+        final summary = (sections?['summary'] as String?)?.trim();
+        final indexBrief = (sections?['index'] as String?)?.trim();
 
-        // 데이터 없을 때 skeleton shimmer 느낌으로 로딩 표시
-        if (!snapshot.hasData || data == null || brief == null) {
-          return _DarkCard(
-            color: cardColor,
-            borderColor: borderColor,
-            child: SizedBox(
-              height: _contentHeight,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.auto_awesome_rounded,
-                        size: 14,
-                        color: titleColor,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        '🤖 AI 간단 시황',
-                        style: _homeText(
-                          color: titleColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    height: 14,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: skeletonColor,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                  const SizedBox(height: 7),
-                  Container(
-                    height: 14,
-                    width: 240,
-                    decoration: BoxDecoration(
-                      color: skeletonColor,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                  const SizedBox(height: 7),
-                  Container(
-                    height: 14,
-                    width: 180,
-                    decoration: BoxDecoration(
-                      color: skeletonColor,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                  const Spacer(),
-                ],
+        const accent = Color(0xFF10B981);
+        final headerColor = isDark
+            ? const Color(0xFF5EEAD4)
+            : const Color(0xFF047857);
+
+        BoxDecoration cardDeco() => BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: isDark
+                ? const [Color(0xFF14352C), Color(0xFF0F1520)]
+                : const [Color(0xFFE6FAF2), Colors.white],
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: accent.withValues(alpha: isDark ? 0.22 : 0.28),
+          ),
+        );
+
+        Widget header(String timeLabel) => Row(
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF10B981), Color(0xFF0D9488)],
+                ),
+                borderRadius: BorderRadius.circular(10),
               ),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                color: Colors.white,
+                size: 16,
+              ),
+            ),
+            const SizedBox(width: 9),
+            Text(
+              'AI 시황 분석',
+              style: _homeText(
+                color: headerColor,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const Spacer(),
+            if (timeLabel.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.13),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  timeLabel,
+                  style: _homeText(
+                    color: headerColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+          ],
+        );
+
+        // 데이터 없을 때 skeleton
+        if (!snapshot.hasData || data == null || brief == null) {
+          return Container(
+            decoration: cardDeco(),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                header(''),
+                const SizedBox(height: 14),
+                for (final w in [double.infinity, 240.0, 170.0]) ...[
+                  Container(
+                    height: 13,
+                    width: w,
+                    decoration: BoxDecoration(
+                      color: skeletonColor,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                const Spacer(),
+                Text(
+                  '장중 시황을 준비하고 있어요',
+                  style: _homeText(color: _homeFaint, fontSize: 12),
+                ),
+              ],
             ),
           );
         }
 
-        return _DarkCard(
-          color: cardColor,
-          borderColor: borderColor,
-          child: SizedBox(
-            height: _contentHeight,
+        final timeLabel = slotLabel != null ? '오늘 $slotLabel' : '';
+        final hasSummary = summary != null && summary.isNotEmpty;
+        final preview = (indexBrief != null && indexBrief.isNotEmpty)
+            ? indexBrief
+            : brief;
+
+        return GestureDetector(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const _AIBriefDetailScreen()),
+          ),
+          child: Container(
+            decoration: cardDeco(),
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.auto_awesome_rounded,
-                      size: 14,
-                      color: titleColor,
-                    ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        _formatSlotTime(slotLabel, generatedAt),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: _homeText(
-                          color: titleColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Expanded(
-                  child: Text(
-                    brief,
-                    maxLines: 5,
+                header(timeLabel),
+                const SizedBox(height: 13),
+                if (hasSummary) ...[
+                  Text(
+                    summary,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: _homeText(
                       color: bodyColor,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Expanded(
+                  child: Text(
+                    preview,
+                    maxLines: hasSummary ? 3 : 5,
+                    overflow: TextOverflow.ellipsis,
+                    style: _homeText(
+                      color: bodyColor.withValues(alpha: 0.82),
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w500,
                       height: 1.55,
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: _TextMoreButton(
-                    label: '더보기',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const _AIBriefDetailScreen(),
-                        ),
-                      );
-                    },
-                  ),
+                const SizedBox(height: 6),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      '자세히 보기',
+                      style: _homeText(
+                        color: accent,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: accent,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -2889,72 +3117,293 @@ class _AIBriefCard extends StatelessWidget {
   }
 }
 
-class _TextMoreButton extends StatelessWidget {
-  const _TextMoreButton({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(6),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: _homeText(
-                color: _homeAccent,
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(width: 2),
-            Icon(Icons.chevron_right_rounded, size: 16, color: _homeAccent),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _AIBriefDetailScreen extends StatelessWidget {
   const _AIBriefDetailScreen();
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('AI 간단 시황')),
+      appBar: AppBar(
+        title: const Text(
+          'AI 시황 분석',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+      ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance
             .collection('ai_briefs')
             .doc('latest')
             .snapshots(),
         builder: (context, snapshot) {
-          final data = snapshot.hasData && snapshot.data!.exists
-              ? snapshot.data!.data() as Map<String, dynamic>?
-              : null;
-          final brief = data?['brief'] as String?;
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
+          final data = snapshot.data!.exists
+              ? snapshot.data!.data() as Map<String, dynamic>?
+              : null;
+          final brief = data?['brief'] as String?;
+          final slotLabel = data?['slotLabel'] as String?;
+          final sections = data?['sections'] as Map<String, dynamic>?;
+
+          String s(String k) => (sections?[k] as String?)?.trim() ?? '';
+          final summary = s('summary');
+          final news = (sections?['news'] as List?) ?? const [];
+          final hasSections =
+              sections != null &&
+              (summary.isNotEmpty ||
+                  s('index').isNotEmpty ||
+                  s('sector').isNotEmpty ||
+                  news.isNotEmpty);
+
+          if (!hasSections) {
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+              children: [
+                Text(
+                  brief ?? '표시할 AI 시황이 없습니다.',
+                  style: TextStyle(
+                    height: 1.6,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: cs.onSurface,
+                  ),
+                ),
+              ],
+            );
+          }
+
           return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
+              if (slotLabel != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 4, bottom: 10),
+                  child: Text(
+                    '오늘 $slotLabel 기준',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurface.withValues(alpha: 0.5),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              if (summary.isNotEmpty) _summaryCard(cs, summary),
+              if (news.isNotEmpty)
+                _BriefSection(
+                  icon: Icons.article_outlined,
+                  title: '주요뉴스',
+                  accent: const Color(0xFF3B82F6),
+                  child: _newsList(cs, news),
+                ),
+              if (s('index').isNotEmpty)
+                _BriefSection(
+                  icon: Icons.show_chart_rounded,
+                  title: '지수 시황',
+                  accent: const Color(0xFF10B981),
+                  child: _paragraph(cs, s('index')),
+                ),
+              if (s('sector').isNotEmpty)
+                _BriefSection(
+                  icon: Icons.donut_large_rounded,
+                  title: '업종별 분석',
+                  accent: const Color(0xFF8B5CF6),
+                  child: _paragraph(cs, s('sector')),
+                ),
+              if (s('flow').isNotEmpty)
+                _BriefSection(
+                  icon: Icons.swap_vert_rounded,
+                  title: '수급·시장 폭',
+                  accent: const Color(0xFFF59E0B),
+                  child: _paragraph(cs, s('flow')),
+                ),
+              if (s('checkpoint').isNotEmpty)
+                _BriefSection(
+                  icon: Icons.flag_rounded,
+                  title: '체크포인트',
+                  accent: const Color(0xFF6366F1),
+                  child: _paragraph(cs, s('checkpoint')),
+                ),
+              const SizedBox(height: 6),
               Text(
-                brief ?? '표시할 AI 시황이 없습니다.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  height: 1.55,
-                  fontWeight: FontWeight.w600,
+                'AI가 시장 데이터·뉴스를 바탕으로 생성한 참고용 요약입니다.',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: cs.onSurface.withValues(alpha: 0.4),
                 ),
               ),
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _summaryCard(ColorScheme cs, String summary) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF10B981), Color(0xFF059669)],
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              summary,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _newsList(ColorScheme cs, List<dynamic> news) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < news.length; i++) ...[
+          if (i > 0)
+            Divider(height: 18, color: cs.onSurface.withValues(alpha: 0.07)),
+          _newsItem(
+            cs,
+            (news[i] as Map?)?['headline']?.toString() ?? '',
+            (news[i] as Map?)?['detail']?.toString() ?? '',
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _newsItem(ColorScheme cs, String headline, String detail) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(top: 6, right: 8),
+              width: 5,
+              height: 5,
+              decoration: const BoxDecoration(
+                color: Color(0xFF3B82F6),
+                shape: BoxShape.circle,
+              ),
+            ),
+            Expanded(
+              child: Text(
+                headline,
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w800,
+                  height: 1.4,
+                  color: cs.onSurface,
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (detail.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(left: 13, top: 3),
+            child: Text(
+              detail,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.5,
+                color: cs.onSurface.withValues(alpha: 0.65),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _paragraph(ColorScheme cs, String text) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: 14,
+        height: 1.6,
+        fontWeight: FontWeight.w500,
+        color: cs.onSurface.withValues(alpha: 0.9),
+      ),
+    );
+  }
+}
+
+class _BriefSection extends StatelessWidget {
+  const _BriefSection({
+    required this.icon,
+    required this.title,
+    required this.accent,
+    required this.child,
+  });
+
+  final IconData icon;
+  final String title;
+  final Color accent;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: dark
+            ? Colors.white.withValues(alpha: 0.04)
+            : Colors.black.withValues(alpha: 0.02),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.07)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(icon, size: 16, color: accent),
+              ),
+              const SizedBox(width: 9),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: cs.onSurface,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
       ),
     );
   }
@@ -3479,6 +3928,7 @@ class _IndexListPageState extends State<_IndexListPage> {
 
   @override
   Widget build(BuildContext context) {
+    _syncHomeLightMode(context);
     return Scaffold(
       backgroundColor: _homeBg0,
       appBar: AppBar(title: const Text('지수 전체')),
@@ -3488,6 +3938,8 @@ class _IndexListPageState extends State<_IndexListPage> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
           children: [
+            const _NightFuturesGroup(),
+            const SizedBox(height: 18),
             _DarkCard(
               child: _MajorIndicesPreview(indicesFuture: _indicesFuture),
             ),
@@ -6331,227 +6783,76 @@ class _NicknameSetupDialogState extends State<_NicknameSetupDialog> {
     return PopScope(
       canPop: false,
       child: AlertDialog(
-      title: const Text(
-        '닉네임 설정',
-        style: TextStyle(fontWeight: FontWeight.w700),
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '댓글 등 활동에 표시될 닉네임을 먼저 설정해주세요. (2~12자)',
-            style: TextStyle(
-              color: cs.onSurface.withValues(alpha: 0.55),
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _ctrl,
-            autofocus: true,
-            enabled: !_checking,
-            style: TextStyle(color: cs.onSurface),
-            decoration: InputDecoration(
-              hintText: '닉네임',
-              hintStyle: TextStyle(color: cs.onSurface.withValues(alpha: 0.3)),
-              errorText: _errorMsg,
-              filled: true,
-              fillColor: cs.onSurface.withValues(alpha: 0.05),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(
-                  color: Color(0xFF10B981),
-                  width: 1.5,
-                ),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 12,
-              ),
-            ),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: _checking ? null : _submit,
-          child: _checking
-              ? const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Color(0xFF10B981),
-                  ),
-                )
-              : const Text(
-                  '확인',
-                  style: TextStyle(
-                    color: Color(0xFF10B981),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+        title: const Text(
+          '닉네임 설정',
+          style: TextStyle(fontWeight: FontWeight.w700),
         ),
-      ],
-    ),
-    );
-  }
-}
-
-/// 닉네임 변경 다이얼로그 (현재 닉네임 prefill, 취소 가능).
-/// TextEditingController를 State에서 소유해 dialog dismiss 시 안전하게 dispose.
-class _NicknameChangeDialog extends StatefulWidget {
-  const _NicknameChangeDialog({
-    required this.uid,
-    required this.initialNickname,
-    required this.firestoreService,
-  });
-  final String uid;
-  final String initialNickname;
-  final FirestoreService firestoreService;
-
-  @override
-  State<_NicknameChangeDialog> createState() => _NicknameChangeDialogState();
-}
-
-class _NicknameChangeDialogState extends State<_NicknameChangeDialog> {
-  late final TextEditingController _ctrl;
-  String? _errorMsg;
-  bool _checking = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = TextEditingController(text: widget.initialNickname);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    final nick = _ctrl.text.trim();
-    if (nick.length < 2 || nick.length > 12) {
-      setState(() => _errorMsg = '닉네임은 2~12자여야 합니다');
-      return;
-    }
-    setState(() => _checking = true);
-    final taken = await widget.firestoreService.isNicknameTaken(
-      nick,
-      widget.uid,
-    );
-    if (!mounted) return;
-    if (taken) {
-      setState(() {
-        _errorMsg = '이미 사용 중인 닉네임입니다';
-        _checking = false;
-      });
-      return;
-    }
-    try {
-      await widget.firestoreService.setNickname(widget.uid, nick);
-      if (mounted) Navigator.pop(context);
-    } on NicknameTakenException {
-      if (!mounted) return;
-      setState(() {
-        _errorMsg = '방금 다른 사용자에게 점유되었어요. 다른 닉네임을 시도해주세요';
-        _checking = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMsg = '저장에 실패했어요. 잠시 후 다시 시도해주세요';
-        _checking = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? const Color(0xFF1A2035) : Colors.white;
-    return AlertDialog(
-      backgroundColor: cardColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Text(
-        '닉네임 설정',
-        style: TextStyle(
-          color: isDark ? Colors.white : Colors.black87,
-          fontWeight: FontWeight.w700,
-          fontSize: 16,
-        ),
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: _ctrl,
-            enabled: !_checking,
-            style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-            decoration: InputDecoration(
-              hintText: '닉네임 입력 (2~12자)',
-              hintStyle: TextStyle(
-                color: isDark ? Colors.white38 : Colors.black38,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '댓글 등 활동에 표시될 닉네임을 먼저 설정해주세요. (2~12자)',
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.55),
                 fontSize: 13,
               ),
-              filled: true,
-              fillColor: isDark
-                  ? Colors.white.withValues(alpha: 0.05)
-                  : Colors.black.withValues(alpha: 0.04),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none,
-              ),
-              errorText: _errorMsg,
             ),
-            onChanged: (_) {
-              if (_errorMsg != null) {
-                setState(() => _errorMsg = null);
-              }
-            },
+            const SizedBox(height: 14),
+            TextField(
+              controller: _ctrl,
+              autofocus: true,
+              enabled: !_checking,
+              style: TextStyle(color: cs.onSurface),
+              decoration: InputDecoration(
+                hintText: '닉네임',
+                hintStyle: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.3),
+                ),
+                errorText: _errorMsg,
+                filled: true,
+                fillColor: cs.onSurface.withValues(alpha: 0.05),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(
+                    color: Color(0xFF10B981),
+                    width: 1.5,
+                  ),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: _checking ? null : _submit,
+            child: _checking
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFF10B981),
+                    ),
+                  )
+                : const Text(
+                    '확인',
+                    style: TextStyle(
+                      color: Color(0xFF10B981),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: _checking ? null : () => Navigator.pop(context),
-          child: Text(
-            '취소',
-            style: TextStyle(
-              color: isDark ? Colors.white54 : Colors.black45,
-            ),
-          ),
-        ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF10B981),
-            foregroundColor: Colors.black,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-          ),
-          onPressed: _checking ? null : _save,
-          child: _checking
-              ? const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.black,
-                  ),
-                )
-              : const Text('저장', style: TextStyle(fontWeight: FontWeight.w600)),
-        ),
-      ],
     );
   }
 }

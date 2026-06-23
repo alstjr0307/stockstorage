@@ -10,7 +10,6 @@ const { getFirestore, FieldPath } = require('firebase-admin/firestore');
 const https = require('https');
 const axios = require('axios');
 const cheerio = require('cheerio');
-const WebSocket = require('ws');
 const AdmZip = require('adm-zip');
 const eucKrDecoder = new TextDecoder('euc-kr');
 
@@ -829,6 +828,8 @@ let _kisToken = null;
 let _kisTokenExpiry = null;
 let _dartCorpCodeByStockCode = null;
 let _dartCorpCodeFetchedAt = 0;
+const NAVER_RESEARCH_LOOKBACK_DAYS = 90;
+const NAVER_RESEARCH_LOOKBACK_LABEL = '최근 3개월';
 
 async function getKisToken(appKey, appSecret) {
   const now = Date.now();
@@ -990,7 +991,10 @@ async function fetchNaverDomesticValuation(ticker) {
     const now = Date.now();
     const recentResearches = (Array.isArray(data?.researches) ? data.researches : [])
       .map((r) => ({ ...r, parsedDate: parseNaverResearchDate(r?.wdt) }))
-      .filter((r) => r.parsedDate && now - r.parsedDate.getTime() <= 31 * 24 * 60 * 60 * 1000)
+      .filter((r) =>
+        r.parsedDate &&
+        now - r.parsedDate.getTime() <= NAVER_RESEARCH_LOOKBACK_DAYS * 24 * 60 * 60 * 1000
+      )
       .slice(0, 5);
     const reports = (await Promise.all(recentResearches.map(async (r) => {
       try {
@@ -1371,9 +1375,11 @@ function getSecondThursday(year, month) {
   return firstThursday + 7;
 }
 
-// KOSPI200 야간선물 단축코드: A0 + (year-2010 2자리) + 월 2자리
-// 최종거래일(분기 두 번째 목요일) 이후면 다음 분기물로 전환
-function getNightFuturesSymbol() {
+// KOSPI200 정규 선물 근월물 단축코드: A01 + 연(끝1자리) + 월(2자리)
+// (KIS 마스터파일 fo_idx_code_mts.mst 기준. A01=KOSPI200, A06=KOSDAQ150)
+// 분기물(3/6/9/12) 중 최종거래일(둘째 목요일) 안 지난 가장 가까운 월물.
+// 예: getNightFuturesSymbol('A01') = A01609, getNightFuturesSymbol('A06') = A06609
+function getNightFuturesSymbol(prefix = 'A01') {
   const kst = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
   const year = kst.getUTCFullYear();
   const month = kst.getUTCMonth() + 1;
@@ -1398,196 +1404,133 @@ function getNightFuturesSymbol() {
     }
   }
 
-  return `A0${String(expiryYear - 2010).padStart(2, '0')}${String(expiryMonth).padStart(2, '0')}`;
+  return `${prefix}${expiryYear % 10}${String(expiryMonth).padStart(2, '0')}`;
 }
 
-// KIS WebSocket 승인키 발급
+// KIS 실시간 WebSocket 승인키 (12시간 캐시, 웜 인스턴스에서 재사용)
+let _kisApprovalKey = null;
+let _kisApprovalExp = 0;
 async function getKisApprovalKey(appKey, appSecret) {
-  const res = await axios.post(
+  if (_kisApprovalKey && Date.now() < _kisApprovalExp) return _kisApprovalKey;
+  const r = await axios.post(
     'https://openapi.koreainvestment.com:9443/oauth2/Approval',
     { grant_type: 'client_credentials', appkey: appKey, secretkey: appSecret }
   );
-  return res.data.approval_key;
+  _kisApprovalKey = r.data.approval_key;
+  _kisApprovalExp = Date.now() + 12 * 60 * 60 * 1000;
+  return _kisApprovalKey;
 }
 
-// AES-256-CBC 복호화
-function aesDecrypt(encData, key, iv) {
-  const crypto = require('crypto');
-  const decipher = crypto.createDecipheriv(
-    'aes-256-cbc',
-    Buffer.from(key, 'utf8'),
-    Buffer.from(iv, 'utf8'),
-  );
-  let dec = decipher.update(encData, 'base64', 'utf8');
-  dec += decipher.final('utf8');
-  return dec;
-}
-
-// KIS WebSocket으로 야간선물 실시간 체결가 1회 수신 (재시도 포함)
-function fetchViaWebSocket(approvalKey, symbol, timeoutMs = 25000) {
+// KIS 실시간 WebSocket(H0MFCNT0 KRX야간선물체결)으로 라이브 체결 1건 수신.
+// REST(inquire-price)는 야간세션을 추적 못 하고 주간 종가에서 freeze되므로 WS 사용.
+// (서버에서는 실시간 푸시 정상 수신 — 2026-06-22 검증)
+function fetchNightFuturesQuote(appKey, appSecret, symbol, timeoutMs = 12000) {
   return new Promise((resolve, reject) => {
+    const WebSocket = require('ws');
     let settled = false;
-    let aesKey = null;
-    let aesIv = null;
-    const done = (fn, val) => { if (!settled) { settled = true; clearTimeout(timer); try { ws.terminate(); } catch(_){} fn(val); } };
+    let ws;
+    const done = (fn, v) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { ws.terminate(); } catch (_) {}
+      fn(v);
+    };
+    const timer = setTimeout(() => done(reject, new Error('ws timeout')), timeoutMs);
 
-    const timer = setTimeout(() => done(reject, new Error('timeout')), timeoutMs);
-
-    const ws = new WebSocket('ws://ops.koreainvestment.com:21000');
-
-    ws.on('open', () => {
-      console.log('[WS] 연결됨');
-      ws.send(JSON.stringify({
-        header: { approval_key: approvalKey, custtype: 'P', tr_type: '1', 'content-type': 'utf-8' },
-        body: { input: { tr_id: 'H0UPANC0', tr_key: symbol } },
-      }));
-    });
-
-    ws.on('message', (raw) => {
-      const msg = raw.toString();
-      if (msg.startsWith('{')) {
-        try {
-          const json = JSON.parse(msg);
-          if (json.header?.tr_id === 'PINGPONG') { ws.send(msg); return; }
-          if (json.body?.rt_cd === '9' && json.body?.msg_cd === 'OPSP8996') {
-            done(reject, new Error('ALREADY_IN_USE')); return;
-          }
-          // SUBSCRIBE SUCCESS → AES 키 저장
-          if (json.body?.msg1 === 'SUBSCRIBE SUCCESS') {
-            aesKey = json.body?.output?.key;
-            aesIv  = json.body?.output?.iv;
-            console.log('[WS] 구독 성공, 암호화키 수신:', !!aesKey);
-          }
-        } catch (_) {}
-        return;
-      }
-
-      const parts = msg.split('|');
-      console.log('[WS] 파이프메시지:', parts[0], parts[1], parts[2], parts[3]?.slice(0, 60));
-      if (parts.length < 4 || parts[1] !== 'H0UPANC0') return;
-
-      let dataStr = parts[3];
-
-      // 암호화된 경우 복호화
-      if (parts[0] === '1') {
-        if (!aesKey || !aesIv) {
-          console.warn('[WS] 암호화 데이터인데 키 없음');
+    getKisApprovalKey(appKey, appSecret).then((approval) => {
+      ws = new WebSocket('ws://ops.koreainvestment.com:21000');
+      ws.on('open', () => {
+        ws.send(JSON.stringify({
+          header: { approval_key: approval, custtype: 'P', tr_type: '1', 'content-type': 'utf-8' },
+          body: { input: { tr_id: 'H0MFCNT0', tr_key: symbol } },
+        }));
+      });
+      ws.on('message', (raw) => {
+        const m = raw.toString();
+        if (m[0] === '{') {
+          try {
+            const j = JSON.parse(m);
+            if (j.header?.tr_id === 'PINGPONG') ws.send(m);
+          } catch (_) {}
           return;
         }
-        try {
-          dataStr = aesDecrypt(dataStr, aesKey, aesIv);
-        } catch (e) {
-          console.error('[WS] 복호화 실패:', e.message);
-          return;
-        }
-      }
-
-      // 데이터 건수(parts[2])만큼 레코드가 있을 수 있음 → 첫 번째만 사용
-      const firstRecord = dataStr.split('^' + symbol).shift() || dataStr;
-      const fields = firstRecord.split('^');
-      console.log('[WS] fields[0..9]:', fields.slice(0, 10).join(', '));
-
-      // H0UPANC0 필드: 0:단축코드 1:영업일자 2:체결시각 3:현재가 4:전일대비 5:등락률
-      const price = parseFloat(fields[3]);
-      const change = parseFloat(fields[4]);
-      const changeRate = parseFloat(fields[5]);
-      if (!price || price <= 0) {
-        console.warn('[WS] 가격 파싱 실패, fields:', fields.slice(0, 8).join(', '));
-        return;
-      }
-
-      console.log('[WS] 체결가 수신:', price, change, changeRate);
-      done(resolve, { price, change, changeRate });
-    });
-
-    ws.on('error', (e) => { console.error('[WS] 에러:', e.message); done(reject, e); });
+        const p = m.split('|');
+        if (p[1] !== 'H0MFCNT0' || !p[3]) return;
+        // 필드: 0 단축코드 1 시각 2 전일대비 3 부호 4 등락률 5 현재가 ... 10 누적거래량
+        const f = p[3].split('^');
+        const price = parseFloat(f[5]);
+        if (!price || price <= 0) return;
+        const rawChange = parseFloat(f[2]) || 0;
+        const rawRate = parseFloat(f[4]) || 0;
+        const sign = f[3];
+        const dir = sign === '4' || sign === '5' ? -1 : 1; // 4:하락 5:하한
+        done(resolve, {
+          price,
+          change: rawChange === 0 ? 0 : Math.abs(rawChange) * dir,
+          changeRate: rawRate === 0 ? 0 : Math.abs(rawRate) * dir,
+          volume: parseInt(f[10]) || 0,
+        });
+      });
+      ws.on('error', (e) => done(reject, e));
+    }).catch((e) => done(reject, e));
   });
 }
 
-// approvalKey 재발급 후 재시도 포함 fetchViaWebSocket
-async function fetchWithRetry(appKey, appSecret, symbol) {
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const approvalKey = await getKisApprovalKey(appKey, appSecret);
-      const data = await fetchViaWebSocket(approvalKey, symbol, 20000); // 20초
-      return data;
-    } catch (e) {
-      console.error(`[WS] 시도 ${attempt} 실패:`, e.message);
-      if (attempt < 2) {
-        await new Promise(r => setTimeout(r, 1000));
-      } else {
-        throw e;
-      }
-    }
+// 야간선물 시세 1건을 받아 지정 컬렉션에 기록 (매분 호출)
+async function recordNightFuturesTo(db, collection, kst, appKey, appSecret, symbol) {
+  const q = await fetchNightFuturesQuote(appKey, appSecret, symbol);
+  if (!q) return;
+
+  // 매분 기록 (한산해서 시세가 안 움직여도 연속된 차트가 그려지도록).
+  const tsKey = kst.toISOString().slice(0, 16).replace('T', '_');
+  await db.collection(collection).doc(tsKey).set({
+    price: q.price,
+    change: q.change,
+    changeRate: q.changeRate,
+    volume: q.volume,
+    timestamp: new Date(), // 실제 UTC 시각 (기기 시간대 변환 정확)
+    symbol,
+  });
+
+  // 오래된 데이터 정리 (최대 2000개 유지)
+  const old = await db.collection(collection)
+    .orderBy('timestamp', 'desc').offset(2000).limit(100).get();
+  if (!old.empty) {
+    const batch = db.batch();
+    old.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
   }
 }
 
-// ── 야간선물 가격 5분마다 Firestore에 기록 (히스토리 축적) ──────────────────
+// ── 야간선물 가격 1분마다 Firestore에 기록 (KOSPI200 + KOSDAQ150) ────────────
 exports.recordNightFuturesPrice = onSchedule(
-  { schedule: 'every 1 minutes', region: 'asia-northeast3', timeoutSeconds: 60 },
+  { schedule: 'every 1 minutes', region: 'asia-northeast3', timeoutSeconds: 40 },
   async () => {
     const kst = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
     const kstHour = kst.getUTCHours();
-    if (kstHour >= 5 && kstHour < 18) return; // 낮 시간 스킵
+    if (kstHour >= 5 && kstHour < 18) return; // 야간세션(18:00~05:00 KST)만 기록
 
+    const config = await getKisConfig();
+    if (!config) return;
     const db = getFirestore();
-    const snap = await db.collection('_admin').doc('kis').get();
-    if (!snap.exists) return;
 
-    const { appKey, appSecret } = snap.data();
-    const symbol = getNightFuturesSymbol();
-
-    try {
-      const data = await fetchWithRetry(appKey, appSecret, symbol);
-
-      const tsKey = kst.toISOString().slice(0, 16).replace('T', '_');
-      await db.collection('night_futures_prices').doc(tsKey).set({
-        price: data.price,
-        change: data.change,
-        changeRate: data.changeRate,
-        timestamp: kst,
-        symbol,
-      });
-
-      // 7일 이상 된 데이터 정리 (최대 2000개 유지)
-      const old = await db.collection('night_futures_prices')
-        .orderBy('timestamp', 'desc').offset(2000).limit(100).get();
-      if (!old.empty) {
-        const batch = db.batch();
-        old.docs.forEach(d => batch.delete(d.ref));
-        await batch.commit();
+    const targets = [
+      { collection: 'night_futures_prices', symbol: getNightFuturesSymbol('A01') }, // KOSPI200
+      { collection: 'night_futures_prices_kosdaq', symbol: getNightFuturesSymbol('A06') }, // KOSDAQ150
+    ];
+    // WS 세션은 appkey당 1개라 순차 처리. 하나 실패해도 다른 하나는 진행.
+    for (const t of targets) {
+      try {
+        await recordNightFuturesTo(db, t.collection, kst, config.appKey, config.appSecret, t.symbol);
+      } catch (e) {
+        console.warn(`[recordNightFuturesPrice:${t.collection}]`, e.response?.data || e.message);
       }
-    } catch (_) {}
+    }
   }
 );
 
-// ── 야간선물 설정 반환 (approval_key + symbol + 히스토리) ──────────────────
-exports.getKisNightFuturesConfig = onCall(
-  { region: 'asia-northeast3', timeoutSeconds: 15 },
-  async () => {
-    const db = getFirestore();
-    const snap = await db.collection('_admin').doc('kis').get();
-    if (!snap.exists) throw new HttpsError('not-found', 'KIS 설정 없음');
-
-    const { appKey, appSecret } = snap.data();
-    const symbol = getNightFuturesSymbol();
-    const approvalKey = await getKisApprovalKey(appKey, appSecret);
-
-    // 최근 300개 (5분봉 기준 약 25시간)
-    const histSnap = await db.collection('night_futures_prices')
-      .orderBy('timestamp', 'desc').limit(300).get();
-
-    const history = histSnap.docs.reverse().map(d => ({
-      time: d.data().timestamp.toMillis(),
-      price: d.data().price,
-    }));
-
-    return { approvalKey, symbol, history };
-  }
-);
-
-// getKospiNightFutures: WebSocket 없이 Firestore 최신 데이터만 반환
-// (WebSocket은 recordNightFuturesPrice 스케줄러만 사용 — appkey 충돌 방지)
+// getKospiNightFutures: Firestore에 쌓인 최신 야간선물 데이터 1건 반환
 exports.getKospiNightFutures = onCall(
   { region: 'asia-northeast3', timeoutSeconds: 10 },
   async () => {
@@ -1614,6 +1557,12 @@ exports.getKospiNightFutures = onCall(
       sign: d.change >= 0 ? '2' : '4',
     };
   }
+);
+
+// 서버 시각(ms) 반환 — 기기 시계가 틀려도 마켓 시계를 실제 KST로 맞추기 위함
+exports.getServerTime = onCall(
+  { region: 'asia-northeast3', timeoutSeconds: 5 },
+  async () => ({ ms: Date.now() }),
 );
 
 // ── 펨코 주갤 크롤링 공통 로직 ──────────────────────────────────────────────
@@ -1977,6 +1926,36 @@ async function fetchUsMarketData() {
   } catch (_) { return null; }
 }
 
+// 실시간 원/달러 환율 (Yahoo KRW=X) — AI 시황이 검증된 환율 숫자를 쓰도록
+async function fetchUsdKrw() {
+  try {
+    const res = await axios.get(
+      'https://query1.finance.yahoo.com/v8/finance/chart/KRW=X?range=5d&interval=1d',
+      {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        timeout: 8000,
+      }
+    );
+    const result = res.data?.chart?.result?.[0];
+    const meta = result?.meta || {};
+    const closes = (result?.indicators?.quote?.[0]?.close || []).filter(Number.isFinite);
+    const price = Number.isFinite(meta.regularMarketPrice)
+      ? meta.regularMarketPrice
+      : closes.at(-1);
+    if (!Number.isFinite(price) || price <= 0) return null;
+    const prevClose = Number.isFinite(meta.chartPreviousClose)
+      ? meta.chartPreviousClose
+      : (closes.length >= 2 ? closes.at(-2) : null);
+    const change = Number.isFinite(prevClose) ? price - prevClose : null;
+    const changeRate = Number.isFinite(prevClose) && prevClose
+      ? (change / prevClose) * 100
+      : null;
+    return { price, change, changeRate };
+  } catch (_) {
+    return null;
+  }
+}
+
 function getAiBriefSlotMeta(slot) {
   if (slot === '09') {
     return {
@@ -2043,7 +2022,7 @@ async function fetchInvestorFlowSummary(db) {
   } catch (_) { return null; }
 }
 
-function buildAiBriefPrompt(marketData, sectorData, breadthData, investorFlow, news, usMarketData, slot) {
+function buildAiBriefPrompt(marketData, sectorData, breadthData, investorFlow, news, usMarketData, fxData, slot) {
   const { kospi, kosdaq } = marketData;
   const slotMeta = getAiBriefSlotMeta(slot);
 
@@ -2092,6 +2071,14 @@ function buildAiBriefPrompt(marketData, sectorData, breadthData, investorFlow, n
     newsContext = '\n\n[최신 뉴스 헤드라인]\n' + news.map((n, i) => `${i + 1}. ${n.title}`).join('\n');
   }
 
+  let fxContext = '';
+  if (fxData?.price) {
+    const rateStr = fxData.changeRate == null
+      ? ''
+      : ` (${fxData.changeRate >= 0 ? '▲' : '▼'}${Math.abs(fxData.changeRate).toFixed(2)}%, 전일대비 ${fxData.change >= 0 ? '+' : ''}${fxData.change.toFixed(2)}원)`;
+    fxContext = `\n\n[환율 — 실시간 검증값]\n- 원/달러: ${fxData.price.toFixed(2)}원${rateStr}\n- 환율을 언급할 때는 반드시 이 숫자만 사용하고, 뉴스 헤드라인에 다른 환율 숫자가 있어도 무시하세요.`;
+  }
+
   let usContext = '';
   if (usMarketData?.indices?.length) {
     const fmt = usMarketData.indices
@@ -2108,43 +2095,52 @@ ${slotMeta.focus}
 
 [지수]
 - 코스피: ${kospi.price.toLocaleString('ko-KR')}pt (${kospi.isUp ? '▲' : '▼'}${Math.abs(kospi.changeRate).toFixed(2)}%, ${kospi.change >= 0 ? '+' : ''}${kospi.change.toFixed(2)}pt)
-- 코스닥: ${kosdaq.price.toLocaleString('ko-KR')}pt (${kosdaq.isUp ? '▲' : '▼'}${Math.abs(kosdaq.changeRate).toFixed(2)}%, ${kosdaq.change >= 0 ? '+' : ''}${kosdaq.change.toFixed(2)}pt)${usContext}${sectorContext}${breadthContext}${investorContext}${newsContext}
+- 코스닥: ${kosdaq.price.toLocaleString('ko-KR')}pt (${kosdaq.isUp ? '▲' : '▼'}${Math.abs(kosdaq.changeRate).toFixed(2)}%, ${kosdaq.change >= 0 ? '+' : ''}${kosdaq.change.toFixed(2)}pt)${fxContext}${usContext}${sectorContext}${breadthContext}${investorContext}${newsContext}
 
-[작성 형식 — 반드시 아래 4개 문단을 빈 줄로 구분해서 출력]
-
-문단1 (지수 흐름과 배경): 코스피·코스닥의 종가/현재가와 등락률·등락폭 숫자를 그대로 인용하면서, 시간대별 관점에 맞춰 상승·하락 배경을 풀어 쓰세요. 09시는 전일 미국장(S&P 500·NASDAQ·Dow)의 등락률과 핵심 이슈를 국내장 출발과 연결, 12시는 오전 흐름이 어떻게 펼쳐졌는지, 15:30은 종가 기준 마감 결과와 장중 변동성을 정리합니다. 단순히 "상승했습니다/하락했습니다"가 아니라, 어느 정도의 폭으로 어떤 분위기였는지 가늠되게 서술하세요. 3~4문장.
-
-문단2 (업종 색깔): 제공된 [업종 등락] 데이터의 상승 업종 2개와 하락 업종 2개를 등락률 숫자와 함께 구체적으로 언급하고, "왜 이쪽이 강하고 저쪽이 약한지" 뉴스/매크로 흐름과 자연스럽게 엮어 설명하세요. KOSPI와 KOSDAQ의 업종 색깔이 다르면 그 대조도 짚어 주세요. 업종명은 제공된 데이터에 있는 것만 사용하고, 데이터에 없는 업종을 만들어내지 마세요. 3~4문장.
-
-문단3 (수급과 시장 폭): [매매동향] 데이터의 외국인·기관(가능하면 개인) 순매수 금액(억원)을 인용하면서 매수 주체가 어디인지 명시하세요. 12시·15:30 슬롯이면 [시장 폭: ETF/ETN 제외]의 KOSPI·KOSDAQ 상승/하락 종목 수를 그대로 인용해 "지수는 ○○했지만 종목 분포는 ○○"식의 시장 폭 코멘트를 한 문장 이상 넣어 주세요. 09시 슬롯이고 매매동향·시장 폭 데이터가 없으면 환율·금리·전일 미국장 수급 톤 등 거시 배경을 대신 다루세요. 3~4문장.
-
-문단4 (정리와 체크포인트): 시간대에 맞춰 마무리합니다. 09시는 개장 초 지켜볼 이슈와 키 레벨, 12시는 오후장에서 이어질 변수, 15:30은 하루 정리와 다음 거래일에 봐야 할 포인트로 마무리하세요. 뉴스 헤드라인이 있으면 구체 키워드(미국증시, S&P500, 환율, 금리, 실적, FOMC 등)를 자연스럽게 녹이되, "투자심리에 우호적/부정적", "작용했습니다"처럼 딱딱하거나 단정적인 표현은 피하고 "거론됐습니다", "눈에 띄었습니다", "관전 포인트로 꼽힙니다"처럼 부드럽게 쓰세요. 단순 헤드라인 나열은 금지. 3~4문장.
-
-[공통 규칙]
-- 4개 문단, 각 3~4문장, 전체 분량은 약 500~700자
-- 등락률·등락폭·수급 금액·종목 수 등 제공된 숫자는 반드시 본문에 등장시킬 것 (인용 부호 없이 자연스럽게)
-- 반드시 높임말(~습니다/~네요/~보입니다) 사용
-- 사실 기반 서술만, 투자 권유·매수/매도 추천·미래 단정 예측 금지
-- 제공된 데이터에 없는 종목명·업종명·지표는 만들어내지 말 것
-- 각 문장은 마침표로 끝낼 것
-- "오늘은", "현재" 같은 막연한 도입부로 시작하지 말 것
-
-4개 문단만 출력하세요 (제목·번호·머리말 없이, 문단 사이 빈 줄 하나로 구분):`;
+[출력 형식 — 아래 JSON 객체 하나만 출력. 코드펜스(\`\`\`)나 설명 문구 없이 순수 JSON만]
+{
+  "summary": "오늘 장 분위기를 한 문장으로 압축 (40자 이내, ~습니다 체)",
+  "news": [
+    { "headline": "핵심 뉴스·이슈 제목 (간결하게, 20자 내외)", "detail": "왜 중요한지와 시장 영향 1~2문장" }
+  ],
+  "index": "지수 시황: 코스피·코스닥의 종가/현재가와 등락률·등락폭 숫자를 인용하며 시간대 관점에 맞춰 상승·하락 배경을 3~4문장으로. 09시는 전일 미국장(S&P500·NASDAQ·Dow) 연결, 12시는 오전 흐름, 15:30은 마감 결과와 장중 변동성.",
+  "sector": "업종별 분석: [업종 등락] 데이터의 상승 업종 2개·하락 업종 2개를 등락률 숫자와 함께 짚고 강약 이유를 뉴스/매크로와 엮어 3~4문장. 데이터에 있는 업종명만 사용.",
+  "flow": "수급·시장 폭: [매매동향]의 외국인·기관(가능하면 개인) 순매수 금액(억원)과, 있으면 [시장 폭]의 상승/하락 종목 수를 인용해 2~3문장. 09시이고 데이터가 없으면 환율·금리·전일 미국장 톤 등 거시 배경으로 대체.",
+  "checkpoint": "체크포인트: 시간대에 맞춘 마무리와 다음에 봐야 할 포인트 2~3문장."
 }
 
-async function generateBriefWithOpenAi(apiKey, marketData, sectorData, breadthData, investorFlow, news, usMarketData, slot) {
-  const prompt = buildAiBriefPrompt(marketData, sectorData, breadthData, investorFlow, news, usMarketData, slot);
+[news 작성 규칙]
+- [최신 뉴스 헤드라인]에서 가장 중요한 3~4개를 골라 headline+detail로 정리하세요.
+- 헤드라인이 제공되지 않았으면 news는 빈 배열 []로 두세요. 뉴스를 지어내지 마세요.
+
+[공통 규칙]
+- 등락률·등락폭·수급 금액·종목 수 등 제공된 숫자는 반드시 본문에 등장시킬 것 (인용 부호 없이 자연스럽게)
+- 반드시 높임말(~습니다/~네요/~보입니다) 사용, 각 문장은 마침표로 끝낼 것
+- 사실 기반 서술만, 투자 권유·매수/매도 추천·미래 단정 예측 금지
+- 제공된 데이터에 없는 종목명·업종명·지표는 만들어내지 말 것
+- "투자심리에 우호적/부정적", "작용했습니다"처럼 단정적 표현 대신 "거론됐습니다", "눈에 띄었습니다", "관전 포인트로 꼽힙니다"처럼 부드럽게
+- "오늘은", "현재" 같은 막연한 도입부 금지
+- 각 필드 값은 본문만 작성하고, "업종별 분석:", "지수 시황:", "수급:", "체크포인트:" 같은 카테고리명·소제목을 값 앞에 절대 붙이지 말 것
+
+위 JSON 객체 하나만 출력하세요:`;
+}
+
+async function generateBriefWithOpenAi(apiKey, marketData, sectorData, breadthData, investorFlow, news, usMarketData, fxData, slot) {
+  const prompt = buildAiBriefPrompt(marketData, sectorData, breadthData, investorFlow, news, usMarketData, fxData, slot);
+
+  // 시크릿 값에 BOM/제로폭 문자가 섞여 있으면 헤더 변환이 깨지므로 정제
+  const cleanKey = String(apiKey).replace(/[﻿​\r\n\t]/g, '').trim();
 
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${apiKey}`,
+      'Authorization': `Bearer ${cleanKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       model: 'gpt-5-mini',
       input: prompt,
-      max_output_tokens: 2000,
+      max_output_tokens: 2800,
       reasoning: { effort: 'low' },
       text: { verbosity: 'medium' },
     }),
@@ -2164,7 +2160,62 @@ async function generateBriefWithOpenAi(apiKey, marketData, sectorData, breadthDa
     .trim();
 
   if (!text) throw new Error('[AiBrief] OpenAI 응답이 비어 있습니다.');
-  return text;
+
+  // JSON 카테고리 파싱 (실패 시 전체를 지수시황 텍스트로 폴백)
+  let sections;
+  try {
+    const obj = extractJsonObject(text);
+    const news = Array.isArray(obj.news)
+      ? obj.news
+          .map((n) => ({
+            headline: String(n?.headline || '').trim(),
+            detail: String(n?.detail || '').trim(),
+          }))
+          .filter((n) => n.headline)
+          .slice(0, 5)
+      : [];
+    sections = {
+      summary: stripLeadingLabel(obj.summary),
+      news,
+      index: stripLeadingLabel(obj.index),
+      sector: stripLeadingLabel(obj.sector),
+      flow: stripLeadingLabel(obj.flow),
+      checkpoint: stripLeadingLabel(obj.checkpoint),
+    };
+  } catch (e) {
+    console.warn('[AiBrief] JSON 파싱 실패, 텍스트 폴백:', e.message);
+    sections = { summary: '', news: [], index: text, sector: '', flow: '', checkpoint: '' };
+  }
+
+  return { sections, brief: sectionsToBrief(sections) };
+}
+
+// 각 섹션 본문 앞에 모델이 붙인 카테고리 소제목("업종별 분석:" 등) 제거
+function stripLeadingLabel(value) {
+  let t = String(value || '').trim();
+  const labels = [
+    '주요뉴스', '지수 시황', '지수시황', '업종별 분석', '업종 분석', '업종별분석',
+    '수급·시장 폭', '수급 시장 폭', '수급·시장폭', '수급', '시장 폭', '체크포인트', '요약',
+  ];
+  for (const l of labels) {
+    const re = new RegExp('^' + l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*[:：]\\s*');
+    if (re.test(t)) { t = t.replace(re, ''); break; }
+  }
+  return t.trim();
+}
+
+// 카테고리 → 단일 텍스트 (하위호환 brief 필드용)
+function sectionsToBrief(s) {
+  const parts = [];
+  if (s.summary) parts.push(s.summary);
+  if (Array.isArray(s.news) && s.news.length) {
+    parts.push('[주요뉴스]\n' + s.news.map((n) => `· ${n.headline}: ${n.detail}`).join('\n'));
+  }
+  if (s.index) parts.push('[지수 시황]\n' + s.index);
+  if (s.sector) parts.push('[업종별 분석]\n' + s.sector);
+  if (s.flow) parts.push('[수급]\n' + s.flow);
+  if (s.checkpoint) parts.push('[체크포인트]\n' + s.checkpoint);
+  return parts.join('\n\n');
 }
 
 async function runAiBriefGeneration(apiKey, slot) {
@@ -2210,24 +2261,26 @@ async function runAiBriefGeneration(apiKey, slot) {
     console.error('[AiBrief] fetchMarketData 실패 — 시황 생성 중단:', e.message);
     throw e;
   }
-  const [sectorData, breadthData, investorFlow, news, usMarketData] = await Promise.all([
+  const [sectorData, breadthData, investorFlow, news, usMarketData, fxData] = await Promise.all([
     fetchSectorData(),
     fetchMarketBreadth(),
     fetchInvestorFlowSummary(db),
     fetchMarketNews(),
     fetchUsMarketData(),
+    fetchUsdKrw(),
   ]);
 
   const marketClosed = getMarketClosedInfo(marketData);
   if (marketClosed) return saveMarketClosedBrief(marketClosed, marketData);
 
-  const brief = await generateBriefWithOpenAi(apiKey, marketData, sectorData, breadthData, investorFlow, news, usMarketData, slot);
+  const { sections, brief } = await generateBriefWithOpenAi(apiKey, marketData, sectorData, breadthData, investorFlow, news, usMarketData, fxData, slot);
 
   const slotLabel = getAiBriefSlotMeta(slot).timeLabel;
   const payload = {
-    brief, slot, slotLabel, date: dateKey,
+    brief, sections, slot, slotLabel, date: dateKey,
     kospi: marketData.kospi, kosdaq: marketData.kosdaq,
     sectors: sectorData ?? null,
+    fx: fxData ?? null,
     generatedAt: new Date(),
   };
 
@@ -3187,6 +3240,8 @@ function freeDailyAiLimit(level) {
 async function hasRevenueCatPremium(uid, secretApiKey) {
   const apiKey = (secretApiKey || '').trim();
   if (!apiKey) return false;
+  // 분석 호출의 임계 경로 — 재시도로 지연이 길어지면 클라이언트 콜러블이
+  // 재전송해 이중 차감이 생길 수 있으므로 단일 시도로 둔다. 타임아웃은 8s.
   try {
     const response = await axios.get(
       `https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(uid)}`,
@@ -3195,7 +3250,7 @@ async function hasRevenueCatPremium(uid, secretApiKey) {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        timeout: 5000,
+        timeout: 8000,
       }
     );
     const premium = response.data?.subscriber?.entitlements?.premium;
@@ -3229,34 +3284,42 @@ async function isAdminUid(uid) {
   }
 }
 
-async function consumeStockAiAnalysisQuota(uid, revenueCatSecretApiKey) {
+async function consumeStockAiAnalysisQuota(uid, revenueCatSecretApiKey, requestId) {
   if (await isAdminUid(uid)) return null;
   const db = getFirestore();
   const isPremium = await hasRevenueCatPremium(uid, revenueCatSecretApiKey);
   const dateKey = seoulDateKey();
   const quotaRef = db.collection('users').doc(uid).collection('ai_quota').doc(dateKey);
   const publicRef = db.collection('user_public').doc(uid);
+  const reqId = (requestId || '').toString().trim().slice(0, 64);
 
   await db.runTransaction(async (tx) => {
     const [quotaSnap, publicSnap] = await Promise.all([
       tx.get(quotaRef),
       tx.get(publicRef),
     ]);
-    const used = Number(quotaSnap.data()?.count || 0);
+    const data = quotaSnap.data() || {};
+    const recent = Array.isArray(data.recentRequestIds) ? data.recentRequestIds : [];
+    // 같은 requestId가 이미 차감됐으면(전송 재시도/이중 호출) 재차감하지 않는다.
+    if (reqId && recent.includes(reqId)) return;
+    const used = Number(data.count || 0);
     const level = Number(publicSnap.data()?.level || 1);
-    const limit = isPremium ? 3 : freeDailyAiLimit(level);
+    const limit = isPremium ? 5 : freeDailyAiLimit(level);
     if (used >= limit) {
       throw new HttpsError(
         'resource-exhausted',
         isPremium
-          ? '프리미엄 AI 분석은 하루 3회까지 사용할 수 있습니다.'
+          ? '프리미엄 AI 분석은 하루 5회까지 사용할 수 있습니다.'
           : `현재 레벨에서는 AI 분석을 하루 ${limit}회까지 사용할 수 있습니다.`
       );
     }
+    // 최근 requestId를 최대 20개까지만 보관(멱등성 판단용).
+    const nextRecent = reqId ? [...recent, reqId].slice(-20) : recent;
     tx.set(
       quotaRef,
       {
         count: used + 1,
+        recentRequestIds: nextRecent,
         updatedAt: new Date(),
         lastAccess: isPremium ? 'premium' : 'free',
       },
@@ -3266,18 +3329,27 @@ async function consumeStockAiAnalysisQuota(uid, revenueCatSecretApiKey) {
   return dateKey;
 }
 
-async function refundStockAiAnalysisQuota(uid, dateKey) {
+async function refundStockAiAnalysisQuota(uid, dateKey, requestId) {
   if (!uid || !dateKey) return;
+  const reqId = (requestId || '').toString().trim().slice(0, 64);
   try {
     const db = getFirestore();
     const quotaRef = db.collection('users').doc(uid).collection('ai_quota').doc(dateKey);
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(quotaRef);
-      const used = Number(snap.data()?.count || 0);
+      const data = snap.data() || {};
+      const recent = Array.isArray(data.recentRequestIds) ? data.recentRequestIds : [];
+      // requestId가 있는데 차감 기록이 없으면(중복 환불/차감 안 됨) 환불하지 않는다.
+      if (reqId && !recent.includes(reqId)) return;
+      const used = Number(data.count || 0);
       if (used <= 0) return;
       tx.set(
         quotaRef,
-        { count: used - 1, updatedAt: new Date() },
+        {
+          count: used - 1,
+          recentRequestIds: reqId ? recent.filter((id) => id !== reqId) : recent,
+          updatedAt: new Date(),
+        },
         { merge: true }
       );
     });
@@ -3311,9 +3383,11 @@ exports.generateStockAiAnalysis = onCall(
     if (!ticker || !name) {
       throw new HttpsError('invalid-argument', '종목명과 티커가 필요합니다.');
     }
+    const requestId = clampStockAnalysisInput(data.requestId, 64);
     const quotaDateKey = await consumeStockAiAnalysisQuota(
       request.auth.uid,
-      REVENUECAT_SECRET_API_KEY.value()
+      REVENUECAT_SECRET_API_KEY.value(),
+      requestId
     );
     try {
     const isDomesticStock = /^\d{6}$/.test(ticker) && ['KS', 'KQ'].includes(market.toUpperCase());
@@ -3381,7 +3455,7 @@ exports.generateStockAiAnalysis = onCall(
       ? naverValuation.reports.map((r, i) =>
           `${i + 1}. ${r.date} ${r.broker} "${r.title}" / 의견 ${r.opinion || 'N/A'} / 목표가 ${Number.isFinite(r.targetPrice) ? `${r.targetPrice.toLocaleString('ko-KR')}원` : '미제공'}`,
         ).join('\n')
-      : '- 최근 1개월 증권사 리포트: 미수집';
+      : `- ${NAVER_RESEARCH_LOOKBACK_LABEL} 증권사 리포트: 미수집`;
 
     const epsTimelineLines = Array.isArray(epsTimeline) && epsTimeline.length
       ? epsTimeline
@@ -3410,8 +3484,8 @@ exports.generateStockAiAnalysis = onCall(
     const investorFlowLines = investorFlow
       ? [
           `- 기준일: ${investorFlow.marketDate}`,
-          `- 외국인 순매수 TOP5 포함 여부: ${investorFlow.foreign ? `${investorFlow.foreign.rank}위, ${investorFlow.foreign.amountText}` : '미포함'}`,
-          `- 기관 순매수 TOP5 포함 여부: ${investorFlow.institution ? `${investorFlow.institution.rank}위, ${investorFlow.institution.amountText}` : '미포함'}`,
+          `- 외국인 순매수 상위(TOP20) 포함 여부: ${investorFlow.foreign ? `${investorFlow.foreign.rank}위, ${investorFlow.foreign.amountText}` : '미포함'}`,
+          `- 기관 순매수 상위(TOP20) 포함 여부: ${investorFlow.institution ? `${investorFlow.institution.rank}위, ${investorFlow.institution.amountText}` : '미포함'}`,
         ].join('\n')
       : '- 수급 스냅샷: 미수집';
 
@@ -3525,7 +3599,7 @@ ${kisLines}
 [네이버 밸류에이션/동종업계 스냅샷]
 ${naverValuationLines}
 
-[최근 1개월 증권사 리포트]
+[${NAVER_RESEARCH_LOOKBACK_LABEL} 증권사 리포트]
 ${naverReportLines}
 
 [연도별 EPS·PER 컨센서스 시계열 (오래된 → 최신)]
@@ -4303,7 +4377,7 @@ actionReason은 "단정적 매수·매도 권유"로 들리지 않되 방향은 
 
     return payload;
     } catch (err) {
-      await refundStockAiAnalysisQuota(request.auth.uid, quotaDateKey);
+      await refundStockAiAnalysisQuota(request.auth.uid, quotaDateKey, requestId);
       throw err;
     }
   }

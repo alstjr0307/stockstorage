@@ -177,7 +177,7 @@ async function fetchTop5FromNaver(config) {
   });
 
   return {
-    items: rows.slice(0, 5).map((item, index) => ({
+    items: rows.slice(0, 20).map((item, index) => ({
       rank: index + 1,
       ...item,
     })),

@@ -184,6 +184,25 @@ class FirestoreService {
     });
   }
 
+  /// 공개 레벨 + 프리미엄 뱃지 (다른 유저 아바타 왕관 표시용).
+  Stream<({int level, bool premium})> watchPublicUserBadge(String uid) {
+    if (uid.isEmpty) return Stream.value((level: 1, premium: false));
+    return _db.collection('user_public').doc(uid).snapshots().map((doc) {
+      final data = doc.data();
+      final level = (data?['level'] as num?)?.toInt() ?? 1;
+      return (level: level, premium: data?['isPremium'] == true);
+    });
+  }
+
+  /// 내 프리미엄 상태를 공개 프로필에 미러링 (구독 변동 시 호출).
+  Future<void> setPublicPremium(String uid, bool isPremium) async {
+    if (uid.isEmpty) return;
+    await _db
+        .collection('user_public')
+        .doc(uid)
+        .set({'isPremium': isPremium}, SetOptions(merge: true));
+  }
+
   Future<void> syncUserContributionStats(String uid) async {
     if (uid.isEmpty) return;
 
@@ -2069,7 +2088,9 @@ class FirestoreService {
   }
 
   Future<void> createPost(Post post) async {
-    await _db.collection('posts').add(post.toFirestore());
+    final data = post.toFirestore();
+    data['createdAt'] = FieldValue.serverTimestamp();
+    await _db.collection('posts').add(data);
     await recordPostCreated(post.uid);
   }
 

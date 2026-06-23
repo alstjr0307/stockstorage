@@ -1,9 +1,12 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/market_feature_stock.dart';
 import '../services/firestore_service.dart';
+import '../services/stock_price_service.dart';
 import 'market_feature_stock_detail_screen.dart';
+import 'stock_detail_screen.dart';
 
 // ── Design tokens ─────────────────────────────────────────────────────────
 const _kAccent = Color(0xFF00D68F); // 20일선 회복
@@ -138,6 +141,18 @@ class _MarketFeatureStocksScreenState extends State<MarketFeatureStocksScreen> {
       group: 'high_breakout',
       description: '최근 고점 또는 신고가 구간을 돌파한 종목입니다.',
     ),
+    _FeatureStockFilter(
+      '외인 순매수',
+      group: 'foreign_net_buy',
+      investorType: 'foreign',
+      description: '장 마감 기준 외국인 순매수 금액 상위 20개 종목입니다. (KOSPI·KOSDAQ 합산)',
+    ),
+    _FeatureStockFilter(
+      '기관 순매수',
+      group: 'institution_net_buy',
+      investorType: 'institution',
+      description: '장 마감 기준 기관 순매수 금액 상위 20개 종목입니다. (KOSPI·KOSDAQ 합산)',
+    ),
   ];
 
   @override
@@ -209,7 +224,14 @@ class _MarketFeatureStocksScreenState extends State<MarketFeatureStocksScreen> {
         ),
         body: TabBarView(
           children: [
-            for (final filter in _filters) _FeatureStockList(filter: filter),
+            for (final filter in _filters)
+              if (filter.investorType != null)
+                _InvestorNetBuyList(
+                  investorType: filter.investorType!,
+                  tabLabel: filter.label,
+                )
+              else
+                _FeatureStockList(filter: filter),
           ],
         ),
       ),
@@ -243,6 +265,16 @@ void _showFeatureInfoDialog(BuildContext context) {
             _InfoLine(title: '거래량 급증', body: '평소보다 거래량과 거래대금이 동시에 튄 종목입니다.'),
             SizedBox(height: 10),
             _InfoLine(title: '신고가/전고점', body: '최근 고점 또는 신고가 구간을 돌파한 종목입니다.'),
+            SizedBox(height: 10),
+            _InfoLine(
+              title: '외인 순매수',
+              body: '장 마감 기준 외국인이 가장 많이 순매수한 상위 20개 종목입니다.',
+            ),
+            SizedBox(height: 10),
+            _InfoLine(
+              title: '기관 순매수',
+              body: '장 마감 기준 기관이 가장 많이 순매수한 상위 20개 종목입니다.',
+            ),
           ],
         ),
       ),
@@ -296,11 +328,15 @@ class _FeatureStockFilter {
     this.label, {
     required this.group,
     required this.description,
+    this.investorType,
   });
 
   final String label;
   final String group;
   final String description;
+
+  /// 'foreign' | 'institution' 이면 market_investor_flow 수급 데이터를 사용한다.
+  final String? investorType;
 }
 
 // ── List widget per tab ───────────────────────────────────────────────────
@@ -1003,6 +1039,359 @@ class _ChangeRateBadge extends StatelessWidget {
           color: color,
           fontSize: 12,
           fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+// ── 외인/기관 순매수 상위 20 (market_investor_flow) ────────────────────────
+class _InvestorNetBuyList extends StatelessWidget {
+  const _InvestorNetBuyList({
+    required this.investorType,
+    required this.tabLabel,
+  });
+
+  final String investorType; // 'foreign' | 'institution'
+  final String tabLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final accent = investorType == 'foreign'
+        ? const Color(0xFF3182F6)
+        : const Color(0xFFEA580C);
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('market_investor_flow')
+          .orderBy('marketDate', descending: true)
+          .limit(1)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: Color(0xFF3182F6)),
+          );
+        }
+        final doc = snapshot.data?.docs.isNotEmpty == true
+            ? snapshot.data!.docs.first
+            : null;
+        if (doc == null) {
+          return _centerMessage(context, '아직 수급 데이터가 없습니다.');
+        }
+        final data = doc.data();
+        final marketDate = (data['marketDate'] as String?) ?? '-';
+        final items = _collectNetBuy(data, investorType);
+        if (items.isEmpty) {
+          return _centerMessage(context, '$tabLabel 데이터가 없습니다.');
+        }
+
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '$tabLabel ',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface.withValues(alpha: 0.55),
+                    ),
+                  ),
+                  Text(
+                    '${items.length}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                  Text(
+                    '개',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface.withValues(alpha: 0.55),
+                    ),
+                  ),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cs.onSurface.withValues(alpha: 0.06),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: cs.onSurface.withValues(alpha: 0.1),
+                      ),
+                    ),
+                    child: Text(
+                      marketDate,
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.only(bottom: 96),
+                itemCount: items.length,
+                itemBuilder: (context, i) =>
+                    _NetBuyRow(entry: items[i], rank: i + 1, accent: accent),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _centerMessage(BuildContext context, String text) {
+    final cs = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.42),
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+List<_NetBuyEntry> _collectNetBuy(Map<String, dynamic> data, String type) {
+  final key = type == 'foreign' ? 'foreignTop5' : 'institutionTop5';
+  final out = <_NetBuyEntry>[];
+  for (final entry in const [
+    ('kospi', 'KS', 'KOSPI'),
+    ('kosdaq', 'KQ', 'KOSDAQ'),
+  ]) {
+    final market = Map<String, dynamic>.from(
+      (data[entry.$1] as Map?) ?? const {},
+    );
+    final list = (market[key] as List?) ?? const [];
+    for (final raw in list.whereType<Map>()) {
+      final item = Map<String, dynamic>.from(raw);
+      final amount = item['amount'] as num?;
+      out.add(
+        _NetBuyEntry(
+          name: (item['name'] as String?)?.trim() ?? '-',
+          ticker:
+              (item['ticker'] as String?)?.trim() ??
+              (item['code'] as String?)?.trim(),
+          amount: amount,
+          marketCode: entry.$2,
+          marketLabel: entry.$3,
+        ),
+      );
+    }
+  }
+  out.sort((a, b) => (b.amount ?? 0).compareTo(a.amount ?? 0));
+  return out.take(20).toList();
+}
+
+class _NetBuyEntry {
+  const _NetBuyEntry({
+    required this.name,
+    required this.amount,
+    required this.marketCode,
+    required this.marketLabel,
+    this.ticker,
+  });
+
+  final String name;
+  final num? amount;
+  final String marketCode;
+  final String marketLabel;
+  final String? ticker;
+
+  // amount 단위는 백만원 → 억 환산.
+  String get amountEokText {
+    if (amount == null) return '-';
+    final eok = amount! / 100;
+    return eok >= 100
+        ? '+${NumberFormat('#,###').format(eok.round())}억'
+        : '+${eok.toStringAsFixed(1)}억';
+  }
+}
+
+class _NetBuyRow extends StatelessWidget {
+  const _NetBuyRow({
+    required this.entry,
+    required this.rank,
+    required this.accent,
+  });
+
+  final _NetBuyEntry entry;
+  final int rank;
+  final Color accent;
+
+  Future<void> _openDetail(BuildContext context) async {
+    final query = (entry.ticker ?? entry.name).trim();
+    if (query.isEmpty || query == '-') return;
+    try {
+      final results = await StockPriceService.searchStocks(query);
+      final sameMarket = results
+          .where(
+            (r) => r.market.toUpperCase() == entry.marketCode.toUpperCase(),
+          )
+          .toList();
+      final exactTicker = sameMarket.where(
+        (r) =>
+            entry.ticker != null &&
+            r.ticker.toUpperCase() == entry.ticker!.toUpperCase(),
+      );
+      final exactName = sameMarket.where((r) => r.name == entry.name);
+      final match = exactTicker.isNotEmpty
+          ? exactTicker.first
+          : exactName.isNotEmpty
+          ? exactName.first
+          : sameMarket.isNotEmpty
+          ? sameMarket.first
+          : (results.isNotEmpty ? results.first : null);
+
+      if (!context.mounted) return;
+      if (match == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('종목 정보를 찾지 못했습니다.')));
+        return;
+      }
+      Navigator.push(
+        context,
+        stockDetailRoute(
+          stockPickFromSearchResult(
+            match,
+            reason: '외인·기관 수급에서 선택한 종목입니다.',
+            category: '수급',
+          ),
+          enablePickFeatures: false,
+        ),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('종목 정보를 불러오지 못했습니다.')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: () => _openDetail(context),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(color: accent.withValues(alpha: 0.75), width: 3),
+            bottom: BorderSide(color: cs.onSurface.withValues(alpha: 0.07)),
+          ),
+        ),
+        padding: const EdgeInsets.fromLTRB(16, 16, 18, 16),
+        child: Row(
+          children: [
+            Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '$rank',
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(
+                        entry.marketLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: cs.onSurface.withValues(alpha: 0.45),
+                        ),
+                      ),
+                      if (entry.ticker != null) ...[
+                        const SizedBox(width: 6),
+                        Text(
+                          entry.ticker!,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurface.withValues(alpha: 0.38),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                entry.amountEokText,
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

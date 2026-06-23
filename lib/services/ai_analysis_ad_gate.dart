@@ -7,6 +7,14 @@ import 'auth_service.dart';
 import 'firestore_service.dart';
 import 'subscription_service.dart';
 
+class _QuotaFlight {
+  _QuotaFlight(this.token, this.expectedUsed);
+
+  final int token;
+  final int expectedUsed;
+  bool reflectedInServer = false;
+}
+
 /// 새 AI 분석을 실행하기 전 광고 + 쿼터 게이트.
 /// 어느 진입점(목록 FAB / 종목 상세 / 재분석 버튼)에서든 동일하게 사용.
 class AiAnalysisAdGate {
@@ -21,11 +29,52 @@ class AiAnalysisAdGate {
   /// 일일 쿼터 시스템이 활성화되어 있는지 여부. UI(쿼터 배너 등)는 이 값으로 분기.
   static bool get isQuotaActive => !_bypassQuota && !_bypassAll;
 
+  /// 서버 카운터 반영 전의 진행 중 분석을 낙관적으로 반영한다.
+  ///
+  /// 단순히 `serverUsed + inFlight`로 계산하면 서버 count가 이미 올라간 뒤에도
+  /// 진행 중 분석을 한 번 더 더해 로컬에서 2회 차감처럼 보인다. 대신 각 실행이
+  /// 만들 것으로 예상되는 최소 used 값을 floor로 들고 있다가, 서버 count가 그
+  /// 값에 도달하면 더 이상 별도로 더하지 않는다.
+  static int? _nextStartExpectedUsed;
+  static int _nextFlightId = 0;
+  static final List<_QuotaFlight> _inFlight = [];
+
+  static void _reserveNextStart(int currentEffectiveUsed) {
+    _nextStartExpectedUsed = currentEffectiveUsed + 1;
+  }
+
+  static int _effectiveUsed(int serverUsed) {
+    var effective = serverUsed;
+    for (final flight in _inFlight) {
+      if (serverUsed >= flight.expectedUsed) {
+        flight.reflectedInServer = true;
+      }
+      if (!flight.reflectedInServer && flight.expectedUsed > effective) {
+        effective = flight.expectedUsed;
+      }
+    }
+    return effective;
+  }
+
+  static int? markStarted() {
+    final expectedUsed = _nextStartExpectedUsed;
+    _nextStartExpectedUsed = null;
+    if (expectedUsed == null) return null;
+
+    final token = ++_nextFlightId;
+    _inFlight.add(_QuotaFlight(token, expectedUsed));
+    return token;
+  }
+
+  static void markFinished([int? token]) {
+    if (token == null) return;
+    _inFlight.removeWhere((flight) => flight.token == token);
+  }
+
   /// 진행 가능하면 true. 릴리즈 빌드에서 관리자는 우회(디버그에서는 테스트 광고 확인을 위해 정상 진행).
   static Future<bool> run(BuildContext context, String uid) async {
     if (_bypassAll) return true;
-    final isAdmin =
-        AdService.isAdmin || AuthService.adminUids.contains(uid);
+    final isAdmin = AdService.isAdmin || AuthService.adminUids.contains(uid);
     if (isAdmin && !kDebugMode) return true;
 
     final firestore = FirestoreService();
@@ -38,19 +87,31 @@ class AiAnalysisAdGate {
     int limit = 0;
     // 운영자는 디버그 빌드에서도 쿼터 검사를 건너뛴다 (광고 노출만 정상 진행).
     if (!_bypassQuota && !isAdmin) {
-      used = await quota.getUsedToday(uid);
+      used = _effectiveUsed(await quota.getUsedToday(uid));
       limit = isPremium
           ? SubscriptionService.premiumDailyAiLimit
           : AiAnalysisQuotaService.dailyLimitForLevel(level);
       if (!context.mounted) return false;
       if (used >= limit) {
-        await _showQuotaExhausted(context, level: level, limit: limit);
+        await _showQuotaExhausted(
+          context,
+          level: level,
+          limit: limit,
+          isPremium: isPremium,
+        );
         return false;
       }
     }
 
     if (!context.mounted) return false;
-    if (isPremium) return true;
+    // 관리자는 무제한 — 확인 팝업 없이 통과.
+    if (isAdmin) return true;
+    // 프리미엄: 광고는 없지만 남은 횟수를 안내하고 시작 여부를 확인.
+    if (isPremium) {
+      final ok = await _showPremiumConfirm(context, used: used, limit: limit);
+      if (ok == true) _reserveNextStart(used);
+      return ok == true;
+    }
 
     final confirmed = await _showConfirm(
       context,
@@ -81,16 +142,20 @@ class AiAnalysisAdGate {
     );
     dismissLoadingIfShown();
 
-    if (result == RewardedAdResult.rewarded) return true;
+    if (result == RewardedAdResult.rewarded) {
+      _reserveNextStart(used);
+      return true;
+    }
 
     if (context.mounted) {
       final message = switch (result) {
-        RewardedAdResult.failedToLoad =>
-          '지금 광고를 불러올 수 없어요. 잠시 후 다시 시도해주세요.',
+        RewardedAdResult.failedToLoad => '지금 광고를 불러올 수 없어요. 잠시 후 다시 시도해주세요.',
         RewardedAdResult.dismissedEarly => '광고를 끝까지 시청해야 분석을 시작할 수 있어요.',
         RewardedAdResult.rewarded => '',
       };
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
     return false;
   }
@@ -235,10 +300,107 @@ class AiAnalysisAdGate {
     );
   }
 
+  static Future<bool?> _showPremiumConfirm(
+    BuildContext context, {
+    required int used,
+    required int limit,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final remaining = limit - used;
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1A2035) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            const Icon(
+              Icons.workspace_premium,
+              color: Color(0xFFFBBF24),
+              size: 22,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'AI 분석 시작',
+              style: TextStyle(
+                color: isDark ? Colors.white : Colors.black87,
+                fontWeight: FontWeight.w800,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '프리미엄 회원은 광고 없이 바로 분석을 시작합니다.',
+              style: TextStyle(
+                color: isDark ? Colors.white70 : Colors.black54,
+                fontSize: 13.5,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFBBF24).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.calendar_today,
+                    size: 14,
+                    color: Color(0xFFD97706),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '오늘 남은 횟수 $remaining / $limit회',
+                      style: const TextStyle(
+                        color: Color(0xFFD97706),
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              '취소',
+              style: TextStyle(color: isDark ? Colors.white54 : Colors.black45),
+            ),
+          ),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF10B981),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.auto_awesome, size: 18),
+            label: const Text(
+              '분석 시작',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   static Future<void> _showQuotaExhausted(
     BuildContext context, {
     required int level,
     required int limit,
+    bool isPremium = false,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return showDialog(
@@ -255,9 +417,12 @@ class AiAnalysisAdGate {
           ),
         ),
         content: Text(
-          '현재 Lv.$level 기준 하루 $limit회까지 분석할 수 있어요.\n'
-          '레벨을 올리면 더 많이 분석할 수 있어요.\n'
-          '내일 다시 시도해주세요.',
+          isPremium
+              ? '프리미엄 유저는 하루 $limit회까지 이용할 수 있어요.\n'
+                    '내일 다시 시도해주세요.'
+              : '현재 Lv.$level 기준 하루 $limit회까지 분석할 수 있어요.\n'
+                    '레벨을 올리면 더 많이 분석할 수 있어요.\n'
+                    '내일 다시 시도해주세요.',
           style: TextStyle(
             color: isDark ? Colors.white70 : Colors.black54,
             fontSize: 13.5,

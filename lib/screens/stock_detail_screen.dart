@@ -42,7 +42,10 @@ enum _Period {
   min5('5분', '5m', '5d'),
   min60('60분', '60m', '1mo'),
   day1('일봉', '1d', '2y'),
-  week('주봉', '1wk', 'max'),
+  // Yahoo Finance가 .KS/.KQ 티커에 대해 interval=1wk + range=max를 요청받으면
+  // 월봉 데이터(약 318개)를 그대로 돌려주는 버그가 있다. range를 10y로
+  // 제한하면 정상적인 주봉(약 520개)을 받는다.
+  week('주봉', '1wk', '10y'),
   month('월봉', '1mo', 'max');
 
   const _Period(this.label, this.interval, this.range);

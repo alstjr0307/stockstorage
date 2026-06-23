@@ -14,7 +14,7 @@ class SubscriptionScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(title: const Text('프리미엄 멤버십')),
+      appBar: AppBar(title: const Text('광고 제거')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -37,7 +37,7 @@ class SubscriptionScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  subscription.isPremium ? '프리미엄 이용 중' : '주식저장소 프리미엄',
+                  subscription.isPremium ? '프리미엄 구독중' : '광고 없는 주식저장소',
                   style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 22,
@@ -90,7 +90,7 @@ class SubscriptionScreen extends StatelessWidget {
                               ),
                             )
                           : const Text(
-                              '월간 멤버십 시작',
+                              '월 구독으로 광고 제거',
                               style: TextStyle(fontWeight: FontWeight.w800),
                             ),
                     ),
@@ -140,7 +140,11 @@ class SubscriptionScreen extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(success ? '프리미엄 멤버십이 활성화되었습니다.' : '결제를 완료하지 못했어요.'),
+        content: Text(
+          success
+              ? '광고 제거가 적용되었습니다.'
+              : subscription.lastPurchaseError ?? '결제를 완료하지 못했어요.',
+        ),
       ),
     );
   }
@@ -152,9 +156,7 @@ class SubscriptionScreen extends StatelessWidget {
     final restored = await subscription.restore();
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(restored ? '프리미엄 구매를 복원했습니다.' : '복원할 구매 내역이 없어요.'),
-      ),
+      SnackBar(content: Text(restored ? '구매를 복원했습니다.' : '복원할 구매 내역이 없어요.')),
     );
   }
 }

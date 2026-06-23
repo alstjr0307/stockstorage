@@ -157,6 +157,7 @@ class _StockAiAnalysisResultScreenState
   PriceResult? _price;
   FundamentalsResult? _fundamentals;
   List<StockNews> _news = const [];
+  int? _quotaFlightToken;
 
   static const _loadingMessages = [
     '개인 기록에서 기존 분석을 확인하고 있어요',
@@ -341,6 +342,11 @@ class _StockAiAnalysisResultScreenState
   }) async {
     final startedAt = DateTime.now();
     final completer = Completer<StockAiAnalysisResult>();
+    // 서버 차감이 확정되기 전까지 in-flight로 표시 — 로딩 중 새 분석 중복 시작 방지.
+    _quotaFlightToken = AiAnalysisAdGate.markStarted();
+    // 호출당 고유 ID — 전송 재시도로 함수가 중복 실행돼도 서버가 1회만 차감(멱등성).
+    final requestId =
+        '${startedAt.microsecondsSinceEpoch}-${Random().nextInt(0x7fffffff)}';
 
     final docRef = FirebaseFirestore.instance
         .collection('users')
@@ -374,6 +380,7 @@ class _StockAiAnalysisResultScreenState
             fundamentals: _fundamentals ?? widget.fundamentals,
             candles: candles,
             news: _news,
+            requestId: requestId,
           )
           .then((result) {
             if (!completer.isCompleted) completer.complete(result);
@@ -404,6 +411,8 @@ class _StockAiAnalysisResultScreenState
       // 서버 타임아웃(540s) + 약간의 버퍼
       return await completer.future.timeout(const Duration(seconds: 560));
     } finally {
+      AiAnalysisAdGate.markFinished(_quotaFlightToken);
+      _quotaFlightToken = null;
       await _backgroundSub?.cancel();
       _backgroundSub = null;
     }
@@ -982,8 +991,7 @@ class _AnalysisContentState extends State<_AnalysisContent> {
           : box.localToGlobal(Offset.zero) & box.size;
       await Share.share(
         text,
-        subject:
-            '${widget.pick.name} (${widget.pick.ticker}) AI 종목 분석',
+        subject: '${widget.pick.name} (${widget.pick.ticker}) AI 종목 분석',
         sharePositionOrigin: origin,
       );
     } finally {
@@ -1054,6 +1062,7 @@ class _AnalysisContentState extends State<_AnalysisContent> {
       final cleaned = StockAiAnalysisResultScreen.cleanText(value);
       if (cleaned.isNotEmpty) indicators.add('• $label: $cleaned');
     }
+
     addIndicator('펀더멘털', a.fundamentals);
     addIndicator('기술적', a.technical);
     addIndicator('뉴스/이벤트', a.news);
@@ -1120,6 +1129,7 @@ class _AnalysisContentState extends State<_AnalysisContent> {
         if (narrative.isNotEmpty) parts.add(narrative);
         blocks.add(parts.join('\n'));
       }
+
       addScenario('Bull', scenarios.bull);
       addScenario('Base', scenarios.base);
       addScenario('Bear', scenarios.bear);
@@ -1136,6 +1146,7 @@ class _AnalysisContentState extends State<_AnalysisContent> {
         final cleaned = StockAiAnalysisResultScreen.cleanText(value);
         if (cleaned.isNotEmpty) timingLines.add('• $label: $cleaned');
       }
+
       addTiming('단기', timing.shortTerm);
       addTiming('중기', timing.midTerm);
       addTiming('액션', timing.action);
@@ -1338,9 +1349,7 @@ class _AnalysisContentState extends State<_AnalysisContent> {
     final fundamentals = widget.fundamentals;
     final technicalMetrics = widget.technicalMetrics;
     final candles = widget.candles;
-    final summaryText = StockAiAnalysisResultScreen.cleanSummaryText(
-      a.summary,
-    );
+    final summaryText = StockAiAnalysisResultScreen.cleanSummaryText(a.summary);
     final generatedText = a.generatedAt == null
         ? null
         : DateFormat('yyyy.MM.dd HH:mm').format(a.generatedAt!);
@@ -1702,6 +1711,16 @@ class _ReportHeroCard extends StatelessWidget {
         : const Color(0xFF4D9BFF);
     final priceText = price?.formattedPrice ?? '--';
 
+    // 리포트(증권사 목표가)가 있으면 점수와 기업소개 사이에 평균 목표가를 노출.
+    final reportTargets = analysis.sourceReports
+        .map((r) => r.targetPrice)
+        .whereType<double>()
+        .where((t) => t > 0)
+        .toList();
+    final avgTarget = reportTargets.isEmpty
+        ? null
+        : reportTargets.reduce((a, b) => a + b) / reportTargets.length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1854,6 +1873,14 @@ class _ReportHeroCard extends StatelessWidget {
             ),
           ],
         ),
+        if (avgTarget != null) ...[
+          const SizedBox(height: 16),
+          _AnalystTargetCard(
+            avgTarget: avgTarget,
+            count: reportTargets.length,
+            currentPrice: price?.price,
+          ),
+        ],
         if (analysis.companyOverview.trim().isNotEmpty) ...[
           const SizedBox(height: 18),
           _CompanyOverviewCard(text: analysis.companyOverview.trim()),
@@ -1940,6 +1967,97 @@ class _CompanyOverviewCard extends StatelessWidget {
               fontWeight: FontWeight.w600,
               letterSpacing: -0.15,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnalystTargetCard extends StatelessWidget {
+  final double avgTarget;
+  final int count;
+  final double? currentPrice;
+
+  const _AnalystTargetCard({
+    required this.avgTarget,
+    required this.count,
+    required this.currentPrice,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    const accent = Color(0xFF38BDF8);
+    final hasCurrent = currentPrice != null && currentPrice! > 0;
+    final upside = hasCurrent
+        ? (avgTarget - currentPrice!) / currentPrice!
+        : null;
+    final upsideColor = upside == null
+        ? cs.onSurface
+        : upside >= 0
+        ? const Color(0xFFF04452)
+        : const Color(0xFF4D9BFF);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(13, 12, 14, 13),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: const Border(left: BorderSide(color: accent, width: 3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.flag_rounded, size: 13, color: accent),
+              const SizedBox(width: 5),
+              const Text(
+                '증권사 평균 목표가',
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '리포트 $count곳',
+                style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.4),
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                _formatWon(avgTarget),
+                style: TextStyle(
+                  color: cs.onSurface,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.3,
+                ),
+              ),
+              if (upside != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  '현재가 대비 ${upside >= 0 ? '+' : ''}${(upside * 100).toStringAsFixed(1)}%',
+                  style: TextStyle(
+                    color: upsideColor,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ],
           ),
         ],
       ),
@@ -2397,7 +2515,8 @@ class _ScoreBoardCard extends StatelessWidget {
         sub?.priceTrend ?? _scoreFromText(analysis.technical, base);
     final momentumValue =
         sub?.momentumFlow ?? _scoreFromText(analysis.momentum, base);
-    final fundamentalsValue = sub?.fundamentals ??
+    final fundamentalsValue =
+        sub?.fundamentals ??
         _fundamentalScore(
           fundamentals,
           base,
@@ -2416,11 +2535,7 @@ class _ScoreBoardCard extends StatelessWidget {
       _ScoreItem(label: '재무', value: fundamentalsValue, weightPercent: 20),
       _ScoreItem(label: '모멘텀', value: momentumValue, weightPercent: 20),
       if (sub?.riskLevel != null)
-        _ScoreItem(
-          label: '리스크',
-          value: sub!.riskLevel!,
-          weightPercent: 15,
-        ),
+        _ScoreItem(label: '리스크', value: sub!.riskLevel!, weightPercent: 15),
     ];
 
     return Column(

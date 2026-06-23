@@ -2301,7 +2301,7 @@ class _InvestorFlowCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '마감 수급 TOP5',
+                      '마감 수급 TOP20',
                       style: TextStyle(
                         color: cs.onSurface,
                         fontSize: 22,
@@ -2311,7 +2311,7 @@ class _InvestorFlowCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '순매수 금액 기준 · 외인/기관 상위 5종목',
+                      '순매수 금액 기준 · 외인/기관 상위 20종목',
                       style: TextStyle(
                         color: cs.onSurface.withValues(alpha: 0.45),
                         fontSize: 13,
@@ -2945,10 +2945,10 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
       lines.addAll([
         '',
         '[${data.marketDate}]',
-        '외인 순매수 TOP5 (KOSPI): ${_top5Names(data.kospiForeignTop5)}',
-        '기관 순매수 TOP5 (KOSPI): ${_top5Names(data.kospiInstitutionTop5)}',
-        '외인 순매수 TOP5 (KOSDAQ): ${_top5Names(data.kosdaqForeignTop5)}',
-        '기관 순매수 TOP5 (KOSDAQ): ${_top5Names(data.kosdaqInstitutionTop5)}',
+        '외인 순매수 상위 (KOSPI): ${_top5Names(data.kospiForeignTop5)}',
+        '기관 순매수 상위 (KOSPI): ${_top5Names(data.kospiInstitutionTop5)}',
+        '외인 순매수 상위 (KOSDAQ): ${_top5Names(data.kosdaqForeignTop5)}',
+        '기관 순매수 상위 (KOSDAQ): ${_top5Names(data.kosdaqInstitutionTop5)}',
       ]);
     }
     lines.addAll(['', 'https://stockstorage-13828.web.app']);
@@ -3305,7 +3305,7 @@ class _InvestorFlowMarketBlock extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(
-              'TOP5',
+              'TOP20',
               style: TextStyle(
                 color: cs.onSurface.withValues(alpha: 0.45),
                 fontSize: 11,
@@ -3451,7 +3451,7 @@ class _InvestorFlowGroup extends StatelessWidget {
                   borderRadius: BorderRadius.circular(999),
                 ),
                 child: Text(
-                  'TOP5',
+                  'TOP20',
                   style: TextStyle(
                     color: color,
                     fontSize: 10,

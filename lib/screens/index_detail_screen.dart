@@ -24,7 +24,9 @@ enum _Period {
   min5('5분', '5m', '5d'),
   min60('60분', '60m', '1mo'),
   day1('일봉', '1d', '2y'),
-  week('주봉', '1wk', 'max'),
+  // Yahoo Finance가 1wk + range=max를 받으면 월봉을 돌려주는 버그가 있어
+  // range를 10y로 제한해 정상 주봉을 받는다.
+  week('주봉', '1wk', '10y'),
   month('월봉', '1mo', 'max');
 
   const _Period(this.label, this.interval, this.range);

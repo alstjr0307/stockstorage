@@ -18,6 +18,7 @@ class UserLevelAvatar extends StatelessWidget {
   final TextStyle textStyle;
   final int? levelOverride;
 
+  static const Color premiumGold = Color(0xFFE7B43E);
   static final FirestoreService _firestoreService = FirestoreService();
 
   Widget _buildAvatarShell({required Color accent, required Widget child}) {
@@ -30,6 +31,30 @@ class UserLevelAvatar extends StatelessWidget {
         border: Border.all(color: accent.withValues(alpha: 0.35), width: 1.1),
       ),
       child: Center(child: child),
+    );
+  }
+
+  // 프리미엄이면 레벨 써클 위에 왕관을 얹는다. 위젯 footprint는 그대로(radius*2)
+  // 유지하고 왕관만 위로 살짝 넘쳐 그려 목록 레이아웃을 흔들지 않는다.
+  Widget _withCrown(Widget shell, bool premium) {
+    if (!premium) return shell;
+    final crownW = radius * 1.05;
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.center,
+      children: [
+        shell,
+        Positioned(
+          top: -radius * 0.46,
+          child: Transform.rotate(
+            angle: -0.12,
+            child: CustomPaint(
+              size: Size(crownW, crownW * 0.66),
+              painter: const PremiumCrownPainter(premiumGold),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -59,35 +84,64 @@ class UserLevelAvatar extends StatelessWidget {
       );
     }
 
-    final fixedLevel = levelOverride;
-    if (fixedLevel != null) {
-      final accent = _levelColor(fixedLevel);
+    Widget shellForLevel(int level) {
+      final accent = _levelColor(level);
       return _buildAvatarShell(
         accent: accent,
         child: Text(
-          '$fixedLevel',
+          '$level',
           style: textStyle.copyWith(color: accent, fontWeight: FontWeight.w800),
         ),
       );
     }
 
-    return StreamBuilder<int>(
-      stream: _firestoreService.watchPublicUserLevel(uid),
-      initialData: 1,
+    return StreamBuilder<({int level, bool premium})>(
+      stream: _firestoreService.watchPublicUserBadge(uid),
+      initialData: (level: levelOverride ?? 1, premium: false),
       builder: (context, snapshot) {
-        final level = snapshot.data ?? 1;
-        final accent = _levelColor(level);
-        return _buildAvatarShell(
-          accent: accent,
-          child: Text(
-            '$level',
-            style: textStyle.copyWith(
-              color: accent,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        );
+        final data = snapshot.data ?? (level: 1, premium: false);
+        // 레벨은 명시 override가 있으면 우선, 없으면 공개 프로필 값.
+        final level = levelOverride ?? data.level;
+        return _withCrown(shellForLevel(level), data.premium);
       },
     );
   }
+}
+
+// 프리미엄 왕관 (3봉우리 + 보석 포인트). 작은 아바타~큰 프로필 모두에서 재사용.
+class PremiumCrownPainter extends CustomPainter {
+  const PremiumCrownPainter(this.color);
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final fill = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill
+      ..strokeJoin = StrokeJoin.round;
+
+    final path = Path()
+      ..moveTo(w * 0.06, h * 0.95)
+      ..lineTo(0, h * 0.28)
+      ..lineTo(w * 0.28, h * 0.62)
+      ..lineTo(w * 0.5, h * 0.05)
+      ..lineTo(w * 0.72, h * 0.62)
+      ..lineTo(w, h * 0.28)
+      ..lineTo(w * 0.94, h * 0.95)
+      ..close();
+    canvas.drawPath(path, fill);
+
+    if (w >= 20) {
+      final gem = Paint()..color = Colors.white.withValues(alpha: 0.85);
+      canvas.drawCircle(Offset(w * 0.5, h * 0.34), w * 0.05, gem);
+      canvas.drawCircle(Offset(w * 0.06, h * 0.32), w * 0.04, gem);
+      canvas.drawCircle(Offset(w * 0.94, h * 0.32), w * 0.04, gem);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant PremiumCrownPainter oldDelegate) =>
+      oldDelegate.color != color;
 }

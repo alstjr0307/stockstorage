@@ -1296,6 +1296,7 @@ class StockPriceService {
     FundamentalsResult? fundamentals,
     required List<Map<String, dynamic>> candles,
     required List<StockNews> news,
+    String? requestId,
   }) async {
     final fn = FirebaseFunctions.instanceFor(region: 'asia-northeast3')
         .httpsCallable(
@@ -1303,6 +1304,7 @@ class StockPriceService {
           options: HttpsCallableOptions(timeout: const Duration(seconds: 540)),
         );
     final res = await fn.call({
+      'requestId': ?requestId,
       'stock': {'ticker': ticker, 'name': name, 'market': market},
       'price': {
         if (price != null) ...{
