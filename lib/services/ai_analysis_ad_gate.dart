@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
+import '../screens/subscription_screen.dart';
 import 'ad_service.dart';
 import 'ai_analysis_quota_service.dart';
 import 'auth_service.dart';
@@ -421,8 +422,8 @@ class AiAnalysisAdGate {
               ? '프리미엄 유저는 하루 $limit회까지 이용할 수 있어요.\n'
                     '내일 다시 시도해주세요.'
               : '현재 Lv.$level 기준 하루 $limit회까지 분석할 수 있어요.\n'
-                    '레벨을 올리면 더 많이 분석할 수 있어요.\n'
-                    '내일 다시 시도해주세요.',
+                    '프리미엄으로 업그레이드하면 매일 5회를 광고 없이 이용할 수 있어요.\n'
+                    '내일 다시 시도하거나 프리미엄을 확인해보세요.',
           style: TextStyle(
             color: isDark ? Colors.white70 : Colors.black54,
             fontSize: 13.5,
@@ -430,16 +431,46 @@ class AiAnalysisAdGate {
           ),
         ),
         actions: [
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF10B981),
+          if (isPremium)
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+              ),
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                '확인',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            )
+          else ...[
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(
+                '닫기',
+                style: TextStyle(
+                  color: isDark ? Colors.white60 : Colors.black54,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              '확인',
-              style: TextStyle(fontWeight: FontWeight.w800),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF10B981),
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SubscriptionScreen(),
+                  ),
+                );
+              },
+              child: const Text(
+                '프리미엄 보기',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

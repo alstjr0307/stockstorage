@@ -1,9 +1,13 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 import '../services/analytics_service.dart';
 
 class NightFuturesChartScreen extends StatefulWidget {
@@ -31,6 +35,9 @@ class NightFuturesChartScreen extends StatefulWidget {
 
 class _NightFuturesChartScreenState extends State<NightFuturesChartScreen> {
   StreamSubscription? _sub;
+  final _captureKey = GlobalKey();
+  bool _capturing = false;
+  bool _showWatermark = false;
   final List<FlSpot> _spots = [];
   final List<double> _vols = [];
   final List<DateTime> _times = [];
@@ -173,6 +180,50 @@ class _NightFuturesChartScreenState extends State<NightFuturesChartScreen> {
     super.dispose();
   }
 
+  Rect _shareOrigin() {
+    final size = MediaQuery.sizeOf(context);
+    return Rect.fromLTWH(size.width / 2, size.height / 2, 1, 1);
+  }
+
+  Future<void> _captureAndShare() async {
+    setState(() {
+      _capturing = true;
+      _showWatermark = true;
+    });
+    await Future.delayed(const Duration(milliseconds: 80));
+    try {
+      final boundary =
+          _captureKey.currentContext?.findRenderObject()
+              as RenderRepaintBoundary?;
+      if (boundary == null) return;
+      final image = await boundary.toImage(pixelRatio: 3);
+      final data = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (data == null) return;
+      final file = File(
+        '${Directory.systemTemp.path}/night_futures_${DateTime.now().millisecondsSinceEpoch}.png',
+      );
+      await file.writeAsBytes(data.buffer.asUint8List());
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: '${widget.title} · 주식저장소 앱',
+        sharePositionOrigin: _shareOrigin(),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('캡처에 실패했어요. 다시 시도해 주세요.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _capturing = false;
+          _showWatermark = false;
+        });
+      }
+    }
+  }
+
   String _timeLabel(int index) {
     if (index < 0 || index >= _times.length) return '';
     return DateFormat('HH:mm').format(_times[index]);
@@ -191,7 +242,9 @@ class _NightFuturesChartScreenState extends State<NightFuturesChartScreen> {
     final accent = widget.accent;
 
     return Scaffold(
-      body: Container(
+      body: RepaintBoundary(
+        key: _captureKey,
+        child: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -217,30 +270,64 @@ class _NightFuturesChartScreenState extends State<NightFuturesChartScreen> {
                 ),
         ),
       ),
+      ),
     );
   }
 
   Widget _header(ColorScheme cs) {
     final hasData = _price > 0 && !_empty;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 4, 16, 4),
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
       child: Row(
         children: [
-          IconButton(
-            icon: Icon(Icons.arrow_back_ios_new, size: 18, color: cs.onSurface),
-            onPressed: () => Navigator.pop(context),
-          ),
-          Expanded(
-            child: Text(
-              widget.title,
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 17,
+          if (!_capturing)
+            IconButton(
+              icon: Icon(
+                Icons.arrow_back_ios_new,
+                size: 18,
                 color: cs.onSurface,
               ),
+              onPressed: () => Navigator.pop(context),
+            )
+          else
+            const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  widget.title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 17,
+                    color: cs.onSurface,
+                  ),
+                ),
+                if (_showWatermark)
+                  Text(
+                    '주식저장소 앱',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11,
+                      color: Color.alphaBlend(
+                        widget.accent.withValues(alpha: 0.9),
+                        cs.onSurface,
+                      ).withValues(alpha: 0.85),
+                    ),
+                  ),
+              ],
             ),
           ),
           _statusPill(cs, hasData),
+          if (!_capturing) ...[
+            const SizedBox(width: 4),
+            IconButton(
+              tooltip: '캡처해서 공유',
+              icon: Icon(Icons.ios_share, size: 20, color: cs.onSurface),
+              onPressed: _captureAndShare,
+            ),
+          ],
         ],
       ),
     );
@@ -288,6 +375,19 @@ class _NightFuturesChartScreenState extends State<NightFuturesChartScreen> {
           _statsStrip(cs, dark),
           const SizedBox(height: 18),
           Expanded(child: _chartArea(cs, dark)),
+          if (_showWatermark) ...[
+            const SizedBox(height: 12),
+            Center(
+              child: Text(
+                '📈 주식저장소 앱 · 코스피/코스닥 야간선물',
+                style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.45),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

@@ -42,9 +42,10 @@ enum _Period {
   min5('5분', '5m', '5d'),
   min60('60분', '60m', '1mo'),
   day1('일봉', '1d', '2y'),
-  // Yahoo Finance가 .KS/.KQ 티커에 대해 interval=1wk + range=max를 요청받으면
-  // 월봉 데이터(약 318개)를 그대로 돌려주는 버그가 있다. range를 10y로
-  // 제한하면 정상적인 주봉(약 520개)을 받는다.
+  // 국내(.KS/.KQ) 주봉/월봉은 StockPriceService에서 네이버(timeframe=week/month)로
+  // 받는다. Yahoo Finance가 .KS/.KQ에 interval=1wk를 요청받으면 월봉을 돌려주는
+  // 버그 때문. 해외 종목은 Yahoo를 쓰며, range=max 대신 10y로 제한해야 정상
+  // 주봉을 받는다(range 그대로 유지).
   week('주봉', '1wk', '10y'),
   month('월봉', '1mo', 'max');
 

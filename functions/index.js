@@ -16,11 +16,14 @@ const eucKrDecoder = new TextDecoder('euc-kr');
 const OPENAI_API_KEY = defineSecret('OPENAI_API_KEY');
 const DART_API_KEY = defineSecret('DART_API_KEY');
 const REVENUECAT_SECRET_API_KEY = defineSecret('REVENUECAT_SECRET_API_KEY');
+const FINNHUB_API_KEY = defineSecret('FINNHUB_API_KEY');
+const FRED_API_KEY = defineSecret('FRED_API_KEY');
 const {
   crawlDailyInvestorFlow,
   collectDailyInvestorFlow,
   saveDailyInvestorFlow,
 } = require('./investor_flow');
+const { runCalendarSync, notifyTodayEvents } = require('./market_calendar');
 
 initializeApp();
 
@@ -1505,11 +1508,12 @@ async function recordNightFuturesTo(db, collection, kst, appKey, appSecret, symb
 
 // ── 야간선물 가격 1분마다 Firestore에 기록 (KOSPI200 + KOSDAQ150) ────────────
 exports.recordNightFuturesPrice = onSchedule(
-  { schedule: 'every 1 minutes', region: 'asia-northeast3', timeoutSeconds: 40 },
+  // 야간세션(18:00~04:59 KST)에만 매분 실행 — 주간 시간대 불필요 호출 제거.
+  { schedule: '* 18-23,0-4 * * *', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 40 },
   async () => {
     const kst = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
     const kstHour = kst.getUTCHours();
-    if (kstHour >= 5 && kstHour < 18) return; // 야간세션(18:00~05:00 KST)만 기록
+    if (kstHour >= 5 && kstHour < 18) return; // 안전장치: 야간세션(18:00~05:00 KST)만 기록
 
     const config = await getKisConfig();
     if (!config) return;
@@ -4379,6 +4383,56 @@ actionReason은 "단정적 매수·매도 권유"로 들리지 않되 방향은 
     } catch (err) {
       await refundStockAiAnalysisQuota(request.auth.uid, quotaDateKey, requestId);
       throw err;
+    }
+  }
+);
+
+// ── 경제·실적·IPO 캘린더 동기화 (하루 2회: 06:30 / 18:30 KST) ────────────────
+exports.syncMarketCalendar = onSchedule(
+  {
+    schedule: '30 6,18 * * *',
+    timeZone: 'Asia/Seoul',
+    region: 'asia-northeast3',
+    timeoutSeconds: 120,
+    secrets: [FINNHUB_API_KEY, FRED_API_KEY],
+  },
+  async () => {
+    await runCalendarSync(getFirestore(), {
+      finnhubKey: FINNHUB_API_KEY.value() || null,
+      fredKey: FRED_API_KEY.value() || null,
+    });
+  }
+);
+
+// ── 당일 주요 일정 푸시 (매일 08:00 KST) ─────────────────────────────────────
+exports.notifyMarketCalendarToday = onSchedule(
+  {
+    schedule: '0 8 * * *',
+    timeZone: 'Asia/Seoul',
+    region: 'asia-northeast3',
+    timeoutSeconds: 60,
+  },
+  async () => {
+    await notifyTodayEvents(getFirestore());
+  }
+);
+
+// ── 수동 트리거 (테스트용) ───────────────────────────────────────────────────
+exports.syncMarketCalendarNow = onRequest(
+  { region: 'asia-northeast3', timeoutSeconds: 120, secrets: [FINNHUB_API_KEY, FRED_API_KEY] },
+  async (req, res) => {
+    try {
+      const result = await runCalendarSync(getFirestore(), {
+        finnhubKey: FINNHUB_API_KEY.value() || null,
+        fredKey: FRED_API_KEY.value() || null,
+      });
+      if (req.query.notify === '1') {
+        result.notify = await notifyTodayEvents(getFirestore());
+      }
+      res.json({ ok: true, ...result });
+    } catch (e) {
+      console.error('[syncMarketCalendarNow] 실패:', e);
+      res.status(500).json({ ok: false, error: e?.message || String(e) });
     }
   }
 );

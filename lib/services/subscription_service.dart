@@ -198,14 +198,14 @@ class SubscriptionService extends ChangeNotifier {
     final detail = _compactPurchaseErrorDetail(e);
     final base = switch (code) {
       PurchasesErrorCode.productNotAvailableForPurchaseError =>
-        '구독 상품이 현재 구매 가능한 상태가 아니에요. Play Console 상품/트랙 설정을 확인해 주세요.',
+        '구독 상품이 현재 구매 가능한 상태가 아니에요. 스토어 상품 설정을 확인해 주세요.',
       PurchasesErrorCode.purchaseNotAllowedError =>
-        '이 Google Play 계정에서는 결제가 허용되지 않았어요.',
+        '이 계정에서는 결제가 허용되지 않았어요.',
       PurchasesErrorCode.purchaseInvalidError ||
       PurchasesErrorCode.storeProblemError =>
-        'Google Play 결제가 완료되지 않았어요. 테스트 결제수단과 Play 계정 상태를 확인해 주세요.',
+        '결제가 완료되지 않았어요. 결제수단과 스토어 계정 상태를 확인해 주세요.',
       PurchasesErrorCode.paymentPendingError =>
-        '결제가 대기 중입니다. Google Play에서 결제 상태가 확정되면 자동 반영됩니다.',
+        '결제가 대기 중입니다. 스토어에서 결제 상태가 확정되면 자동 반영됩니다.',
       PurchasesErrorCode.productAlreadyPurchasedError =>
         '이미 구매한 구독이 있어요. 구매 복원을 눌러 상태를 갱신해 주세요.',
       PurchasesErrorCode.networkError ||
@@ -213,9 +213,9 @@ class SubscriptionService extends ChangeNotifier {
         '네트워크 연결 문제로 결제를 확인하지 못했어요.',
       PurchasesErrorCode.configurationError ||
       PurchasesErrorCode.invalidCredentialsError =>
-        '구독 설정을 확인해야 합니다. RevenueCat/Play Store 연결 상태를 점검해 주세요.',
+        '구독 설정을 확인해야 합니다. 스토어 연결 상태를 점검해 주세요.',
       _ =>
-        '결제를 완료하지 못했어요. Google Play 결제 상태를 확인해 주세요.',
+        '결제를 완료하지 못했어요. 스토어 결제 상태를 확인해 주세요.',
     };
     return '$base (${code.name}${detail == null ? '' : ': $detail'})';
   }

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -118,7 +120,7 @@ class SubscriptionScreen extends StatelessWidget {
             child: const Text('이전 구매 복원'),
           ),
           Text(
-            '결제는 App Store 또는 Google Play 계정으로 매월 자동 갱신됩니다. '
+            '결제는 ${Platform.isIOS ? 'App Store' : 'Google Play'} 계정으로 매월 자동 갱신됩니다. '
             '해지 후에도 현재 결제 기간이 끝날 때까지 혜택을 이용할 수 있습니다.',
             textAlign: TextAlign.center,
             style: TextStyle(

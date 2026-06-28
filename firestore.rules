@@ -133,7 +133,8 @@ service cloud.firestore {
     // User public profile
     match /user_public/{uid} {
       allow read: if true;
-      allow write: if isLoggedIn() && request.auth.uid == uid;
+      // 관리자는 봇 계정(가짜 uid)의 공개 배지를 만들 수 있음 (구버전 앱 레벨 표시용)
+      allow write: if isAdmin() || (isLoggedIn() && request.auth.uid == uid);
     }
 
     // Reports
@@ -211,7 +212,8 @@ service cloud.firestore {
 
       match /comments/{commentId} {
         allow read: if true;
-        allow create: if isLoggedIn() && request.resource.data.uid == request.auth.uid;
+        // 관리자는 봇 계정(가짜 uid)으로 댓글을 작성할 수 있음
+        allow create: if isAdmin() || (isLoggedIn() && request.resource.data.uid == request.auth.uid);
         allow delete: if isLoggedIn() && (resource.data.uid == request.auth.uid || isAdmin());
         allow update: if isLoggedIn() &&
           resource.data.uid == request.auth.uid &&
@@ -224,6 +226,16 @@ service cloud.firestore {
     match /ai_briefs/{docId} {
       allow read: if true;
       allow write: if false; // Cloud Function admin SDK bypasses rules
+    }
+
+    // 경제·실적·IPO 캘린더 (누구나 읽기, 쓰기는 Cloud Function만)
+    match /market_calendar/{docId} {
+      allow read: if true;
+      allow write: if false; // Cloud Function admin SDK bypasses rules
+    }
+    match /market_calendar_meta/{docId} {
+      allow read: if false;
+      allow write: if false;
     }
 
     // Trading journal

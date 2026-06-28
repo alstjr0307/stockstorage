@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Meta(Facebook) 앱 설치 광고용 값.
+         developers.facebook.com → 내 앱 → 설정 → 기본 설정 에서 발급받은 값으로 교체하세요.
+         - facebook_app_id: 앱 ID (숫자)
+         - facebook_client_token: 클라이언트 토큰 (설정 > 고급 에 있음) -->
+    <string name="facebook_app_id">1357828916468368</string>
+    <string name="facebook_client_token">fdf0b6faa410998529a005b65ea8385d</string>
+</resources>

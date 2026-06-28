@@ -68,10 +68,14 @@ Future<void> initAds() async {
   if (!kIsWeb && Platform.isIOS) {
     // UI가 완전히 로드된 후 ATT 팝업 표시 (Apple 심사 요건)
     await Future.delayed(const Duration(milliseconds: 300));
-    final status = await AppTrackingTransparency.trackingAuthorizationStatus;
+    var status = await AppTrackingTransparency.trackingAuthorizationStatus;
     if (status == TrackingStatus.notDetermined) {
-      await AppTrackingTransparency.requestTrackingAuthorization();
+      status = await AppTrackingTransparency.requestTrackingAuthorization();
     }
+    // ATT 동의 여부를 Meta SDK에 전달 (광고 식별자 추적 허용 여부)
+    await AnalyticsService.instance.setAdvertiserTracking(
+      status == TrackingStatus.authorized,
+    );
   }
   await MobileAds.instance.initialize();
   AdService.instance.loadInterstitial();

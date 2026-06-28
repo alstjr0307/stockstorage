@@ -50,6 +50,13 @@
 		<dict><key>SKAdNetworkIdentifier</key><string>zq492l623r.skadnetwork</string></dict>
 		<dict><key>SKAdNetworkIdentifier</key><string>3qcr597p9d.skadnetwork</string></dict>
 	</array>
+	<!-- Meta(Facebook) SDK: developers.facebook.com 에서 발급받은 값으로 교체하세요 -->
+	<key>FacebookAppID</key>
+	<string>1357828916468368</string>
+	<key>FacebookClientToken</key>
+	<string>fdf0b6faa410998529a005b65ea8385d</string>
+	<key>FacebookDisplayName</key>
+	<string>주식저장소</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

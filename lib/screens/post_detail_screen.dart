@@ -10,6 +10,7 @@ import '../services/auth_service.dart';
 import 'write_post_screen.dart';
 import '../services/analytics_service.dart';
 import '../services/firestore_service.dart';
+import '../utils/bot_profiles.dart';
 import '../utils/dialogs.dart';
 import '../utils/link_utils.dart';
 import '../widgets/user_level_avatar.dart';
@@ -51,6 +52,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
   int _likeCount = 0;
   bool _sending = false;
   String _nickname = '익명';
+  BotProfile? _selectedBotProfile;
   final Set<String> _blockedCommentUids = {};
   late final Stream<List<Comment>> _commentStream;
   // 댓글 정렬 — true=최신순, false=오래된순(스트림 기본).
@@ -143,18 +145,33 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     final auth = context.read<AuthProvider>();
     if (text.isEmpty || !auth.isLoggedIn) return;
     final focusScope = FocusScope.of(context);
+    final botProfile = _selectedBotProfile;
     setState(() => _sending = true);
     try {
-      await _firestoreService.addPostComment(
-        widget.post.id,
-        Comment(
-          id: '',
-          uid: auth.user!.uid,
-          nickname: _nickname,
-          content: text,
-          createdAt: DateTime.now(),
-        ),
-      );
+      if (botProfile != null) {
+        await _firestoreService.addBotPostComment(
+          widget.post.id,
+          Comment(
+            id: '',
+            uid: generateFakeBotUid(),
+            nickname: botProfile.nickname,
+            content: text,
+            createdAt: DateTime.now(),
+            levelOverride: botProfile.level,
+          ),
+        );
+      } else {
+        await _firestoreService.addPostComment(
+          widget.post.id,
+          Comment(
+            id: '',
+            uid: auth.user!.uid,
+            nickname: _nickname,
+            content: text,
+            createdAt: DateTime.now(),
+          ),
+        );
+      }
       AnalyticsService.instance.logWriteCommunityComment('post');
       _commentCtrl.clear();
       focusScope.unfocus();
@@ -502,8 +519,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       widget.post.nickname,
@@ -551,8 +567,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                       onTap: () =>
                                           _togglePostAuthorFollow(!enabled),
                                       child: AnimatedContainer(
-                                        duration:
-                                            const Duration(milliseconds: 140),
+                                        duration: const Duration(
+                                          milliseconds: 140,
+                                        ),
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 10,
                                           vertical: 4,
@@ -900,7 +917,8 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                 delegate: SliverChildBuilderDelegate((_, i) {
                                   final c = comments[i];
                                   final isOwn = auth.user?.uid == c.uid;
-                                  final isAdmin = AuthService.adminUids.contains(auth.user?.uid ?? '');
+                                  final isAdmin = AuthService.adminUids
+                                      .contains(auth.user?.uid ?? '');
                                   return _CommentTile(
                                     comment: c,
                                     isOwn: isOwn,
@@ -910,10 +928,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                                         ? (newContent) =>
                                               _editComment(c, newContent)
                                         : null,
-                                    onReport: (!isOwn && !isAdmin && auth.isLoggedIn)
+                                    onReport:
+                                        (!isOwn && !isAdmin && auth.isLoggedIn)
                                         ? () => _reportComment(c)
                                         : null,
-                                    onBlock: (!isOwn && !isAdmin && auth.isLoggedIn)
+                                    onBlock:
+                                        (!isOwn && !isAdmin && auth.isLoggedIn)
                                         ? () => _blockFromComment(c)
                                         : null,
                                   );
@@ -935,6 +955,10 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
               auth: auth,
               sending: _sending,
               onSubmit: _submitComment,
+              isAdmin: AuthService.adminUids.contains(auth.user?.uid ?? ''),
+              selectedBotProfile: _selectedBotProfile,
+              onBotProfileChanged: (p) =>
+                  setState(() => _selectedBotProfile = p),
             ),
           ],
         ),
@@ -1095,6 +1119,7 @@ class _CommentTileState extends State<_CommentTile> {
               fontSize: 10.5,
               fontWeight: FontWeight.w800,
             ),
+            levelOverride: comment.levelOverride,
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1301,11 +1326,7 @@ class _CommentTileState extends State<_CommentTile> {
             value: 'report',
             child: Row(
               children: [
-                Icon(
-                  Icons.flag_outlined,
-                  size: 15,
-                  color: Colors.orangeAccent,
-                ),
+                Icon(Icons.flag_outlined, size: 15, color: Colors.orangeAccent),
                 SizedBox(width: 8),
                 Text('신고하기', style: TextStyle(fontSize: 14)),
               ],
@@ -1334,12 +1355,18 @@ class _CommentInput extends StatefulWidget {
   final AuthProvider auth;
   final bool sending;
   final VoidCallback onSubmit;
+  final bool isAdmin;
+  final BotProfile? selectedBotProfile;
+  final ValueChanged<BotProfile?> onBotProfileChanged;
 
   const _CommentInput({
     required this.controller,
     required this.auth,
     required this.sending,
     required this.onSubmit,
+    this.isAdmin = false,
+    this.selectedBotProfile,
+    required this.onBotProfileChanged,
   });
 
   @override
@@ -1367,6 +1394,56 @@ class _CommentInputState extends State<_CommentInput> {
     if (has != _hasText && mounted) setState(() => _hasText = has);
   }
 
+  Future<void> _pickBotProfile() async {
+    final picked = await showModalBottomSheet<Object?>(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetContext) {
+        final cs = Theme.of(sheetContext).colorScheme;
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text(
+                  '댓글 작성 계정 선택',
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.person_rounded),
+                title: const Text('내 계정 (기본)'),
+                onTap: () => Navigator.pop(sheetContext, false),
+              ),
+              const Divider(height: 1),
+              ...botProfiles.map(
+                (p) => ListTile(
+                  leading: const Icon(Icons.smart_toy_outlined),
+                  title: Text(p.nickname),
+                  trailing: Text('Lv.${p.level}'),
+                  onTap: () => Navigator.pop(sheetContext, p),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked == false) {
+      widget.onBotProfileChanged(null);
+    } else if (picked is BotProfile) {
+      widget.onBotProfileChanged(picked);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -1392,71 +1469,130 @@ class _CommentInputState extends State<_CommentInput> {
         (bottomPad > 0 ? bottomPad : safeBottom) + 10,
       ),
       child: widget.auth.isLoggedIn
-          ? Row(
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: widget.controller,
-                    maxLines: 4,
-                    minLines: 1,
-                    textInputAction: TextInputAction.newline,
-                    style: TextStyle(color: cs.onSurface, fontSize: 15),
-                    decoration: InputDecoration(
-                      hintText: '댓글을 입력해주세요',
-                      hintStyle: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.3),
-                        fontSize: 15,
-                      ),
-                      filled: true,
-                      fillColor: isDark
-                          ? cs.surface.withValues(alpha: 0.65)
-                          : Colors.white.withValues(alpha: 0.92),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
+                if (widget.isAdmin)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: InkWell(
+                      onTap: _pickBotProfile,
+                      borderRadius: BorderRadius.circular(999),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withValues(
+                            alpha: widget.selectedBotProfile != null
+                                ? 0.16
+                                : 0.08,
+                          ),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: const Color(
+                              0xFF10B981,
+                            ).withValues(alpha: 0.35),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.smart_toy_outlined,
+                              size: 14,
+                              color: Color(0xFF10B981),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              widget.selectedBotProfile != null
+                                  ? '${widget.selectedBotProfile!.nickname} (봇)'
+                                  : '내 계정으로 작성',
+                              style: const TextStyle(
+                                color: Color(0xFF10B981),
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              size: 16,
+                              color: Color(0xFF10B981),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                widget.sending
-                    ? const SizedBox(
-                        width: 40,
-                        height: 40,
-                        child: Padding(
-                          padding: EdgeInsets.all(8),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Color(0xFF10B981),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: widget.controller,
+                        maxLines: 4,
+                        minLines: 1,
+                        textInputAction: TextInputAction.newline,
+                        style: TextStyle(color: cs.onSurface, fontSize: 15),
+                        decoration: InputDecoration(
+                          hintText: '댓글을 입력해주세요',
+                          hintStyle: TextStyle(
+                            color: cs.onSurface.withValues(alpha: 0.3),
+                            fontSize: 15,
                           ),
-                        ),
-                      )
-                    : AnimatedContainer(
-                        duration: const Duration(milliseconds: 140),
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: canSend
-                              ? const Color(0xFF10B981)
-                              : cs.onSurface.withValues(alpha: 0.12),
-                          shape: BoxShape.circle,
-                        ),
-                        child: IconButton(
-                          padding: EdgeInsets.zero,
-                          icon: Icon(
-                            Icons.send_rounded,
-                            size: 18,
-                            color: canSend
-                                ? Colors.white
-                                : cs.onSurface.withValues(alpha: 0.45),
+                          filled: true,
+                          fillColor: isDark
+                              ? cs.surface.withValues(alpha: 0.65)
+                              : Colors.white.withValues(alpha: 0.92),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(18),
+                            borderSide: BorderSide.none,
                           ),
-                          onPressed: canSend ? widget.onSubmit : null,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
                         ),
                       ),
+                    ),
+                    const SizedBox(width: 8),
+                    widget.sending
+                        ? const SizedBox(
+                            width: 40,
+                            height: 40,
+                            child: Padding(
+                              padding: EdgeInsets.all(8),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFF10B981),
+                              ),
+                            ),
+                          )
+                        : AnimatedContainer(
+                            duration: const Duration(milliseconds: 140),
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: canSend
+                                  ? const Color(0xFF10B981)
+                                  : cs.onSurface.withValues(alpha: 0.12),
+                              shape: BoxShape.circle,
+                            ),
+                            child: IconButton(
+                              padding: EdgeInsets.zero,
+                              icon: Icon(
+                                Icons.send_rounded,
+                                size: 18,
+                                color: canSend
+                                    ? Colors.white
+                                    : cs.onSurface.withValues(alpha: 0.45),
+                              ),
+                              onPressed: canSend ? widget.onSubmit : null,
+                            ),
+                          ),
+                  ],
+                ),
               ],
             )
           : Padding(

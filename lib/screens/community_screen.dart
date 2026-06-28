@@ -772,10 +772,12 @@ class _FreeBoardTabState extends State<_FreeBoardTab> {
     final uid = auth.user!.uid;
     final nickname = await _firestoreService.getNickname(uid) ?? '익명';
     if (!mounted) return;
+    final isAdmin = AuthService.adminUids.contains(uid);
     final posted = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => WritePostScreen(uid: uid, nickname: nickname),
+        builder: (_) =>
+            WritePostScreen(uid: uid, nickname: nickname, isAdmin: isAdmin),
       ),
     );
     if (posted == true && mounted) _refresh();
@@ -1336,10 +1338,7 @@ class _JournalCardState extends State<_JournalCard>
             borderRadius: BorderRadius.circular(8),
             onTap: _openChart,
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 4,
-                vertical: 6,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1441,298 +1440,291 @@ class _JournalCardState extends State<_JournalCard>
                 // 작성자 + 액션 + 거래일을 한 영역으로 통합 (별도 거래일 바 제거).
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          GestureDetector(
-                            onTap: widget.onTapAuthor,
-                            behavior: HitTestBehavior.opaque,
-                            child: UserLevelAvatar(
-                              uid: journal.uid,
-                              radius: 14,
-                              backgroundColor: tone.withValues(alpha: 0.12),
-                              textStyle: TextStyle(
-                                color: tone,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      GestureDetector(
+                        onTap: widget.onTapAuthor,
+                        behavior: HitTestBehavior.opaque,
+                        child: UserLevelAvatar(
+                          uid: journal.uid,
+                          radius: 14,
+                          backgroundColor: tone.withValues(alpha: 0.12),
+                          textStyle: TextStyle(
+                            color: tone,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: widget.onTapAuthor,
-                              behavior: HitTestBehavior.opaque,
-                              child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: widget.onTapAuthor,
+                          behavior: HitTestBehavior.opaque,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
                                 children: [
-                                  Row(
-                                    children: [
-                                      Flexible(
-                                        child: Text(
-                                          journal.nickname,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: isDark
-                                                ? Colors.white
-                                                : cs.onSurface,
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w800,
-                                            letterSpacing: -0.1,
-                                          ),
-                                        ),
+                                  Flexible(
+                                    child: Text(
+                                      journal.nickname,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: isDark
+                                            ? Colors.white
+                                            : cs.onSurface,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: -0.1,
                                       ),
-                                      const SizedBox(width: 6),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 7,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: tone.withValues(alpha: 0.13),
-                                          borderRadius:
-                                              BorderRadius.circular(999),
-                                        ),
-                                        child: Text(
-                                          actionLabel,
-                                          style: TextStyle(
-                                            color: tone,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.w900,
-                                            letterSpacing: 0.2,
-                                          ),
-                                        ),
-                                      ),
-                                      if (isNewlyPublished) ...[
-                                        const SizedBox(width: 6),
-                                        _buildNewBadge(),
-                                      ],
-                                    ],
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    '거래일 $tradeDateText',
-                                    style: TextStyle(
-                                      color: isDark
-                                          ? Colors.white.withValues(
-                                              alpha: 0.42,
-                                            )
-                                          : cs.onSurface.withValues(
-                                              alpha: 0.5,
-                                            ),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      fontFeatures: const [
-                                        FontFeature.tabularFigures(),
-                                      ],
                                     ),
                                   ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 7,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: tone.withValues(alpha: 0.13),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      actionLabel,
+                                      style: TextStyle(
+                                        color: tone,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.2,
+                                      ),
+                                    ),
+                                  ),
+                                  if (isNewlyPublished) ...[
+                                    const SizedBox(width: 6),
+                                    _buildNewBadge(),
+                                  ],
                                 ],
                               ),
-                            ),
-                          ),
-                          if (widget.onTapAuthor != null)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 4),
-                              child: Icon(
-                                Icons.chevron_right_rounded,
-                                size: 18,
-                                color: isDark
-                                    ? Colors.white.withValues(alpha: 0.32)
-                                    : cs.onSurface.withValues(alpha: 0.32),
-                              ),
-                            ),
-                          if (widget.onReport != null ||
-                              widget.onBlock != null)
-                            _MoreMenu(
-                              onReport: widget.onReport,
-                              onBlock: widget.onBlock,
-                              iconColor: isDark
-                                  ? Colors.white.withValues(alpha: 0.55)
-                                  : cs.onSurface.withValues(alpha: 0.45),
-                            ),
-                        ],
-                      ),
-                    ),
-                    // Hero 영역: 그라데이션 제거, 좌측 스트라이프와 라벨로 톤 표현.
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (tickerText.isNotEmpty)
-                            Text(
-                              tickerText,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: tone.withValues(alpha: 0.85),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
-                          const SizedBox(height: 2),
-                          Text(
-                            journal.stockName.isNotEmpty
-                                ? journal.stockName
-                                : '기타 메모',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: isDark ? Colors.white : cs.onSurface,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.3,
-                              height: 1.15,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
+                              const SizedBox(height: 3),
                               Text(
-                                headlineLabel,
+                                '거래일 $tradeDateText',
                                 style: TextStyle(
                                   color: isDark
                                       ? Colors.white.withValues(alpha: 0.42)
                                       : cs.onSurface.withValues(alpha: 0.5),
-                                  fontSize: 11.5,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 0.2,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures(),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  headlineValue,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: accent,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: -0.5,
-                                    height: 1.0,
-                                    fontFeatures: const [
-                                      FontFeature.tabularFigures(),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              if (headlineBadge != null) ...[
-                                const SizedBox(width: 6),
-                                Text(
-                                  headlineBadge,
-                                  style: TextStyle(
-                                    color: accent.withValues(alpha: 0.85),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: -0.2,
-                                  ),
-                                ),
-                              ],
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                    // 본문 영역과 hero 사이 얇은 구분선 — 종전 두꺼운 tone 보더 대신.
-                    Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.06)
-                          : cs.onSurface.withValues(alpha: 0.07),
-                    ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 13, 16, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      final itemWidth = (constraints.maxWidth - 16) / 2;
-                      return Wrap(
-                        spacing: 16,
-                        runSpacing: 9,
-                        children: [
-                          for (var i = 0; i < rows.length; i++)
-                            SizedBox(
-                              width: itemWidth,
-                              child: _shareStatCell(
-                                rows[i].label,
-                                rows[i].value,
-                                valueColor: rows[i].valueColor,
-                                alignRight: i.isOdd,
-                              ),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                  if (journal.note.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 11),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.055)
-                            : cs.onSurface.withValues(alpha: 0.03),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.06)
-                              : cs.onSurface.withValues(alpha: 0.08),
                         ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      if (widget.onTapAuthor != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4),
+                          child: Icon(
+                            Icons.chevron_right_rounded,
+                            size: 18,
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.32)
+                                : cs.onSurface.withValues(alpha: 0.32),
+                          ),
+                        ),
+                      if (widget.onReport != null || widget.onBlock != null)
+                        _MoreMenu(
+                          onReport: widget.onReport,
+                          onBlock: widget.onBlock,
+                          iconColor: isDark
+                              ? Colors.white.withValues(alpha: 0.55)
+                              : cs.onSurface.withValues(alpha: 0.45),
+                        ),
+                    ],
+                  ),
+                ),
+                // Hero 영역: 그라데이션 제거, 좌측 스트라이프와 라벨로 톤 표현.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (tickerText.isNotEmpty)
+                        Text(
+                          tickerText,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: tone.withValues(alpha: 0.85),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      const SizedBox(height: 2),
+                      Text(
+                        journal.stockName.isNotEmpty
+                            ? journal.stockName
+                            : '기타 메모',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isDark ? Colors.white : cs.onSurface,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3,
+                          height: 1.15,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
                         children: [
-                          _ExpandableNotePreview(
-                            content: journal.note,
-                            maxLines: 3,
+                          Text(
+                            headlineLabel,
                             style: TextStyle(
                               color: isDark
-                                  ? Colors.white.withValues(alpha: 0.72)
-                                  : cs.onSurface.withValues(alpha: 0.74),
-                              fontSize: 13,
-                              height: 1.58,
-                              fontWeight: FontWeight.w500,
+                                  ? Colors.white.withValues(alpha: 0.42)
+                                  : cs.onSurface.withValues(alpha: 0.5),
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
                             ),
                           ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              headlineValue,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: accent,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.5,
+                                height: 1.0,
+                                fontFeatures: const [
+                                  FontFeature.tabularFigures(),
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (headlineBadge != null) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              headlineBadge,
+                              style: TextStyle(
+                                color: accent.withValues(alpha: 0.85),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
-                    ),
-                  ],
-                  const SizedBox(height: 10),
-                  _shareFooter(tone),
-                  if (widget.isOwn && widget.onTogglePrivate != null) ...[
-                    const SizedBox(height: 8),
-                    GestureDetector(
-                      onTap: _confirmTogglePrivate,
-                      child: Align(
-                        alignment: Alignment.centerRight,
-                        child: Text(
-                          '비공개 전환',
-                          style: TextStyle(
+                    ],
+                  ),
+                ),
+                // 본문 영역과 hero 사이 얇은 구분선 — 종전 두꺼운 tone 보더 대신.
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.06)
+                      : cs.onSurface.withValues(alpha: 0.07),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 13, 16, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          final itemWidth = (constraints.maxWidth - 16) / 2;
+                          return Wrap(
+                            spacing: 16,
+                            runSpacing: 9,
+                            children: [
+                              for (var i = 0; i < rows.length; i++)
+                                SizedBox(
+                                  width: itemWidth,
+                                  child: _shareStatCell(
+                                    rows[i].label,
+                                    rows[i].value,
+                                    valueColor: rows[i].valueColor,
+                                    alignRight: i.isOdd,
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                      if (journal.note.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 11),
+                          decoration: BoxDecoration(
                             color: isDark
-                                ? Colors.white.withValues(alpha: 0.34)
-                                : cs.onSurface.withValues(alpha: 0.45),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
+                                ? Colors.white.withValues(alpha: 0.055)
+                                : cs.onSurface.withValues(alpha: 0.03),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.06)
+                                  : cs.onSurface.withValues(alpha: 0.08),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _ExpandableNotePreview(
+                                content: journal.note,
+                                maxLines: 3,
+                                style: TextStyle(
+                                  color: isDark
+                                      ? Colors.white.withValues(alpha: 0.72)
+                                      : cs.onSurface.withValues(alpha: 0.74),
+                                  fontSize: 13,
+                                  height: 1.58,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+                      ],
+                      const SizedBox(height: 10),
+                      _shareFooter(tone),
+                      if (widget.isOwn && widget.onTogglePrivate != null) ...[
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: _confirmTogglePrivate,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              '비공개 전환',
+                              style: TextStyle(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.34)
+                                    : cs.onSurface.withValues(alpha: 0.45),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ],
             ),
           ],

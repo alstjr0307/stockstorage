@@ -39,6 +39,7 @@ class AuthService {
       password: password,
     );
     AnalyticsService.instance.logLogin('email_signup');
+    AnalyticsService.instance.logSignUp('email');
     AnalyticsService.instance.setUserId(result.user!.uid);
     await _saveCreatedAt(result.user!.uid);
     return result;
@@ -66,6 +67,7 @@ class AuthService {
     AnalyticsService.instance.logLogin('google');
     AnalyticsService.instance.setUserId(result.user!.uid);
     if (result.additionalUserInfo?.isNewUser == true) {
+      AnalyticsService.instance.logSignUp('google');
       await _saveCreatedAt(result.user!.uid);
     }
     return result;
@@ -115,6 +117,7 @@ class AuthService {
           password: password,
         );
         AnalyticsService.instance.logLogin('kakao');
+        AnalyticsService.instance.logSignUp('kakao');
         AnalyticsService.instance.setUserId(result.user!.uid);
         await _saveCreatedAt(result.user!.uid);
         return result;
@@ -131,6 +134,7 @@ class AuthService {
     AnalyticsService.instance.logLogin('apple');
     AnalyticsService.instance.setUserId(result.user!.uid);
     if (result.additionalUserInfo?.isNewUser == true) {
+      AnalyticsService.instance.logSignUp('apple');
       await _saveCreatedAt(result.user!.uid);
     }
     return result;

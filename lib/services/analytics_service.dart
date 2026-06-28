@@ -1,3 +1,4 @@
+import 'package:facebook_app_events/facebook_app_events.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -7,6 +8,10 @@ class AnalyticsService {
 
   final _analytics = FirebaseAnalytics.instance;
 
+  /// Meta(Facebook) 앱 이벤트 — 설치 광고 추적/최적화용.
+  /// 앱 실행(활성화) 이벤트는 SDK가 자동 기록한다.
+  final _fb = FacebookAppEvents();
+
   FirebaseAnalyticsObserver get observer =>
       FirebaseAnalyticsObserver(analytics: _analytics);
 
@@ -15,19 +20,40 @@ class AnalyticsService {
     FirebaseAuth.instance.authStateChanges().listen((user) {
       if (user != null) {
         _analytics.setUserId(id: user.uid);
+        _fb.setUserID(user.uid);
       } else {
         _analytics.setUserId(id: null);
+        _fb.clearUserID();
       }
     });
   }
 
+  /// iOS ATT 동의 결과를 Meta SDK에 전달 (광고 식별자 추적 허용 여부).
+  /// Android에서는 호출해도 무해하다.
+  Future<void> setAdvertiserTracking(bool enabled) =>
+      _fb.setAdvertiserTracking(enabled: enabled);
+
   // ── 유저 ────────────────────────────────────────────────────────────────────
 
-  Future<void> setUserId(String uid) => _analytics.setUserId(id: uid);
-  Future<void> clearUserId() => _analytics.setUserId(id: null);
+  Future<void> setUserId(String uid) {
+    _fb.setUserID(uid);
+    return _analytics.setUserId(id: uid);
+  }
+
+  Future<void> clearUserId() {
+    _fb.clearUserID();
+    return _analytics.setUserId(id: null);
+  }
 
   Future<void> logLogin(String method) =>
       _analytics.logLogin(loginMethod: method);
+
+  /// 신규 회원가입 — Firebase `sign_up` + Meta `CompleteRegistration`.
+  /// Meta 가입 전환 캠페인 최적화에 사용된다.
+  Future<void> logSignUp(String method) async {
+    await _analytics.logSignUp(signUpMethod: method);
+    await _fb.logCompletedRegistration(registrationMethod: method);
+  }
 
   Future<void> logLogout() => _analytics.logEvent(name: 'logout');
 

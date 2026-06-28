@@ -7,6 +7,7 @@ class Comment {
   final String content;
   final DateTime createdAt;
   final DateTime? editedAt;
+  final int? levelOverride;
 
   Comment({
     required this.id,
@@ -15,6 +16,7 @@ class Comment {
     required this.content,
     required this.createdAt,
     this.editedAt,
+    this.levelOverride,
   });
 
   factory Comment.fromFirestore(DocumentSnapshot doc) {
@@ -26,6 +28,7 @@ class Comment {
       content: d['content'] as String? ?? '',
       createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       editedAt: (d['editedAt'] as Timestamp?)?.toDate(),
+      levelOverride: d['authorLevel'] as int?,
     );
   }
 
@@ -35,5 +38,6 @@ class Comment {
     'content': content,
     'createdAt': Timestamp.fromDate(createdAt),
     if (editedAt != null) 'editedAt': Timestamp.fromDate(editedAt!),
+    if (levelOverride != null) 'authorLevel': levelOverride,
   };
 }

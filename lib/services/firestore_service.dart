@@ -4,6 +4,7 @@ import '../models/announcement.dart';
 import '../models/comment.dart';
 import '../models/fmkorea_stock_mention.dart';
 import '../models/market_analysis.dart';
+import '../models/market_calendar_event.dart';
 import '../models/market_feature_stock.dart';
 import '../models/post.dart';
 import '../models/stock_pick.dart';
@@ -197,10 +198,9 @@ class FirestoreService {
   /// 내 프리미엄 상태를 공개 프로필에 미러링 (구독 변동 시 호출).
   Future<void> setPublicPremium(String uid, bool isPremium) async {
     if (uid.isEmpty) return;
-    await _db
-        .collection('user_public')
-        .doc(uid)
-        .set({'isPremium': isPremium}, SetOptions(merge: true));
+    await _db.collection('user_public').doc(uid).set({
+      'isPremium': isPremium,
+    }, SetOptions(merge: true));
   }
 
   Future<void> syncUserContributionStats(String uid) async {
@@ -385,10 +385,7 @@ class FirestoreService {
 
   /// 매매일지 작성 일일 미션 보상.
   /// 같은 KST 날짜에 이미 받았으면 무시. 처음 작성한 일지에만 bonusXp +5.
-  Future<void> grantDailyJournalMissionXp(
-    String uid, {
-    int xp = 5,
-  }) async {
+  Future<void> grantDailyJournalMissionXp(String uid, {int xp = 5}) async {
     if (uid.isEmpty) return;
     final todayKey = _kstDayKey();
     final userRef = _db.collection('users').doc(uid);
@@ -935,11 +932,7 @@ class FirestoreService {
       {'content': newContent, 'editedAt': Timestamp.fromDate(now)},
     );
     batch.set(
-      _db
-          .collection('users')
-          .doc(uid)
-          .collection('myComments')
-          .doc(commentId),
+      _db.collection('users').doc(uid).collection('myComments').doc(commentId),
       {'text': newContent, 'editedAt': Timestamp.fromDate(now)},
       SetOptions(merge: true),
     );
@@ -1796,9 +1789,8 @@ class FirestoreService {
         .limit(200)
         .snapshots()
         .map(
-          (snap) => snap.docs
-              .map((d) => StockAiAnalysisSummary.fromDoc(d))
-              .toList(),
+          (snap) =>
+              snap.docs.map((d) => StockAiAnalysisSummary.fromDoc(d)).toList(),
         );
   }
 
@@ -2096,11 +2088,24 @@ class FirestoreService {
 
   /// 봇 계정 글 등록 — 통계 카운트 없이 posts에만 저장
   Future<void> createBotPost(Post post, {required int level}) async {
+    await _seedBotPublicBadge(post.uid, level);
     await _db.collection('posts').add({
       ...post.toFirestore(),
+      'createdAt': FieldValue.serverTimestamp(),
       'authorLevel': level,
       'isBot': true,
     });
+  }
+
+  /// 봇 가짜 uid의 공개 배지(user_public) 문서를 만들어 둔다.
+  /// authorLevel override를 모르는 구버전 앱도 아바타 레벨을 올바르게 표시하도록.
+  Future<void> _seedBotPublicBadge(String uid, int level) async {
+    if (uid.isEmpty) return;
+    await _db.collection('user_public').doc(uid).set({
+      'level': level,
+      'isPremium': false,
+      'isBot': true,
+    }, SetOptions(merge: true));
   }
 
   Future<void> updatePost(
@@ -2243,6 +2248,18 @@ class FirestoreService {
     await recordCommentCreated(comment.uid);
   }
 
+  /// 봇 계정 댓글 등록 — 통계 카운트/마이댓글 미러 없이 comments에만 저장
+  Future<void> addBotPostComment(String postId, Comment comment) async {
+    final level = comment.levelOverride;
+    if (level != null) {
+      await _seedBotPublicBadge(comment.uid, level);
+    }
+    await _db.collection('posts').doc(postId).collection('comments').add({
+      ...comment.toFirestore(),
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   /// 자유게시판 댓글 수정. 본인 댓글만 가능(rules로 강제). myPostComments 미러 동기화.
   Future<void> updatePostComment(
     String postId,
@@ -2253,11 +2270,7 @@ class FirestoreService {
     final now = DateTime.now();
     final batch = _db.batch();
     batch.update(
-      _db
-          .collection('posts')
-          .doc(postId)
-          .collection('comments')
-          .doc(commentId),
+      _db.collection('posts').doc(postId).collection('comments').doc(commentId),
       {'content': newContent, 'editedAt': Timestamp.fromDate(now)},
     );
     batch.set(
@@ -2505,6 +2518,40 @@ class FirestoreService {
       if (parsed.topMentions.isNotEmpty) return parsed;
     }
     return null;
+  }
+
+  // ─── 경제·실적·IPO 캘린더 ────────────────────────────────────────────────
+  /// market_calendar 전체 일정 스트림 (날짜 오름차순). 클라이언트에서 타입별 필터.
+  Stream<List<MarketCalendarEvent>> watchMarketCalendar({int limit = 200}) {
+    return _db
+        .collection('market_calendar')
+        .orderBy('timestamp')
+        .limit(limit)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((d) => MarketCalendarEvent.fromFirestore(d))
+            .toList());
+  }
+
+  /// 홈 카드용 — 다가오는 일정 (중요도 우선, 가까운 날짜 우선).
+  Stream<List<MarketCalendarEvent>> watchUpcomingCalendar({int take = 5}) {
+    return _db
+        .collection('market_calendar')
+        .orderBy('timestamp')
+        .limit(60)
+        .snapshots()
+        .map((snap) {
+      final events = snap.docs
+          .map((d) => MarketCalendarEvent.fromFirestore(d))
+          .toList();
+      // 중요 이벤트를 앞에 두되 날짜 순서는 유지
+      events.sort((a, b) {
+        final imp = b.importance.compareTo(a.importance);
+        if (imp != 0) return imp;
+        return a.dateTime.compareTo(b.dateTime);
+      });
+      return events.take(take).toList();
+    });
   }
 }
 

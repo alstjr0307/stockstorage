@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/post.dart';
 import '../models/stock_pick.dart';
 import '../models/announcement.dart';
+import '../models/market_calendar_event.dart';
 import '../models/market_feature_stock.dart';
 import '../providers/auth_provider.dart';
 import '../services/ad_service.dart';
@@ -21,6 +22,7 @@ import '../widgets/banner_ad_widget.dart';
 import '../widgets/stock_card.dart';
 import '../widgets/user_level_avatar.dart';
 import 'admin_screen.dart';
+import 'calendar_screen.dart';
 import 'community_screen.dart';
 import 'leaderboard_screen.dart';
 import 'login_screen.dart';
@@ -557,6 +559,10 @@ class _HomeScreenState extends State<HomeScreen>
         context,
         MaterialPageRoute(builder: (_) => const StockAiAnalysisListScreen()),
       ),
+      openMarketCalendar: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const CalendarScreen()),
+      ),
       openAiAnalysisSearch: () {
         final uid = auth.user?.uid;
         if (uid == null) {
@@ -647,6 +653,7 @@ class _DashboardHomePage extends StatefulWidget {
     required this.openMarketSentiment,
     required this.openStockCompare,
     required this.openAiAnalysisList,
+    required this.openMarketCalendar,
     required this.openAiAnalysisSearch,
     required this.watchRewardAd,
     required this.onTopStateChanged,
@@ -671,6 +678,7 @@ class _DashboardHomePage extends StatefulWidget {
   final VoidCallback openMarketSentiment;
   final VoidCallback openStockCompare;
   final VoidCallback openAiAnalysisList;
+  final VoidCallback openMarketCalendar;
   final VoidCallback openAiAnalysisSearch;
   final VoidCallback watchRewardAd;
   final ValueChanged<bool> onTopStateChanged;
@@ -805,6 +813,14 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                   _HomeReveal(order: 4, child: const _AIBriefCard()),
                 ),
                 const _HomeCardBreak(),
+                _HomeReveal(
+                  order: 5,
+                  child: _UpcomingCalendarCard(
+                    firestoreService: widget.firestoreService,
+                    onTap: widget.openMarketCalendar,
+                  ),
+                ),
+                const _HomeCardBreak(),
                 _fixedH(
                   220,
                   _HomeReveal(
@@ -862,6 +878,7 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                     openStockCompare: widget.openStockCompare,
                     openStockSearch: widget.openStockSearch,
                     openAiAnalysisList: widget.openAiAnalysisList,
+                    openMarketCalendar: widget.openMarketCalendar,
                   ),
                 ),
               ],
@@ -5843,6 +5860,155 @@ String _formatTodayChange(PriceResult result, String market) {
   return '$sign${NumberFormat('#,###').format(result.change.round())}';
 }
 
+// ─── 홈: 다가오는 경제·실적·IPO 일정 요약 카드 ──────────────────────────────
+class _UpcomingCalendarCard extends StatefulWidget {
+  const _UpcomingCalendarCard({
+    required this.firestoreService,
+    required this.onTap,
+  });
+
+  final FirestoreService firestoreService;
+  final VoidCallback onTap;
+
+  @override
+  State<_UpcomingCalendarCard> createState() => _UpcomingCalendarCardState();
+}
+
+class _UpcomingCalendarCardState extends State<_UpcomingCalendarCard> {
+  // build()마다 새로 만들면 재구독으로 깜빡임 → 한 번만 생성해 고정.
+  late final Stream<List<MarketCalendarEvent>> _stream;
+
+  @override
+  void initState() {
+    super.initState();
+    _stream = widget.firestoreService.watchUpcomingCalendar(take: 4);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<List<MarketCalendarEvent>>(
+      stream: _stream,
+      builder: (context, snapshot) {
+        final events = snapshot.data ?? const [];
+        // 데이터가 없으면(키 미설정 포함) 카드를 노출하지 않는다.
+        if (events.isEmpty) return const SizedBox.shrink();
+
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+        final cardColor = isDark ? const Color(0xFF1A2035) : Colors.white;
+        final onSurface = theme.colorScheme.onSurface;
+
+        return GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '📅 다가오는 일정',
+                      style: _homeText(
+                        color: _homeLabel,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '전체보기',
+                      style: TextStyle(
+                        color: const Color(0xFF10B981),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Icon(Icons.chevron_right_rounded,
+                        color: onSurface.withValues(alpha: 0.4), size: 18),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                ...events.map((e) => _UpcomingRow(event: e)),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _UpcomingRow extends StatelessWidget {
+  const _UpcomingRow({required this.event});
+
+  final MarketCalendarEvent event;
+
+  @override
+  Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final meta = _calendarTypeMeta(event.type);
+    final d = event.dateTime;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: meta.$3.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(meta.$2, color: meta.$3, size: 17),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              event.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: onSurface.withValues(alpha: 0.9),
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '${d.month}/${d.day}',
+            style: TextStyle(
+              color: onSurface.withValues(alpha: 0.5),
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+(String, IconData, Color) _calendarTypeMeta(CalendarEventType type) {
+  switch (type) {
+    case CalendarEventType.earnings:
+      return ('실적', Icons.bar_chart_rounded, const Color(0xFF10B981));
+    case CalendarEventType.economic:
+      return ('지표', Icons.account_balance_rounded, const Color(0xFF3B82F6));
+    case CalendarEventType.ipo:
+      return ('IPO', Icons.rocket_launch_rounded, const Color(0xFFF59E0B));
+    case CalendarEventType.unknown:
+      return ('기타', Icons.event_rounded, const Color(0xFF94A3B8));
+  }
+}
+
 class _QuickMenu extends StatelessWidget {
   const _QuickMenu({
     required this.openMarketAnalysis,
@@ -5856,6 +6022,7 @@ class _QuickMenu extends StatelessWidget {
     required this.openStockCompare,
     required this.openStockSearch,
     required this.openAiAnalysisList,
+    required this.openMarketCalendar,
   });
 
   final VoidCallback openMarketAnalysis;
@@ -5869,6 +6036,7 @@ class _QuickMenu extends StatelessWidget {
   final VoidCallback openStockCompare;
   final VoidCallback openStockSearch;
   final VoidCallback openAiAnalysisList;
+  final VoidCallback openMarketCalendar;
 
   @override
   Widget build(BuildContext context) {
@@ -5906,6 +6074,11 @@ class _QuickMenu extends StatelessWidget {
               label: 'AI 분석 기록',
               onTap: openAiAnalysisList,
               emphasized: true,
+            ),
+            _QuickMenuTile(
+              icon: Icons.event_note_rounded,
+              label: '경제 캘린더',
+              onTap: openMarketCalendar,
             ),
             _QuickMenuTile(
               icon: Icons.search_rounded,

@@ -718,6 +718,7 @@ class StockPriceService {
     String naverSymbol,
     String range, {
     bool isIndex = false,
+    String timeframe = 'day',
   }) async {
     final end = DateTime.now();
     final start = end.subtract(Duration(days: _rangeToDays(range)));
@@ -726,7 +727,7 @@ class StockPriceService {
     final uri = Uri.parse(
       'https://api.finance.naver.com/siseJson.naver'
       '?symbol=$naverSymbol&requestType=1'
-      '&startTime=${fmt(start)}&endTime=${fmt(end)}&timeframe=day',
+      '&startTime=${fmt(start)}&endTime=${fmt(end)}&timeframe=$timeframe',
     );
     try {
       final response = await http
@@ -773,7 +774,8 @@ class StockPriceService {
       }
 
       // 지수: 오늘 캔들이 없으면 네이버 실시간 API로 보완 (장중/당일 종가 미반영)
-      if (isIndex && out.isNotEmpty) {
+      // 주봉/월봉은 오늘 날짜의 가짜 캔들이 추가되면 안 되므로 일봉에서만 보완.
+      if (isIndex && timeframe == 'day' && out.isNotEmpty) {
         final today = DateTime.now();
         final todayDate = DateTime(today.year, today.month, today.day);
         final lastDate = DateTime(
@@ -829,7 +831,7 @@ class StockPriceService {
         }
       }
 
-      if (!isIndex && out.isNotEmpty) {
+      if (!isIndex && timeframe == 'day' && out.isNotEmpty) {
         try {
           final rtUri = Uri.parse(
             'https://polling.finance.naver.com/api/realtime/domestic/stock/$naverSymbol',
@@ -984,6 +986,35 @@ class StockPriceService {
         return naverData;
       }
     }
+
+    // 한국 종목 주봉/월봉은 네이버 사용. Yahoo Finance가 .KS/.KQ 티커에
+    // interval=1wk 요청 시 월봉 데이터를 돌려주는 버그가 있어, 주봉이 월봉처럼
+    // 보이는 문제를 회피한다. 네이버 siseJson은 timeframe=week/month를 지원.
+    if ((interval == '1wk' || interval == '1mo') && isDomestic) {
+      final isIndex = _naverSymbols.containsKey(ticker);
+      final naverSymbol = isIndex ? _naverSymbols[ticker]! : ticker;
+      final timeframe = interval == '1wk' ? 'week' : 'month';
+      final cacheKey = '$ticker:naver:$interval:$range';
+      final naverFetchedAt = _ohlcCacheFetchedAt[cacheKey];
+      if (_ohlcCache.containsKey(cacheKey) &&
+          naverFetchedAt != null &&
+          DateTime.now().difference(naverFetchedAt) < ohlcCacheDuration) {
+        return _ohlcCache[cacheKey]!;
+      }
+      final naverData = await _fetchNaverDailyOHLC(
+        naverSymbol,
+        range,
+        isIndex: isIndex,
+        timeframe: timeframe,
+      );
+      if (naverData.isNotEmpty) {
+        _ohlcCache[cacheKey] = naverData;
+        _ohlcCacheFetchedAt[cacheKey] = DateTime.now();
+        return naverData;
+      }
+      // 네이버 실패 시 아래 Yahoo 폴백으로 진행.
+    }
+
     final cacheKey = '$symbol:$interval:$range';
     final fetchedAt = _ohlcCacheFetchedAt[cacheKey];
     if (!isDomesticMinute &&

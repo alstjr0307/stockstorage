@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/post.dart';
 import '../services/firestore_service.dart';
 import '../services/storage_service.dart';
+import '../utils/bot_profiles.dart';
 
 // ─── Content block types ─────────────────────────────────────────────────────
 
@@ -33,12 +34,14 @@ class WritePostScreen extends StatefulWidget {
   final String uid;
   final String nickname;
   final Post? editingPost;
+  final bool isAdmin;
 
   const WritePostScreen({
     super.key,
     required this.uid,
     required this.nickname,
     this.editingPost,
+    this.isAdmin = false,
   });
 
   @override
@@ -52,6 +55,8 @@ class _WritePostScreenState extends State<WritePostScreen> {
   final List<Object> _blocks = []; // _TextBlock | _ImageBlock
   _TextBlock? _lastFocused;
   bool _saving = false;
+  // 관리자 전용: 봇 프로필 선택 시 그 닉네임/레벨/가짜 uid로 글 등록
+  BotProfile? _selectedBotProfile;
   static const _maxImages = 10;
   static final RegExp _imageRegex = RegExp(r'!\[[^\]]*\]\(([^)]+)\)');
 
@@ -280,9 +285,7 @@ class _WritePostScreenState extends State<WritePostScreen> {
 
   void _showMaxSnack() => ScaffoldMessenger.of(
     context,
-  ).showSnackBar(
-    SnackBar(content: Text('사진은 최대 $_maxImages장까지 첨부할 수 있습니다')),
-  );
+  ).showSnackBar(SnackBar(content: Text('사진은 최대 $_maxImages장까지 첨부할 수 있습니다')));
 
   void _showImageSourceSheet() {
     final cs = Theme.of(context).colorScheme;
@@ -332,6 +335,58 @@ class _WritePostScreenState extends State<WritePostScreen> {
         ),
       ),
     );
+  }
+
+  // ── 작성 계정(봇) 선택 ─────────────────────────────────────────────────────
+
+  Future<void> _pickBotProfile() async {
+    final cs = Theme.of(context).colorScheme;
+    final picked = await showModalBottomSheet<Object?>(
+      context: context,
+      backgroundColor: cs.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text(
+                  '글 작성 계정 선택',
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.person_rounded),
+                title: const Text('내 계정 (기본)'),
+                onTap: () => Navigator.pop(sheetContext, false),
+              ),
+              const Divider(height: 1),
+              ...botProfiles.map(
+                (p) => ListTile(
+                  leading: const Icon(Icons.smart_toy_outlined),
+                  title: Text(p.nickname),
+                  trailing: Text('Lv.${p.level}'),
+                  onTap: () => Navigator.pop(sheetContext, p),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (picked == false) {
+      setState(() => _selectedBotProfile = null);
+    } else if (picked is BotProfile) {
+      setState(() => _selectedBotProfile = picked);
+    }
   }
 
   // ── 등록 ──────────────────────────────────────────────────────────────────
@@ -405,7 +460,24 @@ class _WritePostScreenState extends State<WritePostScreen> {
     }
 
     try {
-      if (widget.editingPost == null) {
+      final botProfile = _selectedBotProfile;
+      if (widget.editingPost == null && botProfile != null) {
+        // 봇 계정으로 등록 — 닉네임/레벨/가짜 uid 사용, 통계 카운트 없음
+        await _fs.createBotPost(
+          Post(
+            id: '',
+            uid: generateFakeBotUid(),
+            nickname: botProfile.nickname,
+            title: title,
+            content: sb.toString(),
+            likes: 0,
+            createdAt: DateTime.now(),
+            imageUrls: const [],
+            authorLevel: botProfile.level,
+          ),
+          level: botProfile.level,
+        );
+      } else if (widget.editingPost == null) {
         await _fs.createPost(
           Post(
             id: '',
@@ -500,6 +572,59 @@ class _WritePostScreenState extends State<WritePostScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (widget.isAdmin && widget.editingPost == null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: InkWell(
+                        onTap: _pickBotProfile,
+                        borderRadius: BorderRadius.circular(999),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withValues(
+                              alpha: _selectedBotProfile != null ? 0.16 : 0.08,
+                            ),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: const Color(
+                                0xFF10B981,
+                              ).withValues(alpha: 0.35),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _selectedBotProfile != null
+                                    ? Icons.smart_toy_outlined
+                                    : Icons.person_rounded,
+                                size: 15,
+                                color: const Color(0xFF10B981),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _selectedBotProfile != null
+                                    ? '${_selectedBotProfile!.nickname} (봇 Lv.${_selectedBotProfile!.level})'
+                                    : '내 계정으로 작성',
+                                style: const TextStyle(
+                                  color: Color(0xFF10B981),
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                size: 16,
+                                color: Color(0xFF10B981),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   TextField(
                     controller: _titleCtrl,
                     style: TextStyle(
@@ -656,10 +781,8 @@ class _WritePostScreenState extends State<WritePostScreen> {
                     block.existingUrl ?? '',
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      height: 120,
-                      color: Colors.black12,
-                    ),
+                    errorBuilder: (_, __, ___) =>
+                        Container(height: 120, color: Colors.black12),
                   ),
           ),
           Positioned(

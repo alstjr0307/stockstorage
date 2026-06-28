@@ -67,3 +67,7 @@ android/play-account-*.json
 build_log.txt
 icon_log.txt
 deployment_cert.der
+
+# Claude worktrees & temp codex screenshots
+.claude/worktrees/
+codex_*.png
