@@ -7,6 +7,13 @@ final RegExp _urlRegex = RegExp(
   caseSensitive: false,
 );
 
+/// 법적 고지 링크. 구독 결제 화면 및 설정에서 사용.
+/// 개인정보처리방침은 자체 호스팅, 이용약관(EULA)은 Apple 표준 EULA 사용.
+const String kPrivacyPolicyUrl =
+    'https://tofusoft-software.github.io/Stockstorage/privacy.html';
+const String kTermsOfUseUrl =
+    'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+
 Future<void> openExternalUrl(String raw) async {
   var url = raw.trim();
   if (url.isEmpty) return;

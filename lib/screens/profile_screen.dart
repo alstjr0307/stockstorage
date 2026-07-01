@@ -6,6 +6,7 @@ import '../providers/theme_provider.dart';
 import '../services/ad_service.dart';
 import '../services/firestore_service.dart';
 import '../services/subscription_service.dart';
+import '../utils/link_utils.dart';
 import '../widgets/user_level_avatar.dart';
 import 'my_comments_screen.dart';
 import 'my_posts_screen.dart';
@@ -229,6 +230,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     activeThumbColor: _accent,
                   ),
                 ),
+              ),
+              _row(
+                icon: Icons.description_outlined,
+                label: '이용약관 (EULA)',
+                onTap: () => openExternalUrl(kTermsOfUseUrl),
+              ),
+              _row(
+                icon: Icons.privacy_tip_outlined,
+                label: '개인정보처리방침',
+                onTap: () => openExternalUrl(kPrivacyPolicyUrl),
               ),
               _row(
                 icon: Icons.logout_rounded,

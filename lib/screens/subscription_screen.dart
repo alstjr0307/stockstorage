@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../services/subscription_service.dart';
+import '../utils/link_utils.dart';
 
 class SubscriptionScreen extends StatelessWidget {
   const SubscriptionScreen({super.key});
@@ -47,13 +48,27 @@ class SubscriptionScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  subscription.displayPrice,
-                  style: const TextStyle(
-                    color: Color(0xFF10B981),
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      subscription.displayPrice,
+                      style: const TextStyle(
+                        color: Color(0xFF10B981),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(
+                      ' / 월 (월간 자동 갱신)',
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.55),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 20),
                 const _BenefitRow(text: '앱의 모든 광고 제거'),
@@ -121,7 +136,9 @@ class SubscriptionScreen extends StatelessWidget {
           ),
           Text(
             '결제는 ${Platform.isIOS ? 'App Store' : 'Google Play'} 계정으로 매월 자동 갱신됩니다. '
-            '해지 후에도 현재 결제 기간이 끝날 때까지 혜택을 이용할 수 있습니다.',
+            '구독은 현재 기간이 끝나기 최소 24시간 전에 해지하지 않으면 자동으로 갱신되며, '
+            '해지 후에도 현재 결제 기간이 끝날 때까지 혜택을 이용할 수 있습니다. '
+            '구독 관리 및 해지는 ${Platform.isIOS ? 'App Store' : 'Google Play'} 계정 설정에서 할 수 있습니다.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.45),
@@ -129,6 +146,28 @@ class SubscriptionScreen extends StatelessWidget {
               height: 1.55,
             ),
           ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _LegalLink(
+                label: '이용약관(EULA)',
+                onTap: () => openExternalUrl(kTermsOfUseUrl),
+              ),
+              Text(
+                '  ·  ',
+                style: TextStyle(
+                  color: cs.onSurface.withValues(alpha: 0.3),
+                  fontSize: 12,
+                ),
+              ),
+              _LegalLink(
+                label: '개인정보처리방침',
+                onTap: () => openExternalUrl(kPrivacyPolicyUrl),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
         ],
       ),
     );
@@ -159,6 +198,30 @@ class SubscriptionScreen extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(restored ? '구매를 복원했습니다.' : '복원할 구매 내역이 없어요.')),
+    );
+  }
+}
+
+class _LegalLink extends StatelessWidget {
+  const _LegalLink({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF3B82F6),
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          decoration: TextDecoration.underline,
+        ),
+      ),
     );
   }
 }

@@ -594,7 +594,15 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<bool> _ensureNickname(String uid) async {
     while (true) {
       if (!mounted) return false;
-      final existing = await _firestoreService.getNickname(uid);
+      final String? existing;
+      try {
+        existing = await _firestoreService.getNickname(uid);
+      } catch (_) {
+        // 이미 로그인(인증)은 성공한 상태. 닉네임 조회가 일시적으로 실패해도
+        // 로그인 실패처럼 보이는 에러를 띄우지 않고 그대로 입장시킨다.
+        // (닉네임은 홈 화면에서 다시 설정을 유도한다.)
+        return true;
+      }
       if (existing != null && existing.isNotEmpty) return true;
       if (!mounted) return false;
       await _showNicknameDialog(uid);
