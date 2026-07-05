@@ -165,6 +165,23 @@
     #an-detail-date { font-size: 12px; color: #888; margin-bottom: 16px; }
     #an-detail-body { font-size: 14px; color: #ccc; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
 
+    /* 시황분석 탭 넓게 + 리치 에디터 */
+    #tab-analysis.tab-content { max-width: 1080px; }
+    .rich-editor {
+      width: 100%; min-height: 380px; max-height: 72vh; overflow-y: auto;
+      padding: 16px 18px; background: #1A2035; border: 1px solid #2a3550;
+      border-radius: 8px; color: #fff; font-size: 15px; line-height: 1.75;
+      outline: none; word-break: break-word;
+    }
+    .rich-editor:focus { border-color: #4ADE80; }
+    .rich-editor:empty::before {
+      content: attr(data-placeholder); color: #555; pointer-events: none;
+    }
+    .rich-editor img {
+      display: block; max-width: 100%; max-height: 380px; object-fit: contain;
+      border-radius: 8px; border: 1px solid #2a3550; margin: 12px 0;
+    }
+
     .loading { text-align: center; color: #555; padding: 40px; }
     #kakao-btn {
       width: 100%; max-width: 320px; padding: 12px;
@@ -293,23 +310,18 @@
         <input type="text" id="an-title" placeholder="예: 2024년 4월 2주차 시황 분석" />
       </div>
       <div>
-        <label>내용</label>
-        <textarea id="an-body" placeholder="시황 분석 내용을 입력하세요..." style="min-height:200px;"></textarea>
-      </div>
-      <div>
-        <label>본문 중간 이미지 첨부 (최대 5장)</label>
-        <div id="an-img-drop" style="
-          border: 2px dashed #2a3550; border-radius: 10px; padding: 20px;
-          text-align: center; cursor: pointer; color: #555; font-size: 13px;
-          transition: border-color 0.2s;
-        " onclick="document.getElementById('an-img-input').click()"
-           ondragover="event.preventDefault();this.style.borderColor='#4ADE80'"
-           ondragleave="this.style.borderColor='#2a3550'"
-           ondrop="handleImgDrop(event)">
-          클릭하거나 이미지를 드래그하면 현재 커서 위치에 삽입됩니다
+        <label>내용 · 캡처한 이미지를 본문에 바로 붙여넣기(Ctrl+V) 하세요</label>
+        <div id="an-body" class="rich-editor" contenteditable="true"
+             data-placeholder="시황 분석 내용을 입력하세요. 이미지는 복사해서 본문에 바로 붙여넣거나(Ctrl+V) 드래그하면 그 자리에 삽입됩니다."></div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <button type="button" onclick="document.getElementById('an-img-input').click()" style="
+            background:none;border:1px solid #2a3550;color:#94a3b8;
+            padding:7px 13px;border-radius:8px;cursor:pointer;font-size:12px;">
+            🖼 이미지 파일 선택
+          </button>
+          <span style="font-size:11px;color:#555;">본문에 바로 붙여넣기/드래그도 가능 · 장수 제한 없음</span>
+          <input type="file" id="an-img-input" accept="image/*" multiple style="display:none" onchange="handleImgSelect(this.files)" />
         </div>
-        <input type="file" id="an-img-input" accept="image/*" multiple style="display:none" onchange="handleImgSelect(this.files)" />
-        <div id="an-img-preview" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>
       </div>
       <div style="display:flex;gap:8px;align-items:center;">
         <button class="submit-btn" id="an-btn" onclick="addAnalysis()" style="flex:1;">시황 분석 등록</button>
@@ -631,85 +643,127 @@
     } catch(e) { alert('오류: ' + e.message); }
   };
 
-  // 이미지 선택 관리
-  let anImgFiles = [];
+  // 이미지 선택 관리 (본문 인라인 편집기)
+  let anImgFiles = [];        // 업로드 대기 중인 파일 { id, file }
   let editingAnalysisId = null;
-  const MAX_IMGS = 5;
+  const anBodyEl = () => document.getElementById('an-body');
 
   function makeImgToken(id) {
     return `[[이미지:${id}]]`;
   }
 
-  function insertAtBodyCursor(text) {
-    const bodyEl = document.getElementById('an-body');
-    const start = bodyEl.selectionStart ?? bodyEl.value.length;
-    const end = bodyEl.selectionEnd ?? bodyEl.value.length;
-    const before = bodyEl.value.slice(0, start);
-    const after = bodyEl.value.slice(end);
-    const prefix = before && !before.endsWith('\n') ? '\n\n' : '';
-    const suffix = after && !after.startsWith('\n') ? '\n\n' : '';
-    const insert = `${prefix}${text}${suffix}`;
-    bodyEl.value = before + insert + after;
-    const pos = before.length + insert.length;
-    bodyEl.focus();
-    bodyEl.setSelectionRange(pos, pos);
+  function uid() {
+    return `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+
+  // 현재 커서(또는 본문 끝) 위치에 노드 삽입
+  function insertNodeAtCaret(node) {
+    const editor = anBodyEl();
+    editor.focus();
+    const sel = window.getSelection();
+    let range;
+    if (sel && sel.rangeCount && editor.contains(sel.anchorNode)) {
+      range = sel.getRangeAt(0);
+      range.deleteContents();
+    } else {
+      range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+    }
+    const br = document.createElement('br');
+    range.insertNode(br);
+    range.insertNode(node);
+    range.setStartAfter(br);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function insertImageFile(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const id = uid();
+    anImgFiles.push({ id, file });
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(file);
+    img.dataset.localId = id;
+    insertNodeAtCaret(img);
   }
 
   window.handleImgSelect = (files) => {
-    const newFiles = Array.from(files);
-    const inserted = [];
-    for (const f of newFiles) {
-      if (anImgFiles.length >= MAX_IMGS) break;
-      if (!anImgFiles.find(x => x.file.name === f.name && x.file.size === f.size)) {
-        const item = {
-          id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          file: f,
-        };
-        anImgFiles.push(item);
-        inserted.push(makeImgToken(item.id));
-      }
-    }
-    if (inserted.length) insertAtBodyCursor(inserted.join('\n\n'));
-    renderImgPreviews();
+    Array.from(files).forEach(insertImageFile);
     document.getElementById('an-img-input').value = '';
   };
 
-  window.handleImgDrop = (e) => {
-    e.preventDefault();
-    document.getElementById('an-img-drop').style.borderColor = '#2a3550';
-    handleImgSelect(e.dataTransfer.files);
-  };
+  // 붙여넣기 / 드래그로 이미지 삽입
+  (function setupEditor() {
+    const editor = anBodyEl();
+    if (!editor) return;
+    editor.addEventListener('paste', (e) => {
+      const items = e.clipboardData?.items || [];
+      const imgs = [];
+      for (const it of items) {
+        if (it.kind === 'file' && it.type.startsWith('image/')) {
+          const f = it.getAsFile();
+          if (f) imgs.push(f);
+        }
+      }
+      if (imgs.length) {
+        e.preventDefault();
+        imgs.forEach(insertImageFile);
+      } else {
+        // 서식 없는 순수 텍스트로 붙여넣기
+        const text = e.clipboardData.getData('text/plain');
+        if (text) { e.preventDefault(); document.execCommand('insertText', false, text); }
+      }
+    });
+    editor.addEventListener('dragover', (e) => { e.preventDefault(); editor.style.borderColor = '#4ADE80'; });
+    editor.addEventListener('dragleave', () => { editor.style.borderColor = ''; });
+    editor.addEventListener('drop', (e) => {
+      e.preventDefault();
+      editor.style.borderColor = '';
+      const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('image/'));
+      files.forEach(insertImageFile);
+    });
+  })();
 
-  window.removeImgPreview = (idx) => {
-    const item = anImgFiles[idx];
-    if (item) {
-      const bodyEl = document.getElementById('an-body');
-      bodyEl.value = bodyEl.value
-        .replace(makeImgToken(item.id), '')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
+  // 편집기 DOM → 본문 텍스트(이미지는 토큰/마크다운). 삭제된 이미지는 자동 제외됨.
+  function serializeNode(node) {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+    const tag = node.tagName;
+    if (tag === 'BR') return '\n';
+    if (tag === 'IMG') {
+      if (node.dataset.localId) return `\n${makeImgToken(node.dataset.localId)}\n`;
+      const url = node.dataset.url || node.getAttribute('src');
+      return url ? `\n![](${url})\n` : '';
     }
-    anImgFiles.splice(idx, 1);
-    renderImgPreviews();
-  };
+    let inner = '';
+    node.childNodes.forEach(c => { inner += serializeNode(c); });
+    return (tag === 'DIV' || tag === 'P') ? '\n' + inner : inner;
+  }
 
-  function renderImgPreviews() {
-    const container = document.getElementById('an-img-preview');
-    container.innerHTML = anImgFiles.map((item, i) => {
-      const url = URL.createObjectURL(item.file);
-      return `
-        <div style="position:relative;width:92px;flex-shrink:0;">
-          <img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #2a3550;" />
-          <button onclick="removeImgPreview(${i})" style="
-            position:absolute;top:-6px;right:-6px;width:20px;height:20px;
-            background:#f87171;border:none;border-radius:50%;color:#fff;
-            font-size:12px;cursor:pointer;line-height:20px;padding:0;
-          ">✕</button>
-          <div style="font-size:10px;color:#7b8499;margin-top:4px;word-break:break-all;">본문삽입됨</div>
-        </div>`;
-    }).join('');
-    const drop = document.getElementById('an-img-drop');
-    drop.style.display = anImgFiles.length >= MAX_IMGS ? 'none' : 'block';
+  function editorToRawBody() {
+    let out = '';
+    anBodyEl().childNodes.forEach(n => { out += serializeNode(n); });
+    return out.replace(/ /g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  // 본문 텍스트(마크다운) → 편집기 HTML (수정 모드 로드용)
+  function textToHtml(text) {
+    return escapeHtml(text).replace(/\n/g, '<br>');
+  }
+
+  function bodyToEditorHtml(body = '') {
+    const imgPattern = /!\[[^\]]*]\((https?:\/\/[^\s)]+)\)/g;
+    let html = '';
+    let last = 0, m;
+    while ((m = imgPattern.exec(body)) !== null) {
+      html += textToHtml(body.slice(last, m.index));
+      html += `<img src="${escapeHtml(m[1])}" data-url="${escapeHtml(m[1])}" />`;
+      last = m.index + m[0].length;
+    }
+    html += textToHtml(body.slice(last));
+    return html;
   }
 
   async function uploadAnalysisImages(items) {
@@ -738,11 +792,9 @@
 
   function resetAnalysisForm() {
     document.getElementById('an-title').value = '';
-    document.getElementById('an-body').value = '';
+    anBodyEl().innerHTML = '';
     anImgFiles = [];
     editingAnalysisId = null;
-    renderImgPreviews();
-    document.getElementById('an-img-drop').style.display = 'block';
     document.getElementById('an-btn').textContent = '시황 분석 등록';
     document.getElementById('an-cancel-edit-btn').style.display = 'none';
   }
@@ -757,7 +809,7 @@
     const btn = document.getElementById('an-btn');
     const msg = document.getElementById('an-msg');
     const title = document.getElementById('an-title').value.trim();
-    const rawBody = document.getElementById('an-body').value.trim();
+    const rawBody = editorToRawBody();
     if (!title || !rawBody) { showMsg(msg, 'error', '제목과 내용을 입력하세요.'); return; }
     btn.disabled = true;
     const isEditing = !!editingAnalysisId;
@@ -902,8 +954,7 @@
       editingAnalysisId = id;
       anImgFiles = [];
       document.getElementById('an-title').value = data.title || '';
-      document.getElementById('an-body').value = bodyForAnalysisEdit(data);
-      renderImgPreviews();
+      anBodyEl().innerHTML = bodyToEditorHtml(bodyForAnalysisEdit(data));
       document.getElementById('an-btn').textContent = '시황 분석 수정 저장';
       document.getElementById('an-cancel-edit-btn').style.display = 'inline-block';
       document.getElementById('an-title').scrollIntoView({ behavior: 'smooth', block: 'center' });
