@@ -1536,6 +1536,40 @@ exports.recordNightFuturesPrice = onSchedule(
   }
 );
 
+// ── 야간선물 개장 알림 (평일 18:05 KST, 전체 사용자) ─────────────────────────
+// notification_queue에 문서를 넣으면 onNotificationQueued 트리거가 전체
+// fcm_tokens로 발송한다(코스피/코스닥 야간선물은 18:00 개장).
+exports.notifyNightFuturesOpen = onSchedule(
+  { schedule: '5 18 * * 1-5', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 30 },
+  async () => {
+    // 휴장일이면 야간선물도 열리지 않으므로 건너뛴다. 코스피/코스닥의 "오늘
+    // 거래일" 여부로 판별 — 별도 공휴일 목록 관리 없이 자동으로 걸러진다.
+    // 데이터 조회 실패 시엔 알림을 보내지 않는다(오발송 방지).
+    let closedInfo;
+    try {
+      const marketData = await fetchMarketData();
+      closedInfo = getMarketClosedInfo(marketData);
+    } catch (e) {
+      console.warn('[NightFutures] 시장 데이터 조회 실패, 알림 생략:', e.message);
+      return;
+    }
+    if (closedInfo) {
+      console.log(`[NightFutures] 휴장(${closedInfo.reason})으로 알림 생략: ${closedInfo.dateKey}`);
+      return;
+    }
+
+    const db = getFirestore();
+    await db.collection('notification_queue').add({
+      title: '🌙 야간선물 개장',
+      body: '코스피200·코스닥150 야간선물이 개장했습니다. 지금 흐름을 확인해 보세요 →',
+      topic: 'stock_alerts',
+      route: 'night_futures',
+      createdAt: new Date(),
+    });
+    console.log('[NightFutures] 야간선물 개장 알림 큐잉 완료');
+  }
+);
+
 // getKospiNightFutures: Firestore에 쌓인 최신 야간선물 데이터 1건 반환
 exports.getKospiNightFutures = onCall(
   { region: 'asia-northeast3', timeoutSeconds: 10 },
