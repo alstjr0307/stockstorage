@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io';
+import '../utils/share_capture.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -199,12 +199,12 @@ class _NightFuturesChartScreenState extends State<NightFuturesChartScreen> {
       final image = await boundary.toImage(pixelRatio: 3);
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       if (data == null) return;
-      final file = File(
-        '${Directory.systemTemp.path}/night_futures_${DateTime.now().millisecondsSinceEpoch}.png',
+      final xfile = await pngToShareFile(
+        data.buffer.asUint8List(),
+        'night_futures_${DateTime.now().millisecondsSinceEpoch}.png',
       );
-      await file.writeAsBytes(data.buffer.asUint8List());
       await Share.shareXFiles(
-        [XFile(file.path)],
+        [xfile],
         text: '${widget.title} · 주식저장소 앱',
         sharePositionOrigin: _shareOrigin(),
       );

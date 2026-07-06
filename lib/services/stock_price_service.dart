@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 
 class StockSearchResult {
@@ -47,6 +48,30 @@ class StockPriceService {
   static final _hasKorean = RegExp(r'[가-힣ㄱ-ㅎㅏ-ㅣ]');
   static final _isNumericCode = RegExp(r'^\d{4,6}$');
 
+  /// HTTP GET 저수준 래퍼.
+  /// - 네이티브: 대상 서버로 직접 요청.
+  /// - 웹: 브라우저 CORS 차단을 우회하기 위해 Firebase Functions 의 `corsProxy`
+  ///   onCall 로 중계한다(프록시가 캐시/레이트리밋 담당).
+  static Future<http.Response> _pget(
+    Uri uri, {
+    Map<String, String>? headers,
+  }) {
+    if (!kIsWeb) return http.get(uri, headers: headers);
+    return FirebaseFunctions.instanceFor(region: 'asia-northeast3')
+        .httpsCallable('corsProxy')
+        .call(<String, dynamic>{
+          'url': uri.toString(),
+          'headers': headers ?? const <String, String>{},
+        })
+        .then((result) {
+          final data = (result.data as Map).cast<String, dynamic>();
+          return http.Response(
+            (data['body'] ?? '') as String,
+            (data['status'] ?? 502) as int,
+          );
+        });
+  }
+
   /// 쿼리에 한글이 있거나 숫자 코드면 네이버, 아니면 Yahoo Finance
   static Future<List<StockSearchResult>> searchStocks(String query) async {
     if (query.isEmpty) return [];
@@ -69,8 +94,7 @@ class StockPriceService {
           'type': 'main',
         },
       );
-      final response = await http
-          .get(
+      final response = await _pget(
             uri,
             headers: {
               'User-Agent': 'Mozilla/5.0',
@@ -124,8 +148,7 @@ class StockPriceService {
         'https://query2.finance.yahoo.com/v1/finance/search'
         '?q=${Uri.encodeComponent(query)}&quotesCount=10&newsCount=0',
       );
-      final response = await http
-          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+      final response = await _pget(uri, headers: {'User-Agent': 'Mozilla/5.0'})
           .timeout(const Duration(seconds: 6));
 
       if (response.statusCode != 200) return [];
@@ -233,8 +256,7 @@ class StockPriceService {
         'https://query1.finance.yahoo.com/v8/finance/chart/$symbol'
         '?interval=1d&range=1d',
       );
-      final response = await http
-          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+      final response = await _pget(uri, headers: {'User-Agent': 'Mozilla/5.0'})
           .timeout(const Duration(seconds: 8));
 
       if (response.statusCode != 200) return null;
@@ -343,8 +365,7 @@ class StockPriceService {
       final uri = Uri.parse(
         'https://polling.finance.naver.com/api/realtime/domestic/index/$naverSymbol',
       );
-      final response = await http
-          .get(
+      final response = await _pget(
             uri,
             headers: {
               'User-Agent': 'Mozilla/5.0',
@@ -402,8 +423,7 @@ class StockPriceService {
       final uri = Uri.parse(
         'https://polling.finance.naver.com/api/realtime/domestic/stock/$ticker',
       );
-      final response = await http
-          .get(
+      final response = await _pget(
             uri,
             headers: {
               'User-Agent': 'Mozilla/5.0',
@@ -524,8 +544,7 @@ class StockPriceService {
       final uri = Uri.parse(
         'https://polling.finance.naver.com/api/realtime/domestic/stock/$ticker',
       );
-      final res = await http
-          .get(
+      final res = await _pget(
             uri,
             headers: {
               'User-Agent': 'Mozilla/5.0',
@@ -730,8 +749,7 @@ class StockPriceService {
       '&startTime=${fmt(start)}&endTime=${fmt(end)}&timeframe=$timeframe',
     );
     try {
-      final response = await http
-          .get(
+      final response = await _pget(
             uri,
             headers: {
               'User-Agent': 'Mozilla/5.0',
@@ -788,8 +806,7 @@ class StockPriceService {
             final rtUri = Uri.parse(
               'https://polling.finance.naver.com/api/realtime/domestic/index/$naverSymbol',
             );
-            final rtRes = await http
-                .get(
+            final rtRes = await _pget(
                   rtUri,
                   headers: {
                     'User-Agent': 'Mozilla/5.0',
@@ -836,8 +853,7 @@ class StockPriceService {
           final rtUri = Uri.parse(
             'https://polling.finance.naver.com/api/realtime/domestic/stock/$naverSymbol',
           );
-          final rtRes = await http
-              .get(
+          final rtRes = await _pget(
                 rtUri,
                 headers: {
                   'User-Agent': 'Mozilla/5.0',
@@ -1028,8 +1044,7 @@ class StockPriceService {
         'https://query1.finance.yahoo.com/v8/finance/chart/$symbol'
         '?interval=$interval&range=$range',
       );
-      final response = await http
-          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+      final response = await _pget(uri, headers: {'User-Agent': 'Mozilla/5.0'})
           .timeout(const Duration(seconds: 8));
 
       if (response.statusCode != 200) {
@@ -1171,8 +1186,7 @@ class StockPriceService {
               'https://query1.finance.yahoo.com/v8/finance/chart/$symbol'
               '?interval=1d&range=5d',
             );
-            final supRes = await http
-                .get(supUri, headers: {'User-Agent': 'Mozilla/5.0'})
+            final supRes = await _pget(supUri, headers: {'User-Agent': 'Mozilla/5.0'})
                 .timeout(const Duration(seconds: 8));
             if (supRes.statusCode == 200) {
               final supJson = jsonDecode(supRes.body);
@@ -1275,8 +1289,7 @@ class StockPriceService {
       final uri = Uri.parse(
         'https://news.google.com/rss/search?q=$query&hl=ko&gl=KR&ceid=KR:ko',
       );
-      final response = await http
-          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+      final response = await _pget(uri, headers: {'User-Agent': 'Mozilla/5.0'})
           .timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return [];
 
@@ -1419,8 +1432,7 @@ class StockPriceService {
         'https://query1.finance.yahoo.com/v1/finance/search'
         '?q=${Uri.encodeComponent(symbol)}&quotesCount=0&newsCount=5',
       );
-      final response = await http
-          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+      final response = await _pget(uri, headers: {'User-Agent': 'Mozilla/5.0'})
           .timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return [];
       final json = jsonDecode(response.body);
@@ -1502,8 +1514,7 @@ class StockPriceService {
       final uri = Uri.parse(
         'https://production.dataviz.cnn.io/index/fearandgreed/graphdata',
       );
-      final response = await http
-          .get(
+      final response = await _pget(
             uri,
             headers: {
               'User-Agent':
@@ -1601,8 +1612,7 @@ class StockPriceService {
     final siseUri = Uri.parse(
       'https://finance.naver.com/item/sise.nhn?code=$ticker',
     );
-    final siseRes = await http
-        .get(
+    final siseRes = await _pget(
           siseUri,
           headers: {
             'User-Agent': 'Mozilla/5.0',
@@ -1628,8 +1638,7 @@ class StockPriceService {
     final mainUri = Uri.parse(
       'https://finance.naver.com/item/main.nhn?code=$ticker',
     );
-    final mainRes = await http
-        .get(
+    final mainRes = await _pget(
           mainUri,
           headers: {
             'User-Agent': 'Mozilla/5.0',
@@ -1737,8 +1746,7 @@ class StockPriceService {
     final uri = Uri.parse(
       'https://m.stock.naver.com/api/stock/$ticker/integration',
     );
-    final response = await http
-        .get(
+    final response = await _pget(
           uri,
           headers: {
             'User-Agent': 'Mozilla/5.0',
@@ -1798,8 +1806,7 @@ class StockPriceService {
   ) async {
     // 크럼이 없으면 발급
     if (_yahoocrumb == null) {
-      final cookieRes = await http
-          .get(
+      final cookieRes = await _pget(
             Uri.parse('https://fc.yahoo.com'),
             headers: {'User-Agent': 'Mozilla/5.0'},
           )
@@ -1809,8 +1816,7 @@ class StockPriceService {
           .map((c) => c.split(';').first.trim())
           .join('; ');
 
-      final crumbRes = await http
-          .get(
+      final crumbRes = await _pget(
             Uri.parse('https://query2.finance.yahoo.com/v1/test/getcrumb'),
             headers: {
               'User-Agent': 'Mozilla/5.0',
@@ -1825,8 +1831,7 @@ class StockPriceService {
       'https://query1.finance.yahoo.com/v10/finance/quoteSummary/$symbol'
       '?modules=summaryDetail,defaultKeyStatistics&crumb=${Uri.encodeComponent(_yahoocrumb!)}',
     );
-    final response = await http
-        .get(
+    final response = await _pget(
           uri,
           headers: {'User-Agent': 'Mozilla/5.0', 'Cookie': _yahooCookie ?? ''},
         )
@@ -1876,8 +1881,7 @@ class StockPriceService {
       final uri = Uri.parse(
         'https://finance.naver.com/item/board.nhn?code=$ticker&ordertype=&searchtype=&page=1',
       );
-      final response = await http
-          .get(
+      final response = await _pget(
             uri,
             headers: {
               'User-Agent': 'Mozilla/5.0',
@@ -1940,8 +1944,7 @@ class StockPriceService {
         'https://query1.finance.yahoo.com/v10/finance/quoteSummary/$symbol'
         '?modules=calendarEvents',
       );
-      final response = await http
-          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+      final response = await _pget(uri, headers: {'User-Agent': 'Mozilla/5.0'})
           .timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return null;
       final json = jsonDecode(response.body);
@@ -1978,8 +1981,7 @@ class StockPriceService {
         'https://query1.finance.yahoo.com/v8/finance/chart/$symbol'
         '?interval=$interval&period1=$period1&period2=$period2',
       );
-      final response = await http
-          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+      final response = await _pget(uri, headers: {'User-Agent': 'Mozilla/5.0'})
           .timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return [];
       final json = jsonDecode(response.body);
@@ -2008,8 +2010,7 @@ class StockPriceService {
         'https://query1.finance.yahoo.com/v8/finance/chart/$symbol'
         '?interval=$interval&range=$range',
       );
-      final response = await http
-          .get(uri, headers: {'User-Agent': 'Mozilla/5.0'})
+      final response = await _pget(uri, headers: {'User-Agent': 'Mozilla/5.0'})
           .timeout(const Duration(seconds: 8));
 
       if (response.statusCode != 200) return [];

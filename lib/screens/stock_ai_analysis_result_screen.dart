@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
 
@@ -14,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/stock_pick.dart';
 import '../services/ai_analysis_ad_gate.dart';
+import '../utils/share_capture.dart';
 import '../services/firestore_service.dart';
 // AdGate은 새로고침 버튼에서 사용
 import '../services/stock_price_service.dart';
@@ -1305,11 +1305,11 @@ class _AnalysisContentState extends State<_AnalysisContent> {
             format: ui.ImageByteFormat.png,
           );
           if (byteData == null) continue;
-          final file = File(
-            '${Directory.systemTemp.path}/ai_${tickerSafe}_${stamp}_${i + 1}.png',
+          final xfile = await pngToShareFile(
+            byteData.buffer.asUint8List(),
+            'ai_${tickerSafe}_${stamp}_${i + 1}.png',
           );
-          await file.writeAsBytes(byteData.buffer.asUint8List());
-          files.add(XFile(file.path));
+          files.add(xfile);
         } catch (e) {
           debugPrint('share capture failed at $i: $e');
         }

@@ -1,4 +1,4 @@
-import 'dart:io';
+import '../utils/share_capture.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -109,12 +109,12 @@ class _MarketSentimentScreenState extends State<MarketSentimentScreen> {
       final image = await boundary.toImage(pixelRatio: 3);
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       if (data == null) return;
-      final file = File(
-        '${Directory.systemTemp.path}/sentiment_${DateTime.now().millisecondsSinceEpoch}.png',
+      final xfile = await pngToShareFile(
+        data.buffer.asUint8List(),
+        'sentiment_${DateTime.now().millisecondsSinceEpoch}.png',
       );
-      await file.writeAsBytes(data.buffer.asUint8List());
       await Share.shareXFiles(
-        [XFile(file.path)],
+        [xfile],
         text: '주식저장소 시장 심리 지표',
         sharePositionOrigin: _shareOrigin(),
       );

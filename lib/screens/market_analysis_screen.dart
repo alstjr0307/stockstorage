@@ -1,4 +1,4 @@
-import 'dart:io';
+import '../utils/share_capture.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -2421,12 +2422,12 @@ class _FmkoreaHotShareSheetState extends State<_FmkoreaHotShareSheet> {
       final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return;
-      final file = File(
-        '${Directory.systemTemp.path}/fmkorea_hot_${DateTime.now().millisecondsSinceEpoch}.png',
+      final xfile = await pngToShareFile(
+        byteData.buffer.asUint8List(),
+        'fmkorea_hot_${DateTime.now().millisecondsSinceEpoch}.png',
       );
-      await file.writeAsBytes(byteData.buffer.asUint8List());
       await Share.shareXFiles(
-        [XFile(file.path)],
+        [xfile],
         text: '주식저장소 펨코 실시간 HOT 종목',
         sharePositionOrigin: _shareOrigin(),
       );
@@ -2985,13 +2986,13 @@ class _InvestorFlowDetailScreenState extends State<_InvestorFlowDetailScreen> {
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       if (data == null) return;
 
-      final file = File(
-        '${Directory.systemTemp.path}/investor_flow_${DateTime.now().millisecondsSinceEpoch}.png',
+      final xfile = await pngToShareFile(
+        data.buffer.asUint8List(),
+        'investor_flow_${DateTime.now().millisecondsSinceEpoch}.png',
       );
-      await file.writeAsBytes(data.buffer.asUint8List());
 
       await Share.shareXFiles(
-        [XFile(file.path)],
+        [xfile],
         text: '주식저장소 마감수급',
         sharePositionOrigin: _shareOrigin(),
       );
@@ -3152,13 +3153,13 @@ class _FmkoreaIndexDetailScreenState extends State<_FmkoreaIndexDetailScreen> {
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       if (data == null) return;
 
-      final file = File(
-        '${Directory.systemTemp.path}/fmkorea_index_${DateTime.now().millisecondsSinceEpoch}.png',
+      final xfile = await pngToShareFile(
+        data.buffer.asUint8List(),
+        'fmkorea_index_${DateTime.now().millisecondsSinceEpoch}.png',
       );
-      await file.writeAsBytes(data.buffer.asUint8List());
 
       await Share.shareXFiles(
-        [XFile(file.path)],
+        [xfile],
         text: '주식저장소 펨코지수',
         sharePositionOrigin: _shareOrigin(),
       );
@@ -4007,13 +4008,14 @@ class _FmkoreaIndexCard extends StatelessWidget {
       '&startTime=${fmt.format(start)}&endTime=${fmt.format(end)}&timeframe=day',
     );
     try {
-      final client = HttpClient();
-      final req = await client.getUrl(uri);
-      req.headers.set('Referer', 'https://finance.naver.com');
-      req.headers.set('User-Agent', 'Mozilla/5.0');
-      final res = await req.close();
-      final body = await res.transform(const SystemEncoding().decoder).join();
-      client.close();
+      final res = await http.get(
+        uri,
+        headers: const {
+          'Referer': 'https://finance.naver.com',
+          'User-Agent': 'Mozilla/5.0',
+        },
+      );
+      final body = res.body;
       // format: ["YYYYMMDD", open, high, low, close, ...]
       final rows = RegExp(
         r'\["(\d{8})",\s*[\d.]+,\s*[\d.]+,\s*[\d.]+,\s*([\d.]+)',

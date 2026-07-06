@@ -1,5 +1,7 @@
 // 봇 계정으로 글/댓글을 작성할 때 공통으로 쓰는 가짜 프로필 풀.
 
+import 'dart:math';
+
 typedef BotProfile = ({String nickname, int level});
 
 const List<BotProfile> botProfiles = [
@@ -110,13 +112,12 @@ const List<BotProfile> botProfiles = [
 String generateFakeBotUid() {
   const chars =
       'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  final rng = DateTime.now().microsecondsSinceEpoch;
+  // 웹(JS)에서는 64비트 정수 연산이 정확하지 않으므로 Random 으로 대체.
+  // 원래도 now() 시드 기반 비결정적 값이라 동작상 차이 없음.
+  final rng = Random();
   final buf = StringBuffer();
-  var seed = rng;
   for (var i = 0; i < 28; i++) {
-    seed =
-        (seed * 6364136223846793005 + 1442695040888963407) & 0x7FFFFFFFFFFFFFFF;
-    buf.write(chars[seed % chars.length]);
+    buf.write(chars[rng.nextInt(chars.length)]);
   }
   return buf.toString();
 }

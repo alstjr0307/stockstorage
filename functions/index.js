@@ -24,6 +24,7 @@ const {
   saveDailyInvestorFlow,
 } = require('./investor_flow');
 const { runCalendarSync, notifyTodayEvents } = require('./market_calendar');
+const { corsProxy } = require('./cors_proxy');
 
 initializeApp();
 
@@ -194,6 +195,7 @@ async function getFollowerUids(db, followCollection, targetUid) {
 }
 
 exports.crawlDailyInvestorFlow = crawlDailyInvestorFlow;
+exports.corsProxy = corsProxy;
 exports.runDailyInvestorFlowNow = onCall(
   { region: 'asia-northeast3', timeoutSeconds: 120 },
   async () => {

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -42,13 +41,27 @@ class SubscriptionService extends ChangeNotifier {
   Package? get monthlyPackage => _monthlyPackage;
   String get displayPrice =>
       _monthlyPackage?.storeProduct.priceString ?? '월 15,000원';
+  bool get _isAppleStore =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+  String get _storeName => _isAppleStore ? 'App Store' : 'Google Play';
 
   Future<void> initialize() async {
-    if (kIsWeb || !(Platform.isAndroid || Platform.isIOS)) return;
-    final apiKey = Platform.isAndroid ? androidApiKey : iosApiKey;
-    if (apiKey.isEmpty) return;
+    if (kIsWeb) return;
+    final isAndroid = defaultTargetPlatform == TargetPlatform.android;
+    final isIOS = defaultTargetPlatform == TargetPlatform.iOS;
+    if (!(isAndroid || isIOS)) return;
+    final apiKey = isAndroid ? androidApiKey : iosApiKey;
+    if (apiKey.isEmpty) {
+      _error =
+          'RevenueCat ${_isAppleStore ? 'iOS' : 'Android'} Public SDK key가 필요합니다.';
+      notifyListeners();
+      return;
+    }
 
     try {
+      if (kDebugMode) {
+        await Purchases.setLogLevel(LogLevel.debug);
+      }
       final config = PurchasesConfiguration(apiKey)
         ..appUserID = FirebaseAuth.instance.currentUser?.uid
         ..entitlementVerificationMode =
@@ -60,8 +73,9 @@ class SubscriptionService extends ChangeNotifier {
         _syncUser,
       );
       await refresh();
-    } catch (_) {
-      _error = '스토어 결제 연결을 준비 중입니다.';
+    } catch (e) {
+      _error = '$_storeName 결제 연결을 준비하지 못했어요.';
+      debugPrint('[SubscriptionService] configure failed: $e');
       notifyListeners();
     }
   }
@@ -75,7 +89,8 @@ class SubscriptionService extends ChangeNotifier {
           : (await Purchases.logIn(user.uid)).customerInfo;
       _applyCustomerInfo(info);
       await loadOffering();
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[SubscriptionService] auth sync failed: $e');
       await refresh();
     }
   }
@@ -87,6 +102,7 @@ class SubscriptionService extends ChangeNotifier {
       await loadOffering();
     } catch (e) {
       _error = '구독 정보를 불러오지 못했어요.';
+      debugPrint('[SubscriptionService] refresh failed: $e');
       notifyListeners();
     }
   }
@@ -101,8 +117,9 @@ class SubscriptionService extends ChangeNotifier {
               .where((item) => item.storeProduct.identifier == productId)
               .firstOrNull;
       _error = _monthlyPackage == null ? '스토어 상품을 준비 중입니다.' : null;
-    } catch (_) {
+    } catch (e) {
       _error = '스토어 상품을 불러오지 못했어요.';
+      debugPrint('[SubscriptionService] offering load failed: $e');
     }
     notifyListeners();
   }
@@ -149,7 +166,10 @@ class SubscriptionService extends ChangeNotifier {
     try {
       _applyCustomerInfo(await Purchases.restorePurchases());
       return _isPremium;
-    } catch (_) {
+    } catch (e) {
+      _lastPurchaseError = '구매 복원을 완료하지 못했어요.';
+      debugPrint('[SubscriptionService] restore failed: $e');
+      notifyListeners();
       return false;
     } finally {
       _setLoading(false);
@@ -157,7 +177,7 @@ class SubscriptionService extends ChangeNotifier {
   }
 
   Future<void> openManageSubscription() async {
-    final uri = Platform.isAndroid
+    final uri = defaultTargetPlatform == TargetPlatform.android
         ? Uri.parse(
             'https://play.google.com/store/account/subscriptions'
             '?sku=$productId&package=www.stockstorage.stockdiary',
@@ -170,9 +190,9 @@ class SubscriptionService extends ChangeNotifier {
     final next = info.entitlements.active.containsKey(entitlementId);
     // 구독 변동(만료 포함)을 공개 프로필에 반영해 다른 유저 아바타 왕관과 동기화.
     _mirrorPremiumToPublic(next);
+    AdService.setPremium(next);
     if (_isPremium == next) return;
     _isPremium = next;
-    AdService.setPremium(next);
     notifyListeners();
   }
 
@@ -198,33 +218,28 @@ class SubscriptionService extends ChangeNotifier {
     final detail = _compactPurchaseErrorDetail(e);
     final base = switch (code) {
       PurchasesErrorCode.productNotAvailableForPurchaseError =>
-        '구독 상품이 현재 구매 가능한 상태가 아니에요. 스토어 상품 설정을 확인해 주세요.',
+        '구독 상품이 현재 구매 가능한 상태가 아니에요. $_storeName 상품 설정을 확인해 주세요.',
       PurchasesErrorCode.purchaseNotAllowedError =>
-        '이 계정에서는 결제가 허용되지 않았어요.',
+        '이 $_storeName 계정에서는 결제가 허용되지 않았어요.',
       PurchasesErrorCode.purchaseInvalidError ||
       PurchasesErrorCode.storeProblemError =>
-        '결제가 완료되지 않았어요. 결제수단과 스토어 계정 상태를 확인해 주세요.',
+        '$_storeName 결제가 완료되지 않았어요. 테스트 계정과 결제 상태를 확인해 주세요.',
       PurchasesErrorCode.paymentPendingError =>
-        '결제가 대기 중입니다. 스토어에서 결제 상태가 확정되면 자동 반영됩니다.',
+        '결제가 대기 중입니다. $_storeName에서 결제 상태가 확정되면 자동 반영됩니다.',
       PurchasesErrorCode.productAlreadyPurchasedError =>
         '이미 구매한 구독이 있어요. 구매 복원을 눌러 상태를 갱신해 주세요.',
       PurchasesErrorCode.networkError ||
-      PurchasesErrorCode.offlineConnectionError =>
-        '네트워크 연결 문제로 결제를 확인하지 못했어요.',
+      PurchasesErrorCode.offlineConnectionError => '네트워크 연결 문제로 결제를 확인하지 못했어요.',
       PurchasesErrorCode.configurationError ||
       PurchasesErrorCode.invalidCredentialsError =>
-        '구독 설정을 확인해야 합니다. 스토어 연결 상태를 점검해 주세요.',
-      _ =>
-        '결제를 완료하지 못했어요. 스토어 결제 상태를 확인해 주세요.',
+        '구독 설정을 확인해야 합니다. RevenueCat/$_storeName 연결 상태를 점검해 주세요.',
+      _ => '결제를 완료하지 못했어요. $_storeName 결제 상태를 확인해 주세요.',
     };
     return '$base (${code.name}${detail == null ? '' : ': $detail'})';
   }
 
   String? _compactPurchaseErrorDetail(PlatformException e) {
-    final raw = [
-      e.message,
-      if (e.details != null) e.details.toString(),
-    ]
+    final raw = [e.message, if (e.details != null) e.details.toString()]
         .whereType<String>()
         .map((value) => value.replaceAll(RegExp(r'\s+'), ' ').trim())
         .where((value) => value.isNotEmpty)

@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Admin Docs Static",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8123", "--directory", "docs"],
+      "port": 8123
+    },
+    {
+      "name": "Flutter Web Build",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8200", "--directory", "build/web"],
+      "port": 8200
+    },
+    {
+      "name": "Firebase Emulators",
+      "runtimeExecutable": "firebase",
+      "runtimeArgs": ["emulators:start"],
+      "port": 4000
+    },
+    {
+      "name": "Firebase Functions Emulator",
+      "runtimeExecutable": "firebase",
+      "runtimeArgs": ["emulators:start", "--only", "functions"],
+      "port": 5001
+    }
+  ]
+}

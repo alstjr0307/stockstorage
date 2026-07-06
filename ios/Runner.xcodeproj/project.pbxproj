@@ -19,6 +19,7 @@
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
 		A1B2C3D4E5F60001A0B1C2D3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002A0B1C2D3 /* PrivacyInfo.xcprivacy */; };
+		D2639B612FEC4897000E466D /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D2639B602FEC4896000E466D /* StoreKit.framework */; };
 		E9E8AB55C97F3B4BA00A581C /* Pods_RunnerTests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AF1C024AC3484F92D7AE7B90 /* Pods_RunnerTests.framework */; };
 /* End PBXBuildFile section */
 
@@ -71,6 +72,7 @@
 		A1B2C3D4E5F60002A0B1C2D3 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		AF1C024AC3484F92D7AE7B90 /* Pods_RunnerTests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_RunnerTests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		B2F8D12C7AE5DD9FBE445858 /* Pods-RunnerTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.release.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.release.xcconfig"; sourceTree = "<group>"; };
+		D2639B602FEC4896000E466D /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		D28CE90B2F5989DB00128A3B /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
 		E12ECBEE5DC74B34913FBE2A /* Pods-RunnerTests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-RunnerTests.debug.xcconfig"; path = "Target Support Files/Pods-RunnerTests/Pods-RunnerTests.debug.xcconfig"; sourceTree = "<group>"; };
 		FFC47B6248C005146FBEADF1 /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
@@ -81,6 +83,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D2639B612FEC4897000E466D /* StoreKit.framework in Frameworks */,
 				78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */,
 				72413DFFCBAD3B96E86C90EE /* Pods_Runner.framework in Frameworks */,
 			);
@@ -100,6 +103,7 @@
 		2C5DAA546857661069953C65 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				D2639B602FEC4896000E466D /* StoreKit.framework */,
 				5ACA1F5559F6347C05B08E0E /* Pods_Runner.framework */,
 				AF1C024AC3484F92D7AE7B90 /* Pods_RunnerTests.framework */,
 			);
@@ -214,7 +218,7 @@
 				3B06AD1E1E4923F5004D2608 /* Thin Binary */,
 				C4BBED973A7082670D825FD5 /* [CP] Embed Pods Frameworks */,
 				B2E60757B510EB8428D21258 /* [CP] Copy Pods Resources */,
-				8C04178E70213D87068DE277 /* Fix Simulator Platform Tags */,
+				816BF51C5EAE0B267EB4BB55 /* Fix Simulator Platform Tags */,
 			);
 			buildRules = (
 			);
@@ -245,6 +249,11 @@
 					97C146ED1CF9000F007C117D = {
 						CreatedOnToolsVersion = 7.3.1;
 						LastSwiftMigration = 1100;
+						SystemCapabilities = {
+							com.apple.InAppPurchase = {
+								enabled = 1;
+							};
+						};
 					};
 				};
 			};
@@ -294,24 +303,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		1FC01D14A52176C625D6B32E /* Fix Simulator Platform Tags */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Fix Simulator Platform Tags";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "if [ \"${PLATFORM_NAME}\" = \"iphonesimulator\" ]; then\n  echo \"Skipping Fix Simulator Platform Tags on simulator build\"\n  exit 0\nfi\nfind \"${CODESIGNING_FOLDER_PATH}/Frameworks\" -name \"*.framework\" -type d | while read framework; do\n  binary=\"${framework}/$(basename ${framework} .framework)\"\n  if [ ! -f \"${binary}\" ]; then continue; fi\n  platform=$(vtool -show-build \"${binary}\" 2>/dev/null | awk '/platform/{print $2}')\n  if [ \"${platform}\" = \"IOSSIMULATOR\" ]; then\n    minos=\"${IPHONEOS_DEPLOYMENT_TARGET:-14.0}\"\n    vtool -set-build-version ios ${minos} ${minos} -replace -output \"${binary}\" \"${binary}\"\n    codesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" --preserve-metadata=entitlements \"${framework}\"\n  fi\ndone\n";
-		};
 		3B06AD1E1E4923F5004D2608 /* Thin Binary */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -328,7 +319,7 @@
 			shellPath = /bin/sh;
 			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" embed_and_thin";
 		};
-		8C04178E70213D87068DE277 /* Fix Simulator Platform Tags */ = {
+		816BF51C5EAE0B267EB4BB55 /* Fix Simulator Platform Tags */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -382,6 +373,24 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "/bin/sh \"$FLUTTER_ROOT/packages/flutter_tools/bin/xcode_backend.sh\" build";
+		};
+		9AB86FEAB66AA4195586BB89 /* Fix Simulator Platform Tags */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Fix Simulator Platform Tags";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"${PLATFORM_NAME}\" = \"iphonesimulator\" ]; then\n  echo \"Skipping Fix Simulator Platform Tags on simulator build\"\n  exit 0\nfi\nfind \"${CODESIGNING_FOLDER_PATH}/Frameworks\" -name \"*.framework\" -type d | while read framework; do\n  binary=\"${framework}/$(basename ${framework} .framework)\"\n  if [ ! -f \"${binary}\" ]; then continue; fi\n  platform=$(vtool -show-build \"${binary}\" 2>/dev/null | awk '/platform/{print $2}')\n  if [ \"${platform}\" = \"IOSSIMULATOR\" ]; then\n    minos=\"${IPHONEOS_DEPLOYMENT_TARGET:-14.0}\"\n    vtool -set-build-version ios ${minos} ${minos} -replace -output \"${binary}\" \"${binary}\"\n    codesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" --preserve-metadata=entitlements \"${framework}\"\n  fi\ndone\n";
 		};
 		B2E60757B510EB8428D21258 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;

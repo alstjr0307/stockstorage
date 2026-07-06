@@ -1,26 +1,25 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
 import 'package:firebase_core/firebase_core.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart';
 import 'package:provider/provider.dart';
 import 'package:timeago/timeago.dart' as timeago;
-import 'package:app_tracking_transparency/app_tracking_transparency.dart';
+import 'boot/native_boot.dart' as native;
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
-import 'services/ad_service.dart';
 import 'services/analytics_service.dart';
-import 'services/deep_link_service.dart';
-import 'services/notification_service.dart';
 import 'services/subscription_service.dart';
+import 'web/web_shell.dart';
 import 'firebase_options.dart';
 import 'utils/globals.dart';
+
+// 카카오 앱 키 (네이티브/자바스크립트). 웹은 javascriptAppKey 로 로그인.
+const _kakaoNativeAppKey = '23dd91427bb7ac2055aab304681da522';
+const _kakaoJavaScriptAppKey = String.fromEnvironment('KAKAO_JS_KEY');
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,52 +33,32 @@ void main() async {
     if (e.code != 'duplicate-app') rethrow;
   }
 
-  // Firebase App Check 초기화
-  // Debug provider 토큰은 앱 데이터 초기화 때마다 바뀔 수 있어 로컬 개발 중에는
-  // App Check를 켜지 않는다. 릴리즈 빌드에서만 실제 attestation을 사용한다.
-  if (!kDebugMode) {
-    try {
-      await FirebaseAppCheck.instance.activate(
-        androidProvider: AndroidProvider.playIntegrity,
-        appleProvider: AppleProvider.deviceCheck,
-      );
-    } catch (_) {
-      // 에뮬레이터 등 지원 안 되는 환경에서 무시
-    }
-  }
+  // Firebase App Check (네이티브 전용, 웹 no-op)
+  await native.activateAppCheck();
 
-  // FCM 백그라운드 핸들러 등록 (Firebase 초기화 직후)
-  NotificationService.registerBackgroundHandler();
+  // FCM 백그라운드 핸들러 등록 (Firebase 초기화 직후, 웹 no-op)
+  native.registerFcmBackgroundHandler();
 
-  // 카카오 SDK 초기화
-  KakaoSdk.init(nativeAppKey: '23dd91427bb7ac2055aab304681da522');
+  // 카카오 SDK 초기화 (웹은 javascriptAppKey 사용)
+  KakaoSdk.init(
+    nativeAppKey: _kakaoNativeAppKey,
+    javaScriptAppKey: _kakaoJavaScriptAppKey.isEmpty
+        ? _kakaoNativeAppKey
+        : _kakaoJavaScriptAppKey,
+  );
 
   AnalyticsService.instance.init();
   await SubscriptionService.instance.initialize();
-  await DeepLinkService.init();
+  await native.initDeepLinks();
   timeago.setLocaleMessages('ko', timeago.KoMessages());
   runApp(const StockStorageApp());
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    NotificationService.instance.init();
+    native.initNotifications();
   });
 }
 
-Future<void> initAds() async {
-  if (!kIsWeb && Platform.isIOS) {
-    // UI가 완전히 로드된 후 ATT 팝업 표시 (Apple 심사 요건)
-    await Future.delayed(const Duration(milliseconds: 300));
-    var status = await AppTrackingTransparency.trackingAuthorizationStatus;
-    if (status == TrackingStatus.notDetermined) {
-      status = await AppTrackingTransparency.requestTrackingAuthorization();
-    }
-    // ATT 동의 여부를 Meta SDK에 전달 (광고 식별자 추적 허용 여부)
-    await AnalyticsService.instance.setAdvertiserTracking(
-      status == TrackingStatus.authorized,
-    );
-  }
-  await MobileAds.instance.initialize();
-  AdService.instance.loadInterstitial();
-}
+/// 광고 초기화 진입점(홈 화면에서 호출). 웹은 no-op.
+Future<void> initAds() => native.initAds();
 
 class StockStorageApp extends StatelessWidget {
   const StockStorageApp({super.key});
@@ -160,7 +139,7 @@ class StockStorageApp extends StatelessWidget {
               backgroundColor: Color(0xFF0A0E1A),
             ),
           ),
-          home: const _RootGate(),
+          home: kIsWeb ? const WebShell() : const _RootGate(),
         ),
       ),
     );

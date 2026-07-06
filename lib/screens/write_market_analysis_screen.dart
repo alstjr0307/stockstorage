@@ -1,6 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import '../utils/local_image.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/market_analysis.dart';
 import '../services/firestore_service.dart';
@@ -768,8 +768,8 @@ class _WriteMarketAnalysisScreenState extends State<WriteMarketAnalysisScreen> {
 
     final imageWidget = block.url != null
         ? Image.network(block.url!, width: double.infinity, fit: BoxFit.cover)
-        : Image.file(
-            File(block.file!.path),
+        : localImage(
+            block.file!.path,
             width: double.infinity,
             fit: BoxFit.cover,
           );

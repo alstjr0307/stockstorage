@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'analytics_service.dart';
@@ -45,66 +44,66 @@ class AdService {
   static String get _bannerAdUnitId {
     if (kIsWeb) return '';
     if (_useTestAds) {
-      return Platform.isAndroid
+      return defaultTargetPlatform == TargetPlatform.android
           ? 'ca-app-pub-3940256099942544/6300978111'
           : 'ca-app-pub-3940256099942544/2934735716';
     }
-    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/8465933202';
+    if (defaultTargetPlatform == TargetPlatform.android) return 'ca-app-pub-6925657557995580/8465933202';
     return 'ca-app-pub-6925657557995580/6772176184';
   }
 
   static String get _stockInterstitialAdUnitId {
     if (kIsWeb) return '';
     if (_useTestAds) {
-      return Platform.isAndroid
+      return defaultTargetPlatform == TargetPlatform.android
           ? 'ca-app-pub-3940256099942544/1033173712'
           : 'ca-app-pub-3940256099942544/4411468910';
     }
-    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/5598098844';
+    if (defaultTargetPlatform == TargetPlatform.android) return 'ca-app-pub-6925657557995580/5598098844';
     return 'ca-app-pub-6925657557995580/5025289757';
   }
 
   static String get _indicatorInterstitialAdUnitId {
     if (kIsWeb) return '';
     if (_useTestAds) {
-      return Platform.isAndroid
+      return defaultTargetPlatform == TargetPlatform.android
           ? 'ca-app-pub-3940256099942544/1033173712'
           : 'ca-app-pub-3940256099942544/4411468910';
     }
-    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/7720689486';
+    if (defaultTargetPlatform == TargetPlatform.android) return 'ca-app-pub-6925657557995580/7720689486';
     return 'ca-app-pub-6925657557995580/2656065066';
   }
 
   static String get _aiAnalysisInterstitialAdUnitId {
     if (kIsWeb) return '';
     if (_useTestAds) {
-      return Platform.isAndroid
+      return defaultTargetPlatform == TargetPlatform.android
           ? 'ca-app-pub-3940256099942544/1033173712'
           : 'ca-app-pub-3940256099942544/4411468910';
     }
-    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/1747945525';
+    if (defaultTargetPlatform == TargetPlatform.android) return 'ca-app-pub-6925657557995580/1747945525';
     return 'ca-app-pub-6925657557995580/6808700518';
   }
 
   static String get _aiAnalysisListBannerAdUnitId {
     if (kIsWeb) return '';
     if (_useTestAds) {
-      return Platform.isAndroid
+      return defaultTargetPlatform == TargetPlatform.android
           ? 'ca-app-pub-3940256099942544/6300978111'
           : 'ca-app-pub-3940256099942544/2934735716';
     }
-    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/3496141466';
+    if (defaultTargetPlatform == TargetPlatform.android) return 'ca-app-pub-6925657557995580/3496141466';
     return 'ca-app-pub-6925657557995580/2550421535';
   }
 
   static String get _marketAnalysisMidBannerAdUnitId {
     if (kIsWeb) return '';
     if (_useTestAds) {
-      return Platform.isAndroid
+      return defaultTargetPlatform == TargetPlatform.android
           ? 'ca-app-pub-3940256099942544/6300978111'
           : 'ca-app-pub-3940256099942544/2934735716';
     }
-    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/6398470153';
+    if (defaultTargetPlatform == TargetPlatform.android) return 'ca-app-pub-6925657557995580/6398470153';
     return 'ca-app-pub-6925657557995580/3939218968';
   }
 
@@ -112,11 +111,11 @@ class AdService {
   static String get _rewardedAdUnitId {
     if (kIsWeb) return '';
     if (_useTestAds) {
-      return Platform.isAndroid
+      return defaultTargetPlatform == TargetPlatform.android
           ? 'ca-app-pub-3940256099942544/5224354917'
           : 'ca-app-pub-3940256099942544/1712485313';
     }
-    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/4898140479';
+    if (defaultTargetPlatform == TargetPlatform.android) return 'ca-app-pub-6925657557995580/4898140479';
     return 'ca-app-pub-6925657557995580/2080405446';
   }
 
@@ -124,11 +123,11 @@ class AdService {
   static String get _aiAnalysisRewardedAdUnitId {
     if (kIsWeb) return '';
     if (_useTestAds) {
-      return Platform.isAndroid
+      return defaultTargetPlatform == TargetPlatform.android
           ? 'ca-app-pub-3940256099942544/5224354917'
           : 'ca-app-pub-3940256099942544/1712485313';
     }
-    if (Platform.isAndroid) return 'ca-app-pub-6925657557995580/7513305300';
+    if (defaultTargetPlatform == TargetPlatform.android) return 'ca-app-pub-6925657557995580/7513305300';
     return 'ca-app-pub-6925657557995580/2524172276';
   }
 
