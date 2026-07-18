@@ -271,6 +271,54 @@
       resize: vertical;
       line-height: 1.6;
     }
+    .image-tools {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .image-hint {
+      color: #75839a;
+      font-size: 12px;
+    }
+    .image-preview {
+      display: none;
+      grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+      gap: 10px;
+    }
+    .image-preview.has-images {
+      display: grid;
+    }
+    .preview-item {
+      position: relative;
+      aspect-ratio: 1;
+      border: 1px solid #d8e0eb;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #eef3f8;
+    }
+    .preview-item img,
+    .post-thumb img,
+    .detail-images img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .remove-image-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 999px;
+      background: rgba(10,14,26,0.78);
+      color: #fff;
+      font-size: 18px;
+      line-height: 1;
+    }
     .compose-actions {
       display: flex;
       align-items: center;
@@ -358,6 +406,32 @@
       -webkit-line-clamp: 4;
       -webkit-box-orient: vertical;
       word-break: break-word;
+    }
+    .post-thumb {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #eef3f8;
+      border: 1px solid #e2e8f0;
+      margin-top: 12px;
+    }
+    .image-count-badge {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      min-width: 34px;
+      height: 26px;
+      padding: 0 9px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(10,14,26,0.76);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 800;
     }
     .post-actions {
       display: flex;
@@ -479,6 +553,24 @@
       line-height: 1.75;
       word-break: break-word;
       margin: 18px 0 24px;
+    }
+    .detail-images {
+      display: grid;
+      gap: 12px;
+      margin: 0 0 24px;
+    }
+    .detail-image-link {
+      display: block;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #eef3f8;
+      max-height: 520px;
+    }
+    .detail-image-link img {
+      object-fit: contain;
+      max-height: 520px;
+      background: #f8fafc;
     }
     .comments {
       border-top: 1px solid #e2e8f0;
@@ -635,6 +727,12 @@
           <div class="compose-grid">
             <input id="post-title" maxlength="80" placeholder="제목" />
             <textarea id="post-content" maxlength="3000" placeholder="내용을 입력하세요"></textarea>
+            <div class="image-tools">
+              <button class="ghost-btn" id="pick-images-btn" type="button">사진 첨부</button>
+              <span class="image-hint">최대 10장, 이미지 파일만 업로드할 수 있습니다.</span>
+              <input id="post-images" class="hidden" type="file" accept="image/*" multiple />
+            </div>
+            <div id="image-preview" class="image-preview" aria-label="첨부 사진 미리보기"></div>
           </div>
           <div class="compose-actions">
             <span class="counter"><span id="content-count">0</span>/3000</span>
@@ -674,6 +772,7 @@
       </header>
       <div class="modal-body">
         <div id="modal-content" class="detail-content"></div>
+        <div id="modal-images" class="detail-images"></div>
         <div id="modal-actions" class="post-actions"></div>
         <section class="comments" aria-labelledby="comments-title">
           <h3 id="comments-title">댓글</h3>
@@ -713,6 +812,12 @@
       runTransaction,
       serverTimestamp,
     } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+    import {
+      getDownloadURL,
+      getStorage,
+      ref,
+      uploadBytes,
+    } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
     const firebaseConfig = {
       apiKey: 'AIzaSyDIp4yXMzaYXj_XKv8UBrck6fzar4a0TgQ',
@@ -726,6 +831,7 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+    const storage = getStorage(app);
 
     const els = {
       authStatus: document.getElementById('auth-status'),
@@ -737,12 +843,16 @@
       modal: document.getElementById('post-modal'),
       modalActions: document.getElementById('modal-actions'),
       modalContent: document.getElementById('modal-content'),
+      modalImages: document.getElementById('modal-images'),
       modalMeta: document.getElementById('modal-meta'),
       modalTitle: document.getElementById('modal-title'),
       nicknameInput: document.getElementById('nickname-input'),
       postContent: document.getElementById('post-content'),
+      postImages: document.getElementById('post-images'),
       postList: document.getElementById('post-list'),
       postTitle: document.getElementById('post-title'),
+      pickImagesBtn: document.getElementById('pick-images-btn'),
+      imagePreview: document.getElementById('image-preview'),
       saveNicknameBtn: document.getElementById('save-nickname-btn'),
       searchInput: document.getElementById('search-input'),
       submitCommentBtn: document.getElementById('submit-comment-btn'),
@@ -754,9 +864,12 @@
       currentPost: null,
       likedPostIds: new Set(JSON.parse(localStorage.getItem('stockstorage.board.likes') || '[]')),
       posts: [],
+      selectedImages: [],
       user: null,
     };
 
+    const maxImages = 10;
+    const maxImageBytes = 8 * 1024 * 1024;
     const fallbackNickname = `방문자${Math.floor(1000 + Math.random() * 9000)}`;
     els.nicknameInput.value = localStorage.getItem('stockstorage.board.nickname') || fallbackNickname;
     const googleProvider = new GoogleAuthProvider();
@@ -784,6 +897,108 @@
 
     function normalizeText(text) {
       return String(text || '').trim();
+    }
+
+    function getImageUrls(post) {
+      return Array.isArray(post.imageUrls)
+        ? post.imageUrls.filter(url => typeof url === 'string' && url.trim())
+        : [];
+    }
+
+    function makeObjectUrl(file) {
+      const url = URL.createObjectURL(file);
+      state.selectedImages.push({ file, url });
+    }
+
+    function revokeSelectedImageUrls() {
+      state.selectedImages.forEach(item => URL.revokeObjectURL(item.url));
+    }
+
+    function resetSelectedImages() {
+      revokeSelectedImageUrls();
+      state.selectedImages = [];
+      els.postImages.value = '';
+      renderImagePreview();
+    }
+
+    function renderImagePreview() {
+      els.imagePreview.replaceChildren();
+      els.imagePreview.classList.toggle('has-images', state.selectedImages.length > 0);
+      state.selectedImages.forEach((item, index) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'preview-item';
+
+        const img = document.createElement('img');
+        img.src = item.url;
+        img.alt = `첨부 사진 ${index + 1}`;
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'remove-image-btn';
+        remove.setAttribute('aria-label', `첨부 사진 ${index + 1} 삭제`);
+        remove.textContent = '×';
+        remove.addEventListener('click', () => {
+          URL.revokeObjectURL(item.url);
+          state.selectedImages.splice(index, 1);
+          els.postImages.value = '';
+          renderImagePreview();
+        });
+
+        wrap.append(img, remove);
+        els.imagePreview.appendChild(wrap);
+      });
+    }
+
+    function handleImageSelection(files) {
+      const available = maxImages - state.selectedImages.length;
+      if (available <= 0) {
+        setStatus(`사진은 최대 ${maxImages}장까지 첨부할 수 있습니다.`, true);
+        return;
+      }
+
+      const selected = [...files].slice(0, available);
+      let skipped = 0;
+      selected.forEach(file => {
+        if (!file.type.startsWith('image/') || file.size > maxImageBytes) {
+          skipped += 1;
+          return;
+        }
+        makeObjectUrl(file);
+      });
+
+      if (files.length > available) {
+        setStatus(`사진은 최대 ${maxImages}장까지 첨부할 수 있습니다.`, true);
+      } else if (skipped > 0) {
+        setStatus('이미지 파일만 첨부할 수 있고, 파일당 8MB 이하만 업로드됩니다.', true);
+      } else if (state.selectedImages.length > 0) {
+        setStatus(`${state.selectedImages.length}장의 사진을 첨부했습니다.`);
+      }
+      renderImagePreview();
+    }
+
+    function getExtension(file) {
+      const byName = file.name.split('.').pop()?.toLowerCase();
+      if (['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(byName)) return byName;
+      if (file.type === 'image/png') return 'png';
+      if (file.type === 'image/webp') return 'webp';
+      if (file.type === 'image/gif') return 'gif';
+      return 'jpg';
+    }
+
+    async function uploadSelectedImages() {
+      if (!state.user || state.selectedImages.length === 0) return [];
+      const uploaded = [];
+      for (const item of state.selectedImages) {
+        const ext = getExtension(item.file);
+        const random = Math.random().toString(36).slice(2, 10);
+        const path = `post_images/${Date.now()}_${state.user.uid}_${random}.${ext}`;
+        const storageRef = ref(storage, path);
+        const snapshot = await uploadBytes(storageRef, item.file, {
+          contentType: item.file.type || 'image/jpeg',
+        });
+        uploaded.push(await getDownloadURL(snapshot.ref));
+      }
+      return uploaded;
     }
 
     function saveLikedIds() {
@@ -857,6 +1072,9 @@
       body.className = 'post-body';
       body.textContent = normalizeText(post.content);
 
+      const images = getImageUrls(post);
+      const thumb = images.length > 0 ? createPostThumbnail(images, post) : null;
+
       const actions = document.createElement('div');
       actions.className = 'post-actions';
       actions.append(createLikeButton(post));
@@ -868,8 +1086,53 @@
       commentButton.addEventListener('click', () => openPost(post));
       actions.append(commentButton);
 
-      article.append(head, body, actions);
+      article.append(head, body);
+      if (thumb) article.appendChild(thumb);
+      article.appendChild(actions);
       return article;
+    }
+
+    function createPostThumbnail(images, post) {
+      const thumb = document.createElement('button');
+      thumb.type = 'button';
+      thumb.className = 'post-thumb';
+      thumb.setAttribute('aria-label', '게시글 사진 보기');
+      thumb.addEventListener('click', () => openPost(post));
+
+      const img = document.createElement('img');
+      img.src = images[0];
+      img.alt = '게시글 첨부 사진';
+      img.loading = 'lazy';
+      thumb.appendChild(img);
+
+      if (images.length > 1) {
+        const count = document.createElement('span');
+        count.className = 'image-count-badge';
+        count.textContent = `+${images.length - 1}`;
+        thumb.appendChild(count);
+      }
+
+      return thumb;
+    }
+
+    function renderDetailImages(post) {
+      const images = getImageUrls(post);
+      els.modalImages.replaceChildren();
+      if (images.length === 0) return;
+      images.forEach((url, index) => {
+        const link = document.createElement('a');
+        link.className = 'detail-image-link';
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener';
+
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = `첨부 사진 ${index + 1}`;
+        img.loading = 'lazy';
+        link.appendChild(img);
+        els.modalImages.appendChild(link);
+      });
     }
 
     function metaItem(text, className = '') {
@@ -904,29 +1167,33 @@
         els.postTitle.focus();
         return;
       }
-      if (content.length < 2) {
+      if (content.length < 2 && state.selectedImages.length === 0) {
         els.postContent.focus();
         return;
       }
 
       els.submitPostBtn.disabled = true;
       try {
+        setStatus(state.selectedImages.length > 0 ? '사진을 업로드하는 중입니다.' : '글을 등록하는 중입니다.');
+        const imageUrls = await uploadSelectedImages();
         await addDoc(collection(db, 'posts'), {
           uid: state.user.uid,
           nickname: getNickname(),
           title,
           content,
           likes: 0,
-          imageUrls: [],
+          imageUrls,
           createdAt: serverTimestamp(),
         });
         els.postTitle.value = '';
         els.postContent.value = '';
         els.contentCount.textContent = '0';
+        resetSelectedImages();
+        setStatus('게시글을 등록했습니다.');
       } catch (error) {
         setStatus(`글 등록 실패: ${error.message}`, true);
       } finally {
-        els.submitPostBtn.disabled = false;
+        els.submitPostBtn.disabled = !state.user;
       }
     }
 
@@ -984,6 +1251,7 @@
         metaItem(formatDate(post.createdAt)),
       );
       els.modalContent.textContent = normalizeText(post.content);
+      renderDetailImages(post);
       els.modalActions.replaceChildren(createLikeButton(post));
 
       const deleteButton = document.createElement('button');
@@ -1138,6 +1406,14 @@
 
     els.postContent.addEventListener('input', () => {
       els.contentCount.textContent = String(els.postContent.value.length);
+    });
+
+    els.pickImagesBtn.addEventListener('click', () => {
+      els.postImages.click();
+    });
+
+    els.postImages.addEventListener('change', event => {
+      handleImageSelection(event.target.files || []);
     });
 
     els.searchInput.addEventListener('input', renderPosts);
