@@ -131,30 +131,18 @@
       box-shadow: 0 12px 28px rgba(18, 28, 45, 0.08);
       min-width: 0;
     }
-    .profile-panel label {
-      display: block;
+    .profile-label {
       color: #64748b;
       font-size: 12px;
       font-weight: 800;
       margin-bottom: 8px;
     }
-    .nickname-row {
-      display: flex;
-      gap: 8px;
-    }
-    .nickname-row input {
-      min-width: 0;
-      flex: 1;
-      height: 42px;
-      border: 1px solid #d8e0eb;
-      border-radius: 8px;
-      padding: 0 12px;
-      outline: none;
-      color: #172033;
-    }
-    .nickname-row input:focus {
-      border-color: #22c55e;
-      box-shadow: 0 0 0 3px rgba(34,197,94,0.12);
+    .profile-name {
+      color: #111827;
+      font-size: 18px;
+      font-weight: 850;
+      line-height: 1.3;
+      word-break: break-word;
     }
     .secondary-btn,
     .primary-btn,
@@ -662,9 +650,6 @@
         align-items: stretch;
         flex-direction: column;
       }
-      .nickname-row {
-        flex-direction: column;
-      }
       .primary-btn,
       .secondary-btn,
       .ghost-btn,
@@ -709,12 +694,9 @@
         <p>관심 종목, 시장 분위기, 매매 아이디어를 가볍게 나눠보세요. 모든 글은 공개되며 투자 판단은 각자의 책임입니다.</p>
       </div>
       <aside class="profile-panel" aria-label="게시판 프로필">
-        <label for="nickname-input">닉네임</label>
-        <div class="nickname-row">
-          <input id="nickname-input" maxlength="16" autocomplete="nickname" />
-          <button class="secondary-btn" id="save-nickname-btn" type="button">저장</button>
-        </div>
-        <p class="profile-hint">브라우저에 저장되는 게시판용 닉네임입니다. 글과 댓글에는 닉네임이 공개됩니다.</p>
+        <div class="profile-label">게시판 계정</div>
+        <div id="profile-name" class="profile-name">로그인이 필요합니다</div>
+        <p class="profile-hint">로그인하면 앱 닉네임 또는 Google 이름으로 글과 댓글이 작성됩니다.</p>
         <button class="ghost-btn" id="auth-btn" type="button">Google 로그인</button>
         <p id="auth-status" class="status">게시글을 불러오는 중입니다.</p>
       </aside>
@@ -846,14 +828,13 @@
       modalImages: document.getElementById('modal-images'),
       modalMeta: document.getElementById('modal-meta'),
       modalTitle: document.getElementById('modal-title'),
-      nicknameInput: document.getElementById('nickname-input'),
       postContent: document.getElementById('post-content'),
       postImages: document.getElementById('post-images'),
       postList: document.getElementById('post-list'),
       postTitle: document.getElementById('post-title'),
       pickImagesBtn: document.getElementById('pick-images-btn'),
+      profileName: document.getElementById('profile-name'),
       imagePreview: document.getElementById('image-preview'),
-      saveNicknameBtn: document.getElementById('save-nickname-btn'),
       searchInput: document.getElementById('search-input'),
       submitCommentBtn: document.getElementById('submit-comment-btn'),
       submitPostBtn: document.getElementById('submit-post-btn'),
@@ -866,22 +847,51 @@
       posts: [],
       selectedImages: [],
       user: null,
+      nickname: '익명',
     };
 
     const maxImages = 10;
     const maxImageBytes = 8 * 1024 * 1024;
-    const fallbackNickname = `방문자${Math.floor(1000 + Math.random() * 9000)}`;
-    els.nicknameInput.value = localStorage.getItem('stockstorage.board.nickname') || fallbackNickname;
     const googleProvider = new GoogleAuthProvider();
 
     function getNickname() {
-      const nickname = els.nicknameInput.value.trim().slice(0, 16);
-      return nickname || '익명';
+      return state.nickname || '익명';
     }
 
     function setStatus(message, isError = false) {
       els.authStatus.textContent = message;
       els.authStatus.classList.toggle('error', isError);
+    }
+
+    function fallbackUserName(user) {
+      const displayName = normalizeText(user?.displayName);
+      if (displayName) return displayName.slice(0, 16);
+      const emailName = normalizeText(user?.email).split('@')[0];
+      if (emailName) return emailName.slice(0, 16);
+      return '익명';
+    }
+
+    async function resolveNickname(user) {
+      if (!user) return '익명';
+      try {
+        const [privateProfile, publicProfile] = await Promise.all([
+          getDoc(doc(db, 'users', user.uid)).catch(() => null),
+          getDoc(doc(db, 'user_public', user.uid)).catch(() => null),
+        ]);
+        const privateNickname = privateProfile?.exists()
+          ? normalizeText(privateProfile.data()?.nickname)
+          : '';
+        const publicNickname = publicProfile?.exists()
+          ? normalizeText(publicProfile.data()?.nickname)
+          : '';
+        return (privateNickname || publicNickname || fallbackUserName(user)).slice(0, 16);
+      } catch (_) {
+        return fallbackUserName(user);
+      }
+    }
+
+    function updateProfileName() {
+      els.profileName.textContent = state.user ? getNickname() : '로그인이 필요합니다';
     }
 
     function formatDate(value) {
@@ -1449,12 +1459,6 @@
       });
     }
 
-    els.saveNicknameBtn.addEventListener('click', () => {
-      localStorage.setItem('stockstorage.board.nickname', getNickname());
-      els.nicknameInput.value = getNickname();
-      setStatus('닉네임을 저장했습니다.');
-    });
-
     els.authBtn.addEventListener('click', async () => {
       try {
         if (state.user) {
@@ -1491,17 +1495,21 @@
       if (event.key === 'Escape' && els.modal.classList.contains('open')) closeModal();
     });
 
-    onAuthStateChanged(auth, user => {
+    onAuthStateChanged(auth, async user => {
       state.user = user;
       if (user) {
-        if (!localStorage.getItem('stockstorage.board.nickname') && user.displayName) {
-          els.nicknameInput.value = user.displayName.slice(0, 16);
-        }
+        state.nickname = fallbackUserName(user);
+        updateProfileName();
+        state.nickname = await resolveNickname(user);
+        if (auth.currentUser?.uid !== user.uid) return;
+        updateProfileName();
         els.authBtn.textContent = '로그아웃';
         els.submitPostBtn.disabled = false;
         els.submitCommentBtn.disabled = false;
-        setStatus('로그인되었습니다. 글쓰기와 댓글을 사용할 수 있습니다.');
+        setStatus(`${getNickname()} 님으로 글쓰기와 댓글을 사용할 수 있습니다.`);
       } else {
+        state.nickname = '익명';
+        updateProfileName();
         els.authBtn.textContent = 'Google 로그인';
         els.submitPostBtn.disabled = true;
         els.submitCommentBtn.disabled = true;
