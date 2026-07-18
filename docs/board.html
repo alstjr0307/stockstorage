@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>자유게시판 - 주식저장소</title>
+  <meta name="description" content="주식저장소 자유게시판에서 투자 아이디어와 시장 이야기를 나눠보세요." />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', sans-serif;
+      background: #f5f7fb;
+      color: #172033;
+      min-height: 100vh;
+    }
+    button, input, textarea {
+      font: inherit;
+    }
+    button {
+      cursor: pointer;
+    }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(10, 14, 26, 0.94);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(12px);
+    }
+    .topbar-inner {
+      width: min(1080px, 100%);
+      margin: 0 auto;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #fff;
+      text-decoration: none;
+      min-width: 0;
+    }
+    .brand img {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+    }
+    .brand strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.1;
+      color: #fff;
+    }
+    .brand span {
+      display: block;
+      font-size: 12px;
+      color: #95a1b8;
+      margin-top: 3px;
+    }
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .nav-link {
+      border: 1px solid rgba(255,255,255,0.14);
+      background: transparent;
+      color: #d7deea;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      text-decoration: none;
+    }
+    .nav-link:hover {
+      border-color: #4ade80;
+      color: #4ade80;
+    }
+    .page {
+      width: min(1080px, 100%);
+      margin: 0 auto;
+      padding: 28px 20px 64px;
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 20px;
+      align-items: stretch;
+      margin-bottom: 20px;
+    }
+    .hero-main {
+      background: #0a0e1a;
+      color: #fff;
+      border-radius: 14px;
+      padding: 26px;
+      min-height: 166px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border: 1px solid rgba(74,222,128,0.18);
+      box-shadow: 0 18px 42px rgba(12, 18, 34, 0.16);
+    }
+    .eyebrow {
+      color: #4ade80;
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+    h1 {
+      font-size: clamp(26px, 4vw, 38px);
+      line-height: 1.18;
+      letter-spacing: 0;
+      margin-bottom: 10px;
+    }
+    .hero-main p {
+      color: #b6c0d2;
+      font-size: 15px;
+      line-height: 1.6;
+      max-width: 620px;
+    }
+    .profile-panel {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 12px 28px rgba(18, 28, 45, 0.08);
+      min-width: 0;
+    }
+    .profile-panel label {
+      display: block;
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+    .nickname-row {
+      display: flex;
+      gap: 8px;
+    }
+    .nickname-row input {
+      min-width: 0;
+      flex: 1;
+      height: 42px;
+      border: 1px solid #d8e0eb;
+      border-radius: 8px;
+      padding: 0 12px;
+      outline: none;
+      color: #172033;
+    }
+    .nickname-row input:focus {
+      border-color: #22c55e;
+      box-shadow: 0 0 0 3px rgba(34,197,94,0.12);
+    }
+    .secondary-btn,
+    .primary-btn,
+    .ghost-btn,
+    .danger-btn {
+      height: 42px;
+      border: none;
+      border-radius: 8px;
+      padding: 0 14px;
+      font-size: 14px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .primary-btn {
+      background: #22c55e;
+      color: #07111f;
+    }
+    .primary-btn:hover {
+      background: #16a34a;
+    }
+    .primary-btn:disabled,
+    .secondary-btn:disabled,
+    .ghost-btn:disabled,
+    .danger-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+    .secondary-btn {
+      background: #eef3f8;
+      color: #172033;
+    }
+    .secondary-btn:hover {
+      background: #e2e8f0;
+    }
+    .ghost-btn {
+      background: transparent;
+      border: 1px solid #d8e0eb;
+      color: #475569;
+    }
+    .ghost-btn:hover {
+      border-color: #22c55e;
+      color: #15803d;
+    }
+    .danger-btn {
+      background: rgba(239, 68, 68, 0.1);
+      color: #dc2626;
+    }
+    .profile-hint {
+      color: #75839a;
+      font-size: 12px;
+      line-height: 1.5;
+      margin-top: 10px;
+    }
+    .profile-panel .ghost-btn {
+      margin-top: 12px;
+    }
+    .status {
+      margin-top: 10px;
+      min-height: 18px;
+      color: #64748b;
+      font-size: 12px;
+    }
+    .status.error {
+      color: #dc2626;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      gap: 20px;
+      align-items: start;
+    }
+    .compose,
+    .post-card,
+    .side-panel,
+    .modal-panel {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      box-shadow: 0 8px 22px rgba(18, 28, 45, 0.06);
+    }
+    .compose {
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+    .compose h2,
+    .side-panel h2 {
+      font-size: 16px;
+      color: #111827;
+      margin-bottom: 12px;
+    }
+    .compose-grid {
+      display: grid;
+      gap: 10px;
+    }
+    .compose input,
+    .compose textarea,
+    .comment-form textarea {
+      width: 100%;
+      border: 1px solid #d8e0eb;
+      border-radius: 8px;
+      padding: 12px;
+      outline: none;
+      color: #172033;
+      background: #fff;
+    }
+    .compose input:focus,
+    .compose textarea:focus,
+    .comment-form textarea:focus {
+      border-color: #22c55e;
+      box-shadow: 0 0 0 3px rgba(34,197,94,0.12);
+    }
+    .compose textarea {
+      min-height: 120px;
+      resize: vertical;
+      line-height: 1.6;
+    }
+    .compose-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .counter {
+      color: #75839a;
+      font-size: 12px;
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 8px 0 12px;
+    }
+    .toolbar strong {
+      color: #111827;
+      font-size: 16px;
+    }
+    .search {
+      width: min(280px, 48vw);
+      height: 38px;
+      border: 1px solid #d8e0eb;
+      border-radius: 8px;
+      padding: 0 12px;
+      outline: none;
+      color: #172033;
+      background: #fff;
+    }
+    .search:focus {
+      border-color: #22c55e;
+      box-shadow: 0 0 0 3px rgba(34,197,94,0.12);
+    }
+    .post-list {
+      display: grid;
+      gap: 12px;
+    }
+    .post-card {
+      padding: 18px;
+    }
+    .post-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .post-title {
+      border: none;
+      background: transparent;
+      color: #111827;
+      text-align: left;
+      font-size: 17px;
+      line-height: 1.35;
+      font-weight: 850;
+      min-width: 0;
+      padding: 0;
+    }
+    .post-title:hover {
+      color: #15803d;
+    }
+    .meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      color: #75839a;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+    .author {
+      color: #334155;
+      font-weight: 800;
+    }
+    .post-body {
+      color: #334155;
+      font-size: 14px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      word-break: break-word;
+    }
+    .post-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+    .icon-btn {
+      min-width: 78px;
+      height: 36px;
+      border: 1px solid #d8e0eb;
+      border-radius: 8px;
+      background: #fff;
+      color: #475569;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .icon-btn:hover {
+      border-color: #22c55e;
+      color: #15803d;
+    }
+    .icon-btn.liked {
+      border-color: #22c55e;
+      background: rgba(34,197,94,0.1);
+      color: #15803d;
+    }
+    .empty,
+    .loading {
+      color: #75839a;
+      text-align: center;
+      padding: 42px 18px;
+      background: #fff;
+      border: 1px dashed #ccd6e3;
+      border-radius: 12px;
+    }
+    .side-panel {
+      padding: 18px;
+      position: sticky;
+      top: 84px;
+    }
+    .rule-list {
+      display: grid;
+      gap: 10px;
+      color: #475569;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .rule-list li {
+      list-style: none;
+      padding-left: 18px;
+      position: relative;
+    }
+    .rule-list li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 9px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #22c55e;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      background: rgba(10,14,26,0.64);
+      padding: 18px;
+      overflow-y: auto;
+    }
+    .modal.open {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+    }
+    .modal-panel {
+      width: min(760px, 100%);
+      margin: 34px auto;
+      max-height: calc(100vh - 68px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 18px 20px;
+      border-bottom: 1px solid #e2e8f0;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .modal-title {
+      color: #111827;
+      font-size: 20px;
+      line-height: 1.35;
+      font-weight: 850;
+      word-break: break-word;
+    }
+    .close-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      border: 1px solid #d8e0eb;
+      background: #fff;
+      color: #475569;
+      font-size: 22px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .modal-body {
+      overflow-y: auto;
+      padding: 20px;
+    }
+    .detail-content {
+      white-space: pre-wrap;
+      color: #243044;
+      line-height: 1.75;
+      word-break: break-word;
+      margin: 18px 0 24px;
+    }
+    .comments {
+      border-top: 1px solid #e2e8f0;
+      padding-top: 18px;
+    }
+    .comments h3 {
+      font-size: 15px;
+      color: #111827;
+      margin-bottom: 12px;
+    }
+    .comment-list {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .comment {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .comment-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+      color: #75839a;
+      font-size: 12px;
+    }
+    .comment strong {
+      color: #334155;
+      font-size: 13px;
+    }
+    .comment p {
+      color: #334155;
+      font-size: 14px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .comment-form {
+      display: grid;
+      gap: 8px;
+    }
+    .comment-form textarea {
+      min-height: 86px;
+      resize: vertical;
+      line-height: 1.55;
+    }
+    .hidden {
+      display: none !important;
+    }
+    @media (max-width: 860px) {
+      .hero,
+      .layout {
+        grid-template-columns: 1fr;
+      }
+      .side-panel {
+        position: static;
+      }
+    }
+    @media (max-width: 560px) {
+      .topbar-inner {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .nav-actions {
+        width: 100%;
+      }
+      .nav-link {
+        flex: 1;
+        text-align: center;
+      }
+      .page {
+        padding: 22px 14px 48px;
+      }
+      .hero-main {
+        padding: 22px;
+      }
+      .toolbar {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .search {
+        width: 100%;
+      }
+      .compose-actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .nickname-row {
+        flex-direction: column;
+      }
+      .primary-btn,
+      .secondary-btn,
+      .ghost-btn,
+      .danger-btn {
+        width: 100%;
+      }
+      .post-head {
+        flex-direction: column;
+      }
+      .modal {
+        padding: 10px;
+      }
+      .modal-panel {
+        margin: 12px auto;
+        max-height: calc(100vh - 24px);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="index.html" aria-label="주식저장소 홈">
+        <img src="icon.png" alt="" />
+        <span>
+          <strong>주식저장소</strong>
+          <span>자유게시판</span>
+        </span>
+      </a>
+      <div class="nav-actions">
+        <a class="nav-link" href="index.html">홈</a>
+        <a class="nav-link" href="support.html">고객 지원</a>
+      </div>
+    </div>
+  </div>
+
+  <main class="page">
+    <section class="hero" aria-labelledby="page-title">
+      <div class="hero-main">
+        <div class="eyebrow">STOCK STORAGE BOARD</div>
+        <h1 id="page-title">자유게시판</h1>
+        <p>관심 종목, 시장 분위기, 매매 아이디어를 가볍게 나눠보세요. 모든 글은 공개되며 투자 판단은 각자의 책임입니다.</p>
+      </div>
+      <aside class="profile-panel" aria-label="게시판 프로필">
+        <label for="nickname-input">닉네임</label>
+        <div class="nickname-row">
+          <input id="nickname-input" maxlength="16" autocomplete="nickname" />
+          <button class="secondary-btn" id="save-nickname-btn" type="button">저장</button>
+        </div>
+        <p class="profile-hint">브라우저에 저장되는 게시판용 닉네임입니다. 글과 댓글에는 닉네임이 공개됩니다.</p>
+        <button class="ghost-btn" id="auth-btn" type="button">Google 로그인</button>
+        <p id="auth-status" class="status">게시글을 불러오는 중입니다.</p>
+      </aside>
+    </section>
+
+    <section class="layout">
+      <div>
+        <section class="compose" aria-labelledby="write-title">
+          <h2 id="write-title">글쓰기</h2>
+          <div class="compose-grid">
+            <input id="post-title" maxlength="80" placeholder="제목" />
+            <textarea id="post-content" maxlength="3000" placeholder="내용을 입력하세요"></textarea>
+          </div>
+          <div class="compose-actions">
+            <span class="counter"><span id="content-count">0</span>/3000</span>
+            <button class="primary-btn" id="submit-post-btn" type="button" disabled>등록</button>
+          </div>
+        </section>
+
+        <div class="toolbar">
+          <strong>최근 게시글</strong>
+          <input id="search-input" class="search" placeholder="검색" />
+        </div>
+        <div id="post-list" class="post-list">
+          <div class="loading">게시글을 불러오는 중입니다.</div>
+        </div>
+      </div>
+
+      <aside class="side-panel" aria-labelledby="rule-title">
+        <h2 id="rule-title">이용 안내</h2>
+        <ul class="rule-list">
+          <li>종목 토론과 투자 아이디어 공유를 위한 공개 게시판입니다.</li>
+          <li>욕설, 개인정보 노출, 허위 정보, 광고성 글은 삭제될 수 있습니다.</li>
+          <li>글쓰기와 댓글은 Google 로그인 후 이용할 수 있습니다.</li>
+          <li>작성한 글과 댓글은 로그인한 계정에서 직접 삭제할 수 있습니다.</li>
+        </ul>
+      </aside>
+    </section>
+  </main>
+
+  <section id="post-modal" class="modal" aria-hidden="true">
+    <article class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <header class="modal-header">
+        <div>
+          <h2 id="modal-title" class="modal-title"></h2>
+          <div id="modal-meta" class="meta"></div>
+        </div>
+        <button class="close-btn" id="close-modal-btn" type="button" aria-label="닫기">&times;</button>
+      </header>
+      <div class="modal-body">
+        <div id="modal-content" class="detail-content"></div>
+        <div id="modal-actions" class="post-actions"></div>
+        <section class="comments" aria-labelledby="comments-title">
+          <h3 id="comments-title">댓글</h3>
+          <div id="comment-list" class="comment-list">
+            <div class="loading">댓글을 불러오는 중입니다.</div>
+          </div>
+          <div class="comment-form">
+            <textarea id="comment-input" maxlength="800" placeholder="댓글을 입력하세요"></textarea>
+            <button class="primary-btn" id="submit-comment-btn" type="button" disabled>댓글 등록</button>
+          </div>
+        </section>
+      </div>
+    </article>
+  </section>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+    import {
+      getAuth,
+      GoogleAuthProvider,
+      onAuthStateChanged,
+      signInWithPopup,
+      signOut,
+    } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+    import {
+      addDoc,
+      collection,
+      deleteDoc,
+      doc,
+      getDoc,
+      getFirestore,
+      increment,
+      limit,
+      onSnapshot,
+      orderBy,
+      query,
+      runTransaction,
+      serverTimestamp,
+    } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+    const firebaseConfig = {
+      apiKey: 'AIzaSyDIp4yXMzaYXj_XKv8UBrck6fzar4a0TgQ',
+      authDomain: 'stockstorage-13828.firebaseapp.com',
+      projectId: 'stockstorage-13828',
+      storageBucket: 'stockstorage-13828.firebasestorage.app',
+      messagingSenderId: '475716336297',
+      appId: '1:475716336297:web:79645b5453cc769586c7b8',
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    const els = {
+      authStatus: document.getElementById('auth-status'),
+      authBtn: document.getElementById('auth-btn'),
+      closeModalBtn: document.getElementById('close-modal-btn'),
+      commentInput: document.getElementById('comment-input'),
+      commentList: document.getElementById('comment-list'),
+      contentCount: document.getElementById('content-count'),
+      modal: document.getElementById('post-modal'),
+      modalActions: document.getElementById('modal-actions'),
+      modalContent: document.getElementById('modal-content'),
+      modalMeta: document.getElementById('modal-meta'),
+      modalTitle: document.getElementById('modal-title'),
+      nicknameInput: document.getElementById('nickname-input'),
+      postContent: document.getElementById('post-content'),
+      postList: document.getElementById('post-list'),
+      postTitle: document.getElementById('post-title'),
+      saveNicknameBtn: document.getElementById('save-nickname-btn'),
+      searchInput: document.getElementById('search-input'),
+      submitCommentBtn: document.getElementById('submit-comment-btn'),
+      submitPostBtn: document.getElementById('submit-post-btn'),
+    };
+
+    const state = {
+      commentsUnsubscribe: null,
+      currentPost: null,
+      likedPostIds: new Set(JSON.parse(localStorage.getItem('stockstorage.board.likes') || '[]')),
+      posts: [],
+      user: null,
+    };
+
+    const fallbackNickname = `방문자${Math.floor(1000 + Math.random() * 9000)}`;
+    els.nicknameInput.value = localStorage.getItem('stockstorage.board.nickname') || fallbackNickname;
+    const googleProvider = new GoogleAuthProvider();
+
+    function getNickname() {
+      const nickname = els.nicknameInput.value.trim().slice(0, 16);
+      return nickname || '익명';
+    }
+
+    function setStatus(message, isError = false) {
+      els.authStatus.textContent = message;
+      els.authStatus.classList.toggle('error', isError);
+    }
+
+    function formatDate(value) {
+      const date = value?.toDate ? value.toDate() : null;
+      if (!date) return '방금 전';
+      return new Intl.DateTimeFormat('ko-KR', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(date);
+    }
+
+    function normalizeText(text) {
+      return String(text || '').trim();
+    }
+
+    function saveLikedIds() {
+      localStorage.setItem('stockstorage.board.likes', JSON.stringify([...state.likedPostIds]));
+    }
+
+    function postFromDoc(snapshot) {
+      return {
+        id: snapshot.id,
+        ...snapshot.data(),
+      };
+    }
+
+    function renderPosts() {
+      const keyword = els.searchInput.value.trim().toLowerCase();
+      const posts = keyword
+        ? state.posts.filter(post => {
+          const title = normalizeText(post.title).toLowerCase();
+          const content = normalizeText(post.content).toLowerCase();
+          const nickname = normalizeText(post.nickname).toLowerCase();
+          return title.includes(keyword) || content.includes(keyword) || nickname.includes(keyword);
+        })
+        : state.posts;
+
+      els.postList.replaceChildren();
+
+      if (posts.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty';
+        empty.textContent = keyword ? '검색 결과가 없습니다.' : '아직 게시글이 없습니다. 첫 글을 남겨보세요.';
+        els.postList.appendChild(empty);
+        return;
+      }
+
+      const fragment = document.createDocumentFragment();
+      posts.forEach(post => fragment.appendChild(createPostCard(post)));
+      els.postList.appendChild(fragment);
+    }
+
+    function createPostCard(post) {
+      const article = document.createElement('article');
+      article.className = 'post-card';
+
+      const head = document.createElement('div');
+      head.className = 'post-head';
+
+      const titleWrap = document.createElement('div');
+      const title = document.createElement('button');
+      title.type = 'button';
+      title.className = 'post-title';
+      title.textContent = normalizeText(post.title) || '제목 없음';
+      title.addEventListener('click', () => openPost(post));
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.append(metaItem(post.nickname || '익명', 'author'));
+      meta.append(metaItem(formatDate(post.createdAt)));
+
+      titleWrap.append(title, meta);
+
+      const deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.className = 'danger-btn';
+      deleteButton.textContent = '삭제';
+      deleteButton.classList.toggle('hidden', !isMine(post));
+      deleteButton.addEventListener('click', () => deletePost(post));
+
+      head.append(titleWrap, deleteButton);
+
+      const body = document.createElement('p');
+      body.className = 'post-body';
+      body.textContent = normalizeText(post.content);
+
+      const actions = document.createElement('div');
+      actions.className = 'post-actions';
+      actions.append(createLikeButton(post));
+
+      const commentButton = document.createElement('button');
+      commentButton.type = 'button';
+      commentButton.className = 'icon-btn';
+      commentButton.textContent = '댓글';
+      commentButton.addEventListener('click', () => openPost(post));
+      actions.append(commentButton);
+
+      article.append(head, body, actions);
+      return article;
+    }
+
+    function metaItem(text, className = '') {
+      const span = document.createElement('span');
+      if (className) span.className = className;
+      span.textContent = text;
+      return span;
+    }
+
+    function isMine(item) {
+      return Boolean(state.user && item.uid === state.user.uid);
+    }
+
+    function createLikeButton(post) {
+      const button = document.createElement('button');
+      const liked = state.likedPostIds.has(post.id);
+      button.type = 'button';
+      button.className = `icon-btn${liked ? ' liked' : ''}`;
+      button.textContent = `${liked ? '좋아요 취소' : '좋아요'} ${post.likes || 0}`;
+      button.addEventListener('click', () => toggleLike(post.id));
+      return button;
+    }
+
+    async function submitPost() {
+      const title = normalizeText(els.postTitle.value);
+      const content = normalizeText(els.postContent.value);
+      if (!state.user) {
+        setStatus('글쓰기는 Google 로그인 후 이용할 수 있습니다.', true);
+        return;
+      }
+      if (title.length < 2) {
+        els.postTitle.focus();
+        return;
+      }
+      if (content.length < 2) {
+        els.postContent.focus();
+        return;
+      }
+
+      els.submitPostBtn.disabled = true;
+      try {
+        await addDoc(collection(db, 'posts'), {
+          uid: state.user.uid,
+          nickname: getNickname(),
+          title,
+          content,
+          likes: 0,
+          imageUrls: [],
+          createdAt: serverTimestamp(),
+        });
+        els.postTitle.value = '';
+        els.postContent.value = '';
+        els.contentCount.textContent = '0';
+      } catch (error) {
+        setStatus(`글 등록 실패: ${error.message}`, true);
+      } finally {
+        els.submitPostBtn.disabled = false;
+      }
+    }
+
+    async function deletePost(post) {
+      if (!isMine(post)) return;
+      if (!confirm('이 글을 삭제할까요?')) return;
+      try {
+        await deleteDoc(doc(db, 'posts', post.id));
+        if (state.currentPost?.id === post.id) closeModal();
+      } catch (error) {
+        setStatus(`삭제 실패: ${error.message}`, true);
+      }
+    }
+
+    async function toggleLike(postId) {
+      if (!state.user) {
+        setStatus('좋아요는 Google 로그인 후 이용할 수 있습니다.', true);
+        return;
+      }
+      const likedRef = doc(db, 'posts', postId, 'likes', state.user.uid);
+      const postRef = doc(db, 'posts', postId);
+      try {
+        const nowLiked = await runTransaction(db, async tx => {
+          const liked = await tx.get(likedRef);
+          if (liked.exists()) {
+            tx.delete(likedRef);
+            tx.update(postRef, { likes: increment(-1) });
+            return false;
+          }
+          tx.set(likedRef, { uid: state.user.uid, createdAt: serverTimestamp() });
+          tx.update(postRef, { likes: increment(1) });
+          return true;
+        });
+        if (nowLiked) {
+          state.likedPostIds.add(postId);
+        } else {
+          state.likedPostIds.delete(postId);
+        }
+        saveLikedIds();
+        renderPosts();
+        if (state.currentPost?.id === postId) {
+          const fresh = await getDoc(postRef);
+          if (fresh.exists()) openPost(postFromDoc(fresh), { keepScroll: true });
+        }
+      } catch (error) {
+        setStatus(`좋아요 처리 실패: ${error.message}`, true);
+      }
+    }
+
+    function openPost(post, options = {}) {
+      state.currentPost = post;
+      els.modalTitle.textContent = normalizeText(post.title) || '제목 없음';
+      els.modalMeta.replaceChildren(
+        metaItem(post.nickname || '익명', 'author'),
+        metaItem(formatDate(post.createdAt)),
+      );
+      els.modalContent.textContent = normalizeText(post.content);
+      els.modalActions.replaceChildren(createLikeButton(post));
+
+      const deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.className = 'danger-btn';
+      deleteButton.textContent = '글 삭제';
+      deleteButton.classList.toggle('hidden', !isMine(post));
+      deleteButton.addEventListener('click', () => deletePost(post));
+      els.modalActions.append(deleteButton);
+
+      els.modal.classList.add('open');
+      els.modal.setAttribute('aria-hidden', 'false');
+      if (!options.keepScroll) {
+        els.commentInput.value = '';
+      }
+      subscribeComments(post.id);
+    }
+
+    function closeModal() {
+      els.modal.classList.remove('open');
+      els.modal.setAttribute('aria-hidden', 'true');
+      state.currentPost = null;
+      if (state.commentsUnsubscribe) {
+        state.commentsUnsubscribe();
+        state.commentsUnsubscribe = null;
+      }
+    }
+
+    function subscribeComments(postId) {
+      if (state.commentsUnsubscribe) state.commentsUnsubscribe();
+      els.commentList.innerHTML = '<div class="loading">댓글을 불러오는 중입니다.</div>';
+      const q = query(collection(db, 'posts', postId, 'comments'), orderBy('createdAt', 'asc'));
+      state.commentsUnsubscribe = onSnapshot(q, snapshot => {
+        els.commentList.replaceChildren();
+        if (snapshot.empty) {
+          const empty = document.createElement('div');
+          empty.className = 'empty';
+          empty.textContent = '아직 댓글이 없습니다.';
+          els.commentList.appendChild(empty);
+          return;
+        }
+        const fragment = document.createDocumentFragment();
+        snapshot.docs.forEach(commentDoc => {
+          fragment.appendChild(createComment({ id: commentDoc.id, ...commentDoc.data() }));
+        });
+        els.commentList.appendChild(fragment);
+      }, error => {
+        els.commentList.innerHTML = '';
+        const item = document.createElement('div');
+        item.className = 'empty';
+        item.textContent = `댓글을 불러오지 못했습니다: ${error.message}`;
+        els.commentList.appendChild(item);
+      });
+    }
+
+    function createComment(comment) {
+      const wrap = document.createElement('div');
+      wrap.className = 'comment';
+
+      const head = document.createElement('div');
+      head.className = 'comment-head';
+      const left = document.createElement('div');
+      const author = document.createElement('strong');
+      author.textContent = comment.nickname || '익명';
+      const date = document.createElement('span');
+      date.textContent = ` · ${formatDate(comment.createdAt)}`;
+      left.append(author, date);
+
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'ghost-btn';
+      del.textContent = '삭제';
+      del.style.height = '30px';
+      del.classList.toggle('hidden', !isMine(comment));
+      del.addEventListener('click', () => deleteComment(comment.id));
+
+      head.append(left, del);
+
+      const text = document.createElement('p');
+      text.textContent = normalizeText(comment.content);
+      wrap.append(head, text);
+      return wrap;
+    }
+
+    async function submitComment() {
+      const content = normalizeText(els.commentInput.value);
+      if (!state.user || !state.currentPost) return;
+      if (content.length < 1) {
+        els.commentInput.focus();
+        return;
+      }
+      els.submitCommentBtn.disabled = true;
+      try {
+        await addDoc(collection(db, 'posts', state.currentPost.id, 'comments'), {
+          uid: state.user.uid,
+          nickname: getNickname(),
+          content,
+          createdAt: serverTimestamp(),
+        });
+        els.commentInput.value = '';
+      } catch (error) {
+        setStatus(`댓글 등록 실패: ${error.message}`, true);
+      } finally {
+        els.submitCommentBtn.disabled = false;
+      }
+    }
+
+    async function deleteComment(commentId) {
+      if (!state.currentPost || !confirm('이 댓글을 삭제할까요?')) return;
+      try {
+        await deleteDoc(doc(db, 'posts', state.currentPost.id, 'comments', commentId));
+      } catch (error) {
+        setStatus(`댓글 삭제 실패: ${error.message}`, true);
+      }
+    }
+
+    function subscribePosts() {
+      const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'), limit(50));
+      onSnapshot(q, snapshot => {
+        state.posts = snapshot.docs.map(postFromDoc);
+        renderPosts();
+        if (state.currentPost) {
+          const fresh = state.posts.find(post => post.id === state.currentPost.id);
+          if (fresh) openPost(fresh, { keepScroll: true });
+        }
+      }, error => {
+        els.postList.innerHTML = '';
+        const item = document.createElement('div');
+        item.className = 'empty';
+        item.textContent = `게시글을 불러오지 못했습니다: ${error.message}`;
+        els.postList.appendChild(item);
+      });
+    }
+
+    els.saveNicknameBtn.addEventListener('click', () => {
+      localStorage.setItem('stockstorage.board.nickname', getNickname());
+      els.nicknameInput.value = getNickname();
+      setStatus('닉네임을 저장했습니다.');
+    });
+
+    els.authBtn.addEventListener('click', async () => {
+      try {
+        if (state.user) {
+          await signOut(auth);
+          return;
+        }
+        await signInWithPopup(auth, googleProvider);
+      } catch (error) {
+        setStatus(`로그인 실패: ${error.message}`, true);
+      }
+    });
+
+    els.postContent.addEventListener('input', () => {
+      els.contentCount.textContent = String(els.postContent.value.length);
+    });
+
+    els.searchInput.addEventListener('input', renderPosts);
+    els.submitPostBtn.addEventListener('click', submitPost);
+    els.submitCommentBtn.addEventListener('click', submitComment);
+    els.closeModalBtn.addEventListener('click', closeModal);
+    els.modal.addEventListener('click', event => {
+      if (event.target === els.modal) closeModal();
+    });
+    window.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && els.modal.classList.contains('open')) closeModal();
+    });
+
+    onAuthStateChanged(auth, user => {
+      state.user = user;
+      if (user) {
+        if (!localStorage.getItem('stockstorage.board.nickname') && user.displayName) {
+          els.nicknameInput.value = user.displayName.slice(0, 16);
+        }
+        els.authBtn.textContent = '로그아웃';
+        els.submitPostBtn.disabled = false;
+        els.submitCommentBtn.disabled = false;
+        setStatus('로그인되었습니다. 글쓰기와 댓글을 사용할 수 있습니다.');
+      } else {
+        els.authBtn.textContent = 'Google 로그인';
+        els.submitPostBtn.disabled = true;
+        els.submitCommentBtn.disabled = true;
+        setStatus('읽기는 바로 가능하며, 글쓰기와 댓글은 Google 로그인이 필요합니다.');
+      }
+    });
+
+    subscribePosts();
+  </script>
+</body>
+</html>
