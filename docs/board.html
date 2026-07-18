@@ -729,7 +729,7 @@
             <textarea id="post-content" maxlength="3000" placeholder="내용을 입력하세요"></textarea>
             <div class="image-tools">
               <button class="ghost-btn" id="pick-images-btn" type="button">사진 첨부</button>
-              <span class="image-hint">최대 10장, 이미지 파일만 업로드할 수 있습니다.</span>
+              <span class="image-hint">본문에 사진을 붙여넣어도 첨부됩니다. 최대 10장, 파일당 8MB 이하.</span>
               <input id="post-images" class="hidden" type="file" accept="image/*" multiple />
             </div>
             <div id="image-preview" class="image-preview" aria-label="첨부 사진 미리보기"></div>
@@ -1024,6 +1024,19 @@
         setStatus(`${state.selectedImages.length}장의 사진을 첨부했습니다.`);
       }
       renderImagePreview();
+    }
+
+    function handleContentPaste(event) {
+      const items = [...(event.clipboardData?.items || [])];
+      const imageFiles = items
+        .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
+        .map(item => item.getAsFile())
+        .filter(Boolean);
+
+      if (imageFiles.length === 0) return;
+      event.preventDefault();
+      handleImageSelection(imageFiles);
+      els.postContent.focus();
     }
 
     function getExtension(file) {
@@ -1457,6 +1470,7 @@
     els.postContent.addEventListener('input', () => {
       els.contentCount.textContent = String(els.postContent.value.length);
     });
+    els.postContent.addEventListener('paste', handleContentPaste);
 
     els.pickImagesBtn.addEventListener('click', () => {
       els.postImages.click();
