@@ -899,10 +899,60 @@
       return String(text || '').trim();
     }
 
+    function cleanUrl(url) {
+      let cleaned = String(url || '').trim();
+      while (/[.,;:!?)]$/.test(cleaned)) {
+        cleaned = cleaned.slice(0, -1);
+      }
+      return cleaned;
+    }
+
+    function isLikelyImageUrl(url) {
+      const lower = cleanUrl(url).toLowerCase();
+      return lower.includes('firebasestorage.googleapis.com')
+        || lower.includes('storage.googleapis.com')
+        || /\.(png|jpe?g|webp|gif)(?:[?#]|$)/.test(lower);
+    }
+
+    function extractContentImageUrls(content) {
+      const text = String(content || '');
+      const urls = [];
+      const markdownImageRegex = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g;
+      const rawUrlRegex = /https?:\/\/[^\s<>"']+/g;
+
+      for (const match of text.matchAll(markdownImageRegex)) {
+        const url = cleanUrl(match[1]);
+        if (isLikelyImageUrl(url)) urls.push(url);
+      }
+
+      for (const match of text.matchAll(rawUrlRegex)) {
+        const url = cleanUrl(match[0]);
+        if (isLikelyImageUrl(url)) urls.push(url);
+      }
+
+      return [...new Set(urls)];
+    }
+
     function getImageUrls(post) {
-      return Array.isArray(post.imageUrls)
-        ? post.imageUrls.filter(url => typeof url === 'string' && url.trim())
+      const fieldUrls = Array.isArray(post.imageUrls)
+        ? post.imageUrls.filter(url => typeof url === 'string' && url.trim()).map(cleanUrl)
         : [];
+      return [...new Set([...fieldUrls, ...extractContentImageUrls(post.content)])];
+    }
+
+    function getDisplayContent(content) {
+      const withoutMarkdownImages = String(content || '').replace(
+        /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/g,
+        (full, url) => isLikelyImageUrl(url) ? '' : full,
+      );
+      const withoutRawImageUrls = withoutMarkdownImages.replace(
+        /https?:\/\/[^\s<>"']+/g,
+        url => isLikelyImageUrl(url) ? '' : url,
+      );
+      return withoutRawImageUrls
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
     }
 
     function makeObjectUrl(file) {
@@ -1070,7 +1120,7 @@
 
       const body = document.createElement('p');
       body.className = 'post-body';
-      body.textContent = normalizeText(post.content);
+      body.textContent = getDisplayContent(post.content);
 
       const images = getImageUrls(post);
       const thumb = images.length > 0 ? createPostThumbnail(images, post) : null;
@@ -1250,7 +1300,7 @@
         metaItem(post.nickname || '익명', 'author'),
         metaItem(formatDate(post.createdAt)),
       );
-      els.modalContent.textContent = normalizeText(post.content);
+      els.modalContent.textContent = getDisplayContent(post.content);
       renderDetailImages(post);
       els.modalActions.replaceChildren(createLikeButton(post));
 
