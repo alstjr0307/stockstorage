@@ -1,1 +1,90 @@
-{"hosting":{"public":"public","ignore":["firebase.json","**/node_modules/**"],"headers":[{"source":"/.well-known/**","headers":[{"key":"Content-Type","value":"application/json"},{"key":"Cache-Control","value":"no-cache"}]}],"rewrites":[{"source":"/pick/**","destination":"/pick.html"},{"source":"/analysis/**","destination":"/pick.html"}]},"firestore":{"rules":"firestore.rules","indexes":"firestore.indexes.json"},"functions":[{"source":"functions","codebase":"default","ignore":["node_modules",".git","firebase-debug.log","get_secret.js","get_secret2.js"]}],"flutter":{"platforms":{"android":{"default":{"projectId":"stockstorage-13828","appId":"1:475716336297:android:aeb556df2377dd8a86c7b8","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"stockstorage-13828","appId":"1:475716336297:ios:17553a3f44ccbde486c7b8","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"stockstorage-13828","configurations":{"android":"1:475716336297:android:aeb556df2377dd8a86c7b8","ios":"1:475716336297:ios:17553a3f44ccbde486c7b8","web":"1:475716336297:web:79645b5453cc769586c7b8"}}}}}}
+{
+  "hosting": [
+    {
+      "target": "landing",
+      "public": "public",
+      "ignore": ["firebase.json", "**/node_modules/**"],
+      "headers": [
+        {
+          "source": "/.well-known/**",
+          "headers": [
+            { "key": "Content-Type", "value": "application/json" },
+            { "key": "Cache-Control", "value": "no-cache" }
+          ]
+        }
+      ],
+      "rewrites": [
+        { "source": "/pick/**", "destination": "/pick.html" },
+        { "source": "/analysis/**", "destination": "/pick.html" }
+      ]
+    },
+    {
+      "target": "web",
+      "public": "build/web",
+      "ignore": ["firebase.json", "**/node_modules/**"],
+      "rewrites": [{ "source": "**", "destination": "/index.html" }],
+      "headers": [
+        {
+          "comment": "배포마다 내용이 바뀌고 파일명은 그대로라 항상 재검증(대개 304)",
+          "source": "/@(index.html|flutter_bootstrap.js|main.dart.js|version.json|flutter_service_worker.js)",
+          "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        },
+        {
+          "comment": "매니페스트류는 배포마다 바뀔 수 있어 재검증. 뒤 규칙이 우선하므로 폰트보다 먼저 둔다.",
+          "source": "/assets/**",
+          "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
+        },
+        {
+          "comment": "폰트/캔버스킷은 거의 바뀌지 않으므로 30일 캐시",
+          "source": "/assets/assets/fonts/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "public, max-age=2592000" }
+          ]
+        },
+        {
+          "source": "/canvaskit/**",
+          "headers": [
+            { "key": "Cache-Control", "value": "public, max-age=2592000" }
+          ]
+        }
+      ]
+    }
+  ],
+  "firestore": { "rules": "firestore.rules", "indexes": "firestore.indexes.json" },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": ["node_modules", ".git", "firebase-debug.log", "get_secret.js", "get_secret2.js"]
+    }
+  ],
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "stockstorage-13828",
+          "appId": "1:475716336297:android:aeb556df2377dd8a86c7b8",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "stockstorage-13828",
+          "appId": "1:475716336297:ios:17553a3f44ccbde486c7b8",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "stockstorage-13828",
+          "configurations": {
+            "android": "1:475716336297:android:aeb556df2377dd8a86c7b8",
+            "ios": "1:475716336297:ios:17553a3f44ccbde486c7b8",
+            "web": "1:475716336297:web:79645b5453cc769586c7b8"
+          }
+        }
+      }
+    }
+  }
+}

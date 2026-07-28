@@ -1,6 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:http/http.dart' as http;
 
 class StockSearchResult {
@@ -44,6 +45,15 @@ class StockSearchResult {
   }
 }
 
+/// 배치로 묶어 보낼 웹 프록시 요청 하나.
+class _ProxyRequest {
+  _ProxyRequest(this.url, this.headers);
+
+  final String url;
+  final Map<String, String> headers;
+  final Completer<http.Response> completer = Completer<http.Response>();
+}
+
 class StockPriceService {
   static final _hasKorean = RegExp(r'[가-힣ㄱ-ㅎㅏ-ㅣ]');
   static final _isNumericCode = RegExp(r'^\d{4,6}$');
@@ -52,23 +62,72 @@ class StockPriceService {
   /// - 네이티브: 대상 서버로 직접 요청.
   /// - 웹: 브라우저 CORS 차단을 우회하기 위해 Firebase Functions 의 `corsProxy`
   ///   onCall 로 중계한다(프록시가 캐시/레이트리밋 담당).
+  ///
+  /// 웹에서는 화면 하나가 종목마다 따로 호출해 함수 호출이 수십 번씩 나가므로,
+  /// 짧은 시간 안에 모인 요청을 한 번의 호출로 묶어 보낸다.
   static Future<http.Response> _pget(
     Uri uri, {
     Map<String, String>? headers,
   }) {
     if (!kIsWeb) return http.get(uri, headers: headers);
-    return FirebaseFunctions.instanceFor(region: 'asia-northeast3')
+
+    final request = _ProxyRequest(uri.toString(), headers ?? const {});
+    _proxyQueue.add(request);
+    if (_proxyQueue.length >= _proxyBatchMax) {
+      _flushProxyQueue();
+    } else {
+      _proxyTimer ??= Timer(_proxyBatchWindow, _flushProxyQueue);
+    }
+    return request.completer.future;
+  }
+
+  static final List<_ProxyRequest> _proxyQueue = [];
+  static Timer? _proxyTimer;
+  static const _proxyBatchWindow = Duration(milliseconds: 30);
+  static const _proxyBatchMax = 20;
+
+  static void _flushProxyQueue() {
+    _proxyTimer?.cancel();
+    _proxyTimer = null;
+    if (_proxyQueue.isEmpty) return;
+
+    final pending = List<_ProxyRequest>.of(_proxyQueue);
+    _proxyQueue.clear();
+    for (var i = 0; i < pending.length; i += _proxyBatchMax) {
+      final end = (i + _proxyBatchMax).clamp(0, pending.length);
+      _sendProxyBatch(pending.sublist(i, end));
+    }
+  }
+
+  static void _sendProxyBatch(List<_ProxyRequest> batch) {
+    FirebaseFunctions.instanceFor(region: 'asia-northeast3')
         .httpsCallable('corsProxy')
         .call(<String, dynamic>{
-          'url': uri.toString(),
-          'headers': headers ?? const <String, String>{},
+          'requests': [
+            for (final request in batch)
+              {'url': request.url, 'headers': request.headers},
+          ],
         })
         .then((result) {
-          final data = (result.data as Map).cast<String, dynamic>();
-          return http.Response(
-            (data['body'] ?? '') as String,
-            (data['status'] ?? 502) as int,
-          );
+          final results =
+              ((result.data as Map)['results'] as List?) ?? const [];
+          for (var i = 0; i < batch.length; i++) {
+            final item = i < results.length
+                ? (results[i] as Map).cast<String, dynamic>()
+                : const <String, dynamic>{};
+            batch[i].completer.complete(
+              http.Response(
+                (item['body'] ?? '') as String,
+                (item['status'] ?? 502) as int,
+              ),
+            );
+          }
+        })
+        .catchError((Object error) {
+          debugPrint('[corsProxy] batch failed: $error');
+          for (final request in batch) {
+            request.completer.complete(http.Response('', 502));
+          }
         });
   }
 
@@ -1800,32 +1859,45 @@ class StockPriceService {
     return total > 0 ? total.round() : null;
   }
 
+  // 동시 호출(관심종목 여러 행에서 동시에 MP 요청 등) 시 crumb 발급이 여러 번
+  // 겹치지 않도록 진행 중인 발급 작업을 공유한다.
+  static Future<void>? _crumbInflight;
+
+  /// 야후 crumb/cookie 발급 (없을 때만). quoteSummary·옵션체인 등 인증 필요 API 공용.
+  static Future<void> _ensureYahooCrumb() {
+    if (_yahoocrumb != null) return Future.value();
+    return _crumbInflight ??= _fetchYahooCrumb().whenComplete(() {
+      _crumbInflight = null;
+    });
+  }
+
+  static Future<void> _fetchYahooCrumb() async {
+    final cookieRes = await _pget(
+          Uri.parse('https://fc.yahoo.com'),
+          headers: {'User-Agent': 'Mozilla/5.0'},
+        )
+        .timeout(const Duration(seconds: 6));
+    _yahooCookie = cookieRes.headers['set-cookie']
+        ?.split(',')
+        .map((c) => c.split(';').first.trim())
+        .join('; ');
+
+    final crumbRes = await _pget(
+          Uri.parse('https://query2.finance.yahoo.com/v1/test/getcrumb'),
+          headers: {
+            'User-Agent': 'Mozilla/5.0',
+            'Cookie': _yahooCookie ?? '',
+          },
+        )
+        .timeout(const Duration(seconds: 6));
+    _yahoocrumb = crumbRes.body.trim();
+  }
+
   /// Yahoo Finance quoteSummary (crumb 방식, 미국주식)
   static Future<FundamentalsResult?> _fetchYahooFundamentals(
     String symbol,
   ) async {
-    // 크럼이 없으면 발급
-    if (_yahoocrumb == null) {
-      final cookieRes = await _pget(
-            Uri.parse('https://fc.yahoo.com'),
-            headers: {'User-Agent': 'Mozilla/5.0'},
-          )
-          .timeout(const Duration(seconds: 6));
-      _yahooCookie = cookieRes.headers['set-cookie']
-          ?.split(',')
-          .map((c) => c.split(';').first.trim())
-          .join('; ');
-
-      final crumbRes = await _pget(
-            Uri.parse('https://query2.finance.yahoo.com/v1/test/getcrumb'),
-            headers: {
-              'User-Agent': 'Mozilla/5.0',
-              'Cookie': _yahooCookie ?? '',
-            },
-          )
-          .timeout(const Duration(seconds: 6));
-      _yahoocrumb = crumbRes.body.trim();
-    }
+    await _ensureYahooCrumb();
 
     final uri = Uri.parse(
       'https://query1.finance.yahoo.com/v10/finance/quoteSummary/$symbol'
@@ -1869,6 +1941,132 @@ class StockPriceService {
       marketCap: marketCap,
       forwardPer: forwardPer,
     );
+  }
+
+  // ── Max Pain (옵션 최대 고통 가격, 미국주식 전용) ──────────────────
+  static final _maxPainCache = <String, _CachedMaxPain>{};
+  static const _maxPainCacheDuration = Duration(minutes: 30);
+
+  /// 옵션 체인 기반 Max Pain 계산 (미국주식 전용, 최근접 만기 기준)
+  /// 만기 시 옵션 매수자 손실(=매도자 이익)이 최대가 되는 기초자산 가격.
+  static Future<MaxPainResult?> fetchMaxPain(
+    String ticker,
+    String market,
+  ) async {
+    if (market != 'US') return null;
+    final symbol = toSymbol(ticker, market);
+
+    final cached = _maxPainCache[symbol];
+    if (cached != null &&
+        DateTime.now().difference(cached.fetchedAt) < _maxPainCacheDuration) {
+      return cached.result;
+    }
+
+    try {
+      http.Response? response;
+      // 크럼이 유효하지 않으면(401) 재발급 후 1회 재시도
+      for (var attempt = 0; attempt < 2; attempt++) {
+        await _ensureYahooCrumb();
+        final uri = Uri.parse(
+          'https://query1.finance.yahoo.com/v7/finance/options/$symbol'
+          '?crumb=${Uri.encodeComponent(_yahoocrumb!)}',
+        );
+        response = await _pget(
+              uri,
+              headers: {
+                'User-Agent': 'Mozilla/5.0',
+                'Cookie': _yahooCookie ?? '',
+              },
+            )
+            .timeout(const Duration(seconds: 8));
+        if (response.statusCode != 401) break;
+        debugPrint('[MaxPain] 401 crumb expired (attempt ${attempt + 1})');
+        _yahoocrumb = null;
+        _yahooCookie = null;
+      }
+      if (response == null || response.statusCode != 200) {
+        debugPrint('[MaxPain] http ${response?.statusCode}');
+        return null;
+      }
+
+      final json = jsonDecode(response.body);
+      final result = json['optionChain']?['result']?[0];
+      if (result == null) return null;
+      final options = result['options'] as List?;
+      if (options == null || options.isEmpty) return null;
+      final chain = options[0];
+
+      // strike → (callOi, putOi)
+      final oiByStrike = <double, List<int>>{};
+      int totalCallOi = 0;
+      int totalPutOi = 0;
+      for (final c in (chain['calls'] as List? ?? const [])) {
+        final strike = (c['strike'] as num?)?.toDouble();
+        final oi = (c['openInterest'] as num?)?.toInt() ?? 0;
+        if (strike == null) continue;
+        oiByStrike.putIfAbsent(strike, () => [0, 0])[0] += oi;
+        totalCallOi += oi;
+      }
+      for (final p in (chain['puts'] as List? ?? const [])) {
+        final strike = (p['strike'] as num?)?.toDouble();
+        final oi = (p['openInterest'] as num?)?.toInt() ?? 0;
+        if (strike == null) continue;
+        oiByStrike.putIfAbsent(strike, () => [0, 0])[1] += oi;
+        totalPutOi += oi;
+      }
+      if (oiByStrike.isEmpty || (totalCallOi == 0 && totalPutOi == 0)) {
+        return null;
+      }
+
+      // 각 행사가를 만기 정산가로 가정했을 때 옵션 매수자 총 수익(=매도자 고통)이
+      // 최소가 되는 지점 = Max Pain
+      final strikes = oiByStrike.keys.toList()..sort();
+      double? maxPain;
+      double? minPain;
+      for (final s in strikes) {
+        double pain = 0;
+        oiByStrike.forEach((k, oi) {
+          if (s > k) pain += oi[0] * (s - k); // 콜 내재가치
+          if (k > s) pain += oi[1] * (k - s); // 풋 내재가치
+        });
+        if (minPain == null || pain < minPain) {
+          minPain = pain;
+          maxPain = s;
+        }
+      }
+      if (maxPain == null) return null;
+
+      final expiration = DateTime.fromMillisecondsSinceEpoch(
+        ((chain['expirationDate'] as num?)?.toInt() ?? 0) * 1000,
+        isUtc: true,
+      );
+      final underlying = (result['quote']?['regularMarketPrice'] as num?)
+          ?.toDouble();
+
+      final maxPainResult = MaxPainResult(
+        maxPain: maxPain,
+        underlyingPrice: underlying,
+        expiration: expiration,
+        totalCallOi: totalCallOi,
+        totalPutOi: totalPutOi,
+        strikes: [
+          for (final s in strikes)
+            OiStrike(
+              strike: s,
+              callOi: oiByStrike[s]![0],
+              putOi: oiByStrike[s]![1],
+            ),
+        ],
+      );
+      _maxPainCache[symbol] = _CachedMaxPain(
+        result: maxPainResult,
+        fetchedAt: DateTime.now(),
+      );
+      return maxPainResult;
+    } catch (e) {
+      debugPrint('[MaxPain] error: $e');
+      return null;
+    }
   }
 
   /// 네이버 종목토론방 게시글 (한국주식 전용, 최대 20개)
@@ -2169,6 +2367,9 @@ class StockAiAnalysisResult {
   final String summary;
   final double? score;
   final StockAiSubScores? subScores;
+
+  /// 전체 사용자 최근 분석(롤링 500건) 대비 상위 몇 %인지. null이면 표본 부족.
+  final int? scorePercentileTop;
   final String scoreLabel;
   final String theme;
   final String sector;
@@ -2203,6 +2404,7 @@ class StockAiAnalysisResult {
     required this.summary,
     required this.score,
     this.subScores,
+    this.scorePercentileTop,
     required this.scoreLabel,
     required this.theme,
     required this.sector,
@@ -2253,6 +2455,7 @@ class StockAiAnalysisResult {
               Map<String, dynamic>.from(map['subScores'] as Map),
             )
           : null,
+      scorePercentileTop: (map['scorePercentileTop'] as num?)?.round(),
       scoreLabel: text('scoreLabel'),
       theme: text('theme'),
       sector: text('sector'),
@@ -2353,6 +2556,7 @@ class StockAiAnalysisResult {
       'summary': summary,
       'score': score,
       'subScores': subScores?.toMap(),
+      'scorePercentileTop': scorePercentileTop,
       'scoreLabel': scoreLabel,
       'theme': theme,
       'sector': sector,
@@ -3062,4 +3266,46 @@ class _CachedFearAndGreed {
   final FearAndGreedResult result;
   final DateTime fetchedAt;
   const _CachedFearAndGreed({required this.result, required this.fetchedAt});
+}
+
+/// 행사가별 미결제약정 (Max Pain 차트용)
+class OiStrike {
+  final double strike;
+  final int callOi;
+  final int putOi;
+
+  const OiStrike({
+    required this.strike,
+    required this.callOi,
+    required this.putOi,
+  });
+}
+
+/// Max Pain 계산 결과 (최근접 만기 기준)
+class MaxPainResult {
+  final double maxPain;
+  final double? underlyingPrice;
+  final DateTime expiration; // UTC
+  final int totalCallOi;
+  final int totalPutOi;
+  final List<OiStrike> strikes;
+
+  const MaxPainResult({
+    required this.maxPain,
+    required this.underlyingPrice,
+    required this.expiration,
+    required this.totalCallOi,
+    required this.totalPutOi,
+    required this.strikes,
+  });
+
+  /// Put/Call Ratio (미결제약정 기준)
+  double? get putCallRatio =>
+      totalCallOi > 0 ? totalPutOi / totalCallOi : null;
+}
+
+class _CachedMaxPain {
+  final MaxPainResult result;
+  final DateTime fetchedAt;
+  const _CachedMaxPain({required this.result, required this.fetchedAt});
 }

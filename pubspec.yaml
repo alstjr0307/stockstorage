@@ -89,16 +89,15 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/icon.png"
+  image_path: "tools/icons/icon.png"
   remove_alpha_ios: true
   min_sdk_android: 21
   adaptive_icon_background: "#0A4A8A"
-  adaptive_icon_foreground: "assets/icon.png"
+  adaptive_icon_foreground: "tools/icons/icon.png"
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/
+  # 폰트는 tools/subset_fonts.py 로 만든 서브셋(원본은 tools/fonts_source).
   fonts:
     - family: Pretendard
       fonts:
