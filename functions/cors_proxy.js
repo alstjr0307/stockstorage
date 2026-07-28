@@ -13,6 +13,7 @@ const axios = require('axios');
 
 // 허용 호스트(정확 일치). 필요한 것만 추가.
 const ALLOWED_HOSTS = new Set([
+  'ac.stock.naver.com', // 종목 자동완성(관리자 종목 등록·검색에서 사용)
   'finance.naver.com',
   'api.finance.naver.com',
   'polling.finance.naver.com',

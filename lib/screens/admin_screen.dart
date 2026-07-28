@@ -12,8 +12,11 @@ import '../utils/bot_profiles.dart';
 import '../widgets/stock_search_field.dart';
 import 'write_market_analysis_screen.dart';
 
+/// 관리자 패널. [embedded] 는 웹 셸 안에 탭으로 붙일 때 뒤로가기 버튼을 숨긴다.
 class AdminScreen extends StatefulWidget {
-  const AdminScreen({super.key});
+  const AdminScreen({super.key, this.embedded = false});
+
+  final bool embedded;
 
   @override
   State<AdminScreen> createState() => _AdminScreenState();
@@ -42,14 +45,17 @@ class _AdminScreenState extends State<AdminScreen>
       appBar: AppBar(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back_ios,
-            color: Theme.of(context).colorScheme.onSurface,
-            size: 18,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
+        automaticallyImplyLeading: !widget.embedded,
+        leading: widget.embedded
+            ? null
+            : IconButton(
+                icon: Icon(
+                  Icons.arrow_back_ios,
+                  color: Theme.of(context).colorScheme.onSurface,
+                  size: 18,
+                ),
+                onPressed: () => Navigator.pop(context),
+              ),
         title: Text(
           '관리자 패널',
           style: TextStyle(

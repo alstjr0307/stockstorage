@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../screens/admin_screen.dart';
 import '../screens/calendar_screen.dart';
 import '../screens/community_screen.dart';
 import '../screens/home_screen.dart' show StockPicksListScreen;
@@ -9,6 +12,7 @@ import '../screens/market_analysis_screen.dart';
 import '../screens/market_sentiment_screen.dart';
 import '../screens/night_futures_chart_screen.dart';
 import '../screens/stock_ai_analysis_list_screen.dart';
+import '../services/auth_service.dart';
 import 'web_login_sheet.dart';
 
 /// 웹 전용 셸 — 8개 핵심 기능만 노출한다.
@@ -22,6 +26,54 @@ class WebShell extends StatefulWidget {
 
 class _WebShellState extends State<WebShell> {
   int _index = 0;
+  bool _isAdmin = false;
+  // 관리자 패널은 처음 열 때까지 만들지 않는다(탭마다 Firestore 조회가 있다).
+  bool _adminOpened = false;
+  StreamSubscription<User?>? _authSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _isAdmin = _adminUid(FirebaseAuth.instance.currentUser);
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      final isAdmin = _adminUid(user);
+      if (isAdmin == _isAdmin || !mounted) return;
+      setState(() {
+        _isAdmin = isAdmin;
+        if (!isAdmin) {
+          _adminOpened = false;
+          if (_index >= _dests.length) _index = 0;
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
+
+  static bool _adminUid(User? user) =>
+      user != null && AuthService.adminUids.contains(user.uid);
+
+  static const _adminDest =
+      (_IconPair(Icons.shield_outlined, Icons.shield), '관리자');
+
+  List<(_IconPair, String)> get _visibleDests => [
+        ..._dests,
+        if (_isAdmin) _adminDest,
+      ];
+
+  List<Widget> get _visiblePages => [
+        ..._pages,
+        if (_isAdmin)
+          _adminOpened
+              ? const AdminScreen(embedded: true)
+              : const SizedBox.shrink(),
+      ];
+
+  bool get _onAdminPage => _isAdmin && _index == _dests.length;
 
   static const _dests = <(_IconPair, String)>[
     (_IconPair(Icons.auto_awesome_outlined, Icons.auto_awesome), 'AI 종목분석'),
@@ -46,18 +98,24 @@ class _WebShellState extends State<WebShell> {
     MarketSentimentScreen(),
   ];
 
-  void _select(int i) => setState(() => _index = i);
+  void _select(int i) => setState(() {
+        _index = i;
+        if (_isAdmin && i == _dests.length) _adminOpened = true;
+      });
 
   @override
   Widget build(BuildContext context) {
+    final dests = _visibleDests;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 900;
         // 모바일용으로 설계된 화면이라 본문 폭을 제한해 데스크탑에서도 자연스럽게.
+        // 관리자 패널은 입력 폼이 많아 조금 더 넓게 쓴다.
         final body = Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: IndexedStack(index: _index, children: _pages),
+            constraints: BoxConstraints(maxWidth: _onAdminPage ? 1040 : 720),
+            child: IndexedStack(index: _index, children: _visiblePages),
           ),
         );
 
@@ -67,7 +125,7 @@ class _WebShellState extends State<WebShell> {
               children: [
                 _WebRail(
                   index: _index,
-                  dests: _dests,
+                  dests: dests,
                   onSelect: _select,
                 ),
                 const VerticalDivider(width: 1),
@@ -79,7 +137,7 @@ class _WebShellState extends State<WebShell> {
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(_dests[_index].$2),
+            title: Text(dests[_index].$2),
             actions: const [_LoginAction()],
           ),
           drawer: Drawer(
@@ -87,14 +145,14 @@ class _WebShellState extends State<WebShell> {
               child: ListView(
                 children: [
                   const _BrandHeader(),
-                  for (var i = 0; i < _dests.length; i++)
+                  for (var i = 0; i < dests.length; i++)
                     ListTile(
                       leading: Icon(
                         i == _index
-                            ? _dests[i].$1.active
-                            : _dests[i].$1.inactive,
+                            ? dests[i].$1.active
+                            : dests[i].$1.inactive,
                       ),
-                      title: Text(_dests[i].$2),
+                      title: Text(dests[i].$2),
                       selected: i == _index,
                       onTap: () {
                         Navigator.pop(context);
