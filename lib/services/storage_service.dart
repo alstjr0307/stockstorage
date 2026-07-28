@@ -19,6 +19,21 @@ class StorageService {
     return _picker.pickImage(source: ImageSource.camera, imageQuality: 80);
   }
 
+  static const _allowedExts = {'jpg', 'jpeg', 'png', 'webp', 'gif'};
+
+  static String _extensionOf(XFile file) {
+    for (final candidate in [file.name, file.path]) {
+      final ext = candidate.split('.').last.toLowerCase();
+      if (_allowedExts.contains(ext)) return ext == 'jpeg' ? 'jpg' : ext;
+    }
+    return switch (file.mimeType) {
+      'image/png' => 'png',
+      'image/webp' => 'webp',
+      'image/gif' => 'gif',
+      _ => 'jpg',
+    };
+  }
+
   /// Firebase Storage에 이미지 업로드 → 다운로드 URL 반환
   /// putData(bytes) 방식: Android content URI에서도 안정적으로 동작
   static Future<String> uploadImage({
@@ -26,14 +41,17 @@ class StorageService {
     required String folder,
     required String uid,
   }) async {
-    final ext = file.path.split('.').last.toLowerCase();
-    final mime = ext == 'jpg' || ext == 'jpeg'
-        ? 'image/jpeg'
-        : ext == 'png'
-        ? 'image/png'
-        : ext == 'webp'
-        ? 'image/webp'
-        : 'image/jpeg';
+    // 웹에서는 XFile.path 가 blob URL 이라 확장자를 뽑을 수 없다 → name/mimeType 사용
+    final ext = _extensionOf(file);
+    final mime =
+        file.mimeType ??
+        (ext == 'png'
+            ? 'image/png'
+            : ext == 'webp'
+            ? 'image/webp'
+            : ext == 'gif'
+            ? 'image/gif'
+            : 'image/jpeg');
     final name = '${DateTime.now().millisecondsSinceEpoch}_$uid.$ext';
     final ref = _storage.ref('$folder/$name');
     final bytes = await file.readAsBytes();

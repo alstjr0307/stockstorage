@@ -1,10 +1,12 @@
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/post.dart';
 import '../services/firestore_service.dart';
 import '../services/storage_service.dart';
 import '../utils/bot_profiles.dart';
+import '../utils/local_image.dart';
+import '../utils/paste_image.dart';
 
 // ─── Content block types ─────────────────────────────────────────────────────
 
@@ -60,10 +62,29 @@ class _WritePostScreenState extends State<WritePostScreen> {
   static const _maxImages = 10;
   static final RegExp _imageRegex = RegExp(r'!\[[^\]]*\]\(([^)]+)\)');
 
+  void Function()? _pasteSubscription;
+
   @override
   void initState() {
     super.initState();
     _initBlocks();
+    _pasteSubscription = listenPastedImages(_onPastedImages);
+  }
+
+  /// 웹에서 본문에 이미지를 붙여넣었을 때 커서 위치에 사진 블록으로 삽입.
+  void _onPastedImages(List<XFile> files) {
+    if (!mounted || files.isEmpty) return;
+    final remaining = _maxImages - _imageCount;
+    if (remaining <= 0) {
+      _showMaxSnack();
+      return;
+    }
+    setState(() {
+      for (final f in files.take(remaining)) {
+        _insertImage(_ImageBlock.local(f));
+      }
+    });
+    if (files.length > remaining) _showMaxSnack();
   }
 
   void _initBlocks() {
@@ -103,6 +124,7 @@ class _WritePostScreenState extends State<WritePostScreen> {
 
   @override
   void dispose() {
+    _pasteSubscription?.call();
     _titleCtrl.dispose();
     for (final b in _blocks) {
       if (b is _TextBlock) b.dispose();
@@ -728,6 +750,21 @@ class _WritePostScreenState extends State<WritePostScreen> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
+                  if (kIsWeb)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 8, right: 12),
+                        child: Text(
+                          '사진을 복사해 Ctrl+V로 바로 붙여넣을 수 있어요',
+                          textAlign: TextAlign.right,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: cs.onSurface.withValues(alpha: 0.45),
+                            fontSize: 11.5,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -772,8 +809,8 @@ class _WritePostScreenState extends State<WritePostScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: block.file != null
-                ? Image.file(
-                    File(block.file!.path),
+                ? localImage(
+                    block.file!.path,
                     width: double.infinity,
                     fit: BoxFit.cover,
                   )

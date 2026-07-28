@@ -259,6 +259,43 @@
       resize: vertical;
       line-height: 1.6;
     }
+    .rich-editor {
+      width: 100%;
+      min-height: 160px;
+      max-height: 520px;
+      overflow-y: auto;
+      border: 1px solid #d8e0eb;
+      border-radius: 8px;
+      padding: 12px;
+      outline: none;
+      color: #172033;
+      background: #fff;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .rich-editor:focus {
+      border-color: #22c55e;
+      box-shadow: 0 0 0 3px rgba(34,197,94,0.12);
+    }
+    .rich-editor.drag-over {
+      border-color: #22c55e;
+      background: #f2fbf5;
+    }
+    .rich-editor:empty::before {
+      content: attr(data-placeholder);
+      color: #9aa7bb;
+    }
+    .rich-editor img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      border-radius: 10px;
+      margin: 10px 0;
+    }
+    .rich-editor img.uploading {
+      opacity: 0.55;
+    }
     .image-tools {
       display: flex;
       align-items: center;
@@ -270,42 +307,12 @@
       color: #75839a;
       font-size: 12px;
     }
-    .image-preview {
-      display: none;
-      grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-      gap: 10px;
-    }
-    .image-preview.has-images {
-      display: grid;
-    }
-    .preview-item {
-      position: relative;
-      aspect-ratio: 1;
-      border: 1px solid #d8e0eb;
-      border-radius: 10px;
-      overflow: hidden;
-      background: #eef3f8;
-    }
-    .preview-item img,
     .post-thumb img,
     .detail-images img {
       width: 100%;
       height: 100%;
       object-fit: cover;
       display: block;
-    }
-    .remove-image-btn {
-      position: absolute;
-      top: 6px;
-      right: 6px;
-      width: 28px;
-      height: 28px;
-      border: none;
-      border-radius: 999px;
-      background: rgba(10,14,26,0.78);
-      color: #fff;
-      font-size: 18px;
-      line-height: 1;
     }
     .compose-actions {
       display: flex;
@@ -547,6 +554,12 @@
       gap: 12px;
       margin: 0 0 24px;
     }
+    .detail-images:empty {
+      display: none;
+    }
+    .detail-content .detail-image-link {
+      margin: 12px 0;
+    }
     .detail-image-link {
       display: block;
       border: 1px solid #e2e8f0;
@@ -708,13 +721,13 @@
           <h2 id="write-title">글쓰기</h2>
           <div class="compose-grid">
             <input id="post-title" maxlength="80" placeholder="제목" />
-            <textarea id="post-content" maxlength="3000" placeholder="내용을 입력하세요"></textarea>
+            <div id="post-content" class="rich-editor" contenteditable="true" role="textbox" aria-multiline="true"
+                 data-placeholder="내용을 입력하세요. 사진이 포함된 글을 그대로 복사해 붙여넣으면(Ctrl+V) 사진도 원래 자리에 함께 들어갑니다."></div>
             <div class="image-tools">
               <button class="ghost-btn" id="pick-images-btn" type="button">사진 첨부</button>
-              <span class="image-hint">본문에 사진을 붙여넣어도 첨부됩니다. 최대 10장, 파일당 8MB 이하.</span>
+              <span class="image-hint">사진은 복사·드래그해서 본문에 바로 넣을 수 있습니다. 최대 10장, 파일당 8MB 이하.</span>
               <input id="post-images" class="hidden" type="file" accept="image/*" multiple />
             </div>
-            <div id="image-preview" class="image-preview" aria-label="첨부 사진 미리보기"></div>
           </div>
           <div class="compose-actions">
             <span class="counter"><span id="content-count">0</span>/3000</span>
@@ -834,7 +847,6 @@
       postTitle: document.getElementById('post-title'),
       pickImagesBtn: document.getElementById('pick-images-btn'),
       profileName: document.getElementById('profile-name'),
-      imagePreview: document.getElementById('image-preview'),
       searchInput: document.getElementById('search-input'),
       submitCommentBtn: document.getElementById('submit-comment-btn'),
       submitPostBtn: document.getElementById('submit-post-btn'),
@@ -845,7 +857,7 @@
       currentPost: null,
       likedPostIds: new Set(JSON.parse(localStorage.getItem('stockstorage.board.likes') || '[]')),
       posts: [],
-      selectedImages: [],
+      pendingImages: [],
       user: null,
       nickname: '익명',
     };
@@ -965,88 +977,229 @@
         .trim();
     }
 
-    function makeObjectUrl(file) {
-      const url = URL.createObjectURL(file);
-      state.selectedImages.push({ file, url });
+    // ── 본문 에디터: 사진이 글 안에 그대로 들어가는 방식 ──────────────────────
+    const blockTags = new Set([
+      'ADDRESS', 'ARTICLE', 'BLOCKQUOTE', 'DIV', 'FIGURE', 'FIGCAPTION', 'FOOTER',
+      'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HEADER', 'LI', 'P', 'PRE', 'SECTION', 'TR',
+    ]);
+
+    function makeLocalImageId() {
+      return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
     }
 
-    function revokeSelectedImageUrls() {
-      state.selectedImages.forEach(item => URL.revokeObjectURL(item.url));
+    function imageToken(id) {
+      return `[[이미지:${id}]]`;
+    }
+
+    function editorImages() {
+      return [...els.postContent.querySelectorAll('img')];
+    }
+
+    function remainingImageSlots() {
+      return maxImages - editorImages().length;
+    }
+
+    /// 본문에서 지워진 사진은 업로드 대상에서 제외한다.
+    function dropRemovedPendingImages() {
+      const used = new Set(
+        editorImages().map(img => img.dataset.localId).filter(Boolean),
+      );
+      state.pendingImages = state.pendingImages.filter(item => {
+        if (used.has(item.id)) return true;
+        URL.revokeObjectURL(item.url);
+        return false;
+      });
     }
 
     function resetSelectedImages() {
-      revokeSelectedImageUrls();
-      state.selectedImages = [];
+      state.pendingImages.forEach(item => URL.revokeObjectURL(item.url));
+      state.pendingImages = [];
       els.postImages.value = '';
-      renderImagePreview();
     }
 
-    function renderImagePreview() {
-      els.imagePreview.replaceChildren();
-      els.imagePreview.classList.toggle('has-images', state.selectedImages.length > 0);
-      state.selectedImages.forEach((item, index) => {
-        const wrap = document.createElement('div');
-        wrap.className = 'preview-item';
+    function insertNodeAtCaret(node) {
+      const editor = els.postContent;
+      editor.focus();
+      const selection = window.getSelection();
+      let range;
+      if (selection && selection.rangeCount && editor.contains(selection.anchorNode)) {
+        range = selection.getRangeAt(0);
+        range.deleteContents();
+      } else {
+        range = document.createRange();
+        range.selectNodeContents(editor);
+        range.collapse(false);
+      }
+      const tail = document.createElement('br');
+      range.insertNode(tail);
+      range.insertNode(node);
+      range.setStartAfter(tail);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
 
-        const img = document.createElement('img');
-        img.src = item.url;
-        img.alt = `첨부 사진 ${index + 1}`;
-
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.className = 'remove-image-btn';
-        remove.setAttribute('aria-label', `첨부 사진 ${index + 1} 삭제`);
-        remove.textContent = '×';
-        remove.addEventListener('click', () => {
-          URL.revokeObjectURL(item.url);
-          state.selectedImages.splice(index, 1);
-          els.postImages.value = '';
-          renderImagePreview();
-        });
-
-        wrap.append(img, remove);
-        els.imagePreview.appendChild(wrap);
-      });
+    function insertLocalImage(file) {
+      if (!file || !file.type.startsWith('image/')) return false;
+      if (file.size > maxImageBytes) {
+        setStatus('사진은 파일당 8MB 이하만 넣을 수 있습니다.', true);
+        return false;
+      }
+      const id = makeLocalImageId();
+      const url = URL.createObjectURL(file);
+      state.pendingImages.push({ id, file, url });
+      const img = document.createElement('img');
+      img.src = url;
+      img.dataset.localId = id;
+      insertNodeAtCaret(img);
+      return true;
     }
 
     function handleImageSelection(files) {
-      const available = maxImages - state.selectedImages.length;
-      if (available <= 0) {
-        setStatus(`사진은 최대 ${maxImages}장까지 첨부할 수 있습니다.`, true);
+      const images = [...files].filter(file => file.type.startsWith('image/'));
+      if (images.length === 0) return;
+      const slots = remainingImageSlots();
+      if (slots <= 0) {
+        setStatus(`사진은 최대 ${maxImages}장까지 넣을 수 있습니다.`, true);
         return;
       }
-
-      const selected = [...files].slice(0, available);
-      let skipped = 0;
-      selected.forEach(file => {
-        if (!file.type.startsWith('image/') || file.size > maxImageBytes) {
-          skipped += 1;
-          return;
-        }
-        makeObjectUrl(file);
-      });
-
-      if (files.length > available) {
-        setStatus(`사진은 최대 ${maxImages}장까지 첨부할 수 있습니다.`, true);
-      } else if (skipped > 0) {
-        setStatus('이미지 파일만 첨부할 수 있고, 파일당 8MB 이하만 업로드됩니다.', true);
-      } else if (state.selectedImages.length > 0) {
-        setStatus(`${state.selectedImages.length}장의 사진을 첨부했습니다.`);
+      images.slice(0, slots).forEach(insertLocalImage);
+      if (images.length > slots) {
+        setStatus(`사진은 최대 ${maxImages}장까지 넣을 수 있습니다.`, true);
       }
-      renderImagePreview();
+      updateContentCount();
     }
 
+    // 사진 파일을 붙여넣으면 그 자리에, 사진이 포함된 글을 붙여넣으면 글과 사진을 원래 순서대로.
     function handleContentPaste(event) {
-      const items = [...(event.clipboardData?.items || [])];
-      const imageFiles = items
+      const clipboard = event.clipboardData;
+      if (!clipboard) return;
+
+      const imageFiles = [...(clipboard.items || [])]
         .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
         .map(item => item.getAsFile())
         .filter(Boolean);
+      if (imageFiles.length > 0) {
+        event.preventDefault();
+        handleImageSelection(imageFiles);
+        return;
+      }
 
-      if (imageFiles.length === 0) return;
-      event.preventDefault();
-      handleImageSelection(imageFiles);
-      els.postContent.focus();
+      const html = clipboard.getData('text/html');
+      if (html && /<img[\s>]/i.test(html)) {
+        const fragment = htmlToEditorFragment(html);
+        if (fragment) {
+          event.preventDefault();
+          insertNodeAtCaret(fragment);
+          updateContentCount();
+          return;
+        }
+      }
+
+      const text = clipboard.getData('text/plain');
+      if (text) {
+        event.preventDefault();
+        document.execCommand('insertText', false, text);
+        updateContentCount();
+      }
+    }
+
+    // 복사한 글에서 텍스트와 사진만 남긴다(스크립트·스타일·서식은 버림).
+    function htmlToEditorFragment(html) {
+      const parsed = new DOMParser().parseFromString(html, 'text/html');
+      const fragment = document.createDocumentFragment();
+      let slots = remainingImageSlots();
+      let skipped = 0;
+      let hasContent = false;
+
+      // 줄바꿈이 연달아 쌓이지 않게 한다.
+      const appendBreak = () => {
+        if (!fragment.lastChild || fragment.lastChild.nodeName === 'BR') return;
+        fragment.appendChild(document.createElement('br'));
+      };
+
+      const walk = node => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.textContent.replace(/\s+/g, ' ');
+          if (text.trim()) {
+            fragment.appendChild(document.createTextNode(text));
+            hasContent = true;
+          }
+          return;
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+        const tag = node.tagName;
+        if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') return;
+        if (tag === 'BR') {
+          appendBreak();
+          return;
+        }
+        if (tag === 'IMG') {
+          const src = cleanUrl(node.getAttribute('src') || '');
+          if (!/^https?:\/\//i.test(src)) return;
+          if (slots <= 0) {
+            skipped += 1;
+            return;
+          }
+          slots -= 1;
+          const img = document.createElement('img');
+          img.src = src;
+          img.dataset.url = src;
+          img.referrerPolicy = 'no-referrer';
+          appendBreak();
+          fragment.append(img, document.createElement('br'));
+          hasContent = true;
+          return;
+        }
+
+        node.childNodes.forEach(walk);
+        if (blockTags.has(tag)) appendBreak();
+      };
+
+      parsed.body.childNodes.forEach(walk);
+      if (!hasContent) return null;
+      if (skipped > 0) {
+        setStatus(`사진은 최대 ${maxImages}장까지 넣을 수 있어 ${skipped}장은 제외했습니다.`, true);
+      }
+      return fragment;
+    }
+
+    // 에디터 DOM → 저장용 본문. 내가 올릴 사진은 토큰으로, 이미 URL이 있는 사진은 마크다운으로.
+    function serializeEditorNode(node) {
+      if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+      if (node.nodeType !== Node.ELEMENT_NODE) return '';
+      const tag = node.tagName;
+      if (tag === 'BR') return '\n';
+      if (tag === 'IMG') {
+        if (node.dataset.localId) return `\n${imageToken(node.dataset.localId)}\n`;
+        const url = cleanUrl(node.dataset.url || node.getAttribute('src') || '');
+        return /^https?:\/\//i.test(url) ? `\n![](${url})\n` : '';
+      }
+      let inner = '';
+      node.childNodes.forEach(child => { inner += serializeEditorNode(child); });
+      return blockTags.has(tag) ? `\n${inner}` : inner;
+    }
+
+    function editorToRawBody() {
+      let out = '';
+      els.postContent.childNodes.forEach(node => { out += serializeEditorNode(node); });
+      return out
+        .replace(/ /g, ' ')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    }
+
+    function editorTextLength() {
+      return editorToRawBody()
+        .replace(/\[\[이미지:[^\]]+\]\]/g, '')
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+        .trim().length;
+    }
+
+    function updateContentCount() {
+      els.contentCount.textContent = String(editorTextLength());
     }
 
     function getExtension(file) {
@@ -1058,20 +1211,36 @@
       return 'jpg';
     }
 
-    async function uploadSelectedImages() {
-      if (!state.user || state.selectedImages.length === 0) return [];
-      const uploaded = [];
-      for (const item of state.selectedImages) {
-        const ext = getExtension(item.file);
-        const random = Math.random().toString(36).slice(2, 10);
-        const path = `post_images/${Date.now()}_${state.user.uid}_${random}.${ext}`;
-        const storageRef = ref(storage, path);
-        const snapshot = await uploadBytes(storageRef, item.file, {
-          contentType: item.file.type || 'image/jpeg',
-        });
-        uploaded.push(await getDownloadURL(snapshot.ref));
+    async function uploadImageFile(file) {
+      const ext = getExtension(file);
+      const random = Math.random().toString(36).slice(2, 10);
+      const path = `post_images/${Date.now()}_${state.user.uid}_${random}.${ext}`;
+      const snapshot = await uploadBytes(ref(storage, path), file, {
+        contentType: file.type || 'image/jpeg',
+      });
+      return getDownloadURL(snapshot.ref);
+    }
+
+    /// 본문에 남아 있는 로컬 사진만 업로드하고 토큰 → URL 대응표를 돌려준다.
+    async function uploadPendingImages() {
+      dropRemovedPendingImages();
+      if (!state.user || state.pendingImages.length === 0) return {};
+      const uploaded = {};
+      for (const item of state.pendingImages) {
+        uploaded[item.id] = await uploadImageFile(item.file);
       }
       return uploaded;
+    }
+
+    function replaceImageTokens(body, uploaded) {
+      let next = body;
+      for (const [id, url] of Object.entries(uploaded)) {
+        next = next.replaceAll(imageToken(id), `![](${url})`);
+      }
+      return next
+        .replace(/\[\[이미지:[^\]]+\]\]/g, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
     }
 
     function saveLikedIds() {
@@ -1188,23 +1357,56 @@
       return thumb;
     }
 
-    function renderDetailImages(post) {
-      const images = getImageUrls(post);
-      els.modalImages.replaceChildren();
-      if (images.length === 0) return;
-      images.forEach((url, index) => {
-        const link = document.createElement('a');
-        link.className = 'detail-image-link';
-        link.href = url;
-        link.target = '_blank';
-        link.rel = 'noopener';
+    function detailImageLink(url, index) {
+      const link = document.createElement('a');
+      link.className = 'detail-image-link';
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener';
 
-        const img = document.createElement('img');
-        img.src = url;
-        img.alt = `첨부 사진 ${index + 1}`;
-        img.loading = 'lazy';
-        link.appendChild(img);
-        els.modalImages.appendChild(link);
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = `첨부 사진 ${index}`;
+      img.loading = 'lazy';
+      link.appendChild(img);
+      return link;
+    }
+
+    /// 본문을 글·사진 순서 그대로 그린다. 그려진 사진 URL 집합을 돌려준다.
+    function renderDetailBody(post) {
+      const content = String(post.content || '');
+      const pattern = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)|(https?:\/\/[^\s<>"']+)/g;
+      const rendered = new Set();
+      els.modalContent.replaceChildren();
+
+      const appendText = text => {
+        const trimmed = text.replace(/^\n+|\n+$/g, '');
+        if (trimmed.trim()) {
+          els.modalContent.appendChild(document.createTextNode(`${trimmed}\n`));
+        }
+      };
+
+      let cursor = 0;
+      let match;
+      while ((match = pattern.exec(content)) !== null) {
+        const url = cleanUrl(match[1] || match[2] || '');
+        // 마크다운 이미지가 아닌 일반 링크는 본문 텍스트로 그대로 둔다.
+        if (!match[1] && !isLikelyImageUrl(url)) continue;
+        appendText(content.slice(cursor, match.index));
+        els.modalContent.appendChild(detailImageLink(url, rendered.size + 1));
+        rendered.add(url);
+        cursor = match.index + match[0].length;
+      }
+      appendText(content.slice(cursor));
+      return rendered;
+    }
+
+    /// 본문에 없이 imageUrls 필드에만 있는 사진(옛 글)은 아래에 모아 보여준다.
+    function renderDetailImages(post, rendered) {
+      const images = getImageUrls(post).filter(url => !rendered.has(url));
+      els.modalImages.replaceChildren();
+      images.forEach((url, index) => {
+        els.modalImages.appendChild(detailImageLink(url, index + 1));
       });
     }
 
@@ -1231,7 +1433,7 @@
 
     async function submitPost() {
       const title = normalizeText(els.postTitle.value);
-      const content = normalizeText(els.postContent.value);
+      const rawBody = editorToRawBody();
       if (!state.user) {
         setStatus('글쓰기는 Google 로그인 후 이용할 수 있습니다.', true);
         return;
@@ -1240,28 +1442,33 @@
         els.postTitle.focus();
         return;
       }
-      if (content.length < 2 && state.selectedImages.length === 0) {
+      if (editorTextLength() < 2 && editorImages().length === 0) {
         els.postContent.focus();
+        return;
+      }
+      if (editorTextLength() > 3000) {
+        setStatus('본문은 3000자까지 입력할 수 있습니다.', true);
         return;
       }
 
       els.submitPostBtn.disabled = true;
       try {
-        setStatus(state.selectedImages.length > 0 ? '사진을 업로드하는 중입니다.' : '글을 등록하는 중입니다.');
-        const imageUrls = await uploadSelectedImages();
+        dropRemovedPendingImages();
+        setStatus(state.pendingImages.length > 0 ? '사진을 업로드하는 중입니다.' : '글을 등록하는 중입니다.');
+        const content = replaceImageTokens(rawBody, await uploadPendingImages());
         await addDoc(collection(db, 'posts'), {
           uid: state.user.uid,
           nickname: getNickname(),
           title,
           content,
           likes: 0,
-          imageUrls,
+          imageUrls: extractContentImageUrls(content),
           createdAt: serverTimestamp(),
         });
         els.postTitle.value = '';
-        els.postContent.value = '';
-        els.contentCount.textContent = '0';
+        els.postContent.replaceChildren();
         resetSelectedImages();
+        updateContentCount();
         setStatus('게시글을 등록했습니다.');
       } catch (error) {
         setStatus(`글 등록 실패: ${error.message}`, true);
@@ -1323,8 +1530,7 @@
         metaItem(post.nickname || '익명', 'author'),
         metaItem(formatDate(post.createdAt)),
       );
-      els.modalContent.textContent = getDisplayContent(post.content);
-      renderDetailImages(post);
+      renderDetailImages(post, renderDetailBody(post));
       els.modalActions.replaceChildren(createLikeButton(post));
 
       const deleteButton = document.createElement('button');
@@ -1472,9 +1678,25 @@
     });
 
     els.postContent.addEventListener('input', () => {
-      els.contentCount.textContent = String(els.postContent.value.length);
+      dropRemovedPendingImages();
+      updateContentCount();
     });
     els.postContent.addEventListener('paste', handleContentPaste);
+    els.postContent.addEventListener('dragover', event => {
+      if (![...(event.dataTransfer?.types || [])].includes('Files')) return;
+      event.preventDefault();
+      els.postContent.classList.add('drag-over');
+    });
+    els.postContent.addEventListener('dragleave', () => {
+      els.postContent.classList.remove('drag-over');
+    });
+    els.postContent.addEventListener('drop', event => {
+      const files = [...(event.dataTransfer?.files || [])];
+      els.postContent.classList.remove('drag-over');
+      if (files.length === 0) return;
+      event.preventDefault();
+      handleImageSelection(files);
+    });
 
     els.pickImagesBtn.addEventListener('click', () => {
       els.postImages.click();
