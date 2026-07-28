@@ -68,23 +68,72 @@ class _WritePostScreenState extends State<WritePostScreen> {
   void initState() {
     super.initState();
     _initBlocks();
-    _pasteSubscription = listenPastedImages(_onPastedImages);
+    _pasteSubscription = listenPastedContent(_onPasted);
   }
 
-  /// 웹에서 본문에 이미지를 붙여넣었을 때 커서 위치에 사진 블록으로 삽입.
-  void _onPastedImages(List<XFile> files) {
-    if (!mounted || files.isEmpty) return;
-    final remaining = _maxImages - _imageCount;
-    if (remaining <= 0) {
-      _showMaxSnack();
-      return;
-    }
-    setState(() {
-      for (final f in files.take(remaining)) {
-        _insertImage(_ImageBlock.local(f));
+  /// 웹에서 붙여넣은 글·사진을 커서 위치에 원래 순서대로 넣는다.
+  void _onPasted(List<PastedPart> parts) {
+    if (!mounted || parts.isEmpty) return;
+    var slots = _maxImages - _imageCount;
+    var skipped = 0;
+
+    final inserted = <Object>[];
+    for (final part in parts) {
+      if (part.isText) {
+        inserted.add(_listenedTextBlock(part.text!));
+        continue;
       }
+      if (slots <= 0) {
+        skipped += 1;
+        continue;
+      }
+      slots -= 1;
+      inserted.add(
+        part.file != null
+            ? _ImageBlock.local(part.file!)
+            : _ImageBlock.remote(part.imageUrl!),
+      );
+    }
+
+    if (inserted.isNotEmpty) setState(() => _insertAtCursor(inserted));
+    if (skipped > 0) _showMaxSnack();
+  }
+
+  /// 커서 위치에 블록들을 순서대로 끼워 넣고, 커서 뒤 글은 그 아래로 내린다.
+  void _insertAtCursor(List<Object> newBlocks) {
+    final anchorBlock =
+        _lastFocused ?? _blocks.whereType<_TextBlock>().lastOrNull;
+    var anchor = anchorBlock == null ? -1 : _blocks.indexOf(anchorBlock);
+
+    var tail = '';
+    if (anchorBlock != null) {
+      final ctrl = anchorBlock.ctrl;
+      final text = ctrl.text;
+      final selection = ctrl.selection;
+      final start = selection.isValid ? selection.start : text.length;
+      final end = selection.isValid ? selection.end : text.length;
+      tail = text.substring(end);
+      ctrl.text = text.substring(0, start);
+    }
+
+    for (final block in newBlocks) {
+      anchor = _insertBlockAt(anchor, block);
+    }
+
+    // 커서 뒤 글을 이어 쓸 자리로 옮기고 그 자리에 포커스를 준다.
+    final trailing = _listenedTextBlock(tail);
+    _insertBlockAt(anchor, trailing);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      trailing.focus.requestFocus();
+      trailing.ctrl.selection = const TextSelection.collapsed(offset: 0);
     });
-    if (files.length > remaining) _showMaxSnack();
+  }
+
+  /// [after] 뒤에 블록을 넣고 새 블록의 위치를 돌려준다.
+  int _insertBlockAt(int after, Object block) {
+    final index = after < 0 ? 0 : after + 1;
+    _blocks.insert(index, block);
+    return index;
   }
 
   void _initBlocks() {
@@ -221,11 +270,9 @@ class _WritePostScreenState extends State<WritePostScreen> {
     }
     final picked = await StorageService.pickImages(maxImages: remaining);
     if (picked.isEmpty || !mounted) return;
-    setState(() {
-      for (final f in picked) {
-        _insertImage(_ImageBlock.local(f));
-      }
-    });
+    setState(
+      () => _insertAtCursor(picked.map(_ImageBlock.local).toList()),
+    );
   }
 
   Future<void> _pickFromCamera() async {
@@ -235,27 +282,7 @@ class _WritePostScreenState extends State<WritePostScreen> {
     }
     final f = await StorageService.pickFromCamera();
     if (f == null || !mounted) return;
-    setState(() => _insertImage(_ImageBlock.local(f)));
-  }
-
-  void _insertImage(_ImageBlock img) {
-    int insertAfter;
-    if (_lastFocused != null) {
-      final idx = _blocks.indexOf(_lastFocused!);
-      insertAfter = idx == -1 ? _blocks.length - 1 : idx;
-    } else {
-      insertAfter = _blocks.length - 1;
-    }
-    _blocks.insert(insertAfter + 1, img);
-    // Ensure a text block follows the image
-    if (insertAfter + 2 >= _blocks.length ||
-        _blocks[insertAfter + 2] is _ImageBlock) {
-      final next = _listenedTextBlock();
-      _blocks.insert(insertAfter + 2, next);
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => next.focus.requestFocus(),
-      );
-    }
+    setState(() => _insertAtCursor([_ImageBlock.local(f)]));
   }
 
   void _removeImage(int index) {
@@ -755,7 +782,7 @@ class _WritePostScreenState extends State<WritePostScreen> {
                       child: Padding(
                         padding: const EdgeInsets.only(left: 8, right: 12),
                         child: Text(
-                          '사진을 복사해 Ctrl+V로 바로 붙여넣을 수 있어요',
+                          '사진이 들어간 글을 그대로 복사해 붙여넣을 수 있어요 (Ctrl+V)',
                           textAlign: TextAlign.right,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
