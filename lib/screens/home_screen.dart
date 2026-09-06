@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/post.dart';
+import '../models/price_alert.dart';
 import '../models/stock_pick.dart';
 import '../models/announcement.dart';
 import '../models/market_calendar_event.dart';
@@ -19,6 +20,10 @@ import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
 import '../services/subscription_service.dart';
 import '../widgets/banner_ad_widget.dart';
+import '../widgets/kospi200_max_pain_card.dart';
+import '../widgets/max_pain_badge.dart';
+import '../widgets/options_radar_card.dart';
+import '../widgets/price_alert_section.dart';
 import '../widgets/stock_card.dart';
 import '../widgets/user_level_avatar.dart';
 import 'admin_screen.dart';
@@ -33,6 +38,7 @@ import 'market_feature_stocks_screen.dart';
 import 'portfolio_screen.dart';
 import 'notification_history_screen.dart';
 import 'post_detail_screen.dart';
+import 'price_alerts_screen.dart';
 import 'profile_screen.dart';
 import 'stock_ai_analysis_result_screen.dart';
 import 'stock_ai_analysis_list_screen.dart';
@@ -811,6 +817,16 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                 _fixedH(
                   220,
                   _HomeReveal(order: 4, child: const _AIBriefCard()),
+                ),
+                const _HomeCardBreak(),
+                _HomeReveal(
+                  order: 4,
+                  child: const Kospi200MaxPainCard(),
+                ),
+                const _HomeCardBreak(),
+                _HomeReveal(
+                  order: 4,
+                  child: const OptionsRadarCard(),
                 ),
                 const _HomeCardBreak(),
                 _HomeReveal(
@@ -4930,9 +4946,65 @@ class _FavoriteStocksBody extends StatefulWidget {
   State<_FavoriteStocksBody> createState() => _FavoriteStocksBodyState();
 }
 
+/// 관심종목 행에 표시할 조건 알림 상태. index 순서가 곧 표시 우선순위.
+enum _FavoriteAlertState { active, fired, off }
+
 class _FavoriteStocksBodyState extends State<_FavoriteStocksBody> {
   Future<Map<String, PriceResult?>>? _pricesFuture;
   String _stocksKey = '';
+
+  // 조건 알림 상태 — 'MARKET:TICKER' → 대표 상태. 행 벨 아이콘과 헤더 칩에 쓴다.
+  // 종목마다 스트림을 열면 리스너가 종목 수만큼 늘어나므로 유저 단위로 한 번만 구독한다.
+  StreamSubscription<List<PriceAlert>>? _alertSub;
+  Map<String, _FavoriteAlertState> _alertState = const {};
+  int _activeAlertCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _listenAlerts();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FavoriteStocksBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.uid != widget.uid) _listenAlerts();
+  }
+
+  @override
+  void dispose() {
+    _alertSub?.cancel();
+    super.dispose();
+  }
+
+  void _listenAlerts() {
+    _alertSub?.cancel();
+    _alertSub = null;
+    _alertState = const {};
+    _activeAlertCount = 0;
+    final uid = widget.uid;
+    if (uid == null || uid.isEmpty) return;
+    _alertSub = widget.firestoreService.watchPriceAlerts(uid).listen((alerts) {
+      final next = <String, _FavoriteAlertState>{};
+      var active = 0;
+      for (final alert in alerts) {
+        if (alert.enabled && !alert.triggered) active++;
+        final key = '${alert.market}:${alert.ticker}';
+        final state = alert.enabled && !alert.triggered
+            ? _FavoriteAlertState.active
+            : alert.triggered
+            ? _FavoriteAlertState.fired
+            : _FavoriteAlertState.off;
+        final current = next[key];
+        if (current == null || state.index < current.index) next[key] = state;
+      }
+      if (!mounted) return;
+      setState(() {
+        _alertState = next;
+        _activeAlertCount = active;
+      });
+    });
+  }
 
   Future<Map<String, PriceResult?>> _loadPrices(List<StockPick> stocks) async {
     final results = await Future.wait(
@@ -5021,6 +5093,8 @@ class _FavoriteStocksBodyState extends State<_FavoriteStocksBody> {
                           ),
                         ),
                         const Spacer(),
+                        _MyAlertsChip(activeCount: _activeAlertCount),
+                        const SizedBox(width: 8),
                         Text(
                           '${sortedStocks.length}종목',
                           style: TextStyle(
@@ -5047,6 +5121,8 @@ class _FavoriteStocksBodyState extends State<_FavoriteStocksBody> {
                         stock: sortedStocks[i],
                         priceResult: prices[sortedStocks[i].id],
                         loadingPrice: loading,
+                        alertState: _alertState['${sortedStocks[i].market}:'
+                            '${sortedStocks[i].ticker}'],
                       ),
                     ),
                     Padding(
@@ -5232,11 +5308,13 @@ class _FavoriteStockMarketRow extends StatelessWidget {
     required this.stock,
     required this.priceResult,
     required this.loadingPrice,
+    this.alertState,
   });
 
   final StockPick stock;
   final PriceResult? priceResult;
   final bool loadingPrice;
+  final _FavoriteAlertState? alertState;
 
   @override
   Widget build(BuildContext context) {
@@ -5280,11 +5358,26 @@ class _FavoriteStockMarketRow extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 5),
-                  _MarketMetaText(
-                    ticker: stock.ticker,
-                    market: stock.market,
-                    fontSize: 13,
-                    mutedColor: cs.onSurface.withValues(alpha: 0.42),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: _MarketMetaText(
+                          ticker: stock.ticker,
+                          market: stock.market,
+                          fontSize: 13,
+                          mutedColor: cs.onSurface.withValues(alpha: 0.42),
+                        ),
+                      ),
+                      if (stock.market == 'US') ...[
+                        const SizedBox(width: 6),
+                        MaxPainBadge(
+                          ticker: stock.ticker,
+                          market: stock.market,
+                          currentPrice: price?.price,
+                          compact: true,
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
@@ -5306,6 +5399,102 @@ class _FavoriteStockMarketRow extends StatelessWidget {
               priceFontSize: 14,
               changeFontSize: 11,
               changeFontWeight: FontWeight.w800,
+            ),
+            _AlertBellButton(
+              stock: stock,
+              price: price?.price,
+              state: alertState,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 관심종목 행의 조건 알림 벨. 종목 상세로 들어가지 않고 바로 알림을 건다.
+class _AlertBellButton extends StatelessWidget {
+  const _AlertBellButton({
+    required this.stock,
+    required this.price,
+    required this.state,
+  });
+
+  final StockPick stock;
+  final double? price;
+  final _FavoriteAlertState? state;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final muted = cs.onSurface.withValues(alpha: 0.3);
+    final (icon, color) = switch (state) {
+      _FavoriteAlertState.active => (
+        Icons.notifications_active_rounded,
+        const Color(0xFF10B981),
+      ),
+      _FavoriteAlertState.fired => (
+        Icons.notifications_rounded,
+        const Color(0xFFF5C451),
+      ),
+      _FavoriteAlertState.off => (Icons.notifications_off_rounded, muted),
+      null => (Icons.notifications_none_rounded, muted),
+    };
+    return IconButton(
+      icon: Icon(icon, size: 20),
+      color: color,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      tooltip: '조건 알림',
+      onPressed: () => showStockPriceAlertsSheet(
+        context,
+        pick: stock,
+        currentPrice: price,
+      ),
+    );
+  }
+}
+
+/// 관심종목 헤더의 '내 알림' 칩 → 조건 알림 전체 목록.
+class _MyAlertsChip extends StatelessWidget {
+  const _MyAlertsChip({required this.activeCount});
+
+  final int activeCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final has = activeCount > 0;
+    final color = has
+        ? const Color(0xFF10B981)
+        : cs.onSurface.withValues(alpha: 0.45);
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const PriceAlertsScreen()),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              has
+                  ? Icons.notifications_active_rounded
+                  : Icons.notifications_none_rounded,
+              size: 14,
+              color: color,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              has ? '내 알림 $activeCount' : '내 알림',
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ],
         ),

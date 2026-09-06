@@ -21,6 +21,7 @@ import '../services/analytics_service.dart';
 import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
+import '../widgets/price_alert_section.dart';
 import '../widgets/user_level_avatar.dart';
 import 'stock_ai_analysis_result_screen.dart';
 import 'stock_compare_screen.dart';
@@ -60,14 +61,17 @@ enum _Period {
 Route<dynamic> stockDetailRoute(
   StockPick pick, {
   bool enablePickFeatures = true,
+  RouteSettings? settings,
 }) {
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
     return CupertinoPageRoute(
+      settings: settings,
       builder: (_) =>
           StockDetailScreen(pick: pick, enablePickFeatures: enablePickFeatures),
     );
   }
   return MaterialPageRoute(
+    settings: settings,
     builder: (_) =>
         StockDetailScreen(pick: pick, enablePickFeatures: enablePickFeatures),
   );
@@ -192,6 +196,10 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   List<DiscussionPost> _discussionPosts = [];
   bool _loadingDiscussion = true;
 
+  // Max Pain (미국주식 전용)
+  MaxPainResult? _maxPain;
+  bool _loadingMaxPain = false;
+
   // AI 종목 분석
 
   User? get _currentUser => FirebaseAuth.instance.currentUser;
@@ -239,6 +247,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     }
     _loadNews();
     _loadDiscussion();
+    _fetchMaxPain();
     _subscribePick();
     // 관심종목 탭에서 열리면 이미 등록된 상태 — 스트림 응답 전 깜빡임 방지
     if (!widget.enablePickFeatures) _isFavoriteStock = true;
@@ -567,6 +576,21 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       currentPrice: _livePrice?.price ?? widget.pick.currentPrice,
     );
     if (mounted) setState(() => _fundamentals = result);
+  }
+
+  Future<void> _fetchMaxPain() async {
+    if (widget.pick.market != 'US') return;
+    setState(() => _loadingMaxPain = true);
+    final result = await StockPriceService.fetchMaxPain(
+      widget.pick.ticker,
+      widget.pick.market,
+    );
+    if (mounted) {
+      setState(() {
+        _maxPain = result;
+        _loadingMaxPain = false;
+      });
+    }
   }
 
   Future<void> _fetchChart(int seq) async {
@@ -1471,6 +1495,19 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                   ],
                                 ),
                                 const SizedBox(height: 20),
+                                // 조건 알림 (목표가/등락률)
+                                PriceAlertSection(
+                                  pick: widget.pick,
+                                  currentPrice:
+                                      _livePrice?.price ?? widget.pick.currentPrice,
+                                ),
+                                const SizedBox(height: 20),
+                                // Max Pain (미국주식 전용)
+                                if (widget.pick.market == 'US' &&
+                                    (_loadingMaxPain || _maxPain != null)) ...[
+                                  _maxPainSection(),
+                                  const SizedBox(height: 20),
+                                ],
                                 if (widget.enablePickFeatures) ...[
                                   // 투표
                                   _voteSection(),
@@ -1571,6 +1608,222 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           ],
         );
       },
+    );
+  }
+
+  // ── 옵션 Max Pain 섹션 (미국주식 전용) ──────────────────────────
+  Widget _maxPainSection() {
+    final cs = Theme.of(context).colorScheme;
+    const callColor = Color(0xFFF04452); // 콜 = 상승 베팅
+    const putColor = Color(0xFF1677FF); // 풋 = 하락 베팅
+    const accent = Color(0xFF10B981);
+
+    final mp = _maxPain;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: cs.onSurface.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.onSurface.withValues(alpha: 0.1)),
+      ),
+      child: mp == null
+          ? Row(
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: accent,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '옵션 Max Pain 계산 중...',
+                  style: TextStyle(
+                    color: cs.onSurface.withValues(alpha: 0.5),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      '옵션 Max Pain',
+                      style: TextStyle(
+                        color: cs.onSurface,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: _showMaxPainInfo,
+                      child: Icon(
+                        Icons.info_outline_rounded,
+                        size: 16,
+                        color: cs.onSurface.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '만기 ${DateFormat('M/d').format(mp.expiration)}',
+                      style: TextStyle(
+                        color: cs.onSurface.withValues(alpha: 0.45),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '\$${mp.maxPain.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        color: accent,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (_livePrice != null) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Text(
+                          _maxPainDeltaLabel(mp, _livePrice!.price),
+                          style: TextStyle(
+                            color: cs.onSurface.withValues(alpha: 0.55),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 120,
+                  width: double.infinity,
+                  child: CustomPaint(
+                    painter: _OiChartPainter(
+                      strikes: mp.strikes,
+                      maxPain: mp.maxPain,
+                      currentPrice: _livePrice?.price ?? mp.underlyingPrice,
+                      callColor: callColor,
+                      putColor: putColor,
+                      maxPainColor: accent,
+                      axisColor: cs.onSurface.withValues(alpha: 0.35),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    _maxPainLegend('콜 OI', callColor, cs),
+                    const SizedBox(width: 12),
+                    _maxPainLegend('풋 OI', putColor, cs),
+                    const SizedBox(width: 12),
+                    _maxPainLegend('Max Pain', accent, cs),
+                    const Spacer(),
+                    if (mp.putCallRatio != null)
+                      Text(
+                        'P/C ${mp.putCallRatio!.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          color: cs.onSurface.withValues(alpha: 0.55),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+    );
+  }
+
+  String _maxPainDeltaLabel(MaxPainResult mp, double currentPrice) {
+    if (currentPrice <= 0) return '';
+    final pct = (mp.maxPain - currentPrice) / currentPrice * 100;
+    final dir = pct >= 0 ? '↑' : '↓';
+    return '현재가 대비 $dir${pct.abs().toStringAsFixed(1)}%';
+  }
+
+  Widget _maxPainLegend(String label, Color color, ColorScheme cs) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.5),
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showMaxPainInfo() {
+    final cs = Theme.of(context).colorScheme;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: cs.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Text(
+          'Max Pain이란?',
+          style: TextStyle(
+            color: cs.onSurface,
+            fontSize: 17,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        content: Text(
+          '옵션 만기일에 옵션 매수자 전체의 손실이 최대(=매도자 이익 최대)가 되는 주가입니다.\n\n'
+          '만기일에 주가가 Max Pain 근처로 수렴하려는 경향이 있다는 이론이 있으나, '
+          '통계적 경향일 뿐 보장되지 않습니다. 최근접 만기 옵션의 미결제약정(OI) 기준으로 계산되며, '
+          '투자 판단의 참고 지표로만 활용하세요.',
+          style: TextStyle(
+            color: cs.onSurface.withValues(alpha: 0.75),
+            fontSize: 13.5,
+            height: 1.6,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              '확인',
+              style: TextStyle(
+                color: Color(0xFF10B981),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -4036,4 +4289,166 @@ class _FullscreenCandleChartPageState
       ),
     );
   }
+}
+
+/// 행사가별 미결제약정(OI) 바 차트 + Max Pain/현재가 마커
+class _OiChartPainter extends CustomPainter {
+  final List<OiStrike> strikes;
+  final double maxPain;
+  final double? currentPrice;
+  final Color callColor;
+  final Color putColor;
+  final Color maxPainColor;
+  final Color axisColor;
+
+  _OiChartPainter({
+    required this.strikes,
+    required this.maxPain,
+    required this.currentPrice,
+    required this.callColor,
+    required this.putColor,
+    required this.maxPainColor,
+    required this.axisColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (strikes.isEmpty) return;
+
+    // 현재가(없으면 Max Pain) 기준 ±20% 범위만 표시 → 가독성 확보
+    final ref = currentPrice ?? maxPain;
+    var visible = strikes
+        .where((s) => s.strike >= ref * 0.8 && s.strike <= ref * 1.2)
+        .toList();
+    if (visible.length < 5) visible = strikes; // 범위가 너무 좁으면 전체
+    if (visible.isEmpty) return;
+
+    final maxOi = visible
+        .map((s) => max(s.callOi, s.putOi))
+        .reduce(max)
+        .toDouble();
+    if (maxOi <= 0) return;
+
+    const labelHeight = 14.0;
+    final chartHeight = size.height - labelHeight;
+    final slotWidth = size.width / visible.length;
+    final barWidth = max(1.0, slotWidth * 0.38);
+
+    final callPaint = Paint()..color = callColor.withValues(alpha: 0.75);
+    final putPaint = Paint()..color = putColor.withValues(alpha: 0.75);
+
+    for (var i = 0; i < visible.length; i++) {
+      final s = visible[i];
+      final cx = slotWidth * (i + 0.5);
+      // 콜 바 (왼쪽)
+      final callH = chartHeight * (s.callOi / maxOi);
+      if (callH > 0) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(
+              cx - barWidth,
+              chartHeight - callH,
+              barWidth,
+              callH,
+            ),
+            const Radius.circular(1),
+          ),
+          callPaint,
+        );
+      }
+      // 풋 바 (오른쪽)
+      final putH = chartHeight * (s.putOi / maxOi);
+      if (putH > 0) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(
+            Rect.fromLTWH(cx, chartHeight - putH, barWidth, putH),
+            const Radius.circular(1),
+          ),
+          putPaint,
+        );
+      }
+    }
+
+    double xForPrice(double price) {
+      // 행사가 간격이 균일하지 않을 수 있어 인덱스 보간
+      for (var i = 0; i < visible.length; i++) {
+        if (visible[i].strike >= price) {
+          if (i == 0) return slotWidth * 0.5;
+          final prev = visible[i - 1].strike;
+          final next = visible[i].strike;
+          final t = next > prev ? (price - prev) / (next - prev) : 0.0;
+          return slotWidth * (i - 0.5 + t);
+        }
+      }
+      return size.width - slotWidth * 0.5;
+    }
+
+    // Max Pain 세로선
+    final mpX = xForPrice(maxPain);
+    canvas.drawLine(
+      Offset(mpX, 0),
+      Offset(mpX, chartHeight),
+      Paint()
+        ..color = maxPainColor
+        ..strokeWidth = 1.6,
+    );
+
+    // 현재가 점선
+    if (currentPrice != null) {
+      final cpX = xForPrice(currentPrice!);
+      final dashPaint = Paint()
+        ..color = axisColor
+        ..strokeWidth = 1.2;
+      const dashH = 4.0;
+      for (double y = 0; y < chartHeight; y += dashH * 2) {
+        canvas.drawLine(
+          Offset(cpX, y),
+          Offset(cpX, min(y + dashH, chartHeight)),
+          dashPaint,
+        );
+      }
+    }
+
+    // X축 라벨: 최소/Max Pain/최대 행사가 (MP 라벨과 겹치는 가장자리 라벨은 생략)
+    double? mpLabelLeft;
+    double? mpLabelRight;
+    void drawLabel(String text, double x, TextAlign align) {
+      final tp = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: TextStyle(color: axisColor, fontSize: 9),
+        ),
+        textDirection: ui.TextDirection.ltr,
+      )..layout();
+      double dx = x - tp.width / 2;
+      if (align == TextAlign.left) dx = x;
+      if (align == TextAlign.right) dx = x - tp.width;
+      dx = dx.clamp(0, size.width - tp.width);
+      // MP 라벨과 겹치면 그리지 않음
+      if (mpLabelLeft != null &&
+          dx < mpLabelRight! + 4 &&
+          dx + tp.width > mpLabelLeft! - 4) {
+        return;
+      }
+      if (align == TextAlign.center) {
+        mpLabelLeft = dx;
+        mpLabelRight = dx + tp.width;
+      }
+      tp.paint(canvas, Offset(dx, chartHeight + 2));
+    }
+
+    drawLabel('MP ${maxPain.toStringAsFixed(0)}', mpX, TextAlign.center);
+    drawLabel(visible.first.strike.toStringAsFixed(0), 0, TextAlign.left);
+    drawLabel(
+      visible.last.strike.toStringAsFixed(0),
+      size.width,
+      TextAlign.right,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _OiChartPainter old) =>
+      old.strikes != strikes ||
+      old.maxPain != maxPain ||
+      old.currentPrice != currentPrice;
 }

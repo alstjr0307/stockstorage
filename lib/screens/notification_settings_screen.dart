@@ -3,6 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
+import 'price_alerts_screen.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
@@ -85,6 +86,8 @@ class _NotificationSettingsScreenState
                 'postComment': true,
                 'journalComment': true,
                 'journalWriteReminder': false,
+                'priceAlert': true,
+                'nightFutures': true,
               };
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -103,6 +106,18 @@ class _NotificationSettingsScreenState
                 onChanged: (v) => _toggleSetting('pickComment', v),
               ),
               _buildTile(
+                title: '조건 알림 (목표가·등락률)',
+                subtitle: '설정한 목표가나 등락률에 도달하면 알림을 받습니다.',
+                value: settings['priceAlert'] ?? true,
+                onChanged: (v) => _toggleSetting('priceAlert', v),
+              ),
+              _buildTile(
+                title: '야간선물 개장 알림',
+                subtitle: '평일 오후 6시 5분, 코스피200·코스닥150 야간선물 개장 시 알림을 받습니다.',
+                value: settings['nightFutures'] ?? true,
+                onChanged: (v) => _toggleSetting('nightFutures', v),
+              ),
+              _buildTile(
                 title: '게시글 댓글 알림',
                 subtitle: '내 게시글에 달린 댓글 알림을 받습니다.',
                 value: settings['postComment'] ?? true,
@@ -119,6 +134,27 @@ class _NotificationSettingsScreenState
                 subtitle: '평일 오후 6시에 매매일지 작성 알림을 받습니다.',
                 value: settings['journalWriteReminder'] ?? false,
                 onChanged: (v) => _toggleSetting('journalWriteReminder', v),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(
+                  Icons.notifications_active_rounded,
+                  color: Color(0xFF10B981),
+                ),
+                title: const Text(
+                  '내 조건 알림 관리',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: const Text(
+                  '걸어둔 목표가·등락률 알림을 보고 끄거나 삭제합니다.',
+                  style: TextStyle(fontSize: 12),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PriceAlertsScreen()),
+                ),
               ),
               const SizedBox(height: 8),
               const Text(

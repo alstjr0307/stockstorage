@@ -16,7 +16,10 @@ import '../services/ai_analysis_ad_gate.dart';
 import '../utils/share_capture.dart';
 import '../services/firestore_service.dart';
 // AdGate은 새로고침 버튼에서 사용
+import '../services/premium_nudge_service.dart';
 import '../services/stock_price_service.dart';
+import '../services/subscription_service.dart';
+import 'subscription_screen.dart';
 
 class StockAiAnalysisResultScreen extends StatefulWidget {
   final StockPick pick;
@@ -1028,7 +1031,7 @@ class _AnalysisContentState extends State<_AnalysisContent> {
       }
       if (a.score != null) {
         final scoreLabel = a.scoreLabel.isNotEmpty ? ' · ${a.scoreLabel}' : '';
-        lines.add('AI 점수  ${a.score!.toStringAsFixed(1)}/100$scoreLabel');
+        lines.add('AI 점수  ${a.score!.round()}/100$scoreLabel');
       }
       if (a.generatedAt != null) {
         lines.add(
@@ -1537,6 +1540,9 @@ class _AnalysisContentState extends State<_AnalysisContent> {
       addSection(_RisksDetailedCard(risks: risksDetailed));
     }
     addSection(_SourceEvidenceCard(analysis: analysis));
+    // 리포트를 끝까지 읽은 시점 = 가치를 가장 크게 느끼는 순간. 노출 조건은
+    // 카드가 스스로 판단하고(비구독자 + 빈도 제한), 아니면 아무것도 그리지 않는다.
+    addSection(const _PremiumNudgeCard(), gap: 0);
     addSection(
       _StatusCard(fromCache: fromCache, generatedText: generatedText),
       gap: 16,
@@ -1873,6 +1879,28 @@ class _ReportHeroCard extends StatelessWidget {
             ),
           ],
         ),
+        if (analysis.scorePercentileTop != null) ...[
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+              decoration: BoxDecoration(
+                color: scoreColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '최근 전체 분석 중 상위 ${analysis.scorePercentileTop}%',
+                style: TextStyle(
+                  color: scoreColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ),
+          ),
+        ],
         if (avgTarget != null) ...[
           const SizedBox(height: 16),
           _AnalystTargetCard(
@@ -4827,6 +4855,137 @@ class _AiTechnicalMetrics {
       ma120: _movingAverage(closes, 120),
       bollingerPosition: bollinger.$1,
       bollingerVerdict: bollinger.$2,
+    );
+  }
+}
+
+/// 리포트 하단의 프리미엄 안내 카드.
+///
+/// 비구독자에게, 그것도 빈도 제한을 통과했을 때만 나타난다. 조건이 맞지 않으면
+/// 높이 0으로 남아 리포트 레이아웃에 흔적을 남기지 않는다.
+class _PremiumNudgeCard extends StatefulWidget {
+  const _PremiumNudgeCard();
+
+  @override
+  State<_PremiumNudgeCard> createState() => _PremiumNudgeCardState();
+}
+
+class _PremiumNudgeCardState extends State<_PremiumNudgeCard> {
+  static const _spot = PremiumNudgeService.reportFooter;
+
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _decide();
+  }
+
+  Future<void> _decide() async {
+    if (SubscriptionService.instance.isPremium) return;
+    if (!await PremiumNudgeService.instance.shouldShow(_spot)) return;
+    if (!mounted) return;
+    await PremiumNudgeService.instance.markShown(_spot);
+    if (!mounted) return;
+    setState(() => _visible = true);
+  }
+
+  Future<void> _dismiss() async {
+    await PremiumNudgeService.instance.markDismissed(_spot);
+    if (!mounted) return;
+    setState(() => _visible = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_visible) return const SizedBox.shrink();
+
+    final cs = Theme.of(context).colorScheme;
+    const gold = Color(0xFFF5B547);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 18),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: gold.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.workspace_premium_rounded,
+                  color: gold,
+                  size: 18,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    '이 리포트가 도움이 되셨나요?',
+                    style: TextStyle(
+                      color: cs.onSurface,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '프리미엄은 광고 없이 하루 5회까지 분석할 수 있어요.\n'
+              '언제든 스토어에서 해지할 수 있습니다.',
+              style: TextStyle(
+                color: cs.onSurface.withValues(alpha: 0.6),
+                fontSize: 12.5,
+                height: 1.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: _dismiss,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: const Size(0, 36),
+                  ),
+                  child: Text(
+                    '괜찮아요',
+                    style: TextStyle(
+                      color: cs.onSurface.withValues(alpha: 0.45),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF10B981),
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    minimumSize: const Size(0, 36),
+                  ),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const SubscriptionScreen(),
+                    ),
+                  ),
+                  child: const Text(
+                    '프리미엄 보기',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

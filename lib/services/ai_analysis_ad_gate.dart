@@ -275,6 +275,16 @@ class AiAnalysisAdGate {
                 ),
               ),
             ],
+            const SizedBox(height: 12),
+            _PremiumHint(
+              isDark: isDark,
+              onTap: () {
+                Navigator.pop(ctx, false);
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
+                );
+              },
+            ),
           ],
         ),
         actions: [
@@ -460,9 +470,7 @@ class AiAnalysisAdGate {
               onPressed: () {
                 Navigator.pop(ctx);
                 Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const SubscriptionScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const SubscriptionScreen()),
                 );
               },
               child: const Text(
@@ -472,6 +480,53 @@ class AiAnalysisAdGate {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// 광고 시청 확인 다이얼로그 하단의 조용한 프리미엄 안내 한 줄.
+///
+/// 광고 보기가 여전히 기본 동작이다. 이 줄은 버튼이 아니라 안내에 가깝게
+/// 낮은 대비로 두어, 매번 봐도 압박으로 느껴지지 않게 한다.
+class _PremiumHint extends StatelessWidget {
+  const _PremiumHint({required this.isDark, required this.onTap});
+
+  final bool isDark;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          children: [
+            const Icon(
+              Icons.workspace_premium_rounded,
+              size: 15,
+              color: Color(0xFFF5B547),
+            ),
+            const SizedBox(width: 7),
+            Expanded(
+              child: Text(
+                '프리미엄은 광고 없이 하루 5회',
+                style: TextStyle(
+                  color: isDark ? Colors.white54 : Colors.black45,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 16,
+              color: isDark ? Colors.white38 : Colors.black26,
+            ),
+          ],
+        ),
       ),
     );
   }

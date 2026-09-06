@@ -12,6 +12,7 @@ import '../screens/home_screen.dart';
 import '../screens/journal_chart_screen.dart';
 import '../screens/post_detail_screen.dart';
 import '../screens/stock_ai_analysis_result_screen.dart';
+import '../screens/stock_detail_screen.dart';
 import '../utils/globals.dart';
 import 'firestore_service.dart';
 
@@ -278,6 +279,14 @@ class NotificationService {
         );
         return;
       }
+      if (type == 'price_alert') {
+        await _openStockDetailFromAlert(
+          ticker: (data['ticker'] ?? '').toString(),
+          market: (data['market'] ?? '').toString(),
+          name: (data['name'] ?? '').toString(),
+        );
+        return;
+      }
       if (postId.isNotEmpty) {
         await _openPost(postId);
         return;
@@ -339,6 +348,48 @@ class NotificationService {
       MaterialPageRoute(
         settings: RouteSettings(name: routeName),
         builder: (_) => StockAiAnalysisResultScreen(pick: pick),
+      ),
+    );
+  }
+
+  /// 조건 알림(목표가·등락률) 푸시 탭 → 해당 종목 상세로 이동.
+  /// payload에는 ticker/market/name만 오므로 일반 종목 상세로 연다.
+  Future<void> _openStockDetailFromAlert({
+    required String ticker,
+    required String market,
+    required String name,
+  }) async {
+    await _waitForNavigatorContext();
+    final normalizedTicker = ticker.trim().toUpperCase();
+    if (normalizedTicker.isEmpty) return;
+    final navigator = navigatorKey.currentState;
+    if (navigator == null) return;
+
+    final normalizedMarket = market.trim().toUpperCase();
+    final resolvedMarket = normalizedMarket.isEmpty ? 'KS' : normalizedMarket;
+    final routeName = 'stock-detail:${resolvedMarket}_$normalizedTicker';
+
+    // 같은 종목 상세가 이미 스택에 있으면 새로 쌓지 않고 그 화면으로 돌아간다.
+    var foundExisting = false;
+    navigator.popUntil((route) {
+      if (route.settings.name == routeName) {
+        foundExisting = true;
+        return true;
+      }
+      return route.isFirst;
+    });
+    if (foundExisting) return;
+
+    navigator.push(
+      stockDetailRoute(
+        stockPickForGeneralDetail(
+          ticker: normalizedTicker,
+          name: name,
+          market: resolvedMarket,
+          reason: '조건 알림에서 열린 종목입니다.',
+        ),
+        enablePickFeatures: false,
+        settings: RouteSettings(name: routeName),
       ),
     );
   }

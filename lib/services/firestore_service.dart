@@ -6,7 +6,9 @@ import '../models/fmkorea_stock_mention.dart';
 import '../models/market_analysis.dart';
 import '../models/market_calendar_event.dart';
 import '../models/market_feature_stock.dart';
+import '../models/kospi200_max_pain.dart';
 import '../models/post.dart';
+import '../models/price_alert.dart';
 import '../models/stock_pick.dart';
 import '../models/trading_journal.dart';
 import 'stock_price_service.dart';
@@ -54,6 +56,8 @@ class FirestoreService {
     'postComment': true,
     'journalComment': true,
     'journalWriteReminder': false,
+    'priceAlert': true,
+    'nightFutures': true,
   };
 
   static String favoriteStockKey(String market, String ticker) {
@@ -734,6 +738,87 @@ class FirestoreService {
         }, SetOptions(merge: true));
       });
     }
+  }
+
+  // ── 조건 알림 (price_alerts) ─────────────────────────────────────────
+  // 무료 유저 활성 알림 최대 개수. 프리미엄은 무제한.
+  static const int freeAlertLimit = 1;
+
+  CollectionReference<Map<String, dynamic>> get _alertsCol =>
+      _db.collection('price_alerts');
+
+  /// 유저의 모든 조건 알림 (최신순).
+  Stream<List<PriceAlert>> watchPriceAlerts(String uid) {
+    if (uid.isEmpty) return Stream.value(const []);
+    return _alertsCol
+        .where('uid', isEqualTo: uid)
+        .snapshots()
+        .map(
+          (snap) =>
+              snap.docs.map((d) => PriceAlert.fromDoc(d)).toList()
+                ..sort((a, b) {
+                  final at = a.createdAt?.millisecondsSinceEpoch ?? 0;
+                  final bt = b.createdAt?.millisecondsSinceEpoch ?? 0;
+                  return bt.compareTo(at);
+                }),
+        );
+  }
+
+  /// 특정 종목에 걸린 알림만.
+  Stream<List<PriceAlert>> watchPriceAlertsForStock(
+    String uid,
+    String ticker,
+    String market,
+  ) {
+    if (uid.isEmpty) return Stream.value(const []);
+    final t = ticker.trim().toUpperCase();
+    final m = market.trim().toUpperCase();
+    return _alertsCol
+        .where('uid', isEqualTo: uid)
+        .where('ticker', isEqualTo: t)
+        .where('market', isEqualTo: m)
+        .snapshots()
+        .map((snap) => snap.docs.map((d) => PriceAlert.fromDoc(d)).toList());
+  }
+
+  /// 활성(enabled && !triggered) 알림 개수 — 무료 한도 체크용.
+  Future<int> activeAlertCount(String uid) async {
+    if (uid.isEmpty) return 0;
+    final snap = await _alertsCol
+        .where('uid', isEqualTo: uid)
+        .where('enabled', isEqualTo: true)
+        .get();
+    return snap.docs.where((d) => (d.data()['triggered'] as bool?) != true).length;
+  }
+
+  Future<void> addPriceAlert(PriceAlert alert) {
+    return _alertsCol.add(alert.toFirestore());
+  }
+
+  Future<void> deletePriceAlert(String alertId) {
+    return _alertsCol.doc(alertId).delete();
+  }
+
+  /// 발동된 알림을 재무장(다시 켜기). triggered=false 로 되돌린다.
+  Future<void> rearmPriceAlert(String alertId) {
+    return _alertsCol.doc(alertId).update({
+      'enabled': true,
+      'triggered': false,
+      'triggeredAt': FieldValue.delete(),
+    });
+  }
+
+  Future<void> setPriceAlertEnabled(String alertId, bool enabled) {
+    return _alertsCol.doc(alertId).update({'enabled': enabled});
+  }
+
+  // ── 코스피200 옵션 Max Pain (서버 캐시) ──────────────────────────────
+  Stream<Kospi200MaxPain?> watchKospi200MaxPain() {
+    return _db
+        .collection('kospi200_maxpain')
+        .doc('latest')
+        .snapshots()
+        .map(Kospi200MaxPain.fromDoc);
   }
 
   // ── 종료 추천주 ───────────────────────────────────────────────────────
@@ -1478,7 +1563,16 @@ class FirestoreService {
         : _db.collection('tmp').doc().id;
 
     final routeData = <String, dynamic>{};
-    for (final key in ['postId', 'pickId', 'journalId']) {
+    // ticker/market/type 은 조건 알림(price_alert) 종목 상세 라우팅에 쓰인다.
+    for (final key in [
+      'postId',
+      'pickId',
+      'journalId',
+      'type',
+      'ticker',
+      'market',
+      'name',
+    ]) {
       final value = data[key];
       if (value is String && value.trim().isNotEmpty) {
         routeData[key] = value.trim();
@@ -1525,6 +1619,12 @@ class FirestoreService {
       'journalWriteReminder':
           (raw['journalWriteReminder'] as bool?) ??
           _defaultNotificationSettings['journalWriteReminder']!,
+      'priceAlert':
+          (raw['priceAlert'] as bool?) ??
+          _defaultNotificationSettings['priceAlert']!,
+      'nightFutures':
+          (raw['nightFutures'] as bool?) ??
+          _defaultNotificationSettings['nightFutures']!,
     };
   }
 

@@ -8,6 +8,7 @@ import 'home_screen.dart';
 import 'journal_chart_screen.dart';
 import 'notification_settings_screen.dart';
 import 'post_detail_screen.dart';
+import 'stock_detail_screen.dart';
 
 class NotificationHistoryScreen extends StatefulWidget {
   const NotificationHistoryScreen({super.key});
@@ -24,6 +25,27 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
     final postId = (data['postId'] as String?)?.trim() ?? '';
     final pickId = (data['pickId'] as String?)?.trim() ?? '';
     final journalId = (data['journalId'] as String?)?.trim() ?? '';
+    final type = (data['type'] as String?)?.trim() ?? '';
+
+    // 조건 알림(목표가·등락률) → 해당 종목 상세로
+    if (type == 'price_alert') {
+      final ticker = (data['ticker'] as String?)?.trim().toUpperCase() ?? '';
+      if (ticker.isEmpty) return;
+      final market = (data['market'] as String?)?.trim().toUpperCase() ?? '';
+      Navigator.push(
+        context,
+        stockDetailRoute(
+          stockPickForGeneralDetail(
+            ticker: ticker,
+            name: (data['name'] as String?)?.trim() ?? '',
+            market: market.isEmpty ? 'KS' : market,
+            reason: '조건 알림에서 열린 종목입니다.',
+          ),
+          enablePickFeatures: false,
+        ),
+      );
+      return;
+    }
 
     if (postId.isNotEmpty) {
       final post = await _firestoreService.getPostOnce(postId);
@@ -209,7 +231,10 @@ class _NotificationHistoryScreenState extends State<NotificationHistoryScreen> {
               final canOpen =
                   ((data['postId'] as String?)?.trim().isNotEmpty ?? false) ||
                   ((data['pickId'] as String?)?.trim().isNotEmpty ?? false) ||
-                  ((data['journalId'] as String?)?.trim().isNotEmpty ?? false);
+                  ((data['journalId'] as String?)?.trim().isNotEmpty ?? false) ||
+                  ((data['type'] as String?)?.trim() == 'price_alert' &&
+                      ((data['ticker'] as String?)?.trim().isNotEmpty ??
+                          false));
 
               return InkWell(
                 onTap: canOpen ? () => _openNotification(data) : null,
