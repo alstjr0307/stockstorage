@@ -111,6 +111,11 @@ async function writeNotificationHistoryForUids(db, uidSet, payload) {
         ...(payload.postId ? { postId: payload.postId } : {}),
         ...(payload.pickId ? { pickId: payload.pickId } : {}),
         ...(payload.journalId ? { journalId: payload.journalId } : {}),
+        // 조건 알림 등 종목 상세로 라우팅되는 알림용
+        ...(payload.type ? { type: payload.type } : {}),
+        ...(payload.ticker ? { ticker: payload.ticker } : {}),
+        ...(payload.market ? { market: payload.market } : {}),
+        ...(payload.name ? { name: payload.name } : {}),
         sentAt,
         updatedAt: sentAt,
       });
@@ -728,9 +733,14 @@ exports.sendPushOnNotificationQueue = onDocumentCreated(
 
     const db = getFirestore();
 
+    // 큐 문서에 settingKey가 있으면 해당 글로벌 알림 설정이 켜진 유저에게만
+    // 발송한다. 하위호환: new_pick_alerts 토픽은 newPick 설정으로 필터링.
+    const settingKey =
+      data.settingKey || (topic === 'new_pick_alerts' ? 'newPick' : null);
+
     let recipientUids = new Set();
     let tokens = [];
-    if (topic === 'new_pick_alerts') {
+    if (settingKey) {
       // Only token holders can receive pushes, so use fcm_tokens as the
       // candidate set and then filter by the user's notification setting.
       // Avoids scanning the entire users collection on every push.
@@ -749,7 +759,7 @@ exports.sendPushOnNotificationQueue = onDocumentCreated(
       recipientUids = await filterUsersByGlobalSetting(
         db,
         new Set(tokensByUid.keys()),
-        'newPick'
+        settingKey
       );
 
       const tokenSet = new Set();
@@ -1542,6 +1552,9 @@ exports.recordNightFuturesPrice = onSchedule(
 exports.notifyNightFuturesOpen = onSchedule(
   { schedule: '5 18 * * 1-5', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 30 },
   async () => {
+    // [임시 비활성화] 야간선물 개장 알림 발송 중단. 재개하려면 이 return 제거.
+    console.log('[NightFutures] 개장 알림 임시 비활성화됨 — 발송 생략');
+    return;
     // 휴장일이면 야간선물도 열리지 않으므로 건너뛴다. 코스피/코스닥의 "오늘
     // 거래일" 여부로 판별 — 별도 공휴일 목록 관리 없이 자동으로 걸러진다.
     // 데이터 조회 실패 시엔 알림을 보내지 않는다(오발송 방지).
@@ -1563,6 +1576,7 @@ exports.notifyNightFuturesOpen = onSchedule(
       title: '🌙 야간선물 개장',
       body: '코스피200·코스닥150 야간선물이 개장했습니다. 지금 흐름을 확인해 보세요 →',
       topic: 'stock_alerts',
+      settingKey: 'nightFutures',
       route: 'night_futures',
       createdAt: new Date(),
     });
@@ -2835,55 +2849,66 @@ function blendStockAnalysisScore({
 }
 
 /**
- * 모델이 출력한 sub-score 5개를 가중합해 score를 재계산.
+ * riskLevel sub-score 분포 보정.
  *
- * 정책: 비대칭 보정.
- * - 모델 score < 가중합 - 3: 모델이 종합점수를 안전한 60대로 내린 경우.
- *   → 가중합으로 교체해서 sub-score가 보여주는 우호 신호를 종합점수에도 반영.
- * - 모델 score > 가중합 + 3: 모델이 holistic 판단으로 종합점수를 위로 올린 경우.
- *   → 모델의 conviction을 일부 존중. 가중합 + 6까지는 허용 (그 이상은 가중합+6으로 cap).
- * - 차이 ±3 이내: 모델 score 유지.
+ * 관측 문제: 모델이 riskLevel을 "리스크는 늘 있다"는 이유로 40~60에
+ * 뭉개서 출력 (실측 284건: 중앙값 48, p10 35, p90 60, 최대 72 —
+ * 다른 축은 88~90까지 분포). 그 결과 15% 가중치가 사실상 상수항이
+ * 되어 종합점수를 압축하고, 다축이 강한 종목의 상단만 깎는다.
  *
- * "80+ 점수가 거의 안 나온다"는 문제는 모델이 sub 평균보다 위로 못 가는
- * 대칭 규칙 때문이었음. holistic 신호(여러 축이 함께 강할 때 시너지)는
- * 가중합만으로 잡히지 않으므로, 위쪽에만 약간의 여유를 둔다.
+ * 보정: 구간별 선형 확장으로 중앙 뭉침을 펴준다 (단조 증가 유지).
+ *   [0,30] → [0,25], [30,70] → [25,85], [70,100] → [85,100]
+ * recomputeScoreFromSubScores보다 먼저 호출해서 종합점수 가중합과
+ * 화면에 보이는 리스크 sub-score가 같은 값을 쓰게 한다.
  */
-function recomputeScoreFromSubScores(payload) {
-  const sub = payload?.subScores;
-  if (!sub || typeof sub !== 'object') return payload;
-  const weights = {
-    priceTrend: 0.25,
-    newsImpact: 0.20,
-    fundamentals: 0.20,
-    momentumFlow: 0.20,
-    riskLevel: 0.15,
-  };
+function stretchRiskLevelSubScore(payload) {
+  const v = Number(payload?.subScores?.riskLevel);
+  if (!Number.isFinite(v) || v < 0 || v > 100) return payload;
+  let adj;
+  if (v <= 30) adj = v * (25 / 30);
+  else if (v <= 70) adj = 25 + (v - 30) * 1.5;
+  else adj = 85 + (v - 70) * 0.5;
+  payload.subScores.riskLevel = Math.round(Math.max(0, Math.min(100, adj)));
+  return payload;
+}
+
+const SUB_SCORE_WEIGHTS = {
+  priceTrend: 0.25,
+  newsImpact: 0.20,
+  fundamentals: 0.20,
+  momentumFlow: 0.20,
+  riskLevel: 0.15,
+};
+
+/** sub-score 가중합(0~100 정수). 절반 이상 비어 있으면 null. */
+function weightedSubScoreTotal(sub) {
+  if (!sub || typeof sub !== 'object') return null;
   let total = 0;
   let weightSum = 0;
-  for (const [key, weight] of Object.entries(weights)) {
+  for (const [key, weight] of Object.entries(SUB_SCORE_WEIGHTS)) {
     const v = Number(sub[key]);
     if (Number.isFinite(v) && v >= 0 && v <= 100) {
       total += v * weight;
       weightSum += weight;
     }
   }
-  if (weightSum < 0.5) return payload; // sub-score가 절반 이상 비었으면 패스
-  const computed = Math.round(total / weightSum);
-  const modelScore = Number(payload.score);
-  if (!Number.isFinite(modelScore)) {
-    return { ...payload, score: computed };
-  }
-  const delta = modelScore - computed;
-  if (delta < -3) {
-    // 모델이 sub 평균보다 아래로 도망침 → 가중합으로 끌어올림
-    return { ...payload, score: computed };
-  }
-  if (delta > 6) {
-    // 모델이 너무 위로 올림 → 가중합 + 6으로 cap
-    return { ...payload, score: computed + 6 };
-  }
-  // 차이 ±3~+6 → 모델 conviction 존중
-  return payload;
+  if (weightSum < 0.5) return null;
+  return Math.round(total / weightSum);
+}
+
+/**
+ * 종합 score를 sub-score 가중합으로 확정.
+ *
+ * 과거에는 모델 conviction을 존중해 가중합 +6까지 허용했지만, 화면이
+ * "종합 점수는 각 항목 ×가중치의 합"이라고 사용자에게 명시하므로
+ * 그 식이 항상 정확히 성립하도록 가중합으로 고정한다.
+ * (상단이 눌리던 문제는 riskLevel 분포 보정으로 해소 — stretchRiskLevelSubScore 참고.
+ * 시너지/홀리스틱 판단은 sub-score 자체에 반영하도록 프롬프트가 유도한다.)
+ */
+function recomputeScoreFromSubScores(payload) {
+  const computed = weightedSubScoreTotal(payload?.subScores);
+  if (computed === null) return payload; // sub-score가 절반 이상 비었으면 패스
+  return { ...payload, score: computed };
 }
 
 /**
@@ -3258,6 +3283,102 @@ function buildTechnicalSnapshot(candles) {
     ma60: movingAverage(closes, 60),
     ma120: movingAverage(closes, 120),
     bollinger: b,
+  };
+}
+
+/**
+ * 캔들 기반 결정론적 가격추세 점수 (0~100).
+ *
+ * RSI·이동평균·기간수익률은 서버가 이미 계산한 확정 값이므로, LLM의
+ * priceTrend 판정과 블렌딩해 재현성(같은 데이터 → 같은 점수)을 높인다.
+ * valuation absorb와 같은 패턴 — 종합점수가 아닌 sub-score에 흡수.
+ *
+ * base 50에서 신호별 가감:
+ * - 이동평균 위치: 5/20/60/120 중 현재가가 위에 있는 비율 → -12~+12
+ * - 20일 수익률: ±15%/±5% 구간 → -8~+8
+ * - 60일 수익률: ±25%/±10% 구간 → -6~+6
+ * - RSI(14): 55~70 건강한 상승 +6, 80+ 과열 -4, 30~45 약세 -6, <30 침체 -8
+ */
+function computeTechnicalDeterministicScore(t) {
+  const close = Number(t?.latestClose);
+  if (!Number.isFinite(close) || close <= 0) return null;
+  let score = 50;
+  const signals = [];
+
+  const mas = [t.ma5, t.ma20, t.ma60, t.ma120]
+    .map(Number)
+    .filter((v) => Number.isFinite(v) && v > 0);
+  if (mas.length >= 2) {
+    const above = mas.filter((m) => close >= m).length;
+    const pts = Math.round(((above / mas.length) - 0.5) * 24);
+    score += pts;
+    signals.push(`MA ${above}/${mas.length} 상회 ${pts >= 0 ? '+' : ''}${pts}`);
+  }
+  const r20 = Number(t.return20);
+  if (Number.isFinite(r20)) {
+    const pts = r20 >= 15 ? 8 : r20 >= 5 ? 4 : r20 > -5 ? 0 : r20 > -15 ? -4 : -8;
+    score += pts;
+    signals.push(`R20 ${r20.toFixed(1)}% ${pts >= 0 ? '+' : ''}${pts}`);
+  }
+  const r60 = Number(t.return60);
+  if (Number.isFinite(r60)) {
+    const pts = r60 >= 25 ? 6 : r60 >= 10 ? 3 : r60 > -10 ? 0 : r60 > -25 ? -3 : -6;
+    score += pts;
+    signals.push(`R60 ${r60.toFixed(1)}% ${pts >= 0 ? '+' : ''}${pts}`);
+  }
+  const rsiV = Number(t.rsi14);
+  if (Number.isFinite(rsiV)) {
+    const pts = rsiV > 80 ? -4 : rsiV >= 55 ? 6 : rsiV >= 45 ? 0 : rsiV >= 30 ? -6 : -8;
+    score += pts;
+    signals.push(`RSI ${rsiV.toFixed(0)} ${pts >= 0 ? '+' : ''}${pts}`);
+  }
+  if (signals.length < 2) return null;
+  return {
+    score: Math.max(5, Math.min(95, Math.round(score))),
+    signalCount: signals.length,
+    signals,
+  };
+}
+
+/**
+ * 결정론적 단기 모멘텀/수급 점수 (0~100).
+ * - 5일 수익률: ±8%/±3% 구간 → -8~+8
+ * - RSI(14): 60~75 모멘텀 우위 +5, 80+ 과열 -5, <40 모멘텀 상실 -5
+ * - 최근 2주 외국인/기관 순매매 방향(국내 종목만): ±6 / ±4
+ */
+function computeMomentumDeterministicScore(t, dailyInvestorFlow) {
+  let score = 50;
+  const signals = [];
+
+  const r5 = Number(t?.return5);
+  if (Number.isFinite(r5)) {
+    const pts = r5 >= 8 ? 8 : r5 >= 3 ? 4 : r5 > -3 ? 0 : r5 > -8 ? -4 : -8;
+    score += pts;
+    signals.push(`R5 ${r5.toFixed(1)}% ${pts >= 0 ? '+' : ''}${pts}`);
+  }
+  const rsiV = Number(t?.rsi14);
+  if (Number.isFinite(rsiV)) {
+    const pts = rsiV > 80 ? -5 : rsiV >= 60 ? 5 : rsiV >= 40 ? 0 : -5;
+    score += pts;
+    signals.push(`RSI ${rsiV.toFixed(0)} ${pts >= 0 ? '+' : ''}${pts}`);
+  }
+  const frgn = Number(dailyInvestorFlow?.foreignNet14);
+  if (Number.isFinite(frgn) && frgn !== 0) {
+    const pts = frgn > 0 ? 6 : -6;
+    score += pts;
+    signals.push(`외국인14d ${frgn > 0 ? '순매수' : '순매도'} ${pts >= 0 ? '+' : ''}${pts}`);
+  }
+  const inst = Number(dailyInvestorFlow?.institutionNet14);
+  if (Number.isFinite(inst) && inst !== 0) {
+    const pts = inst > 0 ? 4 : -4;
+    score += pts;
+    signals.push(`기관14d ${inst > 0 ? '순매수' : '순매도'} ${pts >= 0 ? '+' : ''}${pts}`);
+  }
+  if (signals.length < 2) return null;
+  return {
+    score: Math.max(5, Math.min(95, Math.round(score))),
+    signalCount: signals.length,
+    signals,
   };
 }
 
@@ -3739,23 +3860,32 @@ ${newsStoryLines}
 [점수 산출 절차 — 반드시 다음 순서대로]
 1단계: 다섯 축 sub-score를 각각 0~100으로 결정. 각 축을 **독립적으로** 평가하고, 약한 신호엔 35~50, 보통 신호엔 50~65, 강한 신호엔 65~85, 매우 강한 신호엔 85+ 범위에서 정확한 정수값을 매기세요.
   - priceTrend (가중 25%): 추세/모멘텀/지지저항 위치
-  - newsImpact (가중 20%): 뉴스 방향성/재료 신뢰도
+  - newsImpact (가중 20%): 뉴스 방향성/재료 신뢰도. **뉴스가 있다는 이유만으로 60~70을 주지 마세요** — 아래 앵커 기준으로 전 범위를 사용하세요.
+    * 75~90: 실적·수주·계약처럼 이익에 직결되는 확정 재료 + 가격 반응이 재료와 정합
+    * 60~74: 방향은 우호적이지만 아직 확정이 아닌 재료 (정책 기대, 업황 개선 조짐)
+    * 45~59: 재료가 모호하거나 노이즈 섞임 — 테마성 언급, 단순 시황 기사 위주
+    * 25~44: 부정적 재료(실적 쇼크, 규제, 소송, 증자) 또는 뉴스와 가격이 역행하는 괴리
   - fundamentals (가중 20%): 위 [점수 산정 프레임] 재무 규칙대로
   - momentumFlow (가중 20%): 단기 모멘텀/수급 추정
-  - riskLevel (가중 15%): 데이터 결측·밸류 부담·뉴스 노이즈가 적을수록 **높은** 값 (즉 100 = 리스크 거의 없음)
+  - riskLevel (가중 15%): 리스크가 적을수록 **높은** 값 (100 = 리스크 거의 없음). **"리스크는 늘 있으니 중간"이라는 이유로 40~60에 머물지 마세요** — 다른 축과 똑같이 아래 앵커 기준으로 25~90 전 범위를 사용하세요.
+    * 75~90: 실적 흑자 안정 + 밸류 부담 크지 않음 + 데이터 완비 + 뉴스가 사업 실체와 정합 (대형 우량주가 전형)
+    * 60~74: 부담 요인이 1개 정도 — 예: 다소 높은 밸류 또는 단기 과열, 나머지는 양호
+    * 45~59: 뚜렷한 부담 2개 이상 — 예: 고밸류 + 과열 겹침, 뉴스 노이즈 + 변동성 확대
+    * 25~44: 구조적 리스크 — 적자 지속, 사업 실체와 괴리된 테마성 급등, 핵심 데이터 결측, 규제/소송 등
 
 2단계: 종합 score = round(priceTrend*0.25 + newsImpact*0.20 + fundamentals*0.20 + momentumFlow*0.20 + riskLevel*0.15)
-이 계산값에서 ±3 이내로만 조정 가능. 그 이상 벗어나면 안 됩니다.
+서버가 이 식으로 재계산하므로 정확히 이 값을 출력하세요. 여러 축이 함께 강한 시너지(또는 함께 약한 리스크)는 종합점수가 아니라 **각 sub-score 자체**에 반영하세요.
 
 [점수 분포 강제 규칙 — 위반 금지]
 - 60~65 구간을 default로 쓰지 마세요. 진짜 양방향 혼조가 아니라면 피하세요.
 - 다섯 sub-score가 모두 55~65에 몰리면 안 됩니다 — 어느 한 축은 분명히 70 이상이거나 50 이하여야 합니다 (정말 평탄한 종목이 아닌 한).
+- riskLevel을 50 전후 default로 뭉개지 마세요. 우량·안정 종목은 75 이상, 투기적·적자 종목은 40 이하로 명확히 구분해야 합니다.
 - 두 종목의 한 축에서 30점 이상 차이나면 → 종합 점수도 **5점 이상** 차이나야 합니다.
 - "확인 필요"라는 이유로 회피하지 말고, 데이터가 보여주는 방향으로 25~90 범위 안에서 명확히 결정하세요.
 - 동점 금지, 1점 단위 차별화.
 - **상단 분포 강제**: 신호가 다축으로 함께 강한 종목(추세+모멘텀+재료가 모두 우호)에서는 종합 80+를 피하지 마세요. 100개 분석 중 5~15개는 80점대가 나와야 정상 분포입니다. 75에서 멈추지 말고 강한 종목은 82, 85, 88까지 올리세요. 90+는 정말 드물지만 가능합니다.
 - **하단 분포 강제**: 다축이 함께 약한 종목(추세 하락 + 실적 둔화 + 리스크 큼)도 35~45 구간을 피하지 말고 명확히 점수에 반영하세요.
-- 종합점수는 sub-score 가중평균에서 ±3 이내가 원칙이지만, 다축이 동시에 강하면(시너지) 가중평균 +5점까지 위로 줄 수 있고, 다축이 동시에 약하면 -5점까지 아래로 줄 수 있습니다 — 단, sub-score 자체를 그 방향으로 명확히 매긴 다음 종합점수를 조정하세요.
+- 종합점수는 항상 sub-score 가중평균과 정확히 일치해야 합니다. 다축이 동시에 강하면(시너지) 해당 sub-score들을 85+까지 과감하게 올려서 종합점수가 자연스럽게 80+가 되게 하고, 다축이 동시에 약하면 sub-score들을 40 이하로 명확히 내리세요.
 
 [점수 구간 가이드]
 - 80+: 다수 축이 강하게 우호적이고 큰 리스크 없을 때
@@ -4209,8 +4339,17 @@ actionReason은 "단정적 매수·매도 권유"로 들리지 않되 방향은 
     // 매겼는데 종합만 "안전한 60대"로 도망친 경우 가중합으로 교체.
     if (payload) {
       const before = payload.score;
+      const riskBefore = payload?.subScores?.riskLevel;
+      payload = stretchRiskLevelSubScore(payload);
+      if (payload?.subScores?.riskLevel !== riskBefore) {
+        console.log(
+          `[generateStockAiAnalysis] riskLevel stretch ${ticker}: ` +
+          `${riskBefore} -> ${payload.subScores.riskLevel}`,
+        );
+      }
       payload = recomputeScoreFromSubScores(payload);
       if (payload.score !== before) {
+        payload.scoreLabel = reconcileScoreLabel(payload.scoreLabel, payload.score);
         console.log(
           `[generateStockAiAnalysis] sub-score recompute ${ticker}: ` +
           `model=${before} -> ${payload.score} ` +
@@ -4270,24 +4409,8 @@ actionReason은 "단정적 매수·매도 권유"로 들리지 않되 방향은 
           if (newFund !== oldFund) {
             payload.subScores.fundamentals = newFund;
             // 종합점수도 sub × 가중치 가중평균으로 다시 계산.
-            const weights = {
-              priceTrend: 0.25,
-              newsImpact: 0.20,
-              fundamentals: 0.20,
-              momentumFlow: 0.20,
-              riskLevel: 0.15,
-            };
-            let total = 0;
-            let weightSum = 0;
-            for (const [k, ww] of Object.entries(weights)) {
-              const v = Number(payload.subScores[k]);
-              if (Number.isFinite(v) && v >= 0 && v <= 100) {
-                total += v * ww;
-                weightSum += ww;
-              }
-            }
-            if (weightSum >= 0.5) {
-              const newTotal = Math.round(total / weightSum);
+            const newTotal = weightedSubScoreTotal(payload.subScores);
+            if (newTotal !== null) {
               const beforeTotal = payload.score;
               payload.score = newTotal;
               payload.scoreLabel = reconcileScoreLabel(payload.scoreLabel, newTotal);
@@ -4306,6 +4429,51 @@ actionReason은 "단정적 매수·매도 권유"로 들리지 않되 방향은 
       console.warn('[generateStockAiAnalysis] valuation absorb failed:', e?.message || e);
     }
 
+    // 결정론적 기술/모멘텀 보정 (valuation absorb와 같은 패턴).
+    // RSI·이동평균·기간수익률·2주 수급은 서버가 계산한 확정 값이므로
+    // LLM의 priceTrend/momentumFlow 판정과 블렌딩해 재현성을 높인다.
+    // 신호 수가 많을수록 결정론 점수의 비중을 올린다.
+    try {
+      const sub = payload?.subScores;
+      const blendWeight = (signalCount) =>
+        signalCount >= 4 ? 0.4
+        : signalCount >= 3 ? 0.32
+        : signalCount >= 2 ? 0.22
+        : signalCount >= 1 ? 0.12
+        : 0;
+      const absorb = (key, calc) => {
+        if (!calc || !Number.isFinite(calc.score)) return null;
+        if (!sub || !Number.isFinite(Number(sub[key]))) return null;
+        const w = blendWeight(calc.signalCount);
+        if (w <= 0) return null;
+        const oldV = Math.round(Number(sub[key]));
+        const newV = Math.round(
+          Math.max(0, Math.min(100, oldV * (1 - w) + calc.score * w))
+        );
+        if (newV === oldV) return null;
+        sub[key] = newV;
+        return `${key}=${oldV}->${newV} det=${calc.score} w=${w.toFixed(2)} (${calc.signals.join(', ')})`;
+      };
+      const changes = [
+        absorb('priceTrend', computeTechnicalDeterministicScore(technicalSnapshot)),
+        absorb('momentumFlow', computeMomentumDeterministicScore(technicalSnapshot, dailyInvestorFlow)),
+      ].filter(Boolean);
+      if (changes.length) {
+        const newTotal = weightedSubScoreTotal(sub);
+        if (newTotal !== null) {
+          const beforeTotal = payload.score;
+          payload.score = newTotal;
+          payload.scoreLabel = reconcileScoreLabel(payload.scoreLabel, newTotal);
+          console.log(
+            `[generateStockAiAnalysis] technical absorbed ${ticker}: ` +
+            `${changes.join(' | ')} total=${beforeTotal}->${newTotal}`,
+          );
+        }
+      }
+    } catch (e) {
+      console.warn('[generateStockAiAnalysis] technical absorb failed:', e?.message || e);
+    }
+
     // 최종 score 확정 후 timing.action이 점수 밴드와 어긋났는지 검사.
     // "70점인데 매수보류", "65점인데 분할매수" 같은 어긋남을 막는다.
     try {
@@ -4322,6 +4490,39 @@ actionReason은 "단정적 매수·매도 권유"로 들리지 않되 방향은 
       }
     } catch (e) {
       console.warn('[generateStockAiAnalysis] action reconcile failed:', e?.message || e);
+    }
+
+    // 점수 상대 위치 — "62점"의 절대값만으로는 비교 기준이 없어 무의미하게
+    // 느껴지므로, 전체 사용자 최근 분석(롤링 500건) 대비 상위 몇 %인지 제공.
+    // 표본 30건 미만이면 생략. 분포 문서 갱신 실패는 분석 자체에 영향 없음.
+    try {
+      if (Number.isFinite(Number(payload?.score))) {
+        const db = getFirestore();
+        const statsRef = db.collection('config').doc('aiScoreDistribution');
+        const s = Number(payload.score);
+        const topPct = await db.runTransaction(async (tx) => {
+          const snap = await tx.get(statsRef);
+          const scores = (Array.isArray(snap.data()?.scores) ? snap.data().scores : [])
+            .map(Number)
+            .filter((v) => Number.isFinite(v));
+          let pct = null;
+          if (scores.length >= 30) {
+            const above = scores.filter((v) => v > s).length;
+            const equal = scores.filter((v) => v === s).length;
+            pct = Math.max(1, Math.min(99,
+              Math.round(((above + equal / 2) / scores.length) * 100)));
+          }
+          scores.push(s);
+          const trimmed = scores.slice(-500);
+          tx.set(statsRef, { scores: trimmed, updatedAt: new Date() }, { merge: true });
+          return pct;
+        });
+        if (Number.isFinite(topPct)) {
+          payload.scorePercentileTop = topPct;
+        }
+      }
+    } catch (e) {
+      console.warn('[generateStockAiAnalysis] score percentile failed:', e?.message || e);
     }
 
     // 클라이언트가 백그라운드/연결 종료 상태여도 결과가 유실되지 않도록
@@ -4468,6 +4669,478 @@ exports.syncMarketCalendarNow = onRequest(
       res.json({ ok: true, ...result });
     } catch (e) {
       console.error('[syncMarketCalendarNow] 실패:', e);
+      res.status(500).json({ ok: false, error: e?.message || String(e) });
+    }
+  }
+);
+
+// ── 조건 알림 (price_alerts) 평가 → FCM 푸시 ─────────────────────────────────
+// 클라이언트가 price_alerts 에 목표가/등락률 조건을 저장하면 서버가 주기적으로
+// 현재가를 조회해 조건 충족 시 해당 유저에게 푸시를 보낸다(1회성, triggered 래치).
+
+/**
+ * 해당 시장이 정규장 시간대인지(1차 게이트). 휴장일은 여기서 못 거르므로
+ * 실제 발동 직전에 시세 응답의 장 상태(quote.isOpen)로 한 번 더 확인한다.
+ * 국내 09:00~15:40 KST / 미국 09:30~16:05 ET — 뒤쪽 여유분은 종가 확정분을
+ * 한 번 평가하기 위한 것.
+ */
+function isMarketSessionWindow(market, now = new Date()) {
+  const isUs = market === 'US';
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: isUs ? 'America/New_York' : 'Asia/Seoul',
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value])
+  );
+  if (parts.weekday === 'Sat' || parts.weekday === 'Sun') return false;
+  const minutes = Number(parts.hour) * 60 + Number(parts.minute);
+  return isUs
+    ? minutes >= 9 * 60 + 30 && minutes <= 16 * 60 + 5
+    : minutes >= 9 * 60 && minutes <= 15 * 60 + 40;
+}
+
+/** 종목 현재가/등락률 조회. US=야후, KS/KQ=네이버 모바일. 실패 시 null. */
+async function fetchAlertQuote(ticker, market) {
+  try {
+    if (market === 'US') {
+      const url =
+        `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}` +
+        `?interval=1d&range=1d`;
+      const res = await axios.get(url, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        timeout: 8000,
+      });
+      const meta = res.data?.chart?.result?.[0]?.meta;
+      if (!meta) return null;
+      const price = Number(meta.regularMarketPrice);
+      const prev = Number(meta.chartPreviousClose ?? meta.previousClose);
+      if (!isFinite(price) || price <= 0) return null;
+      const changePercent =
+        isFinite(prev) && prev > 0 ? ((price - prev) / prev) * 100 : 0;
+      // 야후가 알려주는 현재 정규장 구간. 휴장일엔 다음 거래일 구간이 오므로
+      // now가 구간 안에 없으면 장이 안 열린 것으로 본다.
+      const regular = meta.currentTradingPeriod?.regular;
+      const nowSec = Date.now() / 1000;
+      const isOpen =
+        !!regular && nowSec >= Number(regular.start) && nowSec < Number(regular.end);
+      return { price, changePercent, isOpen };
+    }
+    // KS / KQ — 네이버 모바일 종목 basic
+    const res = await axios.get(
+      `https://m.stock.naver.com/api/stock/${encodeURIComponent(ticker)}/basic`,
+      { headers: NAVER_MOBILE_HEADERS, timeout: 8000 }
+    );
+    const d = res.data;
+    if (!d) return null;
+    const price = Number(String(d.closePrice ?? '').replace(/,/g, ''));
+    if (!isFinite(price) || price <= 0) return null;
+    const changePercent = Number(d.fluctuationsRatio ?? 0);
+    // 네이버가 내려주는 장 상태. 휴장일에도 CLOSE 로 온다.
+    const isOpen = String(d.marketStatus || '').toUpperCase() === 'OPEN';
+    return { price, changePercent, isOpen };
+  } catch (e) {
+    console.warn(`[priceAlerts] quote 실패 ${market}:${ticker}`, e.message);
+    return null;
+  }
+}
+
+/** 알림 조건 충족 여부 판정. */
+function isAlertConditionMet(type, value, quote) {
+  switch (type) {
+    case 'price_above':
+      return quote.price >= value;
+    case 'price_below':
+      return quote.price <= value;
+    case 'change_up':
+      return quote.changePercent >= value;
+    case 'change_down':
+      return quote.changePercent <= -value;
+    default:
+      return false;
+  }
+}
+
+/** 푸시 문구 생성. */
+function buildAlertMessage(alert, quote) {
+  const name = alert.name || alert.ticker;
+  const isUS = alert.market === 'US';
+  const fmtPrice = (v) =>
+    isUS ? `$${Number(v).toFixed(2)}` : `₩${Number(v).toLocaleString('en-US')}`;
+  const now = fmtPrice(quote.price);
+  switch (alert.type) {
+    case 'price_above':
+      return {
+        title: `🔔 ${name} 목표가 도달`,
+        body: `${fmtPrice(alert.value)} 이상에 도달했어요 (현재 ${now})`,
+      };
+    case 'price_below':
+      return {
+        title: `🔔 ${name} 목표가 도달`,
+        body: `${fmtPrice(alert.value)} 이하로 내려왔어요 (현재 ${now})`,
+      };
+    case 'change_up':
+      return {
+        title: `📈 ${name} 급등 알림`,
+        body: `당일 +${alert.value}% 이상 상승했어요 (현재 ${quote.changePercent.toFixed(2)}%)`,
+      };
+    case 'change_down':
+      return {
+        title: `📉 ${name} 급락 알림`,
+        body: `당일 -${alert.value}% 이상 하락했어요 (현재 ${quote.changePercent.toFixed(2)}%)`,
+      };
+    default:
+      return { title: `🔔 ${name} 알림`, body: `조건에 도달했어요 (현재 ${now})` };
+  }
+}
+
+async function evaluatePriceAlertsImpl({ force = false } = {}) {
+  const db = getFirestore();
+
+  // 장중에만 평가한다. 장 마감 중에는 시세가 마지막 종가에 멈춰 있어서,
+  // 이미 충족된 조건을 걸어두면 새벽에도 바로 푸시가 나가버린다.
+  const krOpen = force || isMarketSessionWindow('KS');
+  const usOpen = force || isMarketSessionWindow('US');
+  if (!krOpen && !usOpen) {
+    return { checked: 0, fired: 0, skipped: 'markets-closed' };
+  }
+
+  const snap = await db
+    .collection('price_alerts')
+    .where('enabled', '==', true)
+    .where('triggered', '==', false)
+    .get();
+  if (snap.empty) return { checked: 0, fired: 0 };
+
+  const alerts = snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter((a) => (a.market === 'US' ? usOpen : krOpen));
+  if (alerts.length === 0) {
+    return { checked: 0, fired: 0, skipped: 'no-alerts-in-session' };
+  }
+
+  // 심볼별 1회만 시세 조회
+  const symbols = new Map(); // key -> {ticker, market}
+  for (const a of alerts) {
+    if (!a.ticker || !a.market) continue;
+    symbols.set(`${a.market}:${a.ticker}`, { ticker: a.ticker, market: a.market });
+  }
+  const quotes = new Map();
+  await Promise.all(
+    Array.from(symbols.entries()).map(async ([key, s]) => {
+      const q = await fetchAlertQuote(s.ticker, s.market);
+      if (q) quotes.set(key, q);
+    })
+  );
+
+  // 조건 충족 알림 수집
+  const fired = []; // {alert, quote}
+  let closedSkips = 0;
+  for (const a of alerts) {
+    const q = quotes.get(`${a.market}:${a.ticker}`);
+    if (!q) continue;
+    // 시간대는 맞지만 휴장일이면 시세 응답이 장 마감 상태로 온다 → 건너뛴다.
+    if (!force && q.isOpen === false) {
+      closedSkips++;
+      continue;
+    }
+    if (isAlertConditionMet(a.type, Number(a.value), q)) {
+      fired.push({ alert: a, quote: q });
+    }
+  }
+  if (closedSkips > 0) {
+    console.log(`[priceAlerts] 휴장으로 건너뜀: ${closedSkips}건`);
+  }
+  if (fired.length === 0) return { checked: alerts.length, fired: 0 };
+
+  // 글로벌 알림 설정(priceAlert) off 유저 제외
+  const firedUids = new Set(fired.map((f) => f.alert.uid));
+  const allowedUids = await filterUsersByGlobalSetting(db, firedUids, 'priceAlert');
+
+  // 발동 표시(래치) — 조건 충족한 모든 알림은 설정 off 여부와 무관하게 triggered 처리
+  const batch = db.batch();
+  for (const f of fired) {
+    batch.update(db.collection('price_alerts').doc(f.alert.id), {
+      triggered: true,
+      triggeredAt: new Date(),
+      lastPrice: f.quote.price,
+    });
+  }
+  await batch.commit();
+
+  // 유저별 토큰 캐시 후 푸시
+  const tokenCache = new Map();
+  let sent = 0;
+  for (const f of fired) {
+    const uid = f.alert.uid;
+    if (!allowedUids.has(uid)) continue;
+    if (!tokenCache.has(uid)) {
+      tokenCache.set(uid, await getTokensByUids(db, new Set([uid])));
+    }
+    const tokens = tokenCache.get(uid);
+    const msg = buildAlertMessage(f.alert, f.quote);
+    if (tokens.length > 0) {
+      const invalidTokens = [];
+      const response = await getMessaging().sendEachForMulticast({
+        notification: { title: msg.title, body: msg.body },
+        data: {
+          type: 'price_alert',
+          ticker: String(f.alert.ticker),
+          market: String(f.alert.market),
+          name: String(f.alert.name || f.alert.ticker),
+        },
+        android: { notification: { sound: 'default', channelId: 'stockstorage_alerts' } },
+        apns: { payload: { aps: { sound: 'default' } } },
+        tokens,
+      });
+      response.responses.forEach((r, idx) => {
+        if (
+          !r.success &&
+          (r.error?.code === 'messaging/invalid-registration-token' ||
+            r.error?.code === 'messaging/registration-token-not-registered')
+        ) {
+          invalidTokens.push(tokens[idx]);
+        }
+      });
+      if (invalidTokens.length > 0) {
+        await Promise.all(
+          invalidTokens.map((t) => db.collection('fcm_tokens').doc(t).delete())
+        );
+      }
+      sent += 1;
+    }
+    await writeNotificationHistoryForUids(db, new Set([uid]), {
+      title: msg.title,
+      body: msg.body,
+      source: 'server_price_alert',
+      type: 'price_alert',
+      ticker: String(f.alert.ticker),
+      market: String(f.alert.market),
+      name: String(f.alert.name || f.alert.ticker),
+    });
+  }
+
+  return { checked: alerts.length, fired: fired.length, sent };
+}
+
+// 5분마다 평가하되 실제 계산은 장중에만 한다(isMarketSessionWindow).
+// 스케줄을 장 시간대로 좁히지 않은 건, 시간 조건이 코드와 cron 두 곳으로
+// 갈라지면 서머타임 때 어긋나기 때문. 장외에는 Firestore 조회 전에 즉시 종료한다.
+exports.evaluatePriceAlerts = onSchedule(
+  { schedule: '*/5 * * * *', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 120 },
+  async () => {
+    try {
+      const result = await evaluatePriceAlertsImpl();
+      if (result.fired > 0) {
+        console.log('[priceAlerts]', JSON.stringify(result));
+      }
+    } catch (e) {
+      console.error('[evaluatePriceAlerts] 실패:', e);
+    }
+  }
+);
+
+// 수동 트리거 (검증용).
+exports.evaluatePriceAlertsNow = onRequest(
+  { region: 'asia-northeast3', timeoutSeconds: 120 },
+  async (req, res) => {
+    try {
+      // ?force=1 이면 장중 게이트를 무시한다 (장 마감 중 검증용).
+      const result = await evaluatePriceAlertsImpl({
+        force: req.query.force === '1',
+      });
+      res.json({ ok: true, ...result });
+    } catch (e) {
+      console.error('[evaluatePriceAlertsNow] 실패:', e);
+      res.status(500).json({ ok: false, error: e?.message || String(e) });
+    }
+  }
+);
+
+// ── 코스피200 옵션 Max Pain 계산·캐시 ────────────────────────────────────────
+// KIS 국내옵션 전광판(display-board-callput)에서 최근월 콜/풋 미결제약정을 받아
+// Max Pain(만기 수렴가)을 계산해 Firestore kospi200_maxpain/latest 에 캐시한다.
+// KIS는 서버 인증 API라 클라이언트가 직접 못 부르므로 서버 캐시 방식.
+
+/** 해당 연/월(1-12)의 두 번째 목요일 일(day) 반환 — KOSPI200 월물 만기일. */
+function secondThursdayDay(year, month) {
+  const firstDow = new Date(Date.UTC(year, month - 1, 1)).getUTCDay(); // 0=일
+  const firstThu = ((4 - firstDow + 7) % 7) + 1; // 첫 목요일 날짜
+  return firstThu + 7;
+}
+
+/** 현재(KST) 기준 최근월 옵션 만기 'YYYYMM'. 만기일 지났으면 다음달. */
+function frontMonthExpiry(kstNow) {
+  let y = kstNow.getUTCFullYear();
+  let m = kstNow.getUTCMonth() + 1;
+  const d = kstNow.getUTCDate();
+  if (d > secondThursdayDay(y, m)) {
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+  }
+  return `${y}${String(m).padStart(2, '0')}`;
+}
+
+/** 네이버 모바일에서 코스피200 현재 지수 조회. 실패 시 null. */
+async function fetchKospi200Spot() {
+  try {
+    const res = await axios.get(
+      'https://m.stock.naver.com/api/index/KPI200/basic',
+      { headers: NAVER_MOBILE_HEADERS, timeout: 8000 }
+    );
+    const v = Number(String(res.data?.closePrice ?? '').replace(/,/g, ''));
+    return isFinite(v) && v > 0 ? v : null;
+  } catch (e) {
+    console.warn('[kospi200Spot] 실패:', e.message);
+    return null;
+  }
+}
+
+/** KIS 옵션 전광판에서 최근월 콜/풋 체인 조회. */
+async function fetchKospi200Chain(expiry, appKey, appSecret, token) {
+  const res = await axios.get(
+    'https://openapi.koreainvestment.com:9443/uapi/domestic-futureoption/v1/quotations/display-board-callput',
+    {
+      params: {
+        FID_COND_MRKT_DIV_CODE: 'O',
+        FID_COND_SCR_DIV_CODE: '20503',
+        FID_MRKT_CLS_CODE: 'CO',
+        FID_MTRT_CNT: expiry,
+        FID_MRKT_CLS_CODE1: 'PO',
+        FID_COND_MRKT_CLS_CODE: '',
+      },
+      headers: {
+        authorization: `Bearer ${token}`,
+        appkey: appKey, appsecret: appSecret,
+        tr_id: 'FHPIF05030100', custtype: 'P',
+      },
+      timeout: 12000,
+    }
+  );
+  if (res.data?.rt_cd !== '0') {
+    throw new Error(`KIS rt_cd=${res.data?.rt_cd} ${res.data?.msg1}`);
+  }
+  return { calls: res.data.output1 || [], puts: res.data.output2 || [] };
+}
+
+async function computeKospi200MaxPainImpl() {
+  const config = await getKisConfig();
+  if (!config) throw new Error('KIS config 없음');
+  const token = await getKisToken(config.appKey, config.appSecret);
+
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const expiry = frontMonthExpiry(kst);
+  const [chain, spot] = await Promise.all([
+    fetchKospi200Chain(expiry, config.appKey, config.appSecret, token),
+    fetchKospi200Spot(),
+  ]);
+  const { calls, puts } = chain;
+  if (calls.length === 0 && puts.length === 0) {
+    throw new Error('옵션 체인이 비어있음');
+  }
+
+  // strike -> [callOI, putOI]
+  const oi = new Map();
+  let atmStrike = null;
+  // 콜 ITM/OTM 경계로 ATM 추정 (전광판이 ATM 라벨을 명시하지 않는 경우 대비).
+  // 콜은 행사가 오름차순으로 ITM → OTM 전환. 전환점 부근이 기초자산(≈ATM).
+  let lastItmCall = null;
+  let firstOtmCall = null;
+  const add = (rows, idx) => {
+    for (const r of rows) {
+      const s = Number(r.acpr);
+      const q = Number(r.hts_otst_stpl_qty) || 0;
+      if (!isFinite(s) || s <= 0) continue;
+      if (!oi.has(s)) oi.set(s, [0, 0]);
+      oi.get(s)[idx] += q;
+      const cls = String(r.atm_cls_name || '').trim().toUpperCase();
+      if (idx === 0) {
+        if (cls === 'ATM') atmStrike = s;
+        if (cls === 'ITM' && (lastItmCall === null || s > lastItmCall)) {
+          lastItmCall = s;
+        }
+        if (cls === 'OTM' && (firstOtmCall === null || s < firstOtmCall)) {
+          firstOtmCall = s;
+        }
+      }
+    }
+  };
+  add(calls, 0);
+  add(puts, 1);
+  // 명시 ATM이 없으면 ITM/OTM 경계 중간값 사용
+  if (atmStrike === null && lastItmCall !== null && firstOtmCall !== null) {
+    atmStrike = (lastItmCall + firstOtmCall) / 2;
+  }
+
+  const strikes = Array.from(oi.keys()).sort((a, b) => a - b);
+  let maxPain = null;
+  let minPain = Infinity;
+  for (const s of strikes) {
+    let pain = 0;
+    for (const k of strikes) {
+      const [c, p] = oi.get(k);
+      if (s > k) pain += c * (s - k);
+      if (k > s) pain += p * (k - s);
+    }
+    if (pain < minPain) { minPain = pain; maxPain = s; }
+  }
+
+  let totalCallOi = 0;
+  let totalPutOi = 0;
+  const strikeArr = strikes.map((s) => {
+    const [c, p] = oi.get(s);
+    totalCallOi += c;
+    totalPutOi += p;
+    return { strike: s, callOi: c, putOi: p };
+  });
+
+  const doc = {
+    expiry,
+    expiryDate: `${expiry.slice(0, 4)}-${expiry.slice(4, 6)}-${String(
+      secondThursdayDay(Number(expiry.slice(0, 4)), Number(expiry.slice(4, 6)))
+    ).padStart(2, '0')}`,
+    maxPain,
+    atmStrike,
+    currentLevel: spot,
+    totalCallOi,
+    totalPutOi,
+    putCallRatio: totalCallOi > 0 ? totalPutOi / totalCallOi : null,
+    strikes: strikeArr,
+    updatedAt: new Date(),
+  };
+  await getFirestore().collection('kospi200_maxpain').doc('latest').set(doc);
+  return {
+    expiry, maxPain, atmStrike, currentLevel: spot, totalCallOi, totalPutOi,
+    strikeCount: strikeArr.length,
+  };
+}
+
+// 장중(09:00~15:50 KST 평일) 10분마다 계산.
+exports.computeKospi200MaxPain = onSchedule(
+  { schedule: '*/10 9-15 * * 1-5', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 60 },
+  async () => {
+    try {
+      const r = await computeKospi200MaxPainImpl();
+      console.log('[kospi200MaxPain]', JSON.stringify(r));
+    } catch (e) {
+      console.warn('[computeKospi200MaxPain] 실패:', e.message);
+    }
+  }
+);
+
+// 수동 트리거 (검증용).
+exports.computeKospi200MaxPainNow = onRequest(
+  { region: 'asia-northeast3', timeoutSeconds: 60 },
+  async (req, res) => {
+    try {
+      const r = await computeKospi200MaxPainImpl();
+      res.json({ ok: true, ...r });
+    } catch (e) {
+      console.error('[computeKospi200MaxPainNow] 실패:', e);
       res.status(500).json({ ok: false, error: e?.message || String(e) });
     }
   }

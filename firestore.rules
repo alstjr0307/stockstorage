@@ -160,6 +160,15 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // 조건 알림 (목표가/등락률). 본인 것만 CRUD. triggered 래치는 서버(admin SDK)가 갱신.
+    match /price_alerts/{alertId} {
+      allow read: if isLoggedIn() && resource.data.uid == request.auth.uid;
+      allow create: if isLoggedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.triggered == false;
+      allow update, delete: if isLoggedIn() && resource.data.uid == request.auth.uid;
+    }
+
     // FMKorea index/cache
     match /fmkorea_index/{docId} {
       allow read: if true;
@@ -179,6 +188,12 @@ service cloud.firestore {
     match /market_investor_flow/{docId} {
       allow read: if true;
       allow write: if false;
+    }
+
+    // 코스피200 옵션 Max Pain (누구나 읽기, 쓰기는 Cloud Function만)
+    match /kospi200_maxpain/{docId} {
+      allow read: if true;
+      allow write: if false; // Cloud Function admin SDK bypasses rules
     }
 
     // Night futures prices (KOSPI200 + KOSDAQ150)
