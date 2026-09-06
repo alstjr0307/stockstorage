@@ -260,8 +260,14 @@ async function runCalendarSync(db, { finnhubKey, fredKey } = {}) {
 // US 기준 오늘 발생하는 중요 이벤트(importance>=2)를 한 건의 요약 푸시로 발송.
 // 한국 사용자에게는 "오늘 밤" 일정에 해당.
 async function notifyTodayEvents(db) {
-  const todayUs = ymd(new Date(), 'America/New_York');
-  const metaRef = db.collection('market_calendar_meta').doc(`notify_${todayUs}`);
+  // 이 함수는 08:00 KST에 실행된다. 그런데 미국(ET) 날짜는 KST 13시에 넘어가므로
+  // 08:00 시점엔 아직 전날 ET 날짜다 — 그대로 쓰면 "오늘 밤" 일정이 아니라
+  // "어젯밤 이미 지나간" 일정을 조회하게 된다. 오늘 KST 21시(밤 세션 진입 이후) 기준
+  // ET 날짜를 써야 오늘 밤~내일 새벽 일정과 실제로 맞는다.
+  const kstToday = ymd(new Date(), 'Asia/Seoul');
+  const eveningKst = new Date(`${kstToday}T21:00:00+09:00`);
+  const todayUs = ymd(eveningKst, 'America/New_York');
+  const metaRef = db.collection('market_calendar_meta').doc(`notify_${kstToday}`);
   const meta = await metaRef.get();
   if (meta.exists) {
     return { skipped: true, reason: 'already-notified' };
