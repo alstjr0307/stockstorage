@@ -13,6 +13,7 @@ class StockSearchScreen extends StatefulWidget {
     this.title = '종목 검색',
     this.subtitle,
     this.onPick,
+    this.searchStocks = StockPriceService.searchStocks,
   });
 
   /// 화면 상단 큰 제목.
@@ -24,6 +25,8 @@ class StockSearchScreen extends StatefulWidget {
   /// 비어있으면 종목 상세로 이동 (기본 동작).
   /// 지정하면 결과를 콜백으로 넘기고 그 외 동작은 호출 측에 위임.
   final void Function(StockSearchResult result)? onPick;
+
+  final Future<List<StockSearchResult>> Function(String query) searchStocks;
 
   @override
   State<StockSearchScreen> createState() => _StockSearchScreenState();
@@ -40,6 +43,7 @@ class _StockSearchScreenState extends State<StockSearchScreen> {
   List<String> _recent = const [];
   bool _loading = false;
   String _lastQuery = '';
+  int _searchVersion = 0;
 
   @override
   void initState() {
@@ -101,29 +105,30 @@ class _StockSearchScreenState extends State<StockSearchScreen> {
 
   void _onChanged(String value) {
     _debounce?.cancel();
+    final version = ++_searchVersion;
     final query = value.trim();
-    if (query.isEmpty) {
-      setState(() {
-        _results = const [];
-        _loading = false;
-        _lastQuery = '';
-      });
-      return;
-    }
-    setState(() {});
+    setState(() {
+      _results = const [];
+      _loading = query.isNotEmpty;
+      _lastQuery = query;
+    });
+    if (query.isEmpty) return;
     _debounce = Timer(const Duration(milliseconds: 280), () {
-      _search(query);
+      if (mounted && version == _searchVersion) _search(query);
     });
   }
 
   Future<void> _search(String query) async {
+    _debounce?.cancel();
     if (query.isEmpty) return;
+    final version = ++_searchVersion;
     setState(() {
       _loading = true;
+      _results = const [];
       _lastQuery = query;
     });
-    final results = await StockPriceService.searchStocks(query);
-    if (!mounted || _controller.text.trim() != query) return;
+    final results = await widget.searchStocks(query);
+    if (!mounted || version != _searchVersion) return;
     setState(() {
       _results = results;
       _loading = false;
@@ -203,6 +208,9 @@ class _StockSearchScreenState extends State<StockSearchScreen> {
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 180),
                 switchInCurve: Curves.easeOut,
+                // Outgoing results must stop accepting taps immediately.
+                layoutBuilder: (currentChild, previousChildren) =>
+                    currentChild ?? const SizedBox.shrink(),
                 child: _buildBody(cs, isDark),
               ),
             ),
@@ -224,7 +232,7 @@ class _StockSearchScreenState extends State<StockSearchScreen> {
         onClearAll: _clearAllRecent,
       );
     }
-    if (_loading && _results.isEmpty) {
+    if (_loading) {
       return _SkeletonList(key: const ValueKey('skeleton'), isDark: isDark);
     }
     if (_results.isEmpty) {
@@ -422,23 +430,26 @@ class _SearchField extends StatelessWidget {
               onSubmitted: onSubmitted,
             ),
           ),
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.only(right: 8),
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFF10B981),
+                ),
+              ),
+            ),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 160),
             transitionBuilder: (child, anim) =>
                 ScaleTransition(scale: anim, child: child),
-            child: loading
-                ? const SizedBox(
-                    key: ValueKey('loading'),
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Color(0xFF10B981),
-                    ),
-                  )
-                : hasText
+            child: hasText
                 ? IconButton(
                     key: const ValueKey('clear'),
+                    tooltip: '검색어 지우기',
                     onPressed: onClear,
                     splashRadius: 18,
                     icon: Icon(
@@ -708,11 +719,7 @@ class _TipLine extends StatelessWidget {
 // ───────────────────────── 결과 없음 ─────────────────────────
 
 class _NoResultsView extends StatelessWidget {
-  const _NoResultsView({
-    super.key,
-    required this.query,
-    required this.isDark,
-  });
+  const _NoResultsView({super.key, required this.query, required this.isDark});
 
   final String query;
   final bool isDark;
@@ -906,9 +913,7 @@ class _ResultCardState extends State<_ResultCard> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final cardBg = widget.isDark
-        ? const Color(0xFF1A2035)
-        : Colors.white;
+    final cardBg = widget.isDark ? const Color(0xFF1A2035) : Colors.white;
     final borderColor = widget.isDark
         ? Colors.white.withValues(alpha: 0.06)
         : Colors.black.withValues(alpha: 0.05);
@@ -1078,9 +1083,7 @@ class _SkeletonListState extends State<_SkeletonList>
               height: 68,
               padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
               decoration: BoxDecoration(
-                color: widget.isDark
-                    ? const Color(0xFF1A2035)
-                    : Colors.white,
+                color: widget.isDark ? const Color(0xFF1A2035) : Colors.white,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: widget.isDark

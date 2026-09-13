@@ -3,8 +3,8 @@
     "apps": [],
     "details": [
       {
-        "appID": "YOUR_TEAM_ID.www.stockstorage.stockdiary",
-        "paths": ["/pick/*"]
+        "appID": "3UTXWPH95Z.www.stockstorage.stockmemo",
+        "paths": ["/pick/*", "/analysis/*", "/stock/*"]
       }
     ]
   }

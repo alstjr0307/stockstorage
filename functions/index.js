@@ -1,4 +1,4 @@
-﻿const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const { auth } = require('firebase-functions/v1');
@@ -27,6 +27,11 @@ const { runCalendarSync, notifyTodayEvents } = require('./market_calendar');
 const { corsProxy } = require('./cors_proxy');
 
 initializeApp();
+
+exports.stockLanding = onRequest(
+  { region: 'asia-northeast3', maxInstances: 5, timeoutSeconds: 15 },
+  require('./stock_landing').createStockLandingHandler(getFirestore()),
+);
 
 const PUSH_TEXT = Object.freeze({
   newUserTitle: '\uD83D\uDC64 \uC2E0\uADDC \uAC00\uC785\uC790',
@@ -1394,8 +1399,8 @@ function getSecondThursday(year, month) {
 // (KIS 마스터파일 fo_idx_code_mts.mst 기준. A01=KOSPI200, A06=KOSDAQ150)
 // 분기물(3/6/9/12) 중 최종거래일(둘째 목요일) 안 지난 가장 가까운 월물.
 // 예: getNightFuturesSymbol('A01') = A01609, getNightFuturesSymbol('A06') = A06609
-function getNightFuturesSymbol(prefix = 'A01') {
-  const kst = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
+function getNightFuturesSymbol(prefix = 'A01', now = new Date()) {
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
   const year = kst.getUTCFullYear();
   const month = kst.getUTCMonth() + 1;
   const day = kst.getUTCDate();
@@ -1405,10 +1410,10 @@ function getNightFuturesSymbol(prefix = 'A01') {
   let expiryYear = year;
   if (!expiryMonth) { expiryMonth = 3; expiryYear = year + 1; }
 
-  // 현재 분기월이고, 최종거래일 이후면 다음 분기물 사용
+  // 만기일 새벽은 기존 월물, 만기일 저녁 야간장부터는 다음 분기물 사용.
   if (expiryMonth === month && expiryYear === year) {
     const lastTradingDay = getSecondThursday(year, month);
-    if (day > lastTradingDay) {
+    if (day > lastTradingDay || (day === lastTradingDay && kst.getUTCHours() >= 18)) {
       const idx = qMonths.indexOf(expiryMonth);
       if (idx < qMonths.length - 1) {
         expiryMonth = qMonths[idx + 1];
@@ -1436,81 +1441,30 @@ async function getKisApprovalKey(appKey, appSecret) {
   return _kisApprovalKey;
 }
 
-// KIS 실시간 WebSocket(H0MFCNT0 KRX야간선물체결)으로 라이브 체결 1건 수신.
-// REST(inquire-price)는 야간세션을 추적 못 하고 주간 종가에서 freeze되므로 WS 사용.
-// (서버에서는 실시간 푸시 정상 수신 — 2026-06-22 검증)
-function fetchNightFuturesQuote(appKey, appSecret, symbol, timeoutMs = 12000) {
-  return new Promise((resolve, reject) => {
-    const WebSocket = require('ws');
-    let settled = false;
-    let ws;
-    const done = (fn, v) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      try { ws.terminate(); } catch (_) {}
-      fn(v);
-    };
-    const timer = setTimeout(() => done(reject, new Error('ws timeout')), timeoutMs);
-
-    getKisApprovalKey(appKey, appSecret).then((approval) => {
-      ws = new WebSocket('ws://ops.koreainvestment.com:21000');
-      ws.on('open', () => {
-        ws.send(JSON.stringify({
-          header: { approval_key: approval, custtype: 'P', tr_type: '1', 'content-type': 'utf-8' },
-          body: { input: { tr_id: 'H0MFCNT0', tr_key: symbol } },
-        }));
-      });
-      ws.on('message', (raw) => {
-        const m = raw.toString();
-        if (m[0] === '{') {
-          try {
-            const j = JSON.parse(m);
-            if (j.header?.tr_id === 'PINGPONG') ws.send(m);
-          } catch (_) {}
-          return;
-        }
-        const p = m.split('|');
-        if (p[1] !== 'H0MFCNT0' || !p[3]) return;
-        // 필드: 0 단축코드 1 시각 2 전일대비 3 부호 4 등락률 5 현재가 ... 10 누적거래량
-        const f = p[3].split('^');
-        const price = parseFloat(f[5]);
-        if (!price || price <= 0) return;
-        const rawChange = parseFloat(f[2]) || 0;
-        const rawRate = parseFloat(f[4]) || 0;
-        const sign = f[3];
-        const dir = sign === '4' || sign === '5' ? -1 : 1; // 4:하락 5:하한
-        done(resolve, {
-          price,
-          change: rawChange === 0 ? 0 : Math.abs(rawChange) * dir,
-          changeRate: rawRate === 0 ? 0 : Math.abs(rawRate) * dir,
-          volume: parseInt(f[10]) || 0,
-        });
-      });
-      ws.on('error', (e) => done(reject, e));
-    }).catch((e) => done(reject, e));
-  });
-}
+const { collectNightFuturesQuotes } = require('./night_futures_stream');
 
 // 야간선물 시세 1건을 받아 지정 컬렉션에 기록 (매분 호출)
-async function recordNightFuturesTo(db, collection, kst, appKey, appSecret, symbol) {
-  const q = await fetchNightFuturesQuote(appKey, appSecret, symbol);
+async function recordNightFuturesTo(db, collection, symbol, q) {
   if (!q) return;
 
-  // 매분 기록 (한산해서 시세가 안 움직여도 연속된 차트가 그려지도록).
+  // 실제 수신 시각으로 기록한다. 체결이 없으면 과거 값을 새 시세로 복제하지 않는다.
+  const kst = new Date(q.timestamp.getTime() + 9 * 60 * 60 * 1000);
   const tsKey = kst.toISOString().slice(0, 16).replace('T', '_');
   await db.collection(collection).doc(tsKey).set({
     price: q.price,
     change: q.change,
     changeRate: q.changeRate,
     volume: q.volume,
-    timestamp: new Date(), // 실제 UTC 시각 (기기 시간대 변환 정확)
+    timestamp: q.timestamp,
     symbol,
   });
 
   // 오래된 데이터 정리 (최대 2000개 유지)
+  // offset(2000)은 건너뛴 문서까지 읽기 과금된다. 개수 집계 후 초과분만 읽는다.
+  const count = (await db.collection(collection).count().get()).data().count;
+  if (count <= 2000) return;
   const old = await db.collection(collection)
-    .orderBy('timestamp', 'desc').offset(2000).limit(100).get();
+    .orderBy('timestamp', 'asc').limit(Math.min(count - 2000, 100)).get();
   if (!old.empty) {
     const batch = db.batch();
     old.docs.forEach(d => batch.delete(d.ref));
@@ -1521,7 +1475,7 @@ async function recordNightFuturesTo(db, collection, kst, appKey, appSecret, symb
 // ── 야간선물 가격 1분마다 Firestore에 기록 (KOSPI200 + KOSDAQ150) ────────────
 exports.recordNightFuturesPrice = onSchedule(
   // 야간세션(18:00~04:59 KST)에만 매분 실행 — 주간 시간대 불필요 호출 제거.
-  { schedule: '* 18-23,0-4 * * *', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 40 },
+  { schedule: '* 18-23,0-4 * * *', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 90, maxInstances: 1, concurrency: 1 },
   async () => {
     const kst = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
     const kstHour = kst.getUTCHours();
@@ -1535,13 +1489,22 @@ exports.recordNightFuturesPrice = onSchedule(
       { collection: 'night_futures_prices', symbol: getNightFuturesSymbol('A01') }, // KOSPI200
       { collection: 'night_futures_prices_kosdaq', symbol: getNightFuturesSymbol('A06') }, // KOSDAQ150
     ];
-    // WS 세션은 appkey당 1개라 순차 처리. 하나 실패해도 다른 하나는 진행.
-    for (const t of targets) {
-      try {
-        await recordNightFuturesTo(db, t.collection, kst, config.appKey, config.appSecret, t.symbol);
-      } catch (e) {
-        console.warn(`[recordNightFuturesPrice:${t.collection}]`, e.response?.data || e.message);
-      }
+    const approval = await getKisApprovalKey(config.appKey, config.appSecret);
+    const latest = new Map();
+    try {
+      await collectNightFuturesQuotes(approval, targets.map(t => t.symbol), {
+        onQuote: (symbol, quote) => {
+          // 메모리에서 최신값만 유지하고 종목당 매분 한 번만 저장한다.
+          latest.set(symbol, quote);
+        },
+      });
+    } catch (e) {
+      console.warn('[recordNightFuturesPrice] stream error', e.message);
+    }
+    for (const target of targets) {
+      const quote = latest.get(target.symbol);
+      if (quote) await recordNightFuturesTo(db, target.collection, target.symbol, quote);
+      console.log(`[recordNightFuturesPrice:${target.symbol}] ${quote ? 'received' : 'no trade received in 50s'}`);
     }
   }
 );
@@ -3132,6 +3095,60 @@ async function fetchInvestorFlowForStock(ticker, market) {
 
 async function fetchNaverStockInvestorFlow(ticker) {
   if (!/^\d{6}$/.test(String(ticker || ''))) return null;
+  const fromDealTrendInfos = (items) => {
+    const rows = (Array.isArray(items) ? items : [])
+      .filter((item) => String(item?.itemCode || ticker) === String(ticker))
+      .map((item) => {
+        const date = String(item?.bizdate || '').replace(/[^0-9]/g, '');
+        if (!/^\d{8}$/.test(date)) return null;
+        const close = numOrNull(item.closePrice);
+        const change = signedNumOrNull(item.compareToPreviousClosePrice);
+        const previousClose = Number.isFinite(close) && Number.isFinite(change)
+          ? close - change
+          : null;
+        return {
+          date: `${date.slice(0, 4)}.${date.slice(4, 6)}.${date.slice(6, 8)}`,
+          close,
+          changeRate: previousClose > 0 && Number.isFinite(change)
+            ? (change / previousClose) * 100
+            : null,
+          volume: numOrNull(item.accumulatedTradingVolume),
+          institutionNet: numOrNull(item.organPureBuyQuant),
+          foreignNet: numOrNull(item.foreignerPureBuyQuant),
+          individualNet: numOrNull(item.individualPureBuyQuant),
+          foreignHoldShares: null,
+          foreignHoldRate: numOrNull(String(item.foreignerHoldRatio || '').replace('%', '')),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const recent = rows.slice(0, 14);
+    const sum = (key) => recent.reduce((acc, day) => acc + (Number.isFinite(day[key]) ? day[key] : 0), 0);
+    const latest = recent[0] || null;
+    return recent.length
+      ? {
+          source: 'Naver Mobile integration dealTrendInfos',
+          days: recent,
+          foreignNet14: sum('foreignNet'),
+          institutionNet14: sum('institutionNet'),
+          latestForeignHoldRate: latest?.foreignHoldRate ?? null,
+        }
+      : null;
+  };
+  try {
+    const mobile = await axios.get(`https://m.stock.naver.com/api/stock/${ticker}/integration`, {
+      timeout: 12000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+        Referer: 'https://m.stock.naver.com/',
+        'Accept-Language': 'ko-KR,ko;q=0.9',
+      },
+    });
+    const mobileFlow = fromDealTrendInfos(mobile.data?.dealTrendInfos);
+    if (mobileFlow) return mobileFlow;
+  } catch (e) {
+    console.warn('[fetchNaverStockInvestorFlow] mobile failed:', e.message);
+  }
   try {
     const res = await axios.get(`https://finance.naver.com/item/frgn.naver`, {
       params: { code: ticker, page: 1 },
@@ -3526,7 +3543,12 @@ exports.generateStockAiAnalysis = onCall(
     memory: '1GiB',
     secrets: [OPENAI_API_KEY, DART_API_KEY, REVENUECAT_SECRET_API_KEY],
   },
-  async (request) => {
+  (request) => runStockAiAnalysis(request)
+);
+
+// Internal option is never taken from request.data. Scheduled marketing runs use
+// the same analysis, without consuming a user's quota or sending their push.
+async function runStockAiAnalysis(request, scheduledMarketing = false) {
     if (!request.auth?.uid) {
       throw new HttpsError('unauthenticated', '로그인 후 AI 분석을 사용할 수 있습니다.');
     }
@@ -3545,7 +3567,7 @@ exports.generateStockAiAnalysis = onCall(
       throw new HttpsError('invalid-argument', '종목명과 티커가 필요합니다.');
     }
     const requestId = clampStockAnalysisInput(data.requestId, 64);
-    const quotaDateKey = await consumeStockAiAnalysisQuota(
+    const quotaDateKey = scheduledMarketing ? null : await consumeStockAiAnalysisQuota(
       request.auth.uid,
       REVENUECAT_SECRET_API_KEY.value(),
       requestId
@@ -4553,6 +4575,7 @@ actionReason은 "단정적 매수·매도 권유"로 들리지 않되 방향은 
     }
 
     // 분석 완료 푸시 알림 — 클라이언트가 백그라운드/종료 상태여도 결과를 알린다.
+    if (!scheduledMarketing) {
     try {
       const db = getFirestore();
       const uid = request.auth.uid;
@@ -4615,13 +4638,31 @@ actionReason은 "단정적 매수·매도 권유"로 들리지 않되 방향은 
     } catch (e) {
       console.warn('[generateStockAiAnalysis] FCM notify failed:', e?.message || e);
     }
+    }
 
     return payload;
     } catch (err) {
-      await refundStockAiAnalysisQuota(request.auth.uid, quotaDateKey, requestId);
+      if (!scheduledMarketing) await refundStockAiAnalysisQuota(request.auth.uid, quotaDateKey, requestId);
       throw err;
     }
   }
+
+exports.generateDailyInstagramAnalysis = onSchedule(
+  {
+    schedule: '0 10,14,17 * * 1-5', timeZone: 'Asia/Seoul',
+    region: 'asia-northeast3', timeoutSeconds: 1800, memory: '1GiB',
+    maxInstances: 1, concurrency: 1, retryCount: 0,
+    secrets: [OPENAI_API_KEY, DART_API_KEY],
+  },
+  (event) => require('./instagram_daily').runDailyInstagram({
+    analyze: (data) => runStockAiAnalysis({ auth: { uid: 'instagram-automation' }, data }, true),
+    fetchQuote: fetchKisDomesticSnapshot,
+    fetchValuation: fetchNaverMobileIntegration,
+  }, process.env.INSTAGRAM_LOCAL_PREVIEW === '1' && !process.env.K_SERVICE
+    // Local runs draft by default; INSTAGRAM_LOCAL_PUBLISH=1 opts into a real
+    // post. Neither branch is reachable on Cloud Run, where K_SERVICE is set.
+    ? {draftOnly: process.env.INSTAGRAM_LOCAL_PUBLISH !== '1', allowPriorMarketDay: process.env.INSTAGRAM_LOCAL_PUBLISH !== '1', outputDir: process.env.INSTAGRAM_PREVIEW_DIR, slot:process.env.INSTAGRAM_LOCAL_SLOT}
+    : {slot:require('./instagram_daily').scheduledSlot(new Date(event.scheduleTime||Date.now()))})
 );
 
 // ── 경제·실적·IPO 캘린더 동기화 (하루 2회: 06:30 / 18:30 KST) ────────────────

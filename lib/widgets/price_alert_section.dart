@@ -1,11 +1,13 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 
 import '../models/price_alert.dart';
 import '../models/stock_pick.dart';
 import '../screens/subscription_screen.dart';
 import '../services/firestore_service.dart';
+import '../services/analytics_service.dart';
 import '../services/subscription_service.dart';
 
 const _alertAccent = Color(0xFF10B981);
@@ -17,20 +19,37 @@ Future<bool> showAddPriceAlertSheet(
   BuildContext context, {
   required StockPick pick,
   double? currentPrice,
+  String source = 'stock_detail',
 }) async {
   final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
   if (uid.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('로그인하면 조건 알림을 설정할 수 있어요')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('로그인하면 조건 알림을 설정할 수 있어요')));
     return false;
   }
   final fs = FirestoreService();
+  AnalyticsService.instance.logStockJourney(
+    'price_alert_start',
+    ticker: pick.ticker,
+    market: pick.market,
+    source: source,
+  );
   // 무료 유저는 활성 알림 1개까지
   if (!SubscriptionService.instance.isPremium) {
     final count = await fs.activeAlertCount(uid);
     if (count >= FirestoreService.freeAlertLimit) {
-      if (context.mounted) _showPremiumUpsell(context);
+      if (context.mounted) {
+        if (kIsWeb) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('무료 알림 한도에 도달했어요. 기존 알림을 정리하거나 앱에서 구독을 확인해주세요.'),
+            ),
+          );
+        } else {
+          _showPremiumUpsell(context);
+        }
+      }
       return false;
     }
   }
@@ -43,10 +62,16 @@ Future<bool> showAddPriceAlertSheet(
   );
   if (result == null) return false;
   await fs.addPriceAlert(result);
+  AnalyticsService.instance.logStockJourney(
+    'price_alert_created',
+    ticker: pick.ticker,
+    market: pick.market,
+    source: source,
+  );
   if (context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('조건 알림을 설정했어요 🔔')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('조건 알림을 설정했어요 🔔')));
   }
   return true;
 }
@@ -66,7 +91,11 @@ Future<void> showStockPriceAlertsSheet(
     builder: (_) => _StockAlertsSheet(pick: pick),
   );
   if (wantsAdd == true && context.mounted) {
-    await showAddPriceAlertSheet(context, pick: pick, currentPrice: currentPrice);
+    await showAddPriceAlertSheet(
+      context,
+      pick: pick,
+      currentPrice: currentPrice,
+    );
   }
 }
 
@@ -218,12 +247,8 @@ class PriceAlertSection extends StatelessWidget {
 
   Widget _hint(ColorScheme cs, String text) => Text(
     text,
-    style: TextStyle(
-      color: cs.onSurface.withValues(alpha: 0.45),
-      fontSize: 13,
-    ),
+    style: TextStyle(color: cs.onSurface.withValues(alpha: 0.45), fontSize: 13),
   );
-
 }
 
 class _PremiumTag extends StatelessWidget {
@@ -321,9 +346,7 @@ class _AlertRow extends StatelessWidget {
                 Text(
                   alert.describe(),
                   style: TextStyle(
-                    color: cs.onSurface.withValues(
-                      alpha: fired ? 0.5 : 0.9,
-                    ),
+                    color: cs.onSurface.withValues(alpha: fired ? 0.5 : 0.9),
                     fontSize: 13.5,
                     fontWeight: FontWeight.w700,
                     decoration: fired ? TextDecoration.lineThrough : null,
@@ -521,9 +544,9 @@ class _AlertEditorSheetState extends State<_AlertEditorSheet> {
   void _submit() {
     final value = double.tryParse(_controller.text.trim().replaceAll(',', ''));
     if (value == null || value <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('올바른 값을 입력해주세요')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('올바른 값을 입력해주세요')));
       return;
     }
     final AlertType type;
@@ -684,10 +707,7 @@ class _AlertEditorSheetState extends State<_AlertEditorSheet> {
                 onPressed: _submit,
                 child: const Text(
                   '알림 설정',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
                 ),
               ),
             ),

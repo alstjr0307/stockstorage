@@ -51,6 +51,10 @@ class AuthService {
       final result = await _auth.signInWithPopup(provider);
       AnalyticsService.instance.logLogin('google');
       AnalyticsService.instance.setUserId(result.user!.uid);
+      if (result.additionalUserInfo?.isNewUser == true) {
+        AnalyticsService.instance.logSignUp('google');
+        await _saveCreatedAt(result.user!.uid);
+      }
       return result;
     }
 

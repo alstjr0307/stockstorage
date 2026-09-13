@@ -1,0 +1,265 @@
+{
+  "hook": "싸 보이는데,\n왜 쉽게 못 살까?",
+  "cards": [
+    {
+      "title": "검색만 하는 회사는 아니에요",
+      "metric": "플랫폼",
+      "metricLabel": "핵심 사업과 성장축 파악",
+      "points": [
+        {
+          "headline": "돈 버는 곳",
+          "body": "광고와 쇼핑, 금융, 콘텐츠에서 돈을 벌어요.",
+          "sourceIds": [
+            "companyOverview",
+            "sections.0",
+            "profile"
+          ]
+        },
+        {
+          "headline": "찾아오는 사람들",
+          "body": "광고주와 쇼핑 판매자, 결제 서비스 이용자가 고객이에요.",
+          "sourceIds": [
+            "companyOverview",
+            "profile",
+            "summary"
+          ]
+        },
+        {
+          "headline": "새로 키우는 사업",
+          "body": "AI와 클라우드 투자가 실제 매출로 이어질지 봐야 해요.",
+          "sourceIds": [
+            "companyOverview",
+            "technicalDetail",
+            "sections.1"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "가격과 주가 흐름이 달라요",
+      "metric": "종합 64",
+      "metricLabel": "AI 평가 종합 점수",
+      "points": [
+        {
+          "headline": "종합 64점, 아직은 중립",
+          "body": "기업가치는 싸 보이지만 단기 주가 흐름이 약해요.",
+          "sourceIds": [
+            "score",
+            "summary"
+          ]
+        },
+        {
+          "headline": "점수와 실제 위험은 별개",
+          "body": "위험 평가 89점도 개별 위험이 없다는 뜻은 아니에요.",
+          "sourceIds": [
+            "score",
+            "risks"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "좋은 뉴스에도 숙제는 남아요",
+      "metric": "약 1,382억원",
+      "metricLabel": "분석일 누적 거래대금",
+      "points": [
+        {
+          "headline": "증권사들이 목표가를 올렸어요",
+          "body": "긍정적인 보고서가 매수세에 영향을 줬어요.",
+          "sourceIds": [
+            "catalysts.0",
+            "todayReason",
+            "news"
+          ]
+        },
+        {
+          "headline": "쇼핑 연결도 늘었어요",
+          "body": "증권사 앱에서 네이버 쇼핑으로 이어지는 길이 생겼어요.",
+          "sourceIds": [
+            "catalysts.1",
+            "news"
+          ]
+        },
+        {
+          "headline": "매출은 늘었어요",
+          "body": "하지만 매출 증가가 이익 증가로 이어지는지 봐야 해요.",
+          "sourceIds": [
+            "catalysts.2",
+            "fundamentals"
+          ]
+        },
+        {
+          "headline": "지배구조 문제는 남았어요",
+          "body": "두나무와 네이버페이 관련 논의가 주가를 흔들 수 있어요.",
+          "sourceIds": [
+            "catalysts.3",
+            "news",
+            "todayReason"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "PER만 보면 놓치는 게 있어요",
+      "metric": "선행 PER 17.05배",
+      "metricLabel": "동종 업종 평균 45.28배 대비",
+      "points": [
+        {
+          "headline": "이익에 비해 주가는 낮은 편",
+          "body": "과거 이익 기준 PER은 16.57배예요.",
+          "sourceIds": [
+            "fundamentals",
+            "valuation"
+          ]
+        },
+        {
+          "headline": "장부가와도 큰 차이는 없어요",
+          "body": "PBR 1.08배지만 이것만으로 싸다고 단정하긴 어려워요.",
+          "sourceIds": [
+            "valuation",
+            "fundamentals"
+          ]
+        },
+        {
+          "headline": "비교할 때 조심할 점",
+          "body": "기업마다 성장률과 돈 버는 방식이 달라요.",
+          "sourceIds": [
+            "peerComparison",
+            "valuation"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "기관과 외국인이 엇갈렸어요",
+      "metric": "RSI(14) 38.9",
+      "metricLabel": "단기 침체 신호",
+      "points": [
+        {
+          "headline": "20일선 아래에 있어요",
+          "body": "단기 흐름이 아직 회복됐다고 보기는 어려워요.",
+          "sourceIds": [
+            "technicalDetail",
+            "technical"
+          ]
+        },
+        {
+          "headline": "누가 샀는지가 달라요",
+          "body": "기관은 352,567주를 사고 외국인은 257,261주를 팔았어요.",
+          "sourceIds": [
+            "momentum",
+            "todayReason"
+          ]
+        },
+        {
+          "headline": "아래쪽 가격도 봐야 해요",
+          "body": "분석에선 볼린저밴드 하단 205,267원 부근을 짚었어요.",
+          "sourceIds": [
+            "technicalDetail",
+            "sections.1"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "어떤 조건이 바뀌느냐가 중요해요",
+      "metric": "AI 추정 확률 0.55",
+      "metricLabel": "기본 시나리오 확률(예시)",
+      "points": [
+        {
+          "headline": "이익이 예상을 넘는 경우",
+          "body": "기관·외국인이 함께 사고 실적이 좋아져야 해요.",
+          "sourceIds": [
+            "scenarios.bull"
+          ]
+        },
+        {
+          "headline": "실적이 예상대로 나오는 경우",
+          "body": "제휴가 매출로 이어지면서 완만하게 움직일 수 있어요.",
+          "sourceIds": [
+            "scenarios.base"
+          ]
+        },
+        {
+          "headline": "실적과 지배구조가 나빠지는 경우",
+          "body": "주가가 더 내려갈 수 있는 조건이에요.",
+          "sourceIds": [
+            "scenarios.bear"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "이 세 가지는 걸려요",
+      "metric": "계속 확인할 것",
+      "metricLabel": "주가가 흔들릴 수 있는 이유",
+      "points": [
+        {
+          "headline": "외국인이 계속 팔면",
+          "body": "주가에 부담이 될 수 있어요. 매수로 돌아서는지 봐야 해요.",
+          "sourceIds": [
+            "risksDetailed.0",
+            "momentum"
+          ]
+        },
+        {
+          "headline": "AI 투자비가 늘면",
+          "body": "새 사업에서 돈을 벌기 전에 이익률이 낮아질 수 있어요.",
+          "sourceIds": [
+            "risksDetailed.1",
+            "fundamentals"
+          ]
+        },
+        {
+          "headline": "지배구조 문제가 길어지면",
+          "body": "두나무·네이버페이 관련 공시를 계속 확인해야 해요.",
+          "sourceIds": [
+            "risksDetailed.2",
+            "risks"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "지금은 더 지켜볼 때예요",
+      "metric": "실적 · 공시",
+      "metricLabel": "핵심 체크포인트",
+      "points": [
+        {
+          "headline": "다음 실적 발표",
+          "body": "매출뿐 아니라 영업이익이 늘어나는지 볼게요.",
+          "sourceIds": [
+            "timing",
+            "sections.2",
+            "fundamentals"
+          ]
+        },
+        {
+          "headline": "새로 나오는 공시",
+          "body": "두나무·네이버페이 관련 결정이 달라지는지 봐야 해요.",
+          "sourceIds": [
+            "sections.2",
+            "catalysts.3",
+            "risksDetailed.2"
+          ]
+        },
+        {
+          "headline": "매매 흐름",
+          "body": "외국인이 다시 사고 기관도 계속 사는지 확인해요.",
+          "sourceIds": [
+            "sections.2",
+            "momentum",
+            "todayReason"
+          ]
+        },
+        {
+          "headline": "앱의 판단은 매수보류",
+          "body": "실적과 매매 흐름을 더 확인한 뒤 판단하자는 뜻이에요.",
+          "sourceIds": [
+            "timing"
+          ]
+        }
+      ]
+    }
+  ]
+}

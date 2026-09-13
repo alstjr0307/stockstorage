@@ -6,7 +6,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -4008,13 +4007,14 @@ class _FmkoreaIndexCard extends StatelessWidget {
       '&startTime=${fmt.format(start)}&endTime=${fmt.format(end)}&timeframe=day',
     );
     try {
-      final res = await http.get(
+      final res = await StockPriceService.getFinanceResponse(
         uri,
         headers: const {
           'Referer': 'https://finance.naver.com',
           'User-Agent': 'Mozilla/5.0',
         },
       );
+      if (res.statusCode != 200) return [];
       final body = res.body;
       // format: ["YYYYMMDD", open, high, low, close, ...]
       final rows = RegExp(

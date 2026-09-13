@@ -40,6 +40,12 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="stockstorage-13828.web.app" android:pathPrefix="/analysis" />
             </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="stockstorage-13828.web.app" android:pathPrefix="/stock/" />
+            </intent-filter>
         </activity>
         <!-- 카카오 로그인 리다이렉트 URI -->
         <activity android:name="com.kakao.sdk.flutter.AuthCodeCustomTabsActivity"

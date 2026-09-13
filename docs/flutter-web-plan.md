@@ -154,17 +154,22 @@
   기존 `http.get` 24곳 전부 `_pget` 로 치환 → 지수/차트/펀더멘털 등 웹 데이터 경로 일괄 커버.
 - ⚠️ **배포 전까지 웹의 실시간 지수/차트 데이터는 비어 보임.** (야간선물은 기존 `getKospiNightFutures` 로 이미 동작)
 
-### 🔧 남은 수동 작업 (배포/콘솔 — 사용자 진행 필요)
-1. **Functions 배포:** `firebase deploy --only functions:corsProxy` (프로젝트 `stockstorage-13828`).
-2. **웹 앱 호스팅:** 현재 `firebase.json` 의 hosting `public` 은 딥링크 랜딩(pick.html 등)을 서빙 중 →
-   **건드리지 말 것.** Flutter 웹은 별도 사이트로 배포 권장:
-   - `firebase hosting:sites:create stockstorage-web`
-   - `firebase.json` hosting 을 배열로 바꿔 두 타깃(기존 `public`, 신규 `build/web` + SPA rewrite) 구성
-   - `flutter build web` → `firebase deploy --only hosting:stockstorage-web`
-3. **카카오 콘솔:** 웹 플랫폼 도메인 등록(배포 도메인 + localhost), JavaScript 키를
-   빌드 시 주입: `flutter build web --dart-define=KAKAO_JS_KEY=<js키>`.
-4. **구글 로그인:** Firebase Auth 승인된 도메인에 배포 도메인 추가(웹 팝업 로그인용).
-5. **App Check(선택):** 웹 App Check 는 현재 스킵. Firestore/Functions 에 App Check 강제(enforce)가
+### ✅ 배포 완료 (2026-07-14)
+1. **corsProxy 배포됨** — `asia-northeast3`, Naver KOSPI 폴링 URL로 실데이터 반환 확인.
+2. **호스팅 라이브:** https://stockstorage-web.web.app
+   - `firebase hosting:sites:create stockstorage-web` 완료.
+   - `firebase.json` hosting 배열화: `landing` 타깃(기존 `public` 딥링크 랜딩) + `web` 타깃(`build/web` + SPA rewrite).
+   - `.firebaserc` 에 `firebase target:apply hosting landing|web` 적용됨.
+   - 재배포: `flutter build web --release` → `firebase deploy --only hosting:web`.
+3. 배포 사이트에서 앱 부팅·corsProxy 폴링(실시간 지수) 동작 확인.
+
+### 🔧 남은 수동 작업 (콘솔 — 사용자 진행 필요)
+1. **카카오 콘솔:** 웹 플랫폼 도메인 등록(`https://stockstorage-web.web.app` + localhost),
+   JavaScript 키 발급 후 빌드 시 주입: `flutter build web --release --dart-define=KAKAO_JS_KEY=<js키>` → 재배포.
+   (현재는 JS키 없이 네이티브 키로 폴백 → 카카오 웹 로그인 비활성)
+2. **구글 로그인:** Firebase Console → Authentication → Settings → 승인된 도메인에
+   `stockstorage-web.web.app` 추가 (웹 팝업 로그인용).
+3. **App Check(선택):** 웹 App Check 는 현재 스킵. Firestore/Functions 에 App Check 강제(enforce)가
    켜져 있으면 웹에서 reCAPTCHA v3 provider 등록 필요.
 
 ### 로컬 미리보기

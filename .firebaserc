@@ -1,5 +1,18 @@
 {
   "projects": {
     "default": "stockstorage-13828"
-  }
+  },
+  "targets": {
+    "stockstorage-13828": {
+      "hosting": {
+        "landing": [
+          "stockstorage-13828"
+        ],
+        "web": [
+          "stockstorage-web"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

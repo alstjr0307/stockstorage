@@ -680,6 +680,7 @@ class FirestoreService {
       await _db.runTransaction((tx) async {
         final snap = await tx.get(ref);
         final data = snap.data() ?? <String, dynamic>{};
+        final existing = (data['favoriteStocks'] as Map?)?[key];
         final ids = List<String>.from(data['favoriteStockIds'] ?? const []);
         if (!ids.contains(key)) ids.insert(0, key);
         tx.set(ref, {
@@ -691,7 +692,9 @@ class FirestoreService {
                   ? stock.ticker.trim().toUpperCase()
                   : stock.name.trim(),
               'market': stock.market.trim().toUpperCase(),
-              'addedAt': DateTime.now().millisecondsSinceEpoch,
+              'addedAt': existing is Map && existing['addedAt'] is num
+                  ? existing['addedAt']
+                  : DateTime.now().millisecondsSinceEpoch,
             },
           },
           'lastActiveAt': FieldValue.serverTimestamp(),
@@ -788,7 +791,9 @@ class FirestoreService {
         .where('uid', isEqualTo: uid)
         .where('enabled', isEqualTo: true)
         .get();
-    return snap.docs.where((d) => (d.data()['triggered'] as bool?) != true).length;
+    return snap.docs
+        .where((d) => (d.data()['triggered'] as bool?) != true)
+        .length;
   }
 
   Future<void> addPriceAlert(PriceAlert alert) {
@@ -2628,9 +2633,11 @@ class FirestoreService {
         .orderBy('timestamp')
         .limit(limit)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => MarketCalendarEvent.fromFirestore(d))
-            .toList());
+        .map(
+          (snap) => snap.docs
+              .map((d) => MarketCalendarEvent.fromFirestore(d))
+              .toList(),
+        );
   }
 
   /// 홈 카드용 — 다가오는 일정 (중요도 우선, 가까운 날짜 우선).
@@ -2641,17 +2648,17 @@ class FirestoreService {
         .limit(60)
         .snapshots()
         .map((snap) {
-      final events = snap.docs
-          .map((d) => MarketCalendarEvent.fromFirestore(d))
-          .toList();
-      // 중요 이벤트를 앞에 두되 날짜 순서는 유지
-      events.sort((a, b) {
-        final imp = b.importance.compareTo(a.importance);
-        if (imp != 0) return imp;
-        return a.dateTime.compareTo(b.dateTime);
-      });
-      return events.take(take).toList();
-    });
+          final events = snap.docs
+              .map((d) => MarketCalendarEvent.fromFirestore(d))
+              .toList();
+          // 중요 이벤트를 앞에 두되 날짜 순서는 유지
+          events.sort((a, b) {
+            final imp = b.importance.compareTo(a.importance);
+            if (imp != 0) return imp;
+            return a.dateTime.compareTo(b.dateTime);
+          });
+          return events.take(take).toList();
+        });
   }
 }
 

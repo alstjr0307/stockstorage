@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart' show setEquals;
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -12,54 +13,61 @@ import '../widgets/position_summary_card.dart';
 import '../widgets/stock_search_field.dart';
 import 'login_screen.dart';
 import 'journal_chart_screen.dart';
+import '../services/journal_ledger.dart';
+import '../services/journal_v2_repository.dart';
+import '../widgets/journal_date_navigator.dart';
+import '../widgets/journal_average_down_badge.dart';
+
+Future<bool> _removeJournalSafely(
+  BuildContext context,
+  TradingJournal journal,
+) async {
+  try {
+    await JournalV2Repository(journal.uid).remove(journal);
+    return true;
+  } catch (error) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error is JournalWriteException
+                ? error.message
+                : '삭제하지 못했습니다. 연결을 확인해주세요.',
+          ),
+        ),
+      );
+    }
+    return false;
+  }
+}
 
 const _kQtyEpsilon = 1e-6;
 
 /// 매도 시점(sellDate) 직전의 평균단가를 반환.
-/// 이전 매도 물량을 FIFO로 먼저 차감한 뒤 남은 보유 기준으로 계산한다.
+/// 이전 매도 원가를 이동평균 기준으로 차감한다. 원본 기록은 수정하지 않는다.
 double _avgBuyPriceAt(
   List<TradingJournal> buys,
   DateTime sellDate, {
   List<TradingJournal> sells = const [],
   String? excludingSellId,
 }) {
-  final buysAsc =
-      buys
-          .where(
-            (b) =>
-                !b.tradeDate.isAfter(sellDate) && b.quantity > 0 && b.price > 0,
-          )
-          .toList()
-        ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
-  if (buysAsc.isEmpty) return 0;
-
-  final sellsBefore =
-      sells
-          .where(
-            (s) =>
-                s.id != excludingSellId &&
-                !s.tradeDate.isAfter(sellDate) &&
-                s.quantity > 0,
-          )
-          .toList()
-        ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
-
-  var soldLeft = sellsBefore.fold<double>(0.0, (acc, s) => acc + s.quantity);
-  var remainQty = 0.0;
-  var remainCost = 0.0;
-  for (final b in buysAsc) {
-    var lot = b.quantity;
-    if (soldLeft > 0) {
-      final consumed = lot < soldLeft ? lot : soldLeft;
-      lot -= consumed;
-      soldLeft -= consumed;
-    }
-    if (lot > 0) {
-      remainQty += lot;
-      remainCost += b.price * lot;
-    }
+  final all = [...buys, ...sells];
+  if (all.isEmpty) return 0;
+  final position = JournalLedger.forStock(all, all.first);
+  if (position?.reliable != true) return 0;
+  if (excludingSellId != null) {
+    final effect = position!.effectFor(excludingSellId);
+    if (effect != null) return effect.beforeAverage;
   }
-  return remainQty > 0 ? remainCost / remainQty : 0;
+  return JournalLedger.forStock(
+        all.where(
+          (j) => j.action == '매수'
+              ? !j.tradeDate.isAfter(sellDate)
+              : j.tradeDate.isBefore(sellDate),
+        ),
+        all.first,
+      )?.average ??
+      0;
 }
 
 class TradingJournalTab extends StatelessWidget {
@@ -233,7 +241,7 @@ class _JournalContentState extends State<_JournalContent> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _JournalFormSheet(
+      builder: (_) => JournalFormSheet(
         uid: widget.uid,
         nickname: nickname,
         existing: existing,
@@ -351,14 +359,14 @@ class _JournalContentState extends State<_JournalContent> {
                 ],
               ),
             );
-            if (ok == true) {
-              await _firestoreService.deleteJournal(sell.id);
+            if (ok == true && context.mounted) {
+              await _removeJournalSafely(context, sell);
             }
           }
 
           if (!isStockDetail) {
             final timeline = [...journals]
-              ..sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+              ..sort((a, b) => JournalLedger.compare(b, a));
             final availableDates = <DateTime>[];
             for (final item in timeline) {
               final day = _dateOnly(item.tradeDate);
@@ -382,20 +390,27 @@ class _JournalContentState extends State<_JournalContent> {
               }
             }
             for (final buys in buysByStock.values) {
-              buys.sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+              buys.sort((a, b) => JournalLedger.compare(b, a));
             }
             for (final sells in sellsByStock.values) {
-              sells.sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+              sells.sort((a, b) => JournalLedger.compare(b, a));
             }
             return ListView(
               padding: const EdgeInsets.fromLTRB(0, 8, 0, 100),
               children: [
-                _JournalDateSection(
+                JournalDateSection(
                   timeline: timeline,
                   buysByStock: buysByStock,
                   sellsByStock: sellsByStock,
                   firestoreService: _firestoreService,
                   onEdit: (j) => _openForm(existing: j),
+                  onAddTrade: (j, action) => _openForm(
+                    initialAction: action,
+                    initialStockName: j.stockName,
+                    initialTicker: j.ticker,
+                    initialRawMarket: j.market,
+                    lockActionAndStock: true,
+                  ),
                   onEditLinkedSell: (sell) => _openForm(existing: sell),
                   onDeleteLinkedSell: onDeleteLinkedSell,
                 ),
@@ -404,12 +419,12 @@ class _JournalContentState extends State<_JournalContent> {
           }
 
           final buys = journals.where((j) => j.action == '매수').toList()
-            ..sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+            ..sort((a, b) => JournalLedger.compare(b, a));
           final linkedSells = journals.where((j) => j.action == '매도').toList()
-            ..sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+            ..sort((a, b) => JournalLedger.compare(b, a));
           final representative = ([
             ...journals,
-          ]..sort((a, b) => b.tradeDate.compareTo(a.tradeDate))).first;
+          ]..sort((a, b) => JournalLedger.compare(b, a))).first;
 
           return _StockJournalDetailView(
             representative: representative,
@@ -511,7 +526,7 @@ class _StockJournalDetailViewState extends State<_StockJournalDetailView> {
   @override
   Widget build(BuildContext context) {
     final events = [...widget.journals]
-      ..sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+      ..sort((a, b) => JournalLedger.compare(b, a));
     final position = _StockPositionMetrics.from(
       buys: widget.buys,
       sells: widget.sells,
@@ -632,6 +647,7 @@ class _DetailTabChip extends StatelessWidget {
 }
 
 class _StockPositionMetrics {
+  final bool reliable;
   final double totalBuyQty;
   final double totalBuyAmount;
   final double totalSellAmount;
@@ -649,6 +665,7 @@ class _StockPositionMetrics {
   final bool hasLivePrice;
 
   const _StockPositionMetrics({
+    this.reliable = true,
     required this.totalBuyQty,
     required this.totalBuyAmount,
     required this.totalSellAmount,
@@ -671,8 +688,7 @@ class _StockPositionMetrics {
     required List<TradingJournal> sells,
     PriceResult? price,
   }) {
-    final buysAsc = [...buys]
-      ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+    final buysAsc = [...buys]..sort((a, b) => JournalLedger.compare(a, b));
     final remainingByBuyId = <String, double>{};
     var soldLeft = sells.fold<double>(0, (sum, s) => sum + s.quantity);
     var remainingQty = 0.0;
@@ -686,6 +702,10 @@ class _StockPositionMetrics {
       soldLeft = soldLeft > consumed ? soldLeft - consumed : 0.0;
     }
 
+    final projected = JournalLedger.project([...buys, ...sells]);
+    final ledger = projected.firstOrNull;
+    remainingQty = ledger?.quantity ?? 0;
+    remainingCost = ledger?.cost ?? 0;
     final totalBuyQty = buys.fold<double>(0, (sum, b) => sum + b.quantity);
     final totalBuyAmount = buys.fold<double>(
       0,
@@ -712,23 +732,8 @@ class _StockPositionMetrics {
         ? (currentPrice - avgBuyPrice) / avgBuyPrice * 100
         : null;
 
-    var realizedPnl = 0.0;
-    final buysForAvg = [...buys]
-      ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
-    for (final sell in sells) {
-      final bp = _avgBuyPriceAt(
-        buysForAvg,
-        sell.tradeDate,
-        sells: sells,
-        excludingSellId: sell.id,
-      );
-      if (bp > 0 && sell.price > 0 && sell.quantity > 0) {
-        realizedPnl += (sell.price - bp) * sell.quantity;
-      }
-    }
-    final realizedPnlRate = totalBuyAmount > 0
-        ? ((totalSellAmount - totalBuyAmount) / totalBuyAmount) * 100
-        : null;
+    final realizedPnl = ledger?.realized ?? 0;
+    final realizedPnlRate = ledger?.realizedRate;
 
     TradingJournal? quickSellBuy;
     var quickSellQty = 0.0;
@@ -742,6 +747,7 @@ class _StockPositionMetrics {
     }
 
     return _StockPositionMetrics(
+      reliable: ledger?.reliable ?? true,
       totalBuyQty: totalBuyQty,
       totalBuyAmount: totalBuyAmount,
       totalSellAmount: totalSellAmount,
@@ -774,6 +780,12 @@ class _StockHoldingStatusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (!metrics.reliable) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 16),
+        child: Text('거래 순서·수량 확인이 필요합니다. 기록을 확인한 뒤 손익을 계산합니다.'),
+      );
+    }
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isKrw = stock.market != 'US';
@@ -1010,9 +1022,7 @@ class _StockTradeRecordsCard extends StatelessWidget {
               showTradeDate: false,
               simpleTradeOnly: true,
               relatedBuys: sameStockBuys,
-              linkedSells: journal.action == '매수'
-                  ? sameStockSells
-                  : const <TradingJournal>[],
+              linkedSells: sameStockSells,
               firestoreService: firestoreService,
               onEdit: () {
                 Navigator.pop(context);
@@ -1038,8 +1048,7 @@ class _StockTradeRecordsCard extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isKrw = events.firstOrNull?.market != 'US';
-    final buysAsc = [...buys]
-      ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+    final buysAsc = [...buys]..sort((a, b) => JournalLedger.compare(a, b));
     final sells = events.where((e) => e.action == '매도').toList();
     String fmtP(double p) => isKrw
         ? '₩${NumberFormat('#,###').format(p.toInt())}'
@@ -1799,91 +1808,8 @@ class _InlineStockChartPainter extends CustomPainter {
       oldDelegate.avgSellPrice != avgSellPrice;
 }
 
-class _JournalDateNavigator extends StatelessWidget {
-  final DateTime date;
-  final bool canGoPrev;
-  final bool canGoNext;
-  final VoidCallback? onPrev;
-  final VoidCallback? onNext;
-  final VoidCallback? onPickDate;
-
-  const _JournalDateNavigator({
-    required this.date,
-    required this.canGoPrev,
-    required this.canGoNext,
-    this.onPrev,
-    this.onNext,
-    this.onPickDate,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 10),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: canGoPrev ? onPrev : null,
-            visualDensity: VisualDensity.compact,
-            icon: Icon(
-              Icons.chevron_left_rounded,
-              color: canGoPrev
-                  ? cs.onSurface.withValues(alpha: 0.8)
-                  : cs.onSurface.withValues(alpha: 0.2),
-            ),
-          ),
-          Expanded(
-            child: Center(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: onPickDate,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        DateFormat('yyyy.MM.dd').format(date),
-                        style: TextStyle(
-                          color: cs.onSurface,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Icon(
-                        Icons.calendar_month_rounded,
-                        size: 16,
-                        color: cs.onSurface.withValues(alpha: 0.58),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          IconButton(
-            onPressed: canGoNext ? onNext : null,
-            visualDensity: VisualDensity.compact,
-            icon: Icon(
-              Icons.chevron_right_rounded,
-              color: canGoNext
-                  ? cs.onSurface.withValues(alpha: 0.8)
-                  : cs.onSurface.withValues(alpha: 0.2),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _JournalDateSection extends StatefulWidget {
+class JournalDateSection extends StatefulWidget {
+  final void Function(TradingJournal stock, String action)? onAddTrade;
   final List<TradingJournal> timeline;
   final Map<String, List<TradingJournal>> buysByStock;
   final Map<String, List<TradingJournal>> sellsByStock;
@@ -1892,8 +1818,10 @@ class _JournalDateSection extends StatefulWidget {
   final void Function(TradingJournal journal)? onEditLinkedSell;
   final void Function(TradingJournal journal)? onDeleteLinkedSell;
 
-  const _JournalDateSection({
+  const JournalDateSection({
+    super.key,
     required this.timeline,
+    this.onAddTrade,
     required this.buysByStock,
     required this.sellsByStock,
     required this.firestoreService,
@@ -1903,10 +1831,10 @@ class _JournalDateSection extends StatefulWidget {
   });
 
   @override
-  State<_JournalDateSection> createState() => _JournalDateSectionState();
+  State<JournalDateSection> createState() => JournalDateSectionState();
 }
 
-class _JournalDateSectionState extends State<_JournalDateSection> {
+class JournalDateSectionState extends State<JournalDateSection> {
   DateTime? _selectedDate;
 
   DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
@@ -1927,10 +1855,8 @@ class _JournalDateSectionState extends State<_JournalDateSection> {
     final picked = await showDatePicker(
       context: context,
       initialDate: selected,
-      firstDate: minDate,
-      lastDate: maxDate,
-      selectableDayPredicate: (d) =>
-          availableDates.any((x) => _isSameDay(x, d)),
+      firstDate: DateTime(2000).isBefore(minDate) ? DateTime(2000) : minDate,
+      lastDate: DateTime.now().isAfter(maxDate) ? DateTime.now() : maxDate,
       helpText: '거래일 선택',
       locale: const Locale('ko', 'KR'),
     );
@@ -1952,14 +1878,12 @@ class _JournalDateSectionState extends State<_JournalDateSection> {
       return const SizedBox.shrink();
     }
 
-    final selectedDate =
-        (_selectedDate != null &&
-            availableDates.any((d) => _isSameDay(d, _selectedDate!)))
-        ? _selectedDate!
-        : availableDates.first;
-    final selectedIdx = availableDates.indexWhere(
-      (d) => _isSameDay(d, selectedDate),
-    );
+    availableDates.sort((a, b) => b.compareTo(a));
+    final selectedDate = _selectedDate ?? availableDates.first;
+    final earlier = availableDates
+        .where((d) => d.isBefore(selectedDate))
+        .toList();
+    final later = availableDates.where((d) => d.isAfter(selectedDate)).toList();
     final filteredTimeline = widget.timeline
         .where((j) => _isSameDay(j.tradeDate, selectedDate))
         .toList();
@@ -1982,27 +1906,22 @@ class _JournalDateSectionState extends State<_JournalDateSection> {
 
     return Column(
       children: [
-        _JournalDateNavigator(
+        JournalDateNavigator(
           date: selectedDate,
-          canGoPrev:
-              selectedIdx >= 0 && selectedIdx < availableDates.length - 1,
-          canGoNext: selectedIdx > 0,
-          onPrev: selectedIdx >= 0 && selectedIdx < availableDates.length - 1
-              ? () => setState(
-                  () => _selectedDate = availableDates[selectedIdx + 1],
-                )
-              : null,
-          onNext: selectedIdx > 0
-              ? () => setState(
-                  () => _selectedDate = availableDates[selectedIdx - 1],
-                )
-              : null,
+          canGoPrev: earlier.isNotEmpty,
+          canGoNext: later.isNotEmpty,
+          onPrev: earlier.isEmpty
+              ? null
+              : () => setState(() => _selectedDate = earlier.first),
+          onNext: later.isEmpty
+              ? null
+              : () => setState(() => _selectedDate = later.last),
           onPickDate: () => _pickDate(availableDates, selectedDate),
         ),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          color: const Color(0xFF10B981).withValues(alpha: 0.08),
+          color: cs.onSurface.withValues(alpha: 0.025),
           child: Row(
             children: [
               const SizedBox(
@@ -2045,7 +1964,7 @@ class _JournalDateSectionState extends State<_JournalDateSection> {
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          color: const Color(0xFFF04452).withValues(alpha: 0.08),
+          color: cs.onSurface.withValues(alpha: 0.025),
           child: Row(
             children: [
               const SizedBox(
@@ -2086,11 +2005,21 @@ class _JournalDateSectionState extends State<_JournalDateSection> {
           ),
         ),
         const SizedBox(height: 10),
+        if (filteredTimeline.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 40),
+            child: Text(
+              '이 날짜에는 매매 기록이 없습니다',
+              style: TextStyle(
+                fontSize: 14,
+                color: cs.onSurface.withValues(alpha: .5),
+              ),
+            ),
+          ),
         ...filteredTimeline.map((j) {
           final stockKey = '${j.market}:${j.ticker}';
-          final linkedSellsForCard = j.action == '매수'
-              ? (widget.sellsByStock[stockKey] ?? const <TradingJournal>[])
-              : const <TradingJournal>[];
+          final linkedSellsForCard =
+              widget.sellsByStock[stockKey] ?? const <TradingJournal>[];
           final relatedBuysForCard =
               widget.buysByStock[stockKey] ?? const <TradingJournal>[];
           return _JournalCard(
@@ -2102,6 +2031,9 @@ class _JournalDateSectionState extends State<_JournalDateSection> {
             linkedSells: linkedSellsForCard,
             firestoreService: widget.firestoreService,
             onEdit: () => widget.onEdit(j),
+            onAddTrade: widget.onAddTrade == null
+                ? null
+                : (action) => widget.onAddTrade!(j, action),
             onEditLinkedSell: widget.onEditLinkedSell,
             onDeleteLinkedSell: widget.onDeleteLinkedSell,
           );
@@ -2554,6 +2486,7 @@ class _HoldingRow extends StatelessWidget {
 // ─── 일지 카드 ─────────────────────────────────────────────────────────────
 
 class _JournalCard extends StatefulWidget {
+  final void Function(String action)? onAddTrade;
   final TradingJournal journal;
   final List<TradingJournal> relatedBuys;
   final List<TradingJournal> linkedSells;
@@ -2567,6 +2500,7 @@ class _JournalCard extends StatefulWidget {
   const _JournalCard({
     super.key,
     required this.journal,
+    this.onAddTrade,
     this.relatedBuys = const [],
     this.linkedSells = const [],
     this.showTradeDate = true,
@@ -2611,13 +2545,12 @@ class _JournalCardState extends State<_JournalCard> {
   void _computeDerived() {
     final journal = widget.journal;
     _groupedBuys = widget.relatedBuys.isNotEmpty
-        ? ([...widget.relatedBuys]
-            ..sort((a, b) => b.tradeDate.compareTo(a.tradeDate)))
+        ? ([...widget.relatedBuys]..sort((a, b) => JournalLedger.compare(b, a)))
         : (journal.action == '매수' ? [journal] : <TradingJournal>[]);
 
     final result = <String, double>{};
     final buysAsc = [..._groupedBuys]
-      ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
+      ..sort((a, b) => JournalLedger.compare(a, b));
     var soldLeft = widget.linkedSells.fold<double>(
       0.0,
       (sum, s) => sum + s.quantity,
@@ -2675,7 +2608,7 @@ class _JournalCardState extends State<_JournalCard> {
                     j.market == widget.journal.market,
               )
               .toList()
-            ..sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+            ..sort((a, b) => JournalLedger.compare(b, a));
       final relatedSells =
           sameStockJournals
               .where(
@@ -2685,7 +2618,7 @@ class _JournalCardState extends State<_JournalCard> {
                     j.market == widget.journal.market,
               )
               .toList()
-            ..sort((a, b) => b.tradeDate.compareTo(a.tradeDate));
+            ..sort((a, b) => JournalLedger.compare(b, a));
       final chartBuy = relatedBuys.isNotEmpty
           ? relatedBuys.first
           : widget.journal;
@@ -2760,6 +2693,22 @@ class _JournalCardState extends State<_JournalCard> {
         ? '₩${NumberFormat('#,###').format(p.toInt())}'
         : '\$${p.toStringAsFixed(2)}';
 
+    final history = <String, TradingJournal>{
+      for (final j in [...widget.relatedBuys, ...widget.linkedSells, journal])
+        j.id: j,
+    };
+    final projection = JournalLedger.project(
+      history.values,
+    ).where((p) => p.key == JournalLedger.stockKey(journal)).firstOrNull;
+    final effect = projection?.events
+        .where((e) => e.trade.id == journal.id)
+        .firstOrNull;
+    final buyLabel = projection?.reliable != true
+        ? '거래 순서·수량 확인 필요'
+        : journal.action == '매수'
+        ? effect?.kind.label ?? journal.action
+        : journal.action;
+
     final groupedBuys = _groupedBuys;
     final remainingByBuyId = _remainingByBuyId;
 
@@ -2782,10 +2731,15 @@ class _JournalCardState extends State<_JournalCard> {
     // 총 실현손익 (포지션 전체 종료 시) — avgBuyPrice 기준
     // 총 실현손익 — 각 매도 시점의 평균단가 기준
     double? totalRealizedPnl;
-    if (isClosed) {
+    if (isClosed && projection?.reliable == true) {
       double total = 0;
       for (final s in widget.linkedSells) {
-        final bp = _avgBuyPriceAt(groupedBuys, s.tradeDate);
+        final bp = _avgBuyPriceAt(
+          groupedBuys,
+          s.tradeDate,
+          sells: widget.linkedSells,
+          excludingSellId: s.id,
+        );
         if (s.price > 0 && s.quantity > 0 && bp > 0) {
           total += (s.price - bp) * s.quantity;
         }
@@ -2794,7 +2748,12 @@ class _JournalCardState extends State<_JournalCard> {
     }
 
     // 실현손익 (매도 카드) — 매도 시점 평균단가 기준
-    final sellAvgBp = _avgBuyPriceAt(groupedBuys, journal.tradeDate);
+    final sellAvgBp = _avgBuyPriceAt(
+      groupedBuys,
+      journal.tradeDate,
+      sells: widget.linkedSells,
+      excludingSellId: journal.id,
+    );
     double? realizedPnl, realizedPnlPct;
     if (journal.action == '매도' &&
         sellAvgBp > 0 &&
@@ -2806,20 +2765,31 @@ class _JournalCardState extends State<_JournalCard> {
     final isRealizedUp = realizedPnl != null && realizedPnl >= 0;
 
     final linkedRealizedTotal = widget.linkedSells.fold<double>(0, (sum, s) {
-      final bp = _avgBuyPriceAt(groupedBuys, s.tradeDate);
+      final bp = _avgBuyPriceAt(
+        groupedBuys,
+        s.tradeDate,
+        sells: widget.linkedSells,
+        excludingSellId: s.id,
+      );
       if (s.price > 0 && s.quantity > 0 && bp > 0) {
         return sum + ((s.price - bp) * s.quantity);
       }
       return sum;
     });
     final hasLinkedRealized = widget.linkedSells.any((s) {
-      final bp = _avgBuyPriceAt(groupedBuys, s.tradeDate);
+      final bp = _avgBuyPriceAt(
+        groupedBuys,
+        s.tradeDate,
+        sells: widget.linkedSells,
+        excludingSellId: s.id,
+      );
       return s.price > 0 && s.quantity > 0 && bp > 0;
     });
     final isLinkedTotalUp = linkedRealizedTotal >= 0;
     // 평가손익 (매수 + 잔량 > 0 + 현재가)
     double? pnl, pnlPct;
-    if (journal.action != '매도' &&
+    if (projection?.reliable == true &&
+        journal.action != '매도' &&
         !isClosed &&
         remainingQty > 0 &&
         _price != null &&
@@ -2847,9 +2817,10 @@ class _JournalCardState extends State<_JournalCard> {
     final historyEvents = <({TradingJournal journal, bool isBuy})>[
       ...groupedBuys.map((b) => (journal: b, isBuy: true)),
       ...widget.linkedSells.map((s) => (journal: s, isBuy: false)),
-    ]..sort((a, b) => b.journal.tradeDate.compareTo(a.journal.tradeDate));
+    ]..sort((a, b) => JournalLedger.compare(b.journal, a.journal));
 
     Widget buildCardMenu() => PopupMenuButton<String>(
+      tooltip: '거래 메뉴',
       icon: Icon(
         Icons.more_horiz,
         size: 18,
@@ -2857,7 +2828,11 @@ class _JournalCardState extends State<_JournalCard> {
       ),
       color: isDark ? const Color(0xFF1A2035) : Colors.white,
       onSelected: (v) async {
-        if (v == 'edit') {
+        if (v == 'add-buy') {
+          widget.onAddTrade?.call('매수');
+        } else if (v == 'add-sell') {
+          widget.onAddTrade?.call('매도');
+        } else if (v == 'edit') {
           widget.onEdit();
         } else if (v == 'public') {
           await widget.firestoreService.toggleJournalPublic(
@@ -2909,24 +2884,41 @@ class _JournalCardState extends State<_JournalCard> {
               ],
             ),
           );
-          if (confirm == true) {
-            await widget.firestoreService.deleteJournal(journal.id);
-            AnalyticsService.instance.logDeleteJournal();
+          if (confirm == true && context.mounted) {
+            if (await _removeJournalSafely(context, journal)) {
+              AnalyticsService.instance.logDeleteJournal();
+            }
           }
         }
       },
       itemBuilder: (_) => [
-        if (!isClosed)
+        if (widget.onAddTrade != null) ...[
+          const PopupMenuItem(value: 'add-buy', child: Text('추가매수')),
           PopupMenuItem(
-            value: 'edit',
-            child: Row(
-              children: [
-                const Icon(Icons.edit_outlined, size: 16),
-                const SizedBox(width: 8),
-                Text('수정', style: TextStyle(fontSize: 13)),
-              ],
+            value: 'add-sell',
+            enabled:
+                projection?.reliable == true &&
+                projection!.quantity > JournalLedger.epsilon,
+            child: Text(
+              projection?.reliable != true
+                  ? '매도 · 기록 확인 필요'
+                  : projection!.quantity <= JournalLedger.epsilon
+                  ? '매도 · 보유수량 없음'
+                  : '매도',
             ),
           ),
+          const PopupMenuDivider(),
+        ],
+        PopupMenuItem(
+          value: 'edit',
+          child: Row(
+            children: [
+              const Icon(Icons.edit_outlined, size: 16),
+              const SizedBox(width: 8),
+              Text('수정', style: TextStyle(fontSize: 13)),
+            ],
+          ),
+        ),
         PopupMenuItem(
           value: 'public',
           child: Row(
@@ -2975,16 +2967,16 @@ class _JournalCardState extends State<_JournalCard> {
           ? fmtP(journal.price)
           : (_price?.formattedPrice ?? '-');
       final isEtcCard = journal.action != '매수' && journal.action != '매도';
-      final buyAmountText = avgBuyPrice > 0 && baseQty > 0
-          ? fmtP(avgBuyPrice * baseQty)
-          : '-';
+      final buyAmountText = fmtP(journal.price * journal.quantity);
       final sellAmountText = journal.price > 0 && journal.quantity > 0
           ? fmtP(journal.price * journal.quantity)
           : '-';
       final metricLines = <({String label, String value, Color color})>[
         (
           label: journal.action == '매도' ? '평균단가' : '매수가',
-          value: fmtP(journal.action == '매도' ? sellAvgBp : avgBuyPrice),
+          value: journal.action == '매도' && projection?.reliable != true
+              ? '확인 필요'
+              : fmtP(journal.action == '매도' ? sellAvgBp : journal.price),
           color: cs.onSurface,
         ),
         (
@@ -3006,6 +2998,16 @@ class _JournalCardState extends State<_JournalCard> {
           value: journal.action == '매도' ? sellAmountText : buyAmountText,
           color: cs.onSurface,
         ),
+        if (journal.action == '매수' &&
+            projection?.reliable == true &&
+            effect != null &&
+            effect.beforeQuantity > JournalLedger.epsilon)
+          (
+            label: '평단 변화',
+            value:
+                '${fmtP(effect.beforeAverage)} → ${fmtP(effect.afterAverage)}',
+            color: cs.onSurface,
+          ),
       ];
       final isBuyCard = journal.action == '매수';
       final actionTone = isBuyCard
@@ -3014,17 +3016,6 @@ class _JournalCardState extends State<_JournalCard> {
           ? _upColor
           : Colors.orangeAccent;
       final cardColor = isDark ? const Color(0xFF131929) : cs.surface;
-      final headerGradient = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          actionTone.withValues(alpha: isDark ? 0.1 : 0.075),
-          actionTone.withValues(alpha: isDark ? 0.04 : 0.03),
-          Colors.transparent,
-        ],
-        stops: const [0, 0.6, 1],
-      );
-
       Widget infoChip(String text, Color color) {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -3199,7 +3190,7 @@ class _JournalCardState extends State<_JournalCard> {
       return GestureDetector(
         onTap: null,
         child: Container(
-          margin: const EdgeInsets.only(bottom: 12),
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           decoration: BoxDecoration(
             color: cardColor,
             borderRadius: BorderRadius.circular(20),
@@ -3215,44 +3206,51 @@ class _JournalCardState extends State<_JournalCard> {
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.fromLTRB(18, 18, 10, 16),
-                  decoration: BoxDecoration(gradient: headerGradient),
+                  decoration: const BoxDecoration(),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.fromLTRB(8, 4, 10, 4),
-                            decoration: BoxDecoration(
-                              color: actionTone.withValues(alpha: 0.14),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: actionTone.withValues(alpha: 0.22),
+                          if (projection?.reliable == true &&
+                              effect?.trade.action == '매수' &&
+                              effect!.beforeQuantity > JournalLedger.epsilon)
+                            JournalAdditionalBuyBadge(
+                              buyNumber: effect.buyNumber,
+                            )
+                          else
+                            Container(
+                              padding: const EdgeInsets.fromLTRB(8, 4, 10, 4),
+                              decoration: BoxDecoration(
+                                color: actionTone.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(
+                                  color: actionTone.withValues(alpha: 0.22),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 6,
+                                    height: 6,
+                                    decoration: BoxDecoration(
+                                      color: actionTone,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    buyLabel,
+                                    style: TextStyle(
+                                      color: actionTone,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: actionTone,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 5),
-                                Text(
-                                  journal.action,
-                                  style: TextStyle(
-                                    color: actionTone,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
                           if (isEtcCard) ...[
                             const Spacer(),
                             Container(
@@ -4646,6 +4644,11 @@ class _JournalDetailSheet extends StatelessWidget {
     final groupedBuys = relatedBuys.isNotEmpty
         ? relatedBuys
         : (journal.action == '매수' ? [journal] : <TradingJournal>[]);
+    final projection = JournalLedger.forStock([
+      journal,
+      ...groupedBuys,
+      ...linkedSells,
+    ], journal);
     final baseQty = groupedBuys.fold<double>(0, (sum, b) => sum + b.quantity);
     final avgBuyPrice = baseQty > 0
         ? groupedBuys.fold<double>(
@@ -4664,7 +4667,12 @@ class _JournalDetailSheet extends StatelessWidget {
         linkedSells.isNotEmpty;
 
     // 실현손익 (매도) — 매도 시점 평균단가 기준
-    final sellAvgBp = _avgBuyPriceAt(groupedBuys, journal.tradeDate);
+    final sellAvgBp = _avgBuyPriceAt(
+      groupedBuys,
+      journal.tradeDate,
+      sells: linkedSells,
+      excludingSellId: journal.id,
+    );
     double? realizedPnl, realizedPnlPct;
     if (journal.action == '매도' &&
         sellAvgBp > 0 &&
@@ -4675,10 +4683,15 @@ class _JournalDetailSheet extends StatelessWidget {
     }
     // 총 실현손익 (매수 종료 포지션) — 각 매도 시점 평균단가 기준
     double? totalRealizedPnl, totalRealizedPct;
-    if (isClosed) {
+    if (isClosed && projection?.reliable == true) {
       double total = 0;
       for (final s in linkedSells) {
-        final bp = _avgBuyPriceAt(groupedBuys, s.tradeDate);
+        final bp = _avgBuyPriceAt(
+          groupedBuys,
+          s.tradeDate,
+          sells: linkedSells,
+          excludingSellId: s.id,
+        );
         if (s.price > 0 && s.quantity > 0 && bp > 0) {
           total += (s.price - bp) * s.quantity;
         }
@@ -4690,7 +4703,8 @@ class _JournalDetailSheet extends StatelessWidget {
     }
     // 평가손익 (매수 활성 포지션, remainingQty 기반)
     double? pnl, pnlPct;
-    if (journal.action == '매수' &&
+    if (projection?.reliable == true &&
+        journal.action == '매수' &&
         !isClosed &&
         price != null &&
         avgBuyPrice > 0 &&
@@ -4979,7 +4993,12 @@ class _JournalDetailSheet extends StatelessWidget {
               divider(),
               sectionLabel('매도 내역  (${linkedSells.length}건)'),
               ...linkedSells.map((s) {
-                final sBp = _avgBuyPriceAt(groupedBuys, s.tradeDate);
+                final sBp = _avgBuyPriceAt(
+                  groupedBuys,
+                  s.tradeDate,
+                  sells: linkedSells,
+                  excludingSellId: s.id,
+                );
                 final sIsUp = sBp <= 0 || s.price >= sBp;
                 final sPnl = sBp > 0 && s.price > 0
                     ? (s.price - sBp) * s.quantity
@@ -5188,7 +5207,8 @@ class _JournalDetailSheet extends StatelessWidget {
 
 // ─── 일지 작성/수정 시트 ──────────────────────────────────────────────────
 
-class _JournalFormSheet extends StatefulWidget {
+class JournalFormSheet extends StatefulWidget {
+  final JournalV2Repository? repository;
   final String uid;
   final String nickname;
   final TradingJournal? existing;
@@ -5201,7 +5221,9 @@ class _JournalFormSheet extends StatefulWidget {
   final String? initialRawMarket;
   final bool lockActionAndStock;
 
-  const _JournalFormSheet({
+  const JournalFormSheet({
+    super.key,
+    this.repository,
     required this.uid,
     required this.nickname,
     required this.firestoreService,
@@ -5216,10 +5238,10 @@ class _JournalFormSheet extends StatefulWidget {
   });
 
   @override
-  State<_JournalFormSheet> createState() => _JournalFormSheetState();
+  State<JournalFormSheet> createState() => JournalFormSheetState();
 }
 
-class _JournalFormSheetState extends State<_JournalFormSheet> {
+class JournalFormSheetState extends State<JournalFormSheet> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _priceCtrl;
   late final TextEditingController _quantityCtrl;
@@ -5237,16 +5259,16 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
   bool _isPublic = false;
   bool _saving = false;
   bool _manualMode = false; // 직접 입력 모드
-  bool get _isEditingTradeDateLocked =>
-      widget.existing != null &&
-      (widget.existing!.action == '매도' || widget.existing!.action == '매수');
+  bool get _isEditingTradeDateLocked => false;
+  late final _repository = widget.repository ?? JournalV2Repository(widget.uid);
+  late final String _newId = _repository.newId();
 
   PriceResult? _priceResult;
   bool _fetchingPrice = false;
 
   static const _actions = ['매수', '매도', '기타'];
   bool get _isActionStockLocked =>
-      widget.lockActionAndStock && widget.existing == null;
+      widget.lockActionAndStock || widget.existing != null;
 
   String _marketFromPick(StockPick p) => p.market == 'US' ? 'US' : 'KR';
 
@@ -5456,132 +5478,80 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
         child: child!,
       ),
     );
-    if (picked != null) setState(() => _tradeDate = picked);
+    if (picked != null && mounted) {
+      setState(
+        () => _tradeDate = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          _tradeDate.hour,
+          _tradeDate.minute,
+          _tradeDate.second,
+          _tradeDate.millisecond,
+          _tradeDate.microsecond,
+        ),
+      );
+    }
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     if (_stockName.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('종목을 선택하거나 입력하세요')));
+      ).showSnackBar(const SnackBar(content: Text('종목을 선택해주세요.')));
       return;
     }
     if (!_formKey.currentState!.validate()) return;
-    // 매수 수정 시, 종목 기준 누적 매도수량보다 총 매수수량이 작아지면 안 된다.
-    if (widget.existing != null &&
-        widget.existing!.action == '매수' &&
-        _action == '매수') {
-      final nextQty = double.tryParse(_quantityCtrl.text.trim()) ?? 0;
-      if (nextQty > 0) {
-        final existing = widget.existing!;
-        final allJournals = await widget.firestoreService
-            .getMyJournalsByUidOnce(widget.uid);
-        final soldQtyByStock = allJournals
-            .where(
-              (j) =>
-                  j.action == '매도' &&
-                  j.ticker == existing.ticker &&
-                  j.market == existing.market,
-            )
-            .fold(0.0, (sum, j) => sum + j.quantity);
-        final otherBuyQty = allJournals
-            .where(
-              (j) =>
-                  j.action == '매수' &&
-                  j.ticker == existing.ticker &&
-                  j.market == existing.market &&
-                  j.id != existing.id,
-            )
-            .fold(0.0, (sum, j) => sum + j.quantity);
-        final totalBuyAfterEdit = otherBuyQty + nextQty;
-        if (totalBuyAfterEdit + _kQtyEpsilon < soldQtyByStock) {
-          if (!mounted) return;
-          final soldStr = soldQtyByStock % 1 == 0
-              ? soldQtyByStock.toInt().toString()
-              : soldQtyByStock.toString();
-          setState(
-            () => _qtyError = '해당 종목은 이미 총 $soldStr주 매도되어 수량을 더 줄일 수 없습니다',
-          );
-          return;
-        }
-      }
-    }
-    // 매도 수량 초과 검증 (새 매도 및 수정 모두)
-    if (_action == '매도') {
-      if (_ticker.trim().isNotEmpty) {
-        final latestRemaining = await _computeRemainingQtyForStock(
-          ticker: _ticker,
-          market: _rawMarket.isNotEmpty ? _rawMarket : _market,
-          excludingSellId: widget.existing?.id,
-        );
-        if (mounted) setState(() => _remainingQty = latestRemaining);
-      }
-      final enteredQty = double.tryParse(_quantityCtrl.text.trim()) ?? 0;
-      if (enteredQty > _remainingQty + _kQtyEpsilon) {
-        final maxStr = _remainingQty % 1 == 0
-            ? _remainingQty.toInt().toString()
-            : _remainingQty.toString();
-        setState(() => _qtyError = '$maxStr주 이상 매도할 수 없습니다');
-        return;
-      }
-    }
-    setState(() => _qtyError = null);
-    setState(() => _saving = true);
+    final original = widget.existing;
+    final journal = TradingJournal(
+      id: original?.id ?? _newId,
+      uid: widget.uid,
+      nickname: original?.nickname ?? widget.nickname,
+      stockName: _stockName,
+      ticker: original?.ticker ?? _ticker.toUpperCase(),
+      market:
+          original?.market ?? (_rawMarket.isNotEmpty ? _rawMarket : _market),
+      action: _action,
+      price: double.tryParse(_priceCtrl.text.trim()) ?? 0,
+      quantity: double.tryParse(_quantityCtrl.text.trim()) ?? 0,
+      tradeDate: _tradeDate,
+      note: _noteCtrl.text.trim(),
+      isPublic: _isPublic,
+      likes: original?.likes ?? 0,
+      createdAt: original?.createdAt ?? DateTime.now(),
+      publishedAt: original?.publishedAt,
+      buyPrice:
+          original?.buyPrice ?? widget.initialLinkedBuyJournal?.price ?? 0,
+      linkedBuyId:
+          original?.linkedBuyId ?? widget.initialLinkedBuyJournal?.id ?? '',
+    );
+    setState(() {
+      _saving = true;
+      _qtyError = null;
+    });
     try {
-      double sellBuyPrice = 0;
-      String sellLinkedBuyId = '';
-      if (_action == '매도') {
-        if (widget.existing?.action == '매도') {
-          sellBuyPrice = widget.existing!.buyPrice;
-          sellLinkedBuyId = widget.existing!.linkedBuyId;
-        } else if (widget.initialLinkedBuyJournal != null) {
-          final linkedBuy = widget.initialLinkedBuyJournal!;
-          sellBuyPrice = linkedBuy.price;
-          sellLinkedBuyId = linkedBuy.id;
-        } else if (_ticker.trim().isNotEmpty) {
-          final allJournals = await widget.firestoreService
-              .getMyJournalsByUidOnce(widget.uid);
-          final buysAsc =
-              allJournals
-                  .where(
-                    (j) =>
-                        j.action == '매수' &&
-                        j.ticker == _ticker.toUpperCase() &&
-                        j.market ==
-                            (_rawMarket.isNotEmpty ? _rawMarket : _market),
-                  )
-                  .toList()
-                ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
-          sellBuyPrice = _avgBuyPriceAt(buysAsc, _tradeDate);
-        }
-      }
-
-      final journal = TradingJournal(
-        id: widget.existing?.id ?? '',
-        uid: widget.uid,
-        nickname: widget.nickname,
-        stockName: _stockName,
-        ticker: _ticker.toUpperCase(),
-        market: _rawMarket.isNotEmpty ? _rawMarket : _market,
-        action: _action,
-        price: double.tryParse(_priceCtrl.text.trim()) ?? 0,
-        quantity: double.tryParse(_quantityCtrl.text.trim()) ?? 0,
-        tradeDate: _tradeDate,
-        note: _noteCtrl.text.trim(),
-        isPublic: _isPublic,
-        likes: widget.existing?.likes ?? 0,
-        createdAt: widget.existing?.createdAt ?? DateTime.now(),
-        buyPrice: sellBuyPrice,
-        linkedBuyId: sellLinkedBuyId,
-      );
-      if (widget.existing != null) {
-        await widget.firestoreService.updateJournal(journal);
-        AnalyticsService.instance.logEditJournal();
-      } else {
-        await widget.firestoreService.addJournal(journal);
-        AnalyticsService.instance.logWriteJournal(_action);
-      }
+      await _repository.save(journal, original: original);
+      // Analytics failure must never turn a committed trade into a save error.
+      try {
+        final event = original != null
+            ? AnalyticsService.instance.logEditJournal()
+            : AnalyticsService.instance.logWriteJournal(journal.action);
+        unawaited(event.catchError((Object _) {}));
+      } catch (_) {}
       if (mounted) Navigator.pop(context);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error is JournalWriteException
+                  ? error.message
+                  : '저장하지 못했습니다. 연결을 확인해주세요.',
+            ),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -5612,274 +5582,623 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     );
 
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+    return AbsorbPointer(
+      absorbing: _saving,
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.2)
-                          : Colors.black.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // ── 수량 초과 에러 배너
-                if (_qtyError != null) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: Colors.redAccent.withValues(alpha: 0.35),
+        child: Container(
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+          child: Form(
+            key: _formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.2)
+                            : Colors.black.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.warning_amber_rounded,
-                          size: 16,
-                          color: Colors.redAccent,
+                  ),
+                  const SizedBox(height: 16),
+                  // ── 수량 초과 에러 배너
+                  if (_qtyError != null) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Colors.redAccent.withValues(alpha: 0.35),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _qtyError!,
-                            softWrap: true,
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.warning_amber_rounded,
+                            size: 16,
+                            color: Colors.redAccent,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _qtyError!,
+                              softWrap: true,
+                              style: TextStyle(
+                                color: Colors.redAccent,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  Text(
+                    widget.existing != null ? '매매일지 수정' : '매매일지 작성',
+                    style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black87,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 17,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  // 매매 구분
+                  Text(
+                    '매매 구분',
+                    style: TextStyle(
+                      color: labelColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: _actions.map((a) {
+                      final selected = _action == a;
+                      final color = a == '매수'
+                          ? const Color(0xFF10B981)
+                          : a == '매도'
+                          ? Colors.redAccent
+                          : Colors.orangeAccent;
+                      // 기존 항목 수정 시 액션 변경 불가
+                      final isLocked =
+                          (widget.existing != null &&
+                              a != widget.existing!.action) ||
+                          (_isActionStockLocked && a != _action);
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () {
+                            if (a == _action || isLocked) return;
+                            setState(() {
+                              _action = a;
+                              if (a == '매도' && widget.existing == null) {
+                                _selectedPick = null;
+                                _stockName = '';
+                                _ticker = '';
+                                _rawMarket = '';
+                                _market = 'KR';
+                                _remainingQty = 0;
+                                _priceResult = null;
+                                _manualMode = false;
+                              }
+                            });
+                          },
+                          child: Container(
+                            margin: EdgeInsets.only(
+                              right: a == _actions.last ? 0 : 8,
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isLocked
+                                  ? cs.onSurface.withValues(alpha: 0.02)
+                                  : selected
+                                  ? color.withValues(alpha: 0.15)
+                                  : inputFill,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: selected
+                                    ? color.withValues(alpha: 0.5)
+                                    : Colors.transparent,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                a,
+                                style: TextStyle(
+                                  color: isLocked
+                                      ? cs.onSurface.withValues(alpha: 0.2)
+                                      : selected
+                                      ? color
+                                      : (isDark
+                                            ? Colors.white54
+                                            : Colors.black45),
+                                  fontWeight: selected
+                                      ? FontWeight.w700
+                                      : FontWeight.w400,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+                  // 종목 / 매수포지션 선택
+                  if (widget.existing != null || _action != '매도') ...[
+                    // 매도 수정 시 종목 변경 불가 — 잠긴 표시
+                    if (widget.existing != null && _action == '매도') ...[
+                      Text(
+                        '종목',
+                        style: TextStyle(
+                          color: labelColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.onSurface.withValues(alpha: 0.04),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: cs.onSurface.withValues(alpha: 0.08),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.lock_outline,
+                              size: 14,
+                              color: cs.onSurface.withValues(alpha: 0.3),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _stockName,
+                                style: TextStyle(
+                                  color: cs.onSurface.withValues(alpha: 0.6),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (_ticker.isNotEmpty)
+                              Text(
+                                _ticker,
+                                style: TextStyle(
+                                  color: cs.onSurface.withValues(alpha: 0.3),
+                                  fontSize: 12,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ] else if (_isActionStockLocked) ...[
+                      Text(
+                        '종목',
+                        style: TextStyle(
+                          color: labelColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: cs.onSurface.withValues(alpha: 0.04),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: cs.onSurface.withValues(alpha: 0.08),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.lock_outline,
+                              size: 14,
+                              color: cs.onSurface.withValues(alpha: 0.3),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _stockName,
+                                style: TextStyle(
+                                  color: cs.onSurface.withValues(alpha: 0.6),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (_ticker.isNotEmpty)
+                              Text(
+                                _ticker,
+                                style: TextStyle(
+                                  color: cs.onSurface.withValues(alpha: 0.3),
+                                  fontSize: 12,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ] else ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '종목',
                             style: TextStyle(
-                              color: Colors.redAccent,
-                              fontSize: 13,
+                              color: labelColor,
+                              fontSize: 12,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                Text(
-                  widget.existing != null ? '매매일지 수정' : '매매일지 작성',
-                  style: TextStyle(
-                    color: isDark ? Colors.white : Colors.black87,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 17,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                // 매매 구분
-                Text(
-                  '매매 구분',
-                  style: TextStyle(
-                    color: labelColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: _actions.map((a) {
-                    final selected = _action == a;
-                    final color = a == '매수'
-                        ? const Color(0xFF10B981)
-                        : a == '매도'
-                        ? Colors.redAccent
-                        : Colors.orangeAccent;
-                    // 기존 항목 수정 시 액션 변경 불가
-                    final isLocked =
-                        (widget.existing != null &&
-                            a != widget.existing!.action) ||
-                        (_isActionStockLocked && a != _action);
-                    return Expanded(
-                      child: GestureDetector(
-                        onTap: () {
-                          if (a == _action || isLocked) return;
-                          setState(() {
-                            _action = a;
-                            if (a == '매도' && widget.existing == null) {
-                              _selectedPick = null;
-                              _stockName = '';
-                              _ticker = '';
-                              _rawMarket = '';
-                              _market = 'KR';
-                              _remainingQty = 0;
-                              _priceResult = null;
-                              _manualMode = false;
-                            }
-                          });
-                        },
-                        child: Container(
-                          margin: EdgeInsets.only(
-                            right: a == _actions.last ? 0 : 8,
+                          if (_stockName.isNotEmpty || _manualMode)
+                            GestureDetector(
+                              onTap: _clearSelection,
+                              child: Text(
+                                '다시 선택',
+                                style: TextStyle(
+                                  color: cs.onSurface.withValues(alpha: 0.4),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      // ① 아무것도 선택 안 됐을 때: 두 버튼 노출
+                      if (_stockName.isEmpty && !_manualMode)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: _openStockPicker,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 13,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFF10B981,
+                                    ).withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: const Color(
+                                        0xFF10B981,
+                                      ).withValues(alpha: 0.3),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(
+                                        Icons.star_outline,
+                                        size: 15,
+                                        color: Color(0xFF10B981),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '추천주에서 선택',
+                                        style: TextStyle(
+                                          color: const Color(0xFF10B981),
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() => _manualMode = true),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 13,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: inputFill,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.edit_outlined,
+                                        size: 15,
+                                        color: isDark
+                                            ? Colors.white54
+                                            : Colors.black45,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '직접 입력',
+                                        style: TextStyle(
+                                          color: isDark
+                                              ? Colors.white54
+                                              : Colors.black45,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      // ② 추천주에서 선택된 경우
+                      else if (_selectedPick != null && !_manualMode)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
                           ),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
-                            color: isLocked
-                                ? cs.onSurface.withValues(alpha: 0.02)
-                                : selected
-                                ? color.withValues(alpha: 0.15)
-                                : inputFill,
+                            color: const Color(
+                              0xFF10B981,
+                            ).withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: selected
-                                  ? color.withValues(alpha: 0.5)
-                                  : Colors.transparent,
+                              color: const Color(
+                                0xFF10B981,
+                              ).withValues(alpha: 0.3),
                             ),
                           ),
-                          child: Center(
-                            child: Text(
-                              a,
-                              style: TextStyle(
-                                color: isLocked
-                                    ? cs.onSurface.withValues(alpha: 0.2)
-                                    : selected
-                                    ? color
-                                    : (isDark
-                                          ? Colors.white54
-                                          : Colors.black45),
-                                fontWeight: selected
-                                    ? FontWeight.w700
-                                    : FontWeight.w400,
-                                fontSize: 14,
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.star,
+                                size: 14,
+                                color: Color(0xFF10B981),
                               ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _stockName,
+                                      style: TextStyle(
+                                        color: isDark
+                                            ? Colors.white
+                                            : Colors.black87,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    if (_ticker.isNotEmpty)
+                                      Text(
+                                        _ticker,
+                                        style: TextStyle(
+                                          color: isDark
+                                              ? Colors.white54
+                                              : Colors.black45,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: cs.onSurface.withValues(alpha: 0.07),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  _market,
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? Colors.white54
+                                        : Colors.black45,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      // ②-1 상세페이지에서 자동 주입된 종목
+                      else if (_stockName.isNotEmpty && !_manualMode)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFF10B981,
+                            ).withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: const Color(
+                                0xFF10B981,
+                              ).withValues(alpha: 0.3),
                             ),
                           ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.check_circle_outline,
+                                size: 14,
+                                color: Color(0xFF10B981),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _stockName,
+                                      style: TextStyle(
+                                        color: isDark
+                                            ? Colors.white
+                                            : Colors.black87,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                    if (_ticker.isNotEmpty)
+                                      Text(
+                                        _ticker,
+                                        style: TextStyle(
+                                          color: isDark
+                                              ? Colors.white54
+                                              : Colors.black45,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: cs.onSurface.withValues(alpha: 0.07),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  _market,
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? Colors.white54
+                                        : Colors.black45,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      // ③ 직접 입력 모드 (전체 종목 검색)
+                      else
+                        StockSearchField(
+                          initialTicker: _ticker,
+                          initialName: _stockName,
+                          onSelected: (ticker, name, market) {
+                            setState(() {
+                              _ticker = ticker;
+                              _stockName = name;
+                              _rawMarket = market; // KS/KQ/US
+                              _market = market == 'US' ? 'US' : 'KR';
+                              _priceResult = null;
+                            });
+                            _fetchPrice();
+                          },
                         ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 14),
-                // 종목 / 매수포지션 선택
-                if (widget.existing != null || _action != '매도') ...[
-                  // 매도 수정 시 종목 변경 불가 — 잠긴 표시
-                  if (widget.existing != null && _action == '매도') ...[
-                    Text(
-                      '종목',
-                      style: TextStyle(
-                        color: labelColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: cs.onSurface.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: cs.onSurface.withValues(alpha: 0.08),
+                      // 현재가 표시 (종목 선택 후)
+                      if (_ticker.isNotEmpty &&
+                          (_priceResult != null || _fetchingPrice))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: _fetchingPrice
+                              ? Row(
+                                  children: [
+                                    const SizedBox(
+                                      width: 12,
+                                      height: 12,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 1.5,
+                                        color: Color(0xFF10B981),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      '현재가 조회 중...',
+                                      style: TextStyle(
+                                        color: cs.onSurface.withValues(
+                                          alpha: 0.35,
+                                        ),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Row(
+                                  children: [
+                                    Text(
+                                      '현재가:',
+                                      style: TextStyle(
+                                        color: cs.onSurface.withValues(
+                                          alpha: 0.4,
+                                        ),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _priceResult!.formattedPrice,
+                                      style: TextStyle(
+                                        color: cs.onSurface.withValues(
+                                          alpha: 0.85,
+                                        ),
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _priceResult!.formattedChange,
+                                      style: TextStyle(
+                                        color: _priceResult!.isUp
+                                            ? const Color(0xFF10B981)
+                                            : Colors.redAccent,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                         ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.lock_outline,
-                            size: 14,
-                            color: cs.onSurface.withValues(alpha: 0.3),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _stockName,
-                              style: TextStyle(
-                                color: cs.onSurface.withValues(alpha: 0.6),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          if (_ticker.isNotEmpty)
-                            Text(
-                              _ticker,
-                              style: TextStyle(
-                                color: cs.onSurface.withValues(alpha: 0.3),
-                                fontSize: 12,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ] else if (_isActionStockLocked) ...[
-                    Text(
-                      '종목',
-                      style: TextStyle(
-                        color: labelColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: cs.onSurface.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: cs.onSurface.withValues(alpha: 0.08),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.lock_outline,
-                            size: 14,
-                            color: cs.onSurface.withValues(alpha: 0.3),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _stockName,
-                              style: TextStyle(
-                                color: cs.onSurface.withValues(alpha: 0.6),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          if (_ticker.isNotEmpty)
-                            Text(
-                              _ticker,
-                              style: TextStyle(
-                                color: cs.onSurface.withValues(alpha: 0.3),
-                                fontSize: 12,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
+                    ], // else (일반 종목 선택)
                   ] else ...[
+                    // 매도 신규: 종목 기준으로 선택
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -5891,9 +6210,16 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (_stockName.isNotEmpty || _manualMode)
+                        if (_stockName.isNotEmpty && !_isActionStockLocked)
                           GestureDetector(
-                            onTap: _clearSelection,
+                            onTap: () => setState(() {
+                              _stockName = '';
+                              _ticker = '';
+                              _rawMarket = '';
+                              _market = 'KR';
+                              _remainingQty = 0;
+                              _priceResult = null;
+                            }),
                             child: Text(
                               '다시 선택',
                               style: TextStyle(
@@ -5905,260 +6231,130 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                       ],
                     ),
                     const SizedBox(height: 6),
-                    // ① 아무것도 선택 안 됐을 때: 두 버튼 노출
-                    if (_stockName.isEmpty && !_manualMode)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: _openStockPicker,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 13,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(
-                                    0xFF10B981,
-                                  ).withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: const Color(
-                                      0xFF10B981,
-                                    ).withValues(alpha: 0.3),
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(
-                                      Icons.star_outline,
-                                      size: 15,
-                                      color: Color(0xFF10B981),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      '추천주에서 선택',
-                                      style: TextStyle(
-                                        color: const Color(0xFF10B981),
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
+                    if (_stockName.isEmpty && !_isActionStockLocked)
+                      GestureDetector(
+                        onTap: _openSellStockPicker,
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.redAccent.withValues(alpha: 0.3),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => setState(() => _manualMode = true),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 13,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.list_alt,
+                                size: 15,
+                                color: Colors.redAccent,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                '보유 종목 선택',
+                                style: TextStyle(
+                                  color: Colors.redAccent,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
                                 ),
-                                decoration: BoxDecoration(
-                                  color: inputFill,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: cs.onSurface.withValues(alpha: 0.12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      )
+                    else if (_stockName.isEmpty && _isActionStockLocked)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: cs.onSurface.withValues(alpha: 0.04),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: cs.onSurface.withValues(alpha: 0.08),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.lock_outline,
+                              size: 14,
+                              color: cs.onSurface.withValues(alpha: 0.35),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '종목 고정',
+                              style: TextStyle(
+                                color: cs.onSurface.withValues(alpha: 0.45),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.redAccent.withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.sell_outlined,
+                                  size: 13,
+                                  color: Colors.redAccent,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    _stockName,
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black87,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 15,
+                                    ),
                                   ),
                                 ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.edit_outlined,
-                                      size: 15,
+                                if (_ticker.isNotEmpty)
+                                  Text(
+                                    _ticker,
+                                    style: TextStyle(
                                       color: isDark
                                           ? Colors.white54
                                           : Colors.black45,
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      '직접 입력',
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? Colors.white54
-                                            : Colors.black45,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      )
-                    // ② 추천주에서 선택된 경우
-                    else if (_selectedPick != null && !_manualMode)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(
-                            0xFF10B981,
-                          ).withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: const Color(
-                              0xFF10B981,
-                            ).withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.star,
-                              size: 14,
-                              color: Color(0xFF10B981),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _stockName,
-                                    style: TextStyle(
-                                      color: isDark
-                                          ? Colors.white
-                                          : Colors.black87,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15,
+                                      fontSize: 12,
                                     ),
                                   ),
-                                  if (_ticker.isNotEmpty)
-                                    Text(
-                                      _ticker,
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? Colors.white54
-                                            : Colors.black45,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                ],
-                              ),
+                              ],
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: cs.onSurface.withValues(alpha: 0.07),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                _market,
-                                style: TextStyle(
-                                  color: isDark
-                                      ? Colors.white54
-                                      : Colors.black45,
-                                  fontSize: 12,
-                                ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '보유 잔량 ${_remainingQty % 1 == 0 ? _remainingQty.toInt() : _remainingQty}주',
+                              style: TextStyle(
+                                color: cs.onSurface.withValues(alpha: 0.5),
+                                fontSize: 12,
                               ),
                             ),
                           ],
                         ),
-                      )
-                    // ②-1 상세페이지에서 자동 주입된 종목
-                    else if (_stockName.isNotEmpty && !_manualMode)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(
-                            0xFF10B981,
-                          ).withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: const Color(
-                              0xFF10B981,
-                            ).withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.check_circle_outline,
-                              size: 14,
-                              color: Color(0xFF10B981),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _stockName,
-                                    style: TextStyle(
-                                      color: isDark
-                                          ? Colors.white
-                                          : Colors.black87,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                  if (_ticker.isNotEmpty)
-                                    Text(
-                                      _ticker,
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? Colors.white54
-                                            : Colors.black45,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: cs.onSurface.withValues(alpha: 0.07),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                _market,
-                                style: TextStyle(
-                                  color: isDark
-                                      ? Colors.white54
-                                      : Colors.black45,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    // ③ 직접 입력 모드 (전체 종목 검색)
-                    else
-                      StockSearchField(
-                        initialTicker: _ticker,
-                        initialName: _stockName,
-                        onSelected: (ticker, name, market) {
-                          setState(() {
-                            _ticker = ticker;
-                            _stockName = name;
-                            _rawMarket = market; // KS/KQ/US
-                            _market = market == 'US' ? 'US' : 'KR';
-                            _priceResult = null;
-                          });
-                          _fetchPrice();
-                        },
                       ),
-                    // 현재가 표시 (종목 선택 후)
                     if (_ticker.isNotEmpty &&
                         (_priceResult != null || _fetchingPrice))
                       Padding(
@@ -6222,317 +6418,164 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                                 ],
                               ),
                       ),
-                  ], // else (일반 종목 선택)
-                ] else ...[
-                  // 매도 신규: 종목 기준으로 선택
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '종목',
-                        style: TextStyle(
-                          color: labelColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      if (_stockName.isNotEmpty && !_isActionStockLocked)
-                        GestureDetector(
-                          onTap: () => setState(() {
-                            _stockName = '';
-                            _ticker = '';
-                            _rawMarket = '';
-                            _market = 'KR';
-                            _remainingQty = 0;
-                            _priceResult = null;
-                          }),
-                          child: Text(
-                            '다시 선택',
-                            style: TextStyle(
-                              color: cs.onSurface.withValues(alpha: 0.4),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  if (_stockName.isEmpty && !_isActionStockLocked)
-                    GestureDetector(
-                      onTap: _openSellStockPicker,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent.withValues(alpha: 0.06),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.redAccent.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.list_alt,
-                              size: 15,
-                              color: Colors.redAccent,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '보유 종목 선택',
-                              style: TextStyle(
-                                color: Colors.redAccent,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else if (_stockName.isEmpty && _isActionStockLocked)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      decoration: BoxDecoration(
-                        color: cs.onSurface.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: cs.onSurface.withValues(alpha: 0.08),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.lock_outline,
-                            size: 14,
-                            color: cs.onSurface.withValues(alpha: 0.35),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            '종목 고정',
-                            style: TextStyle(
-                              color: cs.onSurface.withValues(alpha: 0.45),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.redAccent.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Colors.redAccent.withValues(alpha: 0.25),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                  ],
+                  const SizedBox(height: 12),
+                  // 가격, 수량 (기타는 생략)
+                  if (_action != '기타')
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Icon(
-                                Icons.sell_outlined,
-                                size: 13,
-                                color: Colors.redAccent,
-                              ),
-                              const SizedBox(width: 6),
-                              Expanded(
-                                child: Text(
-                                  _stockName,
-                                  style: TextStyle(
-                                    color: isDark
-                                        ? Colors.white
-                                        : Colors.black87,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 15,
-                                  ),
+                              Text(
+                                _action == '매수'
+                                    ? '매수가'
+                                    : _action == '매도'
+                                    ? '매도가'
+                                    : '가격 (선택)',
+                                style: TextStyle(
+                                  color: labelColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              if (_ticker.isNotEmpty)
-                                Text(
-                                  _ticker,
-                                  style: TextStyle(
-                                    color: isDark
-                                        ? Colors.white54
-                                        : Colors.black45,
-                                    fontSize: 12,
-                                  ),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                key: const ValueKey('journal-price'),
+                                controller: _priceCtrl,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                style: TextStyle(
+                                  color: isDark ? Colors.white : Colors.black87,
                                 ),
+                                decoration: inputDeco('0'),
+                                validator: (v) {
+                                  if (v != null &&
+                                      v.trim().isNotEmpty &&
+                                      double.tryParse(v.trim()) == null) {
+                                    return '숫자 입력';
+                                  }
+                                  return null;
+                                },
+                              ),
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '보유 잔량 ${_remainingQty % 1 == 0 ? _remainingQty.toInt() : _remainingQty}주',
-                            style: TextStyle(
-                              color: cs.onSurface.withValues(alpha: 0.5),
-                              fontSize: 12,
-                            ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _action == '매도' && _remainingQty > 0
+                                    ? '수량 (최대 ${_remainingQty % 1 == 0 ? _remainingQty.toInt() : _remainingQty}주)'
+                                    : '수량',
+                                style: TextStyle(
+                                  color: labelColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                key: const ValueKey('journal-quantity'),
+                                controller: _quantityCtrl,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                style: TextStyle(
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                                decoration: inputDeco('0'),
+                                onChanged: (_) {
+                                  if (_qtyError != null) {
+                                    setState(() => _qtyError = null);
+                                  }
+                                },
+                                validator: (v) {
+                                  final text = v?.trim() ?? '';
+                                  if (text.isEmpty) return '수량 입력';
+                                  final qty = double.tryParse(text);
+                                  if (qty == null) return '숫자 입력';
+                                  if (qty <= 0) return '0보다 크게 입력';
+                                  return null;
+                                },
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                  // 거래일 (기타는 생략)
+                  if (_action != '기타') ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      '거래일',
+                      style: TextStyle(
+                        color: labelColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                  if (_ticker.isNotEmpty &&
-                      (_priceResult != null || _fetchingPrice))
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: _fetchingPrice
-                          ? Row(
-                              children: [
-                                const SizedBox(
-                                  width: 12,
-                                  height: 12,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 1.5,
-                                    color: Color(0xFF10B981),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '현재가 조회 중...',
-                                  style: TextStyle(
-                                    color: cs.onSurface.withValues(alpha: 0.35),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            )
-                          : Row(
-                              children: [
-                                Text(
-                                  '현재가:',
-                                  style: TextStyle(
-                                    color: cs.onSurface.withValues(alpha: 0.4),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  _priceResult!.formattedPrice,
-                                  style: TextStyle(
-                                    color: cs.onSurface.withValues(alpha: 0.85),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _priceResult!.formattedChange,
-                                  style: TextStyle(
-                                    color: _priceResult!.isUp
-                                        ? const Color(0xFF10B981)
-                                        : Colors.redAccent,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                ],
-                const SizedBox(height: 12),
-                // 가격, 수량 (기타는 생략)
-                if (_action != '기타')
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: _isEditingTradeDateLocked ? null : _pickDate,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: inputFill,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
                           children: [
-                            Text(
-                              _action == '매수'
-                                  ? '매수가'
-                                  : _action == '매도'
-                                  ? '매도가'
-                                  : '가격 (선택)',
-                              style: TextStyle(
-                                color: labelColor,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
+                            Icon(
+                              Icons.calendar_today_outlined,
+                              size: 16,
+                              color: isDark ? Colors.white38 : Colors.black38,
                             ),
-                            const SizedBox(height: 6),
-                            TextFormField(
-                              controller: _priceCtrl,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
+                            const SizedBox(width: 8),
+                            Text(
+                              DateFormat('yyyy년 MM월 dd일').format(_tradeDate),
                               style: TextStyle(
                                 color: isDark ? Colors.white : Colors.black87,
+                                fontSize: 14,
                               ),
-                              decoration: inputDeco('0'),
-                              validator: (v) {
-                                if (v != null &&
-                                    v.trim().isNotEmpty &&
-                                    double.tryParse(v.trim()) == null) {
-                                  return '숫자 입력';
-                                }
-                                return null;
-                              },
                             ),
+                            if (_isEditingTradeDateLocked) ...[
+                              const SizedBox(width: 8),
+                              Icon(
+                                Icons.lock_outline,
+                                size: 14,
+                                color: cs.onSurface.withValues(alpha: 0.4),
+                              ),
+                            ],
                           ],
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _action == '매도' && _remainingQty > 0
-                                  ? '수량 (최대 ${_remainingQty % 1 == 0 ? _remainingQty.toInt() : _remainingQty}주)'
-                                  : '수량',
-                              style: TextStyle(
-                                color: labelColor,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            TextFormField(
-                              controller: _quantityCtrl,
-                              keyboardType:
-                                  const TextInputType.numberWithOptions(
-                                    decimal: true,
-                                  ),
-                              style: TextStyle(
-                                color: isDark ? Colors.white : Colors.black87,
-                              ),
-                              decoration: inputDeco('0'),
-                              onChanged: (_) {
-                                if (_qtyError != null) {
-                                  setState(() => _qtyError = null);
-                                }
-                              },
-                              validator: (v) {
-                                final text = v?.trim() ?? '';
-                                if (text.isEmpty) return '수량 입력';
-                                final qty = double.tryParse(text);
-                                if (qty == null) return '숫자 입력';
-                                if (qty <= 0) return '0보다 크게 입력';
-                                return null;
-                              },
-                            ),
-                          ],
+                    ),
+                    if (_isEditingTradeDateLocked) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '수정 시 거래일은 변경할 수 없습니다.',
+                        style: TextStyle(
+                          color: cs.onSurface.withValues(alpha: 0.45),
+                          fontSize: 11,
                         ),
                       ),
                     ],
-                  ),
-                // 거래일 (기타는 생략)
-                if (_action != '기타') ...[
+                  ],
                   const SizedBox(height: 12),
+                  // 메모
                   Text(
-                    '거래일',
+                    '메모 (선택)',
                     style: TextStyle(
                       color: labelColor,
                       fontSize: 12,
@@ -6540,167 +6583,110 @@ class _JournalFormSheetState extends State<_JournalFormSheet> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  GestureDetector(
-                    onTap: _isEditingTradeDateLocked ? null : _pickDate,
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: inputFill,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.calendar_today_outlined,
-                            size: 16,
-                            color: isDark ? Colors.white38 : Colors.black38,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            DateFormat('yyyy년 MM월 dd일').format(_tradeDate),
-                            style: TextStyle(
-                              color: isDark ? Colors.white : Colors.black87,
-                              fontSize: 14,
-                            ),
-                          ),
-                          if (_isEditingTradeDateLocked) ...[
-                            const SizedBox(width: 8),
-                            Icon(
-                              Icons.lock_outline,
-                              size: 14,
-                              color: cs.onSurface.withValues(alpha: 0.4),
-                            ),
-                          ],
-                        ],
-                      ),
+                  TextFormField(
+                    key: const ValueKey('journal-note'),
+                    controller: _noteCtrl,
+                    maxLines: 3,
+                    style: TextStyle(
+                      color: isDark ? Colors.white : Colors.black87,
+                      fontSize: 13,
                     ),
+                    decoration: inputDeco(
+                      '매매 이유, 전략, 느낀 점 등을 적어보세요',
+                    ).copyWith(contentPadding: const EdgeInsets.all(14)),
                   ),
-                  if (_isEditingTradeDateLocked) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      '수정 시 거래일은 변경할 수 없습니다.',
-                      style: TextStyle(
-                        color: cs.onSurface.withValues(alpha: 0.45),
-                        fontSize: 11,
-                      ),
+                  const SizedBox(height: 14),
+                  // 공개 여부
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
                     ),
-                  ],
-                ],
-                const SizedBox(height: 12),
-                // 메모
-                Text(
-                  '메모 (선택)',
-                  style: TextStyle(
-                    color: labelColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                TextFormField(
-                  controller: _noteCtrl,
-                  maxLines: 3,
-                  style: TextStyle(
-                    color: isDark ? Colors.white : Colors.black87,
-                    fontSize: 13,
-                  ),
-                  decoration: inputDeco(
-                    '매매 이유, 전략, 느낀 점 등을 적어보세요',
-                  ).copyWith(contentPadding: const EdgeInsets.all(14)),
-                ),
-                const SizedBox(height: 14),
-                // 공개 여부
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: inputFill,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.public_outlined,
-                        size: 18,
-                        color: _isPublic
-                            ? const Color(0xFF10B981)
-                            : (isDark ? Colors.white38 : Colors.black38),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '커뮤니티에 공유',
-                              style: TextStyle(
-                                color: isDark ? Colors.white : Colors.black87,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              '다른 유저들이 볼 수 있습니다',
-                              style: TextStyle(
-                                color: isDark ? Colors.white38 : Colors.black38,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
+                    decoration: BoxDecoration(
+                      color: inputFill,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.public_outlined,
+                          size: 18,
+                          color: _isPublic
+                              ? const Color(0xFF10B981)
+                              : (isDark ? Colors.white38 : Colors.black38),
                         ),
-                      ),
-                      Switch(
-                        value: _isPublic,
-                        onChanged: (v) => setState(() => _isPublic = v),
-                        activeThumbColor: const Color(0xFF10B981),
-                        activeTrackColor: const Color(
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '커뮤니티에 공유',
+                                style: TextStyle(
+                                  color: isDark ? Colors.white : Colors.black87,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                '다른 유저들이 볼 수 있습니다',
+                                style: TextStyle(
+                                  color: isDark
+                                      ? Colors.white38
+                                      : Colors.black38,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _isPublic,
+                          onChanged: (v) => setState(() => _isPublic = v),
+                          activeThumbColor: const Color(0xFF10B981),
+                          activeTrackColor: const Color(
+                            0xFF10B981,
+                          ).withValues(alpha: 0.4),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: _saving ? null : _save,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF10B981),
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        disabledBackgroundColor: const Color(
                           0xFF10B981,
                         ).withValues(alpha: 0.4),
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: _saving ? null : _save,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF10B981),
-                      foregroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      disabledBackgroundColor: const Color(
-                        0xFF10B981,
-                      ).withValues(alpha: 0.4),
+                      child: _saving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.black,
+                              ),
+                            )
+                          : Text(
+                              widget.existing != null ? '수정 완료' : '저장',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 15,
+                              ),
+                            ),
                     ),
-                    child: _saving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.black,
-                            ),
-                          )
-                        : Text(
-                            widget.existing != null ? '수정 완료' : '저장',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15,
-                            ),
-                          ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

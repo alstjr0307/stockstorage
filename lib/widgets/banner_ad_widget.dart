@@ -85,9 +85,12 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<bool>(
-      valueListenable: AdService.premiumListenable,
-      builder: (_, _, _) => _buildAd(),
+    return ListenableBuilder(
+      listenable: Listenable.merge([
+        AdService.premiumListenable,
+        AdService.readinessListenable,
+      ]),
+      builder: (_, _) => _buildAd(),
     );
   }
 

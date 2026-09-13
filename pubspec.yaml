@@ -111,3 +111,8 @@ flutter:
           weight: 700
         - asset: assets/fonts/Pretendard-ExtraBold.ttf
           weight: 800
+
+# Backport only the Firestore transaction completion race fix; keep native SDK versions.
+dependency_overrides:
+  cloud_firestore_platform_interface:
+    path: third_party/cloud_firestore_platform_interface

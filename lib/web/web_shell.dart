@@ -7,18 +7,25 @@ import '../screens/admin_screen.dart';
 import '../screens/calendar_screen.dart';
 import '../screens/community_screen.dart';
 import '../screens/home_screen.dart' show StockPicksListScreen;
-import '../screens/index_detail_screen.dart';
+import 'web_indices_page.dart';
 import '../screens/market_analysis_screen.dart';
 import '../screens/market_sentiment_screen.dart';
 import '../screens/night_futures_chart_screen.dart';
 import '../screens/stock_ai_analysis_list_screen.dart';
 import '../services/auth_service.dart';
+import '../widgets/lazy_indexed_stack.dart';
+import '../models/shared_stock_link.dart';
+import '../screens/stock_detail_screen.dart';
+import '../services/analytics_service.dart';
 import 'web_login_sheet.dart';
 
 /// 웹 전용 셸 — 8개 핵심 기능만 노출한다.
 /// 넓은 화면: 좌측 NavigationRail / 좁은 화면: Drawer.
 class WebShell extends StatefulWidget {
-  const WebShell({super.key});
+  const WebShell({super.key, this.auth, this.pageBuilder});
+
+  final FirebaseAuth? auth;
+  final IndexedWidgetBuilder? pageBuilder;
 
   @override
   State<WebShell> createState() => _WebShellState();
@@ -27,21 +34,54 @@ class WebShell extends StatefulWidget {
 class _WebShellState extends State<WebShell> {
   int _index = 0;
   bool _isAdmin = false;
-  // 관리자 패널은 처음 열 때까지 만들지 않는다(탭마다 Firestore 조회가 있다).
-  bool _adminOpened = false;
+  late final FirebaseAuth _auth;
+  String? _userId;
   StreamSubscription<User?>? _authSub;
 
   @override
   void initState() {
     super.initState();
-    _isAdmin = _adminUid(FirebaseAuth.instance.currentUser);
-    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+    _auth = widget.auth ?? FirebaseAuth.instance;
+    _userId = _auth.currentUser?.uid;
+    _isAdmin = _adminUid(_auth.currentUser);
+    // Parse the current app's query also on preview/custom domains. External
+    // native links still require the exact public host in SharedStockLink.
+    final sharedStock = SharedStockLink.parse(
+      Uri.https('stockstorage-web.web.app', '/', Uri.base.queryParameters),
+      webEntry: true,
+    );
+    if (sharedStock != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        unawaited(
+          AnalyticsService.instance.logStockJourney(
+            'stock_share_landing',
+            ticker: sharedStock.ticker,
+            market: sharedStock.market,
+            source: 'web_link',
+          ),
+        );
+        Navigator.of(context).push(
+          stockDetailRoute(
+            stockPickForGeneralDetail(
+              ticker: sharedStock.ticker,
+              name: sharedStock.name.isEmpty
+                  ? sharedStock.ticker
+                  : sharedStock.name,
+              market: sharedStock.market,
+            ),
+            enablePickFeatures: false,
+          ),
+        );
+      });
+    }
+    _authSub = _auth.authStateChanges().listen((user) {
       final isAdmin = _adminUid(user);
-      if (isAdmin == _isAdmin || !mounted) return;
+      if (!mounted || (user?.uid == _userId && isAdmin == _isAdmin)) return;
       setState(() {
+        _userId = user?.uid;
         _isAdmin = isAdmin;
         if (!isAdmin) {
-          _adminOpened = false;
           if (_index >= _dests.length) _index = 0;
         }
       });
@@ -57,21 +97,20 @@ class _WebShellState extends State<WebShell> {
   static bool _adminUid(User? user) =>
       user != null && AuthService.adminUids.contains(user.uid);
 
-  static const _adminDest =
-      (_IconPair(Icons.shield_outlined, Icons.shield), '관리자');
+  static const _adminDest = (
+    _IconPair(Icons.shield_outlined, Icons.shield),
+    '관리자',
+  );
 
   List<(_IconPair, String)> get _visibleDests => [
-        ..._dests,
-        if (_isAdmin) _adminDest,
-      ];
+    ..._dests,
+    if (_isAdmin) _adminDest,
+  ];
 
   List<Widget> get _visiblePages => [
-        ..._pages,
-        if (_isAdmin)
-          _adminOpened
-              ? const AdminScreen(embedded: true)
-              : const SizedBox.shrink(),
-      ];
+    ..._pages,
+    if (_isAdmin) const AdminScreen(embedded: true),
+  ];
 
   bool get _onAdminPage => _isAdmin && _index == _dests.length;
 
@@ -86,22 +125,21 @@ class _WebShellState extends State<WebShell> {
     (_IconPair(Icons.psychology_outlined, Icons.psychology), '시장심리지표'),
   ];
 
-  // IndexedStack 으로 각 화면 상태를 유지한다.
+  // LazyIndexedStack mounts only visited pages and preserves their state.
   static const _pages = <Widget>[
     StockAiAnalysisListScreen(),
     StockPicksListScreen(),
     CommunityScreen(),
     MarketAnalysisScreen(),
     _WebNightFuturesPage(),
-    _WebIndicesPage(),
+    WebIndicesPage(),
     CalendarScreen(),
     MarketSentimentScreen(),
   ];
 
   void _select(int i) => setState(() {
-        _index = i;
-        if (_isAdmin && i == _dests.length) _adminOpened = true;
-      });
+    _index = i;
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -115,7 +153,13 @@ class _WebShellState extends State<WebShell> {
         final body = Center(
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: _onAdminPage ? 1040 : 720),
-            child: IndexedStack(index: _index, children: _visiblePages),
+            child: LazyIndexedStack(
+              key: ValueKey(_userId),
+              index: _index,
+              itemCount: _visibleDests.length,
+              itemBuilder:
+                  widget.pageBuilder ?? (_, index) => _visiblePages[index],
+            ),
           ),
         );
 
@@ -127,6 +171,7 @@ class _WebShellState extends State<WebShell> {
                   index: _index,
                   dests: dests,
                   onSelect: _select,
+                  auth: _auth,
                 ),
                 const VerticalDivider(width: 1),
                 Expanded(child: body),
@@ -138,7 +183,7 @@ class _WebShellState extends State<WebShell> {
         return Scaffold(
           appBar: AppBar(
             title: Text(dests[_index].$2),
-            actions: const [_LoginAction()],
+            actions: [_LoginAction(auth: _auth)],
           ),
           drawer: Drawer(
             child: SafeArea(
@@ -148,9 +193,7 @@ class _WebShellState extends State<WebShell> {
                   for (var i = 0; i < dests.length; i++)
                     ListTile(
                       leading: Icon(
-                        i == _index
-                            ? dests[i].$1.active
-                            : dests[i].$1.inactive,
+                        i == _index ? dests[i].$1.active : dests[i].$1.inactive,
                       ),
                       title: Text(dests[i].$2),
                       selected: i == _index,
@@ -175,10 +218,12 @@ class _WebRail extends StatelessWidget {
     required this.index,
     required this.dests,
     required this.onSelect,
+    required this.auth,
   });
   final int index;
   final List<(_IconPair, String)> dests;
   final ValueChanged<int> onSelect;
+  final FirebaseAuth auth;
 
   @override
   Widget build(BuildContext context) {
@@ -194,8 +239,10 @@ class _WebRail extends StatelessWidget {
               children: [
                 for (var i = 0; i < dests.length; i++)
                   Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     child: _RailTile(
                       icon: i == index
                           ? dests[i].$1.active
@@ -209,9 +256,9 @@ class _WebRail extends StatelessWidget {
             ),
           ),
           const Divider(height: 1),
-          const Padding(
+          Padding(
             padding: EdgeInsets.all(12),
-            child: _LoginAction(expanded: true),
+            child: _LoginAction(expanded: true, auth: auth),
           ),
         ],
       ),
@@ -244,9 +291,11 @@ class _RailTile extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           child: Row(
             children: [
-              Icon(icon,
-                  size: 20,
-                  color: selected ? scheme.primary : scheme.onSurfaceVariant),
+              Icon(
+                icon,
+                size: 20,
+                color: selected ? scheme.primary : scheme.onSurfaceVariant,
+              ),
               const SizedBox(width: 12),
               Text(
                 label,
@@ -279,8 +328,11 @@ class _BrandHeader extends StatelessWidget {
               color: const Color(0xFF10B981),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.candlestick_chart,
-                color: Colors.white, size: 20),
+            child: const Icon(
+              Icons.candlestick_chart,
+              color: Colors.white,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 10),
           const Text(
@@ -295,13 +347,15 @@ class _BrandHeader extends StatelessWidget {
 
 /// 로그인 상태에 따라 로그인 버튼 / 프로필(로그아웃) 표시.
 class _LoginAction extends StatelessWidget {
-  const _LoginAction({this.expanded = false});
+  const _LoginAction({this.expanded = false, required this.auth});
   final bool expanded;
+  final FirebaseAuth auth;
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+      stream: auth.authStateChanges(),
+      initialData: auth.currentUser,
       builder: (context, snapshot) {
         final user = snapshot.data;
         if (user == null) {
@@ -317,7 +371,7 @@ class _LoginAction extends StatelessWidget {
         }
         return PopupMenuButton<String>(
           onSelected: (v) {
-            if (v == 'logout') FirebaseAuth.instance.signOut();
+            if (v == 'logout') auth.signOut();
           },
           itemBuilder: (_) => const [
             PopupMenuItem(value: 'logout', child: Text('로그아웃')),
@@ -346,50 +400,6 @@ class _LoginAction extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-/// 실시간 지수 랜딩 — 주요 지수 타일 → 상세로 이동.
-class _WebIndicesPage extends StatelessWidget {
-  const _WebIndicesPage();
-
-  static const _entries = <(String, String)>[
-    ('KOSPI', '^KS11'),
-    ('KOSDAQ', '^KQ11'),
-    ('나스닥100 선물', 'NQ=F'),
-    ('S&P500', '^GSPC'),
-    ('나스닥 종합', '^IXIC'),
-    ('달러/원', 'KRW=X'),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('실시간 지수')),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: _entries.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 8),
-        itemBuilder: (context, i) {
-          final (name, symbol) = _entries[i];
-          return Card(
-            margin: EdgeInsets.zero,
-            child: ListTile(
-              leading: const Icon(Icons.show_chart, color: Color(0xFF10B981)),
-              title: Text(name,
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              subtitle: Text(symbol),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => IndexDetailScreen(name: name, symbol: symbol),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 }
@@ -423,8 +433,9 @@ class _WebNightFuturesPageState extends State<_WebNightFuturesPage> {
         Expanded(
           child: NightFuturesChartScreen(
             key: ValueKey(_kosdaq),
-            collection:
-                _kosdaq ? 'night_futures_prices_kosdaq' : 'night_futures_prices',
+            collection: _kosdaq
+                ? 'night_futures_prices_kosdaq'
+                : 'night_futures_prices',
             title: _kosdaq ? '코스닥 야간선물' : '코스피 야간선물',
           ),
         ),

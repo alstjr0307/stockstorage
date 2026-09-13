@@ -15,6 +15,9 @@ import 'package:timeago/timeago.dart' as timeago;
 import 'package:url_launcher/url_launcher.dart';
 import '../models/comment.dart';
 import '../models/stock_pick.dart';
+import '../models/shared_stock_link.dart';
+import '../web/web_login_sheet.dart';
+import 'login_screen.dart';
 import '../services/ad_service.dart';
 import '../services/ai_analysis_ad_gate.dart';
 import '../services/analytics_service.dart';
@@ -186,6 +189,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
 
   // 관심종목 로컬 상태 (낙관적 업데이트용)
   bool? _isFavoriteStock;
+  bool _savingFavoriteStock = false;
   StreamSubscription<bool>? _favoriteStockSub;
 
   // 뉴스
@@ -249,8 +253,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
     _loadDiscussion();
     _fetchMaxPain();
     _subscribePick();
-    // 관심종목 탭에서 열리면 이미 등록된 상태 — 스트림 응답 전 깜빡임 방지
-    if (!widget.enablePickFeatures) _isFavoriteStock = true;
+    // 검색·공유 링크에서도 열리므로 저장 여부는 계정 스트림으로 확인한다.
     _subscribeFavoriteStock();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -259,6 +262,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   }
 
   void _subscribeFavoriteStock() {
+    _favoriteStockSub?.cancel();
     final user = _currentUser;
     if (user == null) return;
     final stockKey = FirestoreService.favoriteStockKey(
@@ -386,20 +390,33 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   }
 
   Future<void> _toggleFavoriteStock() async {
-    final user = _currentUser;
-    if (user == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('로그인 후 관심종목에 등록할 수 있습니다.')));
-      return;
-    }
-
-    final wasSelected = _isFavoriteStock ?? false;
-    // 낙관적 업데이트: 즉시 UI 반전
-    setState(() => _isFavoriteStock = !wasSelected);
-
+    if (_savingFavoriteStock) return;
+    setState(() => _savingFavoriteStock = true);
+    var wasSelected = false;
     try {
+      var user = _currentUser;
+      if (user == null) {
+        if (kIsWeb) {
+          await WebLoginSheet.show(context);
+        } else {
+          await Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+        }
+        if (!mounted || _currentUser == null) return;
+        user = _currentUser;
+        _subscribeFavoriteStock();
+        // Resume the save intent after login, without accidentally removing a
+        // stock that this account had already saved on another device.
+        _isFavoriteStock = null;
+      }
+      if (user == null) return;
+      wasSelected = _isFavoriteStock == true;
+      // 낙관적 업데이트: 즉시 UI 반전
+      setState(() {
+        _isFavoriteStock = !wasSelected;
+      });
+
       await _firestoreService.toggleFavoriteStock(
         user.uid,
         widget.pick,
@@ -410,12 +427,33 @@ class _StockDetailScreenState extends State<StockDetailScreen>
         name: widget.pick.name,
         added: !wasSelected,
       );
+      if (!wasSelected) {
+        AnalyticsService.instance.logStockJourney(
+          'stock_saved',
+          ticker: widget.pick.ticker,
+          market: widget.pick.market,
+          source: 'stock_detail',
+        );
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(wasSelected ? '관심종목에서 해제했습니다.' : '관심종목에 등록했습니다.'),
-          duration: const Duration(seconds: 2),
+          duration: const Duration(seconds: 4),
+          action: wasSelected
+              ? null
+              : SnackBarAction(
+                  label: '가격 알림',
+                  onPressed: () {
+                    showAddPriceAlertSheet(
+                      context,
+                      pick: widget.pick,
+                      currentPrice: _livePrice?.price,
+                      source: 'stock_saved',
+                    );
+                  },
+                ),
         ),
       );
     } catch (e) {
@@ -425,6 +463,8 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('오류가 발생했습니다. 다시 시도해주세요.')));
+    } finally {
+      if (mounted) setState(() => _savingFavoriteStock = false);
     }
   }
 
@@ -494,7 +534,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   Widget _favoriteStockButton(ColorScheme cs) {
     final isFavorite = _isFavoriteStock ?? false;
     return OutlinedButton.icon(
-      onPressed: _currentUser == null ? null : _toggleFavoriteStock,
+      onPressed: _savingFavoriteStock ? null : _toggleFavoriteStock,
       icon: Icon(
         isFavorite ? Icons.star_rounded : Icons.star_border_rounded,
         size: 16,
@@ -761,6 +801,12 @@ class _StockDetailScreenState extends State<StockDetailScreen>
 
   void _shareStock() {
     final pick = widget.pick;
+    AnalyticsService.instance.logStockJourney(
+      'stock_share_open',
+      ticker: pick.ticker,
+      market: pick.market,
+      source: 'stock_detail',
+    );
     if (!_isPickMode) {
       final liveP = _livePrice?.price;
       final divider = '━━━━━━━━━━━━━━━━━━';
@@ -778,7 +824,8 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           '$priceLine'
           '$changeLine'
           '$divider\n'
-          '주식저장소 앱에서 확인하세요.';
+          '이 종목 확인하고 저장하기\n'
+          '${SharedStockLink(market: pick.market, ticker: pick.ticker, name: pick.name).toUri()}';
       final box =
           _shareButtonKey.currentContext?.findRenderObject() as RenderBox?;
       final origin = box != null
@@ -1499,7 +1546,8 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                 PriceAlertSection(
                                   pick: widget.pick,
                                   currentPrice:
-                                      _livePrice?.price ?? widget.pick.currentPrice,
+                                      _livePrice?.price ??
+                                      widget.pick.currentPrice,
                                 ),
                                 const SizedBox(height: 20),
                                 // Max Pain (미국주식 전용)
@@ -1789,9 +1837,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: cs.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           'Max Pain이란?',
           style: TextStyle(
@@ -2401,9 +2447,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
           padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: cs.onSurface.withValues(alpha: 0.12),
-            ),
+            border: Border.all(color: cs.onSurface.withValues(alpha: 0.12)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -4345,12 +4389,7 @@ class _OiChartPainter extends CustomPainter {
       if (callH > 0) {
         canvas.drawRRect(
           RRect.fromRectAndRadius(
-            Rect.fromLTWH(
-              cx - barWidth,
-              chartHeight - callH,
-              barWidth,
-              callH,
-            ),
+            Rect.fromLTWH(cx - barWidth, chartHeight - callH, barWidth, callH),
             const Radius.circular(1),
           ),
           callPaint,

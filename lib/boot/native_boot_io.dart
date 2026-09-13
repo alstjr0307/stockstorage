@@ -1,7 +1,8 @@
 // 네이티브(iOS/Android) 실제 부트스트랩 구현.
+import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:app_tracking_transparency/app_tracking_transparency.dart';
@@ -10,6 +11,7 @@ import '../services/ad_service.dart';
 import '../services/analytics_service.dart';
 import '../services/deep_link_service.dart';
 import '../services/notification_service.dart';
+import '../services/subscription_service.dart';
 
 Future<void> activateAppCheck() async {
   // Debug provider 토큰은 앱 데이터 초기화 때마다 바뀔 수 있어 로컬 개발 중에는
@@ -35,7 +37,16 @@ void initNotifications() {
 
 Future<void> initDeepLinks() => DeepLinkService.init();
 
-Future<void> initAds() async {
+Future<void>? _adsInitialization;
+
+Future<void> initAds() =>
+    _adsInitialization ??= _initializeAds().catchError((Object error) {
+      _adsInitialization = null;
+      debugPrint('[Startup] Ad initialization failed: $error');
+    });
+
+Future<void> _initializeAds() async {
+  await SubscriptionService.instance.initialize();
   if (Platform.isIOS) {
     // UI가 완전히 로드된 후 ATT 팝업 표시 (Apple 심사 요건)
     await Future.delayed(const Duration(milliseconds: 300));
@@ -44,10 +55,26 @@ Future<void> initAds() async {
       status = await AppTrackingTransparency.requestTrackingAuthorization();
     }
     // ATT 동의 여부를 Meta SDK에 전달 (광고 식별자 추적 허용 여부)
-    await AnalyticsService.instance.setAdvertiserTracking(
-      status == TrackingStatus.authorized,
-    );
+    try {
+      await AnalyticsService.instance
+          .setAdvertiserTracking(status == TrackingStatus.authorized)
+          .timeout(const Duration(seconds: 3));
+    } catch (error) {
+      // Meta tracking is independent of AdMob initialization. ATT consent has
+      // already been resolved above; a tracking error must not block ads.
+      debugPrint('[Startup] Meta tracking setup failed: $error');
+    }
   }
-  await MobileAds.instance.initialize();
+  for (var attempt = 0; attempt < 3; attempt++) {
+    try {
+      await MobileAds.instance.initialize();
+      break;
+    } catch (error) {
+      if (attempt == 2) rethrow;
+      debugPrint('[Startup] Retrying ad initialization: $error');
+      await Future<void>.delayed(Duration(seconds: 2 * (attempt + 1)));
+    }
+  }
+  AdService.markInitialized();
   AdService.instance.loadInterstitial();
 }

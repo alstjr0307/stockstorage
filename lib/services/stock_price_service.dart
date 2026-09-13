@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:http/http.dart' as http;
+import 'finance_proxy_response.dart';
 
 class StockSearchResult {
   final String ticker;
@@ -55,6 +56,12 @@ class _ProxyRequest {
 }
 
 class StockPriceService {
+  /// Finance requests from screens must use the same CORS proxy as quotes.
+  static Future<http.Response> getFinanceResponse(
+    Uri uri, {
+    Map<String, String>? headers,
+  }) => _pget(uri, headers: headers).timeout(const Duration(seconds: 10));
+
   static final _hasKorean = RegExp(r'[가-힣ㄱ-ㅎㅏ-ㅣ]');
   static final _isNumericCode = RegExp(r'^\d{4,6}$');
 
@@ -112,21 +119,22 @@ class StockPriceService {
           final results =
               ((result.data as Map)['results'] as List?) ?? const [];
           for (var i = 0; i < batch.length; i++) {
-            final item = i < results.length
-                ? (results[i] as Map).cast<String, dynamic>()
-                : const <String, dynamic>{};
-            batch[i].completer.complete(
-              http.Response(
-                (item['body'] ?? '') as String,
-                (item['status'] ?? 502) as int,
-              ),
-            );
+            try {
+              final item = i < results.length
+                  ? (results[i] as Map).cast<String, dynamic>()
+                  : const <String, dynamic>{};
+              batch[i].completer.complete(financeProxyResponse(item));
+            } catch (_) {
+              batch[i].completer.complete(http.Response('', 502));
+            }
           }
         })
         .catchError((Object error) {
           debugPrint('[corsProxy] batch failed: $error');
           for (final request in batch) {
-            request.completer.complete(http.Response('', 502));
+            if (!request.completer.isCompleted) {
+              request.completer.complete(http.Response('', 502));
+            }
           }
         });
   }
@@ -318,11 +326,17 @@ class StockPriceService {
       final response = await _pget(uri, headers: {'User-Agent': 'Mozilla/5.0'})
           .timeout(const Duration(seconds: 8));
 
-      if (response.statusCode != 200) return null;
+      if (response.statusCode != 200) {
+        debugPrint('[StockPrice] Quote $symbol returned HTTP ${response.statusCode}');
+        return null;
+      }
 
       final json = jsonDecode(response.body);
       final meta = json['chart']?['result']?[0]?['meta'];
-      if (meta == null) return null;
+      if (meta == null) {
+        debugPrint('[StockPrice] Quote $symbol has no market metadata');
+        return null;
+      }
 
       final price = (meta['regularMarketPrice'] as num?)?.toDouble();
       if (price == null) return null;
@@ -374,7 +388,8 @@ class StockPriceService {
 
       _cache[symbol] = _CachedPrice(result: result, fetchedAt: DateTime.now());
       return result;
-    } catch (_) {
+    } catch (error) {
+      debugPrint('[StockPrice] Quote failed for $symbol: $error');
       return null; // CORS(웹) 또는 네트워크 오류 시 null
     }
   }

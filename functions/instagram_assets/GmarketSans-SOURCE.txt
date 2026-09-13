@@ -1,0 +1,5 @@
+Gmarket Sans Bold
+Official source: https://corp.gmarket.com/fonts/
+Download: https://corp.gmarket.com/fonts/GmarketSansTTF.zip
+The official distribution page licenses Gmarket Sans under SIL Open Font License,
+for personal and commercial use. Font file is bundled unmodified.

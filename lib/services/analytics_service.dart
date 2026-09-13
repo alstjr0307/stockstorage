@@ -1,6 +1,7 @@
 import 'package:facebook_app_events/facebook_app_events.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AnalyticsService {
   AnalyticsService._();
@@ -20,28 +21,29 @@ class AnalyticsService {
     FirebaseAuth.instance.authStateChanges().listen((user) {
       if (user != null) {
         _analytics.setUserId(id: user.uid);
-        _fb.setUserID(user.uid);
+        if (!kIsWeb) _fb.setUserID(user.uid);
       } else {
         _analytics.setUserId(id: null);
-        _fb.clearUserID();
+        if (!kIsWeb) _fb.clearUserID();
       }
     });
   }
 
   /// iOS ATT 동의 결과를 Meta SDK에 전달 (광고 식별자 추적 허용 여부).
   /// Android에서는 호출해도 무해하다.
-  Future<void> setAdvertiserTracking(bool enabled) =>
-      _fb.setAdvertiserTracking(enabled: enabled);
+  Future<void> setAdvertiserTracking(bool enabled) async {
+    if (!kIsWeb) await _fb.setAdvertiserTracking(enabled: enabled);
+  }
 
   // ── 유저 ────────────────────────────────────────────────────────────────────
 
   Future<void> setUserId(String uid) {
-    _fb.setUserID(uid);
+    if (!kIsWeb) _fb.setUserID(uid);
     return _analytics.setUserId(id: uid);
   }
 
   Future<void> clearUserId() {
-    _fb.clearUserID();
+    if (!kIsWeb) _fb.clearUserID();
     return _analytics.setUserId(id: null);
   }
 
@@ -52,7 +54,7 @@ class AnalyticsService {
   /// Meta 가입 전환 캠페인 최적화에 사용된다.
   Future<void> logSignUp(String method) async {
     await _analytics.logSignUp(signUpMethod: method);
-    await _fb.logCompletedRegistration(registrationMethod: method);
+    if (!kIsWeb) await _fb.logCompletedRegistration(registrationMethod: method);
   }
 
   Future<void> logLogout() => _analytics.logEvent(name: 'logout');
@@ -88,6 +90,21 @@ class AnalyticsService {
 
   Future<void> logSearch(String query) =>
       _analytics.logSearch(searchTerm: query);
+
+  /// Growth events are best effort: measurement failures must not block saving.
+  Future<void> logStockJourney(
+    String event, {
+    required String ticker,
+    required String market,
+    required String source,
+  }) async {
+    try {
+      await _analytics.logEvent(
+        name: event,
+        parameters: {'ticker': ticker, 'market': market, 'source': source},
+      );
+    } catch (_) {}
+  }
 
   Future<void> logSaveMemo(String ticker) =>
       _analytics.logEvent(name: 'save_memo', parameters: {'ticker': ticker});

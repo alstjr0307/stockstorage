@@ -253,12 +253,24 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Optional coordination for new clients. Legacy journal writes stay valid.
+    // Mixed-version concurrent inserts cannot be serialized by this gate alone.
+    match /journal_revisions/{uid} {
+      allow read: if isLoggedIn() && request.auth.uid == uid;
+      allow create, update: if isLoggedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['revision', 'journalId'])
+        && request.resource.data.revision is int
+        && request.resource.data.journalId is string
+        && request.resource.data.revision == (resource == null ? 0 : resource.data.revision) + 1;
+      allow delete: if false;
+    }
+
     // Trading journal
     match /trading_journal/{journalId} {
       allow read: if resource.data.get('isPublic', false) == true || (isLoggedIn() && resource.data.uid == request.auth.uid);
       allow create: if isLoggedIn() && request.resource.data.uid == request.auth.uid;
       allow update: if isLoggedIn() && (
-        resource.data.uid == request.auth.uid ||
+        (resource.data.uid == request.auth.uid && request.resource.data.uid == resource.data.uid) ||
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
       );
       allow delete: if isLoggedIn() && resource.data.uid == request.auth.uid;

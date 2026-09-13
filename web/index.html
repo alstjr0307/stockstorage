@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -32,13 +32,40 @@
   <title>주식저장소</title>
   <link rel="manifest" href="manifest.json">
 
-  <!-- 카카오 로그인용 JavaScript SDK (kakao_flutter_sdk web) -->
+  <style>
+    body { margin: 0; background: #121212; }
+    #startup { position: fixed; inset: 0; display: grid; place-content: center;
+      padding: 24px; text-align: center; color: #eee; font-family: sans-serif; }
+    #startup h1 { font-size: 24px; }
+    #startup p { color: #bbb; line-height: 1.6; }
+    #startup button { margin: 12px auto; padding: 12px 24px; border: 0;
+      border-radius: 10px; background: #90caf9; color: #121212; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="startup" role="status" aria-live="polite">
+    <h1>주식저장소</h1>
+    <p id="startup-message">화면을 준비하고 있어요.</p>
+    <button id="startup-retry" hidden onclick="location.reload()">다시 시도</button>
+  </div>
+  <script>
+    function showStartupRetry() {
+      const message = document.getElementById('startup-message');
+      if (!message) return;
+      message.textContent = '로딩이 길어지고 있어요. 연결 상태를 확인하고 다시 시도해 주세요.';
+      document.getElementById('startup-retry').hidden = false;
+    }
+    const startupTimer = setTimeout(showStartupRetry, 20000);
+    window.addEventListener('flutter-first-frame', function () {
+      clearTimeout(startupTimer);
+      document.getElementById('startup')?.remove();
+    }, { once: true });
+  </script>
+  <!-- SDK 로딩 중에도 위의 시작 안내를 표시합니다. -->
   <script
     src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js"
     integrity="sha384-TiCUE00h649CAMonG018J2ujOgDKW/kVWlChEuu4jK2vxfAAD0eZxzCKakxg55G4"
     crossorigin="anonymous"></script>
-</head>
-<body>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
@@ -47,6 +74,6 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
-  <script src="flutter_bootstrap.js" async></script>
+  <script src="flutter_bootstrap.js" async onerror="showStartupRetry()"></script>
 </body>
 </html>

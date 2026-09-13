@@ -6,12 +6,14 @@ class StockSearchField extends StatefulWidget {
   final String initialTicker;
   final String initialName;
   final void Function(String ticker, String name, String market) onSelected;
+  final Future<List<StockSearchResult>> Function(String query) searchStocks;
 
   const StockSearchField({
     super.key,
     required this.initialTicker,
     required this.initialName,
     required this.onSelected,
+    this.searchStocks = StockPriceService.searchStocks,
   });
 
   @override
@@ -26,6 +28,7 @@ class _StockSearchFieldState extends State<StockSearchField> {
   Timer? _debounce;
   bool _loading = false;
   bool _selected = false;
+  int _searchVersion = 0;
 
   @override
   void initState() {
@@ -46,22 +49,29 @@ class _StockSearchFieldState extends State<StockSearchField> {
   }
 
   void _onChanged(String value) {
-    _selected = false;
     _debounce?.cancel();
-    if (value.trim().isEmpty) {
-      _removeOverlay();
-      return;
-    }
-    _debounce = Timer(
-      const Duration(milliseconds: 400),
-      () => _search(value.trim()),
-    );
+    final version = ++_searchVersion;
+    final query = value.trim();
+    _removeOverlay();
+    setState(() {
+      _selected = false;
+      _results = [];
+      _loading = query.isNotEmpty;
+    });
+    if (query.isEmpty) return;
+    _debounce = Timer(const Duration(milliseconds: 400), () {
+      if (mounted && version == _searchVersion) _search(query);
+    });
   }
 
   Future<void> _search(String query) async {
+    _debounce?.cancel();
+    if (query.isEmpty) return;
+    final version = ++_searchVersion;
+    _removeOverlay();
     setState(() => _loading = true);
-    final results = await StockPriceService.searchStocks(query);
-    if (!mounted) return;
+    final results = await widget.searchStocks(query);
+    if (!mounted || version != _searchVersion) return;
     setState(() {
       _results = results;
       _loading = false;
@@ -81,7 +91,12 @@ class _StockSearchFieldState extends State<StockSearchField> {
   }
 
   void _onSelect(StockSearchResult r) {
-    _selected = true;
+    _debounce?.cancel();
+    ++_searchVersion;
+    setState(() {
+      _selected = true;
+      _loading = false;
+    });
     _searchController.text = '${r.ticker}  ${r.name}';
     _removeOverlay();
     widget.onSelected(r.ticker, r.name, r.market);

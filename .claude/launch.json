@@ -3,13 +3,13 @@
   "configurations": [
     {
       "name": "Admin Docs Static",
-      "runtimeExecutable": "python3",
+      "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8123", "--directory", "docs"],
       "port": 8123
     },
     {
       "name": "Flutter Web Build",
-      "runtimeExecutable": "python3",
+      "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8200", "--directory", "build/web"],
       "port": 8200
     },

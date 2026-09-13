@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../screens/subscription_screen.dart';
@@ -7,6 +7,7 @@ import 'ai_analysis_quota_service.dart';
 import 'auth_service.dart';
 import 'firestore_service.dart';
 import 'subscription_service.dart';
+import '../web/web_analysis_dialog.dart';
 
 class _QuotaFlight {
   _QuotaFlight(this.token, this.expectedUsed);
@@ -80,6 +81,8 @@ class AiAnalysisAdGate {
 
     final firestore = FirestoreService();
     final quota = AiAnalysisQuotaService.instance;
+    await SubscriptionService.instance.initialize();
+    if (!context.mounted) return false;
     final isPremium = SubscriptionService.instance.isPremium;
 
     final level = await firestore.watchPublicUserLevel(uid).first;
@@ -107,6 +110,14 @@ class AiAnalysisAdGate {
     if (!context.mounted) return false;
     // 관리자는 무제한 — 확인 팝업 없이 통과.
     if (isAdmin) return true;
+    if (kIsWeb) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (_) => WebAnalysisDialog(used: used, limit: limit),
+      );
+      if (ok == true) _reserveNextStart(used);
+      return ok == true;
+    }
     // 프리미엄: 광고는 없지만 남은 횟수를 안내하고 시작 여부를 확인.
     if (isPremium) {
       final ok = await _showPremiumConfirm(context, used: used, limit: limit);
@@ -428,7 +439,9 @@ class AiAnalysisAdGate {
           ),
         ),
         content: Text(
-          isPremium
+          kIsWeb
+              ? '오늘 사용할 수 있는 AI 분석 $limit회를 모두 사용했어요.\n내일 다시 시도해 주세요.'
+              : isPremium
               ? '프리미엄 유저는 하루 $limit회까지 이용할 수 있어요.\n'
                     '내일 다시 시도해주세요.'
               : '현재 Lv.$level 기준 하루 $limit회까지 분석할 수 있어요.\n'
@@ -441,7 +454,7 @@ class AiAnalysisAdGate {
           ),
         ),
         actions: [
-          if (isPremium)
+          if (isPremium || kIsWeb)
             FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF10B981),

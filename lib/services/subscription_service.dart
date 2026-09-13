@@ -22,6 +22,8 @@ class SubscriptionService extends ChangeNotifier {
   static const iosApiKey = String.fromEnvironment('RC_IOS_API_KEY');
 
   StreamSubscription<User?>? _authSubscription;
+  Future<void>? _initialization;
+  bool _initializing = true;
   bool _configured = false;
   bool _isPremium = false;
   bool? _mirroredPremium; // user_public에 마지막으로 기록한 값 (중복 쓰기 방지)
@@ -29,13 +31,25 @@ class SubscriptionService extends ChangeNotifier {
   String? _error;
   String? _lastPurchaseError;
   Package? _monthlyPackage;
+  Future<void> _accountQueue = Future<void>.value();
+  bool _purchasePending = false;
+
+  // Account switches must not change the RevenueCat user during a purchase.
+  Future<T> _withAccount<T>(Future<T> Function() action) {
+    final result = _accountQueue.then((_) => action());
+    _accountQueue = result.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace stack) {},
+    );
+    return result;
+  }
 
   bool get isConfigured => _configured;
   // 관리자 계정은 결제 없이도 프리미엄으로 취급(디버그/내부 검증용).
   bool get isPremium =>
       _isPremium ||
       AuthService.adminUids.contains(FirebaseAuth.instance.currentUser?.uid);
-  bool get loading => _loading;
+  bool get loading => _loading || _initializing;
   String? get error => _error;
   String? get lastPurchaseError => _lastPurchaseError;
   Package? get monthlyPackage => _monthlyPackage;
@@ -45,7 +59,13 @@ class SubscriptionService extends ChangeNotifier {
       !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
   String get _storeName => _isAppleStore ? 'App Store' : 'Google Play';
 
-  Future<void> initialize() async {
+  Future<void> initialize() =>
+      _initialization ??= _initialize().whenComplete(() {
+        _initializing = false;
+        notifyListeners();
+      });
+
+  Future<void> _initialize() async {
     if (kIsWeb) return;
     final isAndroid = defaultTargetPlatform == TargetPlatform.android;
     final isIOS = defaultTargetPlatform == TargetPlatform.iOS;
@@ -80,8 +100,11 @@ class SubscriptionService extends ChangeNotifier {
     }
   }
 
-  Future<void> _syncUser(User? user) async {
+  Future<void> _syncUser(User? _) => _withAccount(_syncCurrentUser);
+
+  Future<void> _syncCurrentUser() async {
     if (!_configured) return;
+    final user = FirebaseAuth.instance.currentUser;
     _mirroredPremium = null; // 계정 전환 시 재미러링 허용
     try {
       final info = user == null
@@ -124,7 +147,22 @@ class SubscriptionService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> purchaseMonthly() async {
+  Future<bool> purchaseMonthly() {
+    if (_purchasePending) return Future.value(false);
+    _purchasePending = true;
+    return _withAccount(
+      _purchaseMonthly,
+    ).whenComplete(() => _purchasePending = false);
+  }
+
+  Future<bool> _purchaseMonthly() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.isAnonymous) {
+      _lastPurchaseError = '로그인 후 프리미엄을 구독할 수 있어요.';
+      notifyListeners();
+      return false;
+    }
+    await initialize();
     final package = _monthlyPackage;
     if (!_configured || package == null) {
       _lastPurchaseError = '스토어 상품을 아직 불러오지 못했어요.';
@@ -134,9 +172,20 @@ class SubscriptionService extends ChangeNotifier {
     _setLoading(true);
     try {
       _lastPurchaseError = null;
+      // Bind the subscription to the signed-in app account, not an anonymous
+      // RevenueCat ID left over from browsing before login.
+      await Purchases.logIn(user.uid);
+      final current = FirebaseAuth.instance.currentUser;
+      if (current?.uid != user.uid || current!.isAnonymous) {
+        _lastPurchaseError = '계정이 변경되었습니다. 다시 구독을 진행해주세요.';
+        notifyListeners();
+        return false;
+      }
       final result = await Purchases.purchase(PurchaseParams.package(package));
-      _applyCustomerInfo(result.customerInfo);
-      return _isPremium;
+      if (FirebaseAuth.instance.currentUser?.uid == user.uid) {
+        _applyCustomerInfo(result.customerInfo);
+      }
+      return result.customerInfo.entitlements.active.containsKey(entitlementId);
     } on PlatformException catch (e) {
       final code = PurchasesErrorHelper.getErrorCode(e);
       if (code == PurchasesErrorCode.purchaseCancelledError) {
@@ -160,12 +209,29 @@ class SubscriptionService extends ChangeNotifier {
     }
   }
 
-  Future<bool> restore() async {
+  Future<bool> restore() => _withAccount(_restore);
+
+  Future<bool> _restore() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.isAnonymous) {
+      _lastPurchaseError = '로그인 후 구매를 복원할 수 있어요.';
+      notifyListeners();
+      return false;
+    }
+    await initialize();
     if (!_configured) return false;
     _setLoading(true);
     try {
-      _applyCustomerInfo(await Purchases.restorePurchases());
-      return _isPremium;
+      await Purchases.logIn(user.uid);
+      if (FirebaseAuth.instance.currentUser?.uid != user.uid) {
+        _lastPurchaseError = '계정이 변경되었습니다. 다시 복원해주세요.';
+        return false;
+      }
+      final info = await Purchases.restorePurchases();
+      if (FirebaseAuth.instance.currentUser?.uid == user.uid) {
+        _applyCustomerInfo(info);
+      }
+      return info.entitlements.active.containsKey(entitlementId);
     } catch (e) {
       _lastPurchaseError = '구매 복원을 완료하지 못했어요.';
       debugPrint('[SubscriptionService] restore failed: $e');

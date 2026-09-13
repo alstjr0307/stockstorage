@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:intl/intl.dart';
@@ -12,6 +13,10 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../models/stock_pick.dart';
+import '../models/shared_stock_link.dart';
+import '../services/analytics_service.dart';
+import '../widgets/analysis_follow_card.dart';
+import '../widgets/price_alert_section.dart';
 import '../services/ai_analysis_ad_gate.dart';
 import '../utils/share_capture.dart';
 import '../services/firestore_service.dart';
@@ -269,6 +274,14 @@ class _StockAiAnalysisResultScreenState
             _loading = false;
           });
           unawaited(_hydrateCandlesInBackground());
+          unawaited(
+            AnalyticsService.instance.logStockJourney(
+              'analysis_view',
+              ticker: widget.pick.ticker,
+              market: widget.pick.market,
+              source: 'cache',
+            ),
+          );
           return;
         }
         // 캐시가 없어 새로 생성하는 단계로 진입 — 이제부터 화려한 로더 표시.
@@ -310,6 +323,14 @@ class _StockAiAnalysisResultScreenState
         _fromCache = false;
         _loading = false;
       });
+      unawaited(
+        AnalyticsService.instance.logStockJourney(
+          'analysis_view',
+          ticker: widget.pick.ticker,
+          market: widget.pick.market,
+          source: 'generated',
+        ),
+      );
     } catch (e, st) {
       debugPrint('AI analysis load failed: $e');
       debugPrintStack(stackTrace: st);
@@ -982,12 +1003,76 @@ class _AnalysisContent extends StatefulWidget {
 
 class _AnalysisContentState extends State<_AnalysisContent> {
   bool _sharing = false;
+  late final String? _followUid;
+  late final Stream<bool> _savedStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _followUid = FirebaseAuth.instance.currentUser?.uid;
+    _savedStream = _followUid == null
+        ? Stream.value(false)
+        : FirestoreService().watchIsFavoriteStock(
+            _followUid,
+            FirestoreService.favoriteStockKey(
+              widget.pick.market,
+              widget.pick.ticker,
+            ),
+          );
+  }
+
+  Future<void> _saveForFollowing() async {
+    if (_followUid == null ||
+        FirebaseAuth.instance.currentUser?.uid != _followUid) {
+      throw StateError('Account changed');
+    }
+    await FirestoreService().toggleFavoriteStock(
+      _followUid,
+      widget.pick,
+      false,
+    );
+    unawaited(
+      AnalyticsService.instance.logStockJourney(
+        'stock_saved',
+        ticker: widget.pick.ticker,
+        market: widget.pick.market,
+        source: 'ai_result',
+      ),
+    );
+  }
+
+  Future<void> _setPriceAlert() async {
+    if (_followUid == null ||
+        FirebaseAuth.instance.currentUser?.uid != _followUid) {
+      throw StateError('Account changed');
+    }
+    await showAddPriceAlertSheet(
+      context,
+      pick: widget.pick,
+      currentPrice: widget.price?.price,
+      source: 'ai_result',
+    );
+  }
+
+  String get _stockShareUrl => SharedStockLink(
+    market: widget.pick.market,
+    ticker: widget.pick.ticker,
+    name: widget.pick.name,
+  ).toUri(source: 'ai_result').toString();
 
   Future<void> shareAsText() async {
     if (_sharing) return;
     _sharing = true;
     try {
       final text = _buildShareText();
+      unawaited(
+        AnalyticsService.instance.logStockJourney(
+          'stock_share_open',
+          ticker: widget.pick.ticker,
+          market: widget.pick.market,
+          source: 'ai_text',
+        ),
+      );
       final box = context.findRenderObject() as RenderBox?;
       final origin = box == null
           ? null
@@ -1196,7 +1281,7 @@ class _AnalysisContentState extends State<_AnalysisContent> {
     sections.add(
       '$divider\n'
       '주식저장소 · AI 종목 분석\n'
-      '📱 앱 다운로드  https://tofusoft-software.github.io/Stockstorage/\n'
+      '⭐ 이 종목 확인하고 저장하기  $_stockShareUrl\n'
       '\n'
       '※ AI 분석은 참고용입니다.\n'
       '   투자 판단과 결과의 책임은 본인에게 있습니다.',
@@ -1337,9 +1422,18 @@ class _AnalysisContentState extends State<_AnalysisContent> {
     final origin = box == null
         ? null
         : box.localToGlobal(Offset.zero) & box.size;
+    unawaited(
+      AnalyticsService.instance.logStockJourney(
+        'stock_share_open',
+        ticker: widget.pick.ticker,
+        market: widget.pick.market,
+        source: 'ai_image',
+      ),
+    );
     await Share.shareXFiles(
       files,
-      text: '${widget.pick.name} (${widget.pick.ticker}) AI 종목 분석',
+      text:
+          '${widget.pick.name} (${widget.pick.ticker}) AI 종목 분석\n$_stockShareUrl',
       sharePositionOrigin: origin,
     );
     _sharing = false;
@@ -1501,6 +1595,15 @@ class _AnalysisContentState extends State<_AnalysisContent> {
       ),
       gap: 22,
     );
+    if (_followUid != null) {
+      addSection(
+        AnalysisFollowCard(
+          savedStream: _savedStream,
+          onSave: _saveForFollowing,
+          onAlert: _setPriceAlert,
+        ),
+      );
+    }
     addSection(
       _SnapshotGrid(
         analysis: analysis,
@@ -4882,6 +4985,7 @@ class _PremiumNudgeCardState extends State<_PremiumNudgeCard> {
   }
 
   Future<void> _decide() async {
+    if (kIsWeb) return;
     if (SubscriptionService.instance.isPremium) return;
     if (!await PremiumNudgeService.instance.shouldShow(_spot)) return;
     if (!mounted) return;

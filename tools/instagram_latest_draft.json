@@ -1,0 +1,1448 @@
+{
+  "editorial": true,
+  "analysisAt": "2026-09-10T09:34:54.306Z",
+  "ticker": "096770",
+  "charts": {
+    "peers": [
+      {
+        "name": "SK",
+        "value": 3.95
+      },
+      {
+        "name": "S-Oil",
+        "value": 5.94
+      },
+      {
+        "name": "GS",
+        "value": 4.42
+      },
+      {
+        "name": "SK디스커버리",
+        "value": 6.19
+      }
+    ],
+    "candles": [
+      {
+        "date": "20260617",
+        "open": 112600,
+        "high": 113200,
+        "low": 108900,
+        "close": 109000,
+        "volume": 456434
+      },
+      {
+        "date": "20260618",
+        "open": 108500,
+        "high": 108600,
+        "low": 103500,
+        "close": 103500,
+        "volume": 384157
+      },
+      {
+        "date": "20260619",
+        "open": 104200,
+        "high": 106300,
+        "low": 100200,
+        "close": 102400,
+        "volume": 574557
+      },
+      {
+        "date": "20260622",
+        "open": 102500,
+        "high": 103100,
+        "low": 100200,
+        "close": 100200,
+        "volume": 290760
+      },
+      {
+        "date": "20260623",
+        "open": 100600,
+        "high": 102000,
+        "low": 92500,
+        "close": 93700,
+        "volume": 585537
+      },
+      {
+        "date": "20260624",
+        "open": 93500,
+        "high": 99900,
+        "low": 91600,
+        "close": 98400,
+        "volume": 446198
+      },
+      {
+        "date": "20260625",
+        "open": 98700,
+        "high": 101000,
+        "low": 94400,
+        "close": 94400,
+        "volume": 381164
+      },
+      {
+        "date": "20260626",
+        "open": 94800,
+        "high": 95000,
+        "low": 87700,
+        "close": 89500,
+        "volume": 476165
+      },
+      {
+        "date": "20260629",
+        "open": 90300,
+        "high": 99000,
+        "low": 89400,
+        "close": 98400,
+        "volume": 424384
+      },
+      {
+        "date": "20260630",
+        "open": 97700,
+        "high": 98000,
+        "low": 94500,
+        "close": 94900,
+        "volume": 342957
+      },
+      {
+        "date": "20260701",
+        "open": 97700,
+        "high": 99000,
+        "low": 93000,
+        "close": 98000,
+        "volume": 363139
+      },
+      {
+        "date": "20260702",
+        "open": 97900,
+        "high": 98000,
+        "low": 92200,
+        "close": 94100,
+        "volume": 390416
+      },
+      {
+        "date": "20260703",
+        "open": 95900,
+        "high": 95900,
+        "low": 91000,
+        "close": 95000,
+        "volume": 285404
+      },
+      {
+        "date": "20260706",
+        "open": 95400,
+        "high": 98700,
+        "low": 94600,
+        "close": 96500,
+        "volume": 232969
+      },
+      {
+        "date": "20260707",
+        "open": 96600,
+        "high": 104200,
+        "low": 95200,
+        "close": 103800,
+        "volume": 852970
+      },
+      {
+        "date": "20260708",
+        "open": 101900,
+        "high": 107000,
+        "low": 97900,
+        "close": 99800,
+        "volume": 520620
+      },
+      {
+        "date": "20260709",
+        "open": 101300,
+        "high": 103400,
+        "low": 98000,
+        "close": 99000,
+        "volume": 363622
+      },
+      {
+        "date": "20260710",
+        "open": 100500,
+        "high": 108200,
+        "low": 99600,
+        "close": 102900,
+        "volume": 447319
+      },
+      {
+        "date": "20260713",
+        "open": 104600,
+        "high": 117400,
+        "low": 104100,
+        "close": 110200,
+        "volume": 1515044
+      },
+      {
+        "date": "20260714",
+        "open": 110400,
+        "high": 110900,
+        "low": 104900,
+        "close": 104900,
+        "volume": 802235
+      },
+      {
+        "date": "20260715",
+        "open": 107300,
+        "high": 118500,
+        "low": 106400,
+        "close": 117000,
+        "volume": 1017192
+      },
+      {
+        "date": "20260716",
+        "open": 117600,
+        "high": 126650,
+        "low": 117000,
+        "close": 121400,
+        "volume": 1851929
+      },
+      {
+        "date": "20260720",
+        "open": 120200,
+        "high": 122300,
+        "low": 116600,
+        "close": 116900,
+        "volume": 808325
+      },
+      {
+        "date": "20260721",
+        "open": 115900,
+        "high": 118800,
+        "low": 112300,
+        "close": 116300,
+        "volume": 478237
+      },
+      {
+        "date": "20260722",
+        "open": 117900,
+        "high": 124400,
+        "low": 117500,
+        "close": 118400,
+        "volume": 793350
+      },
+      {
+        "date": "20260723",
+        "open": 119600,
+        "high": 132500,
+        "low": 119600,
+        "close": 132200,
+        "volume": 1686912
+      },
+      {
+        "date": "20260724",
+        "open": 129700,
+        "high": 135800,
+        "low": 126500,
+        "close": 130100,
+        "volume": 1413273
+      },
+      {
+        "date": "20260727",
+        "open": 126900,
+        "high": 127300,
+        "low": 116000,
+        "close": 116700,
+        "volume": 845081
+      },
+      {
+        "date": "20260728",
+        "open": 114000,
+        "high": 118700,
+        "low": 110100,
+        "close": 112700,
+        "volume": 702722
+      },
+      {
+        "date": "20260729",
+        "open": 113000,
+        "high": 117250,
+        "low": 106200,
+        "close": 109500,
+        "volume": 742040
+      },
+      {
+        "date": "20260730",
+        "open": 111700,
+        "high": 119000,
+        "low": 111300,
+        "close": 116600,
+        "volume": 799528
+      },
+      {
+        "date": "20260731",
+        "open": 120400,
+        "high": 120500,
+        "low": 104000,
+        "close": 110500,
+        "volume": 1833201
+      },
+      {
+        "date": "20260803",
+        "open": 109100,
+        "high": 109100,
+        "low": 104200,
+        "close": 108000,
+        "volume": 573157
+      },
+      {
+        "date": "20260804",
+        "open": 107300,
+        "high": 111600,
+        "low": 106600,
+        "close": 111300,
+        "volume": 574466
+      },
+      {
+        "date": "20260805",
+        "open": 111300,
+        "high": 113900,
+        "low": 108100,
+        "close": 109200,
+        "volume": 832094
+      },
+      {
+        "date": "20260806",
+        "open": 109000,
+        "high": 110000,
+        "low": 106800,
+        "close": 108600,
+        "volume": 486638
+      },
+      {
+        "date": "20260807",
+        "open": 109800,
+        "high": 120300,
+        "low": 109600,
+        "close": 120300,
+        "volume": 1271355
+      },
+      {
+        "date": "20260810",
+        "open": 119100,
+        "high": 124800,
+        "low": 115400,
+        "close": 124500,
+        "volume": 795636
+      },
+      {
+        "date": "20260811",
+        "open": 124700,
+        "high": 129500,
+        "low": 123000,
+        "close": 124100,
+        "volume": 758130
+      },
+      {
+        "date": "20260812",
+        "open": 125500,
+        "high": 128800,
+        "low": 121900,
+        "close": 122400,
+        "volume": 670033
+      },
+      {
+        "date": "20260813",
+        "open": 122500,
+        "high": 123700,
+        "low": 120500,
+        "close": 121700,
+        "volume": 582784
+      },
+      {
+        "date": "20260814",
+        "open": 122000,
+        "high": 129800,
+        "low": 121700,
+        "close": 128700,
+        "volume": 677520
+      },
+      {
+        "date": "20260818",
+        "open": 129000,
+        "high": 133900,
+        "low": 127000,
+        "close": 131500,
+        "volume": 822162
+      },
+      {
+        "date": "20260819",
+        "open": 129700,
+        "high": 132000,
+        "low": 125700,
+        "close": 128900,
+        "volume": 451215
+      },
+      {
+        "date": "20260820",
+        "open": 128800,
+        "high": 129900,
+        "low": 125200,
+        "close": 125900,
+        "volume": 457598
+      },
+      {
+        "date": "20260821",
+        "open": 126200,
+        "high": 127600,
+        "low": 121300,
+        "close": 124800,
+        "volume": 424592
+      },
+      {
+        "date": "20260824",
+        "open": 124800,
+        "high": 134500,
+        "low": 124700,
+        "close": 130100,
+        "volume": 750625
+      },
+      {
+        "date": "20260825",
+        "open": 129100,
+        "high": 129800,
+        "low": 122700,
+        "close": 125000,
+        "volume": 488310
+      },
+      {
+        "date": "20260826",
+        "open": 116600,
+        "high": 116900,
+        "low": 103700,
+        "close": 111200,
+        "volume": 4224472
+      },
+      {
+        "date": "20260827",
+        "open": 110500,
+        "high": 114700,
+        "low": 110500,
+        "close": 112000,
+        "volume": 1256142
+      },
+      {
+        "date": "20260828",
+        "open": 112100,
+        "high": 119500,
+        "low": 111400,
+        "close": 116900,
+        "volume": 1262642
+      },
+      {
+        "date": "20260831",
+        "open": 119300,
+        "high": 127400,
+        "low": 116700,
+        "close": 125500,
+        "volume": 1924132
+      },
+      {
+        "date": "20260901",
+        "open": 126900,
+        "high": 138500,
+        "low": 125800,
+        "close": 135300,
+        "volume": 2364790
+      },
+      {
+        "date": "20260902",
+        "open": 133600,
+        "high": 136200,
+        "low": 131400,
+        "close": 131500,
+        "volume": 1160194
+      },
+      {
+        "date": "20260903",
+        "open": 129200,
+        "high": 137200,
+        "low": 126100,
+        "close": 130800,
+        "volume": 1012027
+      },
+      {
+        "date": "20260904",
+        "open": 130700,
+        "high": 139600,
+        "low": 130700,
+        "close": 138300,
+        "volume": 1280862
+      },
+      {
+        "date": "20260907",
+        "open": 138400,
+        "high": 139500,
+        "low": 135700,
+        "close": 137900,
+        "volume": 551991
+      },
+      {
+        "date": "20260908",
+        "open": 139500,
+        "high": 143800,
+        "low": 136600,
+        "close": 138000,
+        "volume": 830837
+      },
+      {
+        "date": "20260909",
+        "open": 137400,
+        "high": 154500,
+        "low": 135500,
+        "close": 153500,
+        "volume": 1924456
+      },
+      {
+        "date": "20260910",
+        "open": 155500,
+        "high": 164700,
+        "low": 150200,
+        "close": 153100,
+        "volume": 2884492
+      }
+    ],
+    "marketDate": "20260910",
+    "prices": [
+      {
+        "date": "20260617",
+        "value": 109000
+      },
+      {
+        "date": "20260618",
+        "value": 103500
+      },
+      {
+        "date": "20260619",
+        "value": 102400
+      },
+      {
+        "date": "20260622",
+        "value": 100200
+      },
+      {
+        "date": "20260623",
+        "value": 93700
+      },
+      {
+        "date": "20260624",
+        "value": 98400
+      },
+      {
+        "date": "20260625",
+        "value": 94400
+      },
+      {
+        "date": "20260626",
+        "value": 89500
+      },
+      {
+        "date": "20260629",
+        "value": 98400
+      },
+      {
+        "date": "20260630",
+        "value": 94900
+      },
+      {
+        "date": "20260701",
+        "value": 98000
+      },
+      {
+        "date": "20260702",
+        "value": 94100
+      },
+      {
+        "date": "20260703",
+        "value": 95000
+      },
+      {
+        "date": "20260706",
+        "value": 96500
+      },
+      {
+        "date": "20260707",
+        "value": 103800
+      },
+      {
+        "date": "20260708",
+        "value": 99800
+      },
+      {
+        "date": "20260709",
+        "value": 99000
+      },
+      {
+        "date": "20260710",
+        "value": 102900
+      },
+      {
+        "date": "20260713",
+        "value": 110200
+      },
+      {
+        "date": "20260714",
+        "value": 104900
+      },
+      {
+        "date": "20260715",
+        "value": 117000
+      },
+      {
+        "date": "20260716",
+        "value": 121400
+      },
+      {
+        "date": "20260720",
+        "value": 116900
+      },
+      {
+        "date": "20260721",
+        "value": 116300
+      },
+      {
+        "date": "20260722",
+        "value": 118400
+      },
+      {
+        "date": "20260723",
+        "value": 132200
+      },
+      {
+        "date": "20260724",
+        "value": 130100
+      },
+      {
+        "date": "20260727",
+        "value": 116700
+      },
+      {
+        "date": "20260728",
+        "value": 112700
+      },
+      {
+        "date": "20260729",
+        "value": 109500
+      },
+      {
+        "date": "20260730",
+        "value": 116600
+      },
+      {
+        "date": "20260731",
+        "value": 110500
+      },
+      {
+        "date": "20260803",
+        "value": 108000
+      },
+      {
+        "date": "20260804",
+        "value": 111300
+      },
+      {
+        "date": "20260805",
+        "value": 109200
+      },
+      {
+        "date": "20260806",
+        "value": 108600
+      },
+      {
+        "date": "20260807",
+        "value": 120300
+      },
+      {
+        "date": "20260810",
+        "value": 124500
+      },
+      {
+        "date": "20260811",
+        "value": 124100
+      },
+      {
+        "date": "20260812",
+        "value": 122400
+      },
+      {
+        "date": "20260813",
+        "value": 121700
+      },
+      {
+        "date": "20260814",
+        "value": 128700
+      },
+      {
+        "date": "20260818",
+        "value": 131500
+      },
+      {
+        "date": "20260819",
+        "value": 128900
+      },
+      {
+        "date": "20260820",
+        "value": 125900
+      },
+      {
+        "date": "20260821",
+        "value": 124800
+      },
+      {
+        "date": "20260824",
+        "value": 130100
+      },
+      {
+        "date": "20260825",
+        "value": 125000
+      },
+      {
+        "date": "20260826",
+        "value": 111200
+      },
+      {
+        "date": "20260827",
+        "value": 112000
+      },
+      {
+        "date": "20260828",
+        "value": 116900
+      },
+      {
+        "date": "20260831",
+        "value": 125500
+      },
+      {
+        "date": "20260901",
+        "value": 135300
+      },
+      {
+        "date": "20260902",
+        "value": 131500
+      },
+      {
+        "date": "20260903",
+        "value": 130800
+      },
+      {
+        "date": "20260904",
+        "value": 138300
+      },
+      {
+        "date": "20260907",
+        "value": 137900
+      },
+      {
+        "date": "20260908",
+        "value": 138000
+      },
+      {
+        "date": "20260909",
+        "value": 153500
+      },
+      {
+        "date": "20260910",
+        "value": 153100
+      }
+    ],
+    "facts": {
+      "high20": 164700,
+      "ma20": 130030,
+      "volume": 2884492,
+      "low20": 103700,
+      "averageVolume": 1155869.2,
+      "distanceToMa20": 17.74205952472507,
+      "changeRate": -0.2605863192182367,
+      "close": 153100,
+      "volumeRatio": 2.4955176589185006
+    },
+    "flow": {
+      "values": [
+        {
+          "name": "외국인",
+          "value": 959772
+        },
+        {
+          "name": "기관",
+          "value": 1294815
+        }
+      ],
+      "days": 14,
+      "from": "2026.08.24",
+      "to": "2026.09.10",
+      "rows": [
+        {
+          "date": "20260824",
+          "foreign": 23021,
+          "institution": 258085
+        },
+        {
+          "date": "20260825",
+          "foreign": -26904,
+          "institution": 3663
+        },
+        {
+          "date": "20260826",
+          "foreign": -1005932,
+          "institution": -671349
+        },
+        {
+          "date": "20260827",
+          "foreign": 273108,
+          "institution": -34370
+        },
+        {
+          "date": "20260828",
+          "foreign": 350648,
+          "institution": 128398
+        },
+        {
+          "date": "20260831",
+          "foreign": 142387,
+          "institution": 294074
+        },
+        {
+          "date": "20260901",
+          "foreign": 268339,
+          "institution": 266725
+        },
+        {
+          "date": "20260902",
+          "foreign": -64751,
+          "institution": 139924
+        },
+        {
+          "date": "20260903",
+          "foreign": 51920,
+          "institution": 85505
+        },
+        {
+          "date": "20260904",
+          "foreign": 87501,
+          "institution": 382517
+        },
+        {
+          "date": "20260907",
+          "foreign": -56088,
+          "institution": 125652
+        },
+        {
+          "date": "20260908",
+          "foreign": 43692,
+          "institution": -14618
+        },
+        {
+          "date": "20260909",
+          "foreign": 539462,
+          "institution": 322582
+        },
+        {
+          "date": "20260910",
+          "foreign": 333369,
+          "institution": 8027
+        }
+      ]
+    }
+  },
+  "cards": [
+    {
+      "cover": true,
+      "title": "합병 불확실성에 매수할까?"
+    },
+    {
+      "title": "무엇을 파는 회사일까",
+      "metric": "에너지·화학·배터리",
+      "metricLabel": "주요 사업과 수요처",
+      "points": [
+        {
+          "headline": "핵심 사업",
+          "body": "정유와 석유화학, 윤활유를 주로 판매해요",
+          "sourceIds": [
+            "companyOverview"
+          ]
+        },
+        {
+          "headline": "신사업 방향",
+          "body": "전기차용 배터리와 ESS 수주를 확대하고 있어요",
+          "sourceIds": [
+            "companyOverview",
+            "profile"
+          ]
+        },
+        {
+          "headline": "주 고객군",
+          "body": "산업·자동차와 전지·ESS 프로젝트 수요가 대상이에요",
+          "sourceIds": [
+            "companyOverview",
+            "sections.0"
+          ]
+        }
+      ],
+      "label": "어떤 회사인가",
+      "layout": "company",
+      "score": 72,
+      "subScores": {
+        "priceTrend": 82,
+        "newsImpact": 58,
+        "fundamentals": 81,
+        "momentumFlow": 81,
+        "riskLevel": 52
+      }
+    },
+    {
+      "title": "AI가 준 숫자",
+      "metric": "72",
+      "metricLabel": "종합 점수 / 100",
+      "points": [
+        {
+          "headline": "종합 평점",
+          "body": "AI 종합 점수는 72점으로 상위권에 속해요",
+          "sourceIds": [
+            "score"
+          ]
+        },
+        {
+          "headline": "강·약점",
+          "body": "기술·재무 신호는 우호적이나 보호예수 등 리스크가 남아 있어요",
+          "sourceIds": [
+            "score",
+            "risks"
+          ]
+        }
+      ],
+      "label": "분석 점수",
+      "layout": "score",
+      "score": 72,
+      "subScores": {
+        "priceTrend": 82,
+        "newsImpact": 58,
+        "fundamentals": 81,
+        "momentumFlow": 81,
+        "riskLevel": 52
+      }
+    },
+    {
+      "title": "최근 주가에 무슨 일이",
+      "metric": "4,515억원",
+      "metricLabel": "최근 거래대금",
+      "points": [
+        {
+          "headline": "주요 뉴스",
+          "body": "보호예수 해제와 신고서 정정 요구가 핵심 변수였어요",
+          "sourceIds": [
+            "todayReason",
+            "catalysts.0",
+            "catalysts.1",
+            "news",
+            "summary"
+          ]
+        },
+        {
+          "headline": "수급 영향",
+          "body": "기관·외국인 순매수로 거래가 몰리며 가격을 밀어올렸어요",
+          "sourceIds": [
+            "todayReason",
+            "momentum"
+          ]
+        },
+        {
+          "headline": "단기 신호",
+          "body": "RSI 68.4와 볼린저 상단 돌파로 단기 과열 징후가 있어요",
+          "sourceIds": [
+            "todayReason",
+            "technicalDetail",
+            "summary"
+          ]
+        }
+      ],
+      "label": "최근 무슨 일이 있었나",
+      "layout": "news",
+      "score": 72,
+      "subScores": {
+        "priceTrend": 82,
+        "newsImpact": 58,
+        "fundamentals": 81,
+        "momentumFlow": 81,
+        "riskLevel": 52
+      }
+    },
+    {
+      "title": "지금 가격은 어떤가",
+      "metric": "선행 PER 8.96배",
+      "metricLabel": "선행 PER",
+      "points": [
+        {
+          "headline": "기업가치 수준",
+          "body": "선행 PER 8.96배와 PBR 0.99로 상대적으로 낮아요",
+          "sourceIds": [
+            "fundamentals",
+            "valuation"
+          ]
+        },
+        {
+          "headline": "업계 비교",
+          "body": "동종업계 평균 PER 107.74배와 비교하면 할인 구간이에요",
+          "sourceIds": [
+            "peerComparison",
+            "valuation"
+          ]
+        },
+        {
+          "headline": "주의할 점",
+          "body": "과거 적자와 합병 이슈로 기업가치 신뢰도가 흔들릴 수 있어요",
+          "sourceIds": [
+            "fundamentals",
+            "valuation"
+          ]
+        }
+      ],
+      "label": "가격은 비싼가",
+      "layout": "valuation",
+      "score": 72,
+      "subScores": {
+        "priceTrend": 82,
+        "newsImpact": 58,
+        "fundamentals": 81,
+        "momentumFlow": 81,
+        "riskLevel": 52
+      }
+    },
+    {
+      "title": "가격과 거래량, 숫자로 볼게요",
+      "metric": "RSI 68.4",
+      "metricLabel": "단기 과열 지표",
+      "points": [
+        {
+          "headline": "추세 상태",
+          "body": "현재가가 5·20·60·120일 이동평균선 위에 있어 흐름은 위쪽이에요",
+          "sourceIds": [
+            "technical",
+            "technicalDetail",
+            "sections.1"
+          ]
+        },
+        {
+          "headline": "거래 특징",
+          "body": "최근 며칠간 강한 매수 유입과 높은 거래대금이 관찰돼요",
+          "sourceIds": [
+            "momentum",
+            "todayReason"
+          ]
+        },
+        {
+          "headline": "변동성 신호",
+          "body": "과거 급락 이력이 있어 과열 시 되돌림 가능성이 커요",
+          "sourceIds": [
+            "technicalDetail",
+            "risksDetailed.2"
+          ]
+        }
+      ],
+      "label": "캔들로 보는 주가",
+      "layout": "candles",
+      "score": 72,
+      "subScores": {
+        "priceTrend": 82,
+        "newsImpact": 58,
+        "fundamentals": 81,
+        "momentumFlow": 81,
+        "riskLevel": 52
+      }
+    },
+    {
+      "layout": "flow",
+      "label": "외국인·기관 일별 순매매",
+      "title": "누가, 언제 사고팔았을까?"
+    },
+    {
+      "title": "앞으로 벌어질 세 가지",
+      "metric": "기본 0.55",
+      "metricLabel": "AI 기본 시나리오 확률",
+      "points": [
+        {
+          "headline": "상승 조건",
+          "body": "합병 불확실성이 해소되고 ESS 수주가 실적으로 연결되면 오를 수 있어요",
+          "sourceIds": [
+            "scenarios.bull",
+            "catalysts.2"
+          ]
+        },
+        {
+          "headline": "기본 흐름",
+          "body": "합병 절차 지연이나 일부 물량 흡수로 현재권에서 등락할 가능성이 커요",
+          "sourceIds": [
+            "scenarios.base",
+            "summary"
+          ]
+        },
+        {
+          "headline": "하락 조건",
+          "body": "합병 불발이나 보호예수의 대량 매도 시 크게 하락할 수 있어요",
+          "sourceIds": [
+            "scenarios.bear",
+            "catalysts.0"
+          ]
+        }
+      ],
+      "label": "앞으로의 세 가지 경우",
+      "layout": "scenario",
+      "score": 72,
+      "subScores": {
+        "priceTrend": 82,
+        "newsImpact": 58,
+        "fundamentals": 81,
+        "momentumFlow": 81,
+        "riskLevel": 52
+      }
+    },
+    {
+      "title": "이것까지 확인하고 판단해요",
+      "metric": "약 1,801만주",
+      "metricLabel": "예상 보호예수 해제 물량",
+      "points": [
+        {
+          "headline": "보호예수 영향",
+          "body": "해제 물량 약 1,801만주가 단기 공급압력을 줄 수 있어요",
+          "sourceIds": [
+            "catalysts.0",
+            "risksDetailed.0"
+          ]
+        },
+        {
+          "headline": "절차 불확실성",
+          "body": "증권신고서 정정 요구로 합병 일정이나 조건이 바뀔 수 있어요",
+          "sourceIds": [
+            "catalysts.1",
+            "risksDetailed.1"
+          ]
+        },
+        {
+          "headline": "수주 실적 확인",
+          "body": "NeoVolta ESS 수주가 실제 매출·이익으로 이어질지 아직 확실하지 않아요",
+          "sourceIds": [
+            "catalysts.2",
+            "risksDetailed.3"
+          ]
+        },
+        {
+          "headline": "단기 과열 위험",
+          "body": "RSI와 볼린저 상단 돌파로 단기 변동성이 커질 수 있어요",
+          "sourceIds": [
+            "risksDetailed.2",
+            "risks"
+          ]
+        }
+      ],
+      "label": "위험 요소와 다음 확인 사항",
+      "layout": "watch",
+      "score": 72,
+      "subScores": {
+        "priceTrend": 82,
+        "newsImpact": 58,
+        "fundamentals": 81,
+        "momentumFlow": 81,
+        "riskLevel": 52
+      },
+      "checklist": {
+        "title": "다음에 반드시 확인하세요",
+        "metric": "분할매수",
+        "metricLabel": "앱 AI 판단",
+        "points": [
+          {
+            "headline": "우선 점검 항목",
+            "body": "증권신고서 처리 결과, 보호예수의 시점·보유자, 다음 분기 실적을 확인하세요",
+            "sourceIds": [
+              "sections.2",
+              "summary"
+            ]
+          },
+          {
+            "headline": "앱 AI의 권고",
+            "body": "앱 AI 판단: 분할매수 — 기술·실적은 우호적이지만 합병·해제 리스크가 있어요",
+            "sourceIds": [
+              "timing",
+              "sections.2"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "cta": true,
+      "title": "더 많은 종목 분석이 궁금하다면?"
+    }
+  ],
+  "schemaVersion": 7,
+  "sources": [
+    {
+      "title": "[0905주요일정] SK이노베이션·케이뱅크·센코 등 보호예수 해제 예정",
+      "url": "https://news.google.com/rss/articles/CBMidkFVX3lxTE0xTGI2bV9ndGFMeEI5Q0YxTi0xRXc2b0thYXhRTHVUWnJ5UWI2MDAzc1BUaWpMTnlLZm85bjZycF9wUEwyQnY2VHpKRUpacksxdjI2OC1aTnJvOWZzSUQwR1Bma1NULXdJeXg1UVlkdW5zeUR1QlE?oc=5"
+    },
+    {
+      "title": "SK이노베이션, SKIET 재흡수 합병, 주주보호의 새 기준을 묻다",
+      "url": "https://news.google.com/rss/articles/CBMibEFVX3lxTE4zWDNqenpncnIxNUFQZFRpdEhXRWtOX0h2V1dJMlZ3ZDhxVGp5UU0zX05xQ1UzUmlqeEppbWNHX1pNb05qOFpXUW8ycURUQUhtSzhISy1DYjVWWXBTeVBtYlktNUwxNzdVTlhHdA?oc=5"
+    },
+    {
+      "title": "SK이노베이션 1801만주 보호예수 해제…1조6000억원 PRS가 오버행 변수",
+      "url": "https://news.google.com/rss/articles/CBMia0FVX3lxTE5yR1czYjZfcWY5NjFXYVBDRjQzczZlSVp6czlTRlJVLURxWms1RnhmcURBT3UyWVVBMEg1eEU0T1ZBdF91dlBLUkNqYUFreUJiQ3R1QUxlMTUzS0dtVlBlRzFkVlhQWnJHbGtr?oc=5"
+    },
+    {
+      "title": "[장중수급포착] SK이노베이션, 외국인/기관 동시 순매수… 주가 +5.89%",
+      "url": "https://news.google.com/rss/articles/CBMiXEFVX3lxTE96S1VqTjVvQzkxQ3dGekpoZEdKMmhMTW9lMTZUWTZoWE96ejR2ZXgxM016Q3RYN1ZQZl82ZVhoc05MODhqNURpNTRKOGt0cDg4SVlvajhPV1JzU0Fz?oc=5"
+    },
+    {
+      "title": "SK이노베이션·SKIET 합병 ‘제동’…금감원, 증권신고서 정정 요구",
+      "url": "https://news.google.com/rss/articles/CBMif0FVX3lxTFB6OGRNVXNqTXhkOWpZZGNranNoZkZLY3RTN3N5TldsMThDcHU4cm5vSE0wT0o4d3hYUnR2dWxZbldjYXBHNUh3MnF1ZFl4RGNxWXRnanBRWG4zSjlfUmQzZmI4VWFrR2h6WXh1dUxqRklONmFCcTVLQVNaaFhNWDg?oc=5"
+    },
+    {
+      "title": "SK이노베이션 주가, 9월 4일 장중 139,000원 6.27% 상승",
+      "url": "https://news.google.com/rss/articles/CBMickFVX3lxTE5nUkx4TXdoYm5ZRWcwMTMxWVdseEhFNmxYX3RSUjdSMlplUDA0Q1lGM3hXOS1CZVRyU1QyNkZQMmozUnRaSUNGSjZYdTRHZUNqMldHX1ZGT0ExOUJiSDkxbFJZdVZaWVpXeU80ZFgwdkJOUQ?oc=5"
+    },
+    {
+      "title": "SK이노베이션 주가, 9월 9일 장중 138,700원 0.51% 상승",
+      "url": "https://news.google.com/rss/articles/CBMickFVX3lxTE5pbGVVazI4bnR2VjB3bk8zb05mVnA4QXdEREQwY2ZSWml4TmlsQlB6dnRjQ05EXzBpdHFrRm52UEtFSmxibFpnTEY5NXBIYXcyd0FhcTluTllOTk5hZDlrTC05UzAzWnM5dndGNy1qRFZMdw?oc=5"
+    },
+    {
+      "title": "에쓰오일 버리고 SK이노베이션으로…여전히 헐값 15만원 돌파 시간문제? (곽유정 JW인베스트 대표)",
+      "url": "https://news.google.com/rss/articles/CBMiS0FVX3lxTFBTOHVyUzB1LXdmVy1LSWJ2TTVtY1JZTVA0MmJGRTgxMFBRZGdIdVpYanYtQTgzcmdmdG1fZzI5T0poMDdLRDB4SVBKZw?oc=5"
+    },
+    {
+      "title": "SK-On, NeoVolta ESS 수주 코멘트",
+      "url": "https://stock.pstatic.net/stock-research/company/61/20260901_company_188873000.pdf"
+    },
+    {
+      "title": "SKIET 흡수합병에 따른 기존 주주 보호정책 필요",
+      "url": "https://stock.pstatic.net/stock-research/company/57/20260827_company_159569000.pdf"
+    },
+    {
+      "title": "SKIET 합병: 좋은 업황에 끼얹은 찬물",
+      "url": "https://stock.pstatic.net/stock-research/company/61/20260828_company_305702000.pdf"
+    },
+    {
+      "title": "SKIET 흡수합병, 단순화를 넘어 정상화로",
+      "url": "https://stock.pstatic.net/stock-research/company/21/20260827_company_981056000.pdf"
+    },
+    {
+      "title": "컨센 124% 상회. 연간 추정치 상향",
+      "url": "https://stock.pstatic.net/stock-research/company/57/20260731_company_905279000.pdf"
+    },
+    {
+      "title": "동일인등출자계열회사와의상품ㆍ용역거래",
+      "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260910000298"
+    },
+    {
+      "title": "기업설명회(IR)개최(안내공시)",
+      "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260909800523"
+    },
+    {
+      "title": "[기재정정]기업설명회(IR)개최(안내공시)",
+      "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260909800519"
+    },
+    {
+      "title": "정정신고서제출요구( 2026.08.26. 제출 증권신고서(합병) )",
+      "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260904100016"
+    },
+    {
+      "title": "기타안내사항(안내공시)",
+      "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260902800513"
+    },
+    {
+      "title": "대규모기업집단현황공시[분기별공시(개별회사용)]",
+      "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260827000916"
+    },
+    {
+      "title": "지주회사의자회사탈퇴",
+      "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260826800741"
+    },
+    {
+      "title": "[기재정정]주요사항보고서(회사합병결정)",
+      "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260826000414"
+    },
+    {
+      "title": "장래사업ㆍ경영계획(공정공시)",
+      "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260826800053"
+    },
+    {
+      "title": "[정정제출요구]증권신고서(합병)",
+      "url": "https://dart.fss.or.kr/dsaf001/main.do?rcpNo=20260826000056"
+    }
+  ],
+  "totalParts": 1,
+  "part": 1,
+  "caption": "SK이노베이션 (096770) · AI 종목 분석\n\n기업 소개부터 재무·차트·수급·주요 재료·시나리오·리스크까지, 앱 AI 분석을 카드로 읽어보세요.\n\n분석 기준: 2026. 09. 10. 18:34 KST\n\n출처: [0905주요일정] SK이노베이션·케이뱅크·센코 등 보호예수 해제 예정 / SK이노베이션, SKIET 재흡수 합병, 주주보호의 새 기준을 묻다\n원문 출처와 세부 데이터는 앱 분석에서 확인할 수 있습니다.\n\n더 많은 종목 분석이 궁금하다면?\n주식저장소 앱 다운로드\nhttps://alstjr0307.github.io/stockstorage/\n@tf_stockstorage 프로필 링크에서도 확인할 수 있어요.\n\nAI 분석은 오류가 있을 수 있으며 투자 판단의 참고 자료입니다. 차트 기준과 원문 출처는 앱 분석에서 확인할 수 있습니다.\n\n#주식저장소 #AI종목분석 #종목분석 #주식공부\n\n회사 이미지: https://m.stock.naver.com/domestic/stock/096770\n장중 분석: 당일 캔들은 아직 확정되지 않았으며, 거래량은 분석 시점까지의 누적값을 직전 20거래일 하루 평균과 비교했습니다.",
+  "dateLabel": "2026. 09. 10. 18:34 KST",
+  "intraday": true,
+  "sourceSections": [
+    {
+      "id": "companyOverview",
+      "label": "기업 소개",
+      "title": "기업 소개",
+      "body": "SK이노베이션은 정유·석유화학과 윤활유 등 에너지·화학 제품을 중심으로 하는 통합 에너지·화학회사이며 전기차 배터리 및 에너지저장장치(ESS) 관련 사업을 주요 신성장 동력으로 추진하고 있습니다. 전통적인 석유제품 정제·판매와 석유화학 제품 공급에서 국내 주요 플레이어로 평가되며, 경쟁사로는 S-Oil·GS·SK 계열사가 있습니다. 주요 수요처는 석유화학 제품과 윤활유 고객군(산업·자동차)과 전지용 고객사(전기차 및 ESS 프로젝트)로 추정됩니다(추정). 최근에는 배터리·ESS 수주 소식과 자회사(또는 흡수합병 관련) 이슈가 사업 모멘텀으로 거론됩니다."
+    },
+    {
+      "id": "profile",
+      "label": "업종과 테마",
+      "title": "업종과 테마",
+      "body": "업종: 정유·석유화학·에너지 (산업 분류: 에너지/화학 계열, 확실도 높음)\n테마: 에너지·정유·석유화학, 전기차 배터리·ESS, 기업구조 재편(합병·지배구조 이슈)\n\n관련 기업: SK · S-Oil · GS · SK디스커버리"
+    },
+    {
+      "id": "score",
+      "label": "AI 점수와 평가",
+      "title": "AI 점수와 평가",
+      "body": "종합 72 / 100\n\n우호 — 기술적·모멘텀 신호와 선행 실적 기대(흑자 전환 컨센서스)가 우호적이나, 합병·보호예수(오버행) 이슈가 리스크로 남아 있어 신중한 접근\n\n차트: 82\n뉴스: 58\n재무: 81\n모멘텀: 81\n리스크 방어 점수: 52\n\n각 항목은 100점 만점. 리스크 점수는 높을수록 위험이 낮다는 AI 평가입니다.\n\n최근 전체 분석 중 상위 13%"
+    },
+    {
+      "id": "summary",
+      "label": "전체 요약",
+      "title": "전체 요약",
+      "body": "최근 주가 급등 후 소폭 조정이 발생했으며, 단기적으로는 보호예수 해제·합병 신고서 정정 요구 등 이벤트성 뉴스와 기관·외국인 수급이 주가를 견인한 흐름이 가장 큰 배경입니다.\n\n현재 선행 PER 8.96배와 PBR 0.99는 동종업계 평균 PER 107.74배 대비 큰 할인 구간에 위치합니다(숫자 비교 기준).\n\n기술적으론 5·20·60·120일 이동평균선 위에 위치하고 RSI 68.4로 과열권 근접, 볼린저밴드 상단을 돌파하며 강한 단기 상승 모멘텀이 확인됩니다.\n\n가장 중요한 리스크는 대량 보호예수 해제와 합병 관련 증권신고서 정정·검토 이슈로 인한 단기 공급압력과 불확실성입니다.\n\n다음 확인 포인트는 합병 관련 정정 처리 결과, 보호예수 해제(물량·시점)와 향후 분기 실적(2026 컨센서스 EPS 17,090원 반영)의 지속성입니다."
+    },
+    {
+      "id": "todayReason",
+      "label": "오늘 주가가 움직인 이유",
+      "title": "오늘 주가가 움직인 이유",
+      "body": "최근 등락의 핵심 원인은 보호예수 해제 일정·합병 관련 공시·IR과 함께 기관·외국인 순매수에 따른 단기 수급 영향입니다. 합병 신고서 정정 요구로 합병 절차의 불확실성이 제기되었으나, 동시에 일부 증권사에서 수주(ESS) 및 실적 개선 기대를 바탕으로 매수의견을 냈기 때문에 뉴스가 혼재된 상태입니다. 거래대금은 약 4,515억원으로 유의미한 수준이었고 누적거래량은 2,884,492주로 최근의 강한 거래 관심을 반영합니다. 가격은 5·20·60·120일 이동평균선 위에서 거래되며 단기 과열 신호(RSI 68.4, 볼린저밴드 상단 돌파)에 근접해 있어 향후 변동성이 클 수 있습니다."
+    },
+    {
+      "id": "fundamentals",
+      "label": "실적과 재무",
+      "title": "실적과 재무",
+      "body": "선행 PER은 8.96배로 제공되어 동종업계 평균 PER 107.74배 대비 큰 할인 상태입니다. 최근 제공된 연도별 컨센서스에서 2024·2025년 적자에서 2026년 EPS 17,090원으로 흑자 전환이 전망되어 적자→흑자 전환 기대가 강한 상황입니다. 장부가(BPS) 154,159원에 PBR 0.99는 장부가 대비 저평가 또는 적정 수준으로 해석될 여지가 있습니다. 다만 과거 실적(트레일링 EPS 음수)과 합병·공시 이슈는 밸류에이션의 불확실성을 동반합니다."
+    },
+    {
+      "id": "technical",
+      "label": "차트 흐름",
+      "title": "차트 흐름",
+      "body": "현재가가 5·20·60·120일 이동평균선 위에 위치해 단기·중기·장기 추세가 모두 우상향인 정점 구간입니다. RSI(14)=68.4로 과매수에 근접했고 볼린저밴드 상단을 소폭 상회하여 단기 과열 신호가 확인됩니다. 거래대금과 체결패턴은 최근 며칠간 강한 매수 유입을 보였으나 급락일(예: 8월 26일) 등 변동성 확대 이력도 존재합니다. 지지선은 이동평균 근처, 저항은 최근 신고가 권역으로 추정됩니다."
+    },
+    {
+      "id": "news",
+      "label": "뉴스 흐름",
+      "title": "뉴스 흐름",
+      "body": "최근 뉴스 흐름은 합병·증권신고서 정정 요구와 보호예수 해제(오버행 우려)라는 규제·수급 리스크와 ESS 수주·증권사 호평이라는 실적·수주 재료가 섞인 혼조 양상입니다. 단기적으로는 수급 관련 뉴스(보호예수 해제)가 가격에 민감하게 작용할 가능성이 큽니다."
+    },
+    {
+      "id": "momentum",
+      "label": "수급과 모멘텀",
+      "title": "수급과 모멘텀",
+      "body": "최근 5·20·60·120일 수익률이 모두 플러스(5일 +17.0%, 20일 +25.1%, 60일 +36.1%, 120일 +33.9%)로 강한 상승 모멘텀이 존재합니다. 최근 14거래일 동안 외국인·기관 순매수 합계가 각각 +959,772주, +1,294,815주로 수급이 우호적이며 9월 9일 대량 매수와 함께 가격이 급등한 점이 눈에 띕니다. 다만 과거 대규모 매도(8월 26일 외국인 -1,005,932주 등)로 인한 변동성 리스크가 상존합니다."
+    },
+    {
+      "id": "catalysts.0",
+      "label": "주요 재료",
+      "title": "주요 재료",
+      "body": "대규모 보호예수 해제(약 1,801만주) — 오버행 변수\n\n분류: 공시\n영향: 부정\n시점: 단기\n확신도: 높음\n\n보호예수 해제는 유통물량 증가로 단기 공급압력을 유발해 주가에 즉각적인 하방 요인으로 작용할 수 있습니다. 관련 뉴스는 해제 물량 규모(약 1,801만주)와 해제 시점, 보유주체(PRS 등)를 지목하고 있어 실물 유통 가능성을 시사합니다. 해제 시 대량 매도 혹은 시장 흡수 한계에 따라 가격이 급락할 수 있으니 거래량·호가 깊이를 함께 관찰해야 합니다. 과거 사례에서 보호예수 해제 직후 대형주에서 단기 조정이 발생한 점을 고려하면 영향은 단기적이지만 파급력이 충분합니다. 변수는 실제 매도 실행 여부와 주요 보유자의 매매 전략(장기보유 vs 처분)입니다."
+    },
+    {
+      "id": "catalysts.1",
+      "label": "주요 재료",
+      "title": "주요 재료",
+      "body": "합병 관련 증권신고서 정정 요구 — 절차적 불확실성\n\n분류: 공시\n영향: 중립\n시점: 단기\n확신도: 보통\n\n금융당국의 증권신고서 정정 요구는 합병 절차의 내용과 공시 완결성을 재검토하게 하는 이벤트로, 합병 일정 지연 또는 조건 변경 가능성을 내포합니다. 합병이 지연되면 계획된 기업가치 재평가 시점이 늦춰지거나 투자자의 불확실성 확대가 발생할 수 있습니다. 반대로 정정 요구가 수용되고 절차가 명확해지면 불확실성 완화 효과로 주가가 호전될 수 있습니다. 신뢰도는 공시라는 사실 자체로 높으나 결과(정정 후 승인 여부)에 따라 영향의 방향성이 달라집니다."
+    },
+    {
+      "id": "catalysts.2",
+      "label": "주요 재료",
+      "title": "주요 재료",
+      "body": "NeoVolta ESS 관련 수주 코멘트 및 증권사 긍정 리포트\n\n분류: 뉴스\n영향: 긍정\n시점: 중기\n확신도: 보통\n\n증권사 리포트는 NeoVolta ESS 수주 소식을 언급하며 매출·수익성 개선 기대를 제시했고 이는 회사의 전지·ESS 사업 부문에 실적 기여 가능성을 시사합니다. 수주가 매출로 인식되면 중기 매출 증가와 마진 개선으로 연결될 수 있으며 선행 PER이 낮은 점을 감안하면 재평가 요인이 될 수 있습니다. 다만 리포트는 수주 규모·인도 일정·마진 등 세부 조건을 모두 공개하지 않아 실제 이익 기여도는 추가 확인이 필요합니다. 유사한 수주 호재가 과거에 주가 재평가로 이어진 사례가 있으나 지속성은 계약 조건과 실적 반영 시점에 달려 있습니다."
+    },
+    {
+      "id": "valuation",
+      "label": "밸류에이션",
+      "title": "밸류에이션",
+      "body": "PER 평가: 낮음\nPBR 평가: 낮음\n선행 PER: 8.96배\n업종 평균 PER: 동종 종목 평균 약 107.74배\n평가 근거: 선행 PER 8.96배는 동종업계 평균 107.74배에 비해 상당한 할인 상태로 보입니다. 다만 동종업계 평균이 매우 높게 형성된 배경(특정 종목의 고PER 영향 등)을 감안하면 평균 비교만으로 절대적 저평가 결론은 제한적입니다. 트레일링 EPS가 최근 적자였으나 컨센서스(2026 EPS 17,090원) 기준으로 흑자 전환이 예상되는 점은 밸류에이션 재평가의 합리적 근거를 제공합니다. PBR 0.99와 BPS 154,159원은 장부가 대비 가격이 크게 프리미엄을 요구하지 않는 수준으로, 재무 관점에서는 부담이 크지 않습니다. 한계로는 합병·공시 이슈와 보호예수 해제 등 단기 이벤트가 밸류에이션 변동성을 키울 수 있다는 점입니다."
+    },
+    {
+      "id": "peerComparison",
+      "label": "동종 기업 비교",
+      "title": "동종 기업 비교",
+      "body": "동종업계 평균 PER 약 107.74배\n\nSK · PER 3.95 · PBR 0.91\n\nS-Oil · PER 5.94 · PBR 1.79\n\nGS · PER 4.42 · PBR 0.68\n\nSK디스커버리 · PER 6.19 · PBR 0.29"
+    },
+    {
+      "id": "technicalDetail",
+      "label": "기술 지표 상세",
+      "title": "기술 지표 상세",
+      "body": "이동평균: 현재가가 5·20·60·120일 이동평균선 위에 위치해 단기·중기·장기 모두 상향 추세입니다.\nRSI: RSI(14) 68.4로 과매수 직전 수준으로 과열 신호에 근접합니다.\n볼린저밴드: 볼린저밴드 중심 130,030원, 상단 151,591원인데 현재가가 상단을 소폭 상회해 단기 변동성 확대와 상단 부담이 있습니다.\n지지선: 144,000원 근처(MA5) 및 130,000원 근처(MA20) 권역으로 추정됩니다.\n저항선: 최근 52주 고가 164,700원 근처를 단기 주요 저항으로 추정합니다.\n패턴: 직전 몇 주간의 상승 돌파 후 단기 보합·조정 국면으로, 뚜렷한 전형적 패턴(머리어깨 등)은 미확인됩니다.\n해석: 이동평균선 상회는 강한 추세 신호이나 볼린저 상단 돌파와 RSI 수치로 인해 단기 과열과 되돌림 위험이 존재합니다. 지지선 근처 이탈 시 단기 조정폭은 MA20(약 130,000원)까지 확대될 수 있으므로 분할 접근이 유리합니다. 반대로 거래량을 동반한 추가 상승이면 신고가 도전 가능성이 높습니다."
+    },
+    {
+      "id": "scenarios.bull",
+      "label": "상승 시나리오",
+      "title": "상승 시나리오",
+      "body": "조건: 합병 불확실성 해소 및 ESS·배터리 수주 가시화로 실적 컨센서스 상향이 확인될 때\n예상 범위: 약 175,000~190,000원(대략 +14%~+24% 범위)\nAI 추정 확률 (0~1): 0.25\n시나리오 해설: 합병 관련 정정 요구가 해결되고 보호예수 물량이 시장에 흡수되거나 보유자가 처분하지 않기로 하면 불확실성이 해소되어 재평가가 촉발될 수 있습니다. 또한 NeoVolta 등 ESS 수주가 매출·이익에 실질적으로 반영되면 선행 PER이 낮다는 점이 강점으로 작용해 주가 상방 압력이 커질 수 있습니다.\n\nAI가 제시한 조건부 가정이며 실제 수익률이나 확률을 보장하지 않습니다."
+    },
+    {
+      "id": "scenarios.base",
+      "label": "기본 시나리오",
+      "title": "기본 시나리오",
+      "body": "조건: 합병 절차가 지연되거나 보호예수 해제가 일부 흡수되며 실적 전망(2026 EPS 17,090원)이 유지되는 경우\n예상 범위: 약 145,000~165,000원(대략 -5%~+8% 범위)\nAI 추정 확률 (0~1): 0.55\n시나리오 해설: 합병 관련 불확실성은 남아 있으나 시장이 일부 물량을 소화하고 실적 개선 기대가 유지되는 시나리오입니다. 이 경우 주가는 단기 변동성을 보이면서도 선행 실적 기대를 바탕으로 현재 가격대에서 등락을 반복할 가능성이 큽니다.\n\nAI가 제시한 조건부 가정이며 실제 수익률이나 확률을 보장하지 않습니다."
+    },
+    {
+      "id": "scenarios.bear",
+      "label": "하락 시나리오",
+      "title": "하락 시나리오",
+      "body": "조건: 합병 절차의 중대한 변경(합병 축소·불발)이나 보호예수 물량의 대규모 매도 발생 시\n예상 범위: 약 115,000~135,000원(대략 -25%~-12% 범위)\nAI 추정 확률 (0~1): 0.2\n시나리오 해설: 합병 관련 규제·절차 이슈가 부정적으로 전개되어 기대치가 낮아지거나 보호예수 해제 물량이 시장에 대량 매도로 나올 경우 주가가 빠르게 조정될 수 있습니다. 또한 실적 개선 기대가 후퇴하면 트레일링 실적 악화와 함께 밸류에이션 리레이팅이 역방향으로 나타날 수 있습니다.\n\nAI가 제시한 조건부 가정이며 실제 수익률이나 확률을 보장하지 않습니다."
+    },
+    {
+      "id": "risks",
+      "label": "위험 요인",
+      "title": "위험 요인",
+      "body": "• 대량 보호예수 해제에 따른 오버행(공급압력)\n\n• 합병(증권신고서 정정 요구) 관련 규제·절차 지연\n\n• 단기 과열에 따른 변동성 확대"
+    },
+    {
+      "id": "risksDetailed.0",
+      "label": "상세 리스크",
+      "title": "상세 리스크",
+      "body": "분류: 수급\n심각도: 높음\n발생 가능성: 보통\n위험 내용: 보호예수 해제에 따른 대량 유통물량은 단기적으로 주가에 하방 압력을 줄 수 있습니다.\n확인·대응 포인트: 보유자의 실제 매도 여부와 시장 흡수능력을 확인하고, 거래량·호가를 관찰하면서 분할 대응하실 것을 권장합니다."
+    },
+    {
+      "id": "risksDetailed.1",
+      "label": "상세 리스크",
+      "title": "상세 리스크",
+      "body": "분류: 규제\n심각도: 보통\n발생 가능성: 보통\n위험 내용: 증권신고서 정정 요구 등으로 합병 절차가 지연되거나 조건이 변경될 가능성이 존재합니다.\n확인·대응 포인트: 정정 요구에 대한 회사의 추가 공시 및 규제기관의 후속 조치 결과를 모니터링하시기 바랍니다."
+    },
+    {
+      "id": "risksDetailed.2",
+      "label": "상세 리스크",
+      "title": "상세 리스크",
+      "body": "분류: 시장\n심각도: 보통\n발생 가능성: 높음\n위험 내용: 단기간에 형성된 강한 랠리로 인해 RSI·볼린저밴드 기반 과열 및 변동성 확대 위험이 존재합니다.\n확인·대응 포인트: 진입 시 분할매수와 손절 기준 설정, MA20·MA5 근처의 지지 확인을 권장합니다."
+    },
+    {
+      "id": "risksDetailed.3",
+      "label": "상세 리스크",
+      "title": "상세 리스크",
+      "body": "분류: 재무\n심각도: 낮음\n발생 가능성: 보통\n위험 내용: 과거 트레일링 실적이 적자였기 때문에 컨센서스에 대한 신뢰가 완전하지 않을 수 있습니다.\n확인·대응 포인트: 다음 분기 실적과 매출·마진의 실제 반영 여부를 확인해 EPS 개선의 지속성을 검증하시기 바랍니다."
+    },
+    {
+      "id": "timing",
+      "label": "기간별 전망과 판단",
+      "title": "기간별 전망과 판단",
+      "body": "단기 전망: 1~2주 관점에서는 합병 정정 처리와 보호예수 해제 관련 뉴스에 따라 변동성이 확대될 가능성이 큽니다. 단기 급락·급등 양쪽 시나리오가 모두 열려 있으므로 포지션을 새로 취할 경우 분할 접근이 바람직합니다.\n중기 전망: 1~3개월 관점에서는 합병 절차 결과와 수주(ESS) 실적 반영 여부, 2026년 컨센서스 EPS 실현 가능성이 주가 흐름을 결정할 핵심 변수입니다. 실적이 컨센서스 수준으로 확인되면 밸류에이션 재평가가 가능하나, 절차적 불확실성은 잔존합니다.\n앱 AI 판단: 분할매수\n판단 근거: 현재 기술적·모멘텀 신호와 선행 실적 전망이 우호적이지만 합병·보호예수 해제라는 단기 리스크가 존재하기 때문에 분할매수로 리스크를 관리하면서 향후 공시·실적 확인 시 포지션을 조정하는 전략이 타당합니다."
+    },
+    {
+      "id": "sections.0",
+      "label": "CAN SLIM 체크",
+      "title": "CAN SLIM 체크",
+      "body": "C: 분기 EPS는 최근 연간·분기 기준으로 개선 흐름(영업이익 당기 3,487,296,471,000원으로 전기 -401,566,598,000원에서 개선)이 관찰됩니다.\nA: 연 EPS는 2024·2025년 적자에서 2026년 EPS 17,090원(컨센서스)으로 흑자 전환 전망입니다.\nN: 신제품/신사업은 배터리·ESS 수주 소식과 합병 이슈가 주요 뉴스로 확인됩니다.\nS: 거래량은 최근 급증했고 보호예수 해제(대량 물량)로 공급 측 리스크가 존재합니다.\nL: 업계 내에서 정유·석유화학과 전지·ESS 혼합 포트폴리오를 보유한 대형 사업자로 평가됩니다(추정).\nI: 기관은 최근 14거래일 합계에서 순매수(+1,294,815주)를 기록해 수요 측면에서 보강이 있었습니다.\nM: 시장 방향은 에너지·정유업황 개선 신호와 2차전지 수요 확대 기대가 혼재되어 있습니다."
+    },
+    {
+      "id": "sections.1",
+      "label": "기술 지표",
+      "title": "기술 지표",
+      "body": "이동평균: 5·20·60·120일 이동평균선 모두 아래에 현재가 위치해 단기·중기·장기 추세가 우상향입니다.\n볼린저밴드: 중심 130,030원, 상단 151,591원, 하단 108,469원으로 상단을 소폭 상회해 변동성·과열 신호가 나타납니다.\n지지/저항: 지지는 MA5 근처 144,000원 권역과 MA20 근처 130,000원 권역, 저항은 최근 52주 고가 164,700원 근처로 추정됩니다.\nRSI: RSI(14)=68.4로 과열 구간 진입 직전 수준입니다."
+    },
+    {
+      "id": "sections.2",
+      "label": "확인할 것",
+      "title": "확인할 것",
+      "body": "합병 관련 증권신고서 정정 처리 결과 및 금감원 소통 경과 확인.\n보호예수 해제(물량, 행사주체, 시점) 세부 내역 확인.\n다음 분기 실적(컨센서스 대비 결과)과 분기별 EPS 트렌드 확인.\n외국인·기관의 순매수 지속 여부 및 보유비중 변화 점검.\n주요 수주(ESS 등) 계약 세부조건과 예상 매출·마진 반영 여부 확인."
+    }
+  ],
+  "name": "SK이노베이션",
+  "brand": {
+    "sourceUrl": "https://ssl.pstatic.net/imgstock/fn/real/logo/png/stock/Stock096770.png",
+    "heroFile": "096770-logo.png",
+    "page": "https://m.stock.naver.com/domestic/stock/096770"
+  },
+  "account": "tf_stockstorage",
+  "status": "draft"
+}

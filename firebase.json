@@ -14,6 +14,7 @@
         }
       ],
       "rewrites": [
+        { "source": "/stock/**", "function": { "functionId": "stockLanding", "region": "asia-northeast3" } },
         { "source": "/pick/**", "destination": "/pick.html" },
         { "source": "/analysis/**", "destination": "/pick.html" }
       ]

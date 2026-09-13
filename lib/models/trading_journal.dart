@@ -55,7 +55,12 @@ class TradingJournal {
       note: d['note'] as String? ?? '',
       isPublic: d['isPublic'] as bool? ?? false,
       likes: (d['likes'] as int?) ?? 0,
-      createdAt: (d['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      // Legacy records without an input timestamp must have a stable fallback.
+      // Using now would reorder the same documents on every snapshot.
+      createdAt:
+          (d['createdAt'] as Timestamp?)?.toDate() ??
+          (d['tradeDate'] as Timestamp?)?.toDate() ??
+          DateTime.fromMillisecondsSinceEpoch(0),
       publishedAt: (d['publishedAt'] as Timestamp?)?.toDate(),
       buyPrice: (d['buyPrice'] as num?)?.toDouble() ?? 0,
       linkedBuyId: d['linkedBuyId'] as String? ?? '',

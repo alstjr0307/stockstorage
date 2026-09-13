@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 
 import '../models/market_analysis.dart';
 import '../models/stock_pick.dart';
+import '../models/shared_stock_link.dart';
+import 'analytics_service.dart';
 import '../screens/market_analysis_detail_screen.dart';
 import '../screens/stock_detail_screen.dart';
 import '../services/firestore_service.dart';
@@ -27,11 +29,47 @@ class DeepLinkService {
 
   static void _handleUri(Uri uri) {
     if (uri.host != _host) return;
+    final stock = SharedStockLink.parse(uri);
+    if (stock != null) {
+      openSharedStock(stock);
+      return;
+    }
     final segments = uri.pathSegments;
     if (segments.length >= 2) {
       if (segments[0] == 'pick') _navigateToPick(segments[1]);
       if (segments[0] == 'analysis') _navigateToAnalysis(segments[1]);
     }
+  }
+
+  static Future<void> openSharedStock(SharedStockLink stock) async {
+    // Initial app links can arrive before the root Navigator is attached.
+    for (
+      var attempt = 0;
+      attempt < 50 && navigatorKey.currentState == null;
+      attempt++
+    ) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    final navigator = navigatorKey.currentState;
+    if (navigator == null) return;
+    unawaited(
+      AnalyticsService.instance.logStockJourney(
+        'stock_share_landing',
+        ticker: stock.ticker,
+        market: stock.market,
+        source: 'native_link',
+      ),
+    );
+    navigator.push(
+      stockDetailRoute(
+        stockPickForGeneralDetail(
+          ticker: stock.ticker,
+          name: stock.name.isEmpty ? stock.ticker : stock.name,
+          market: stock.market,
+        ),
+        enablePickFeatures: false,
+      ),
+    );
   }
 
   static Future<void> _navigateToPick(String pickId) async {

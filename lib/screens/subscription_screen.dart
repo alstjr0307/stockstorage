@@ -2,6 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart' show FirebaseAuth;
+import '../providers/auth_provider.dart';
+import 'login_screen.dart';
 
 import '../services/subscription_service.dart';
 import '../utils/link_utils.dart';
@@ -12,12 +15,14 @@ class SubscriptionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final subscription = context.watch<SubscriptionService>();
+    final user = context.watch<AuthProvider>().user;
+    final loggedIn = user != null && !user.isAnonymous;
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(title: const Text('광고 제거')),
+      appBar: AppBar(title: const Text('프리미엄 멤버십')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -40,7 +45,7 @@ class SubscriptionScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 Text(
-                  subscription.isPremium ? '프리미엄 구독중' : '광고 없는 주식저장소',
+                  subscription.isPremium ? '프리미엄 구독 중' : '주식저장소를 더 여유롭게',
                   style: TextStyle(
                     color: cs.onSurface,
                     fontSize: 22,
@@ -75,6 +80,8 @@ class SubscriptionScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 const _BenefitRow(text: 'AI 종목 분석 하루 5회 광고 없이 이용'),
                 const SizedBox(height: 12),
+                const _BenefitRow(text: '목표가·등락률 조건 알림 무제한'),
+                const SizedBox(height: 12),
                 const _BenefitRow(text: '언제든 스토어에서 해지 가능'),
                 const SizedBox(height: 22),
                 if (subscription.isPremium)
@@ -93,11 +100,12 @@ class SubscriptionScreen extends StatelessWidget {
                         backgroundColor: const Color(0xFF10B981),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      onPressed:
-                          subscription.loading || !subscription.isConfigured
+                      onPressed: !loggedIn
+                          ? () => _openLogin(context)
+                          : subscription.loading || !subscription.isConfigured
                           ? null
                           : () => _purchase(context, subscription),
-                      child: subscription.loading
+                      child: loggedIn && subscription.loading
                           ? const SizedBox(
                               width: 20,
                               height: 20,
@@ -106,9 +114,11 @@ class SubscriptionScreen extends StatelessWidget {
                                 color: Colors.white,
                               ),
                             )
-                          : const Text(
-                              '월 구독으로 광고 제거',
-                              style: TextStyle(fontWeight: FontWeight.w800),
+                          : Text(
+                              loggedIn ? '프리미엄 월 구독 시작하기' : '로그인 후 구독하기',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                     ),
                   ),
@@ -129,7 +139,9 @@ class SubscriptionScreen extends StatelessWidget {
               style: const TextStyle(color: Colors.grey, fontSize: 12),
             ),
           TextButton(
-            onPressed: subscription.loading || !subscription.isConfigured
+            onPressed: !loggedIn
+                ? () => _openLogin(context)
+                : subscription.loading || !subscription.isConfigured
                 ? null
                 : () => _restore(context, subscription),
             child: const Text('이전 구매 복원'),
@@ -177,6 +189,11 @@ class SubscriptionScreen extends StatelessWidget {
     BuildContext context,
     SubscriptionService subscription,
   ) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.isAnonymous) {
+      await _openLogin(context);
+      return;
+    }
     final success = await subscription.purchaseMonthly();
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -190,14 +207,32 @@ class SubscriptionScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _openLogin(BuildContext context) async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+    // Returning from login never starts a charge automatically.
+  }
+
   Future<void> _restore(
     BuildContext context,
     SubscriptionService subscription,
   ) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.isAnonymous) {
+      await _openLogin(context);
+      return;
+    }
     final restored = await subscription.restore();
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(restored ? '구매를 복원했습니다.' : '복원할 구매 내역이 없어요.')),
+      SnackBar(
+        content: Text(
+          restored
+              ? '구매를 복원했습니다.'
+              : subscription.lastPurchaseError ?? '복원할 구매 내역이 없어요.',
+        ),
+      ),
     );
   }
 }

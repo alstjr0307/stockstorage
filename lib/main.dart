@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -48,11 +50,17 @@ void main() async {
   );
 
   AnalyticsService.instance.init();
-  await SubscriptionService.instance.initialize();
-  await native.initDeepLinks();
+  // Store/network requests must not hold up the first frame. Ad initialization
+  // waits for this same future before allowing any ad requests.
+  unawaited(SubscriptionService.instance.initialize());
   timeago.setLocaleMessages('ko', timeago.KoMessages());
   runApp(const StockStorageApp());
   WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(
+      native.initDeepLinks().catchError((Object error) {
+        debugPrint('[Startup] Deep link initialization failed: $error');
+      }),
+    );
     native.initNotifications();
   });
 }

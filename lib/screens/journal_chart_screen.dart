@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemChrome, DeviceOrientation;
 import 'package:intl/intl.dart';
 import '../models/trading_journal.dart';
+import '../services/journal_ledger.dart';
 import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
 import 'chart_visible_range.dart';
@@ -40,6 +41,13 @@ class JournalChartScreen extends StatefulWidget {
     this.fullscreenOnly = false,
     required this.firestoreService,
   });
+
+  JournalPosition? get ledger => JournalLedger.forStock([
+    buy,
+    ...relatedBuys,
+    ...linkedSells,
+    ...relatedSells,
+  ], buy);
 
   @override
   State<JournalChartScreen> createState() => _JournalChartScreenState();
@@ -82,6 +90,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
       if (seen.add(j.id)) out.add(j);
     }
 
+    add(widget.buy);
     for (final j in widget.linkedSells) {
       add(j);
     }
@@ -371,10 +380,12 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
                       ),
                       _summaryCell(
                         label: '총 실현손익',
-                        value: hasSell
+                        value: widget.ledger?.reliable != true
+                            ? '확인 필요'
+                            : hasSell
                             ? '${_totalRealizedPnl >= 0 ? '+' : ''}${fmtP(_totalRealizedPnl)}'
                             : '-',
-                        valueColor: hasSell
+                        valueColor: hasSell && widget.ledger?.reliable == true
                             ? (_totalRealizedPnl >= 0 ? _kUpColor : _kDownColor)
                             : Colors.white.withValues(alpha: 0.65),
                       ),
@@ -667,7 +678,7 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
       if (widget.showBuyMarker)
         ..._allBuys.map((b) => (journal: b, isBuy: true)),
       ..._allSells.map((s) => (journal: s, isBuy: false)),
-    ]..sort((a, b) => b.journal.tradeDate.compareTo(a.journal.tradeDate));
+    ]..sort((a, b) => JournalLedger.compare(b.journal, a.journal));
 
     return Container(
       decoration: BoxDecoration(
@@ -731,12 +742,13 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
   double get _totalSellQty => _allSells.fold(0.0, (sum, s) => sum + s.quantity);
 
   double get _avgBuyPrice {
-    if (_allBuys.isEmpty || _totalBuyQty <= 0) return 0;
-    final total = _allBuys.fold<double>(
-      0,
-      (sum, b) => sum + (b.price * b.quantity),
-    );
-    return total / _totalBuyQty;
+    final p = widget.ledger;
+    if (p?.reliable != true) return 0;
+    if (p!.quantity > JournalLedger.epsilon) return p.average;
+    return _totalBuyQty > 0
+        ? _allBuys.fold<double>(0, (sum, b) => sum + b.price * b.quantity) /
+              _totalBuyQty
+        : 0;
   }
 
   double get _avgSellPrice {
@@ -748,47 +760,13 @@ class _JournalChartScreenState extends State<JournalChartScreen> {
     return total / _totalSellQty;
   }
 
-  double _avgBuyPriceAt(DateTime sellDate, {String? excludingSellId}) {
-    final buysAsc = _allBuys
-        .where((b) => !b.tradeDate.isAfter(sellDate) && b.quantity > 0 && b.price > 0)
-        .toList()
-      ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
-    if (buysAsc.isEmpty) return 0;
-    final sellsBefore = _allSells
-        .where(
-          (s) =>
-              s.id != excludingSellId &&
-              !s.tradeDate.isAfter(sellDate) &&
-              s.quantity > 0,
-        )
-        .toList()
-      ..sort((a, b) => a.tradeDate.compareTo(b.tradeDate));
-    var soldLeft = sellsBefore.fold<double>(0.0, (acc, s) => acc + s.quantity);
-    var remainQty = 0.0;
-    var remainCost = 0.0;
-    for (final b in buysAsc) {
-      var lot = b.quantity;
-      if (soldLeft > 0) {
-        final consumed = lot < soldLeft ? lot : soldLeft;
-        lot -= consumed;
-        soldLeft -= consumed;
-      }
-      if (lot > 0) {
-        remainQty += lot;
-        remainCost += b.price * lot;
-      }
-    }
-    return remainQty > 0 ? remainCost / remainQty : 0;
-  }
+  double _avgBuyPriceAt(DateTime sellDate, {String? excludingSellId}) =>
+      excludingSellId == null
+      ? 0
+      : widget.ledger?.effectFor(excludingSellId)?.beforeAverage ?? 0;
 
-  double get _totalRealizedPnl {
-    return _allSells.fold<double>(0, (sum, s) {
-      if (s.price <= 0 || s.quantity <= 0) return sum;
-      final bp = _avgBuyPriceAt(s.tradeDate, excludingSellId: s.id);
-      if (bp <= 0) return sum;
-      return sum + (s.price - bp) * s.quantity;
-    });
-  }
+  double get _totalRealizedPnl =>
+      widget.ledger?.reliable == true ? widget.ledger!.realized : 0;
 
   Widget _tradeRow({
     required TradingJournal journal,

@@ -448,7 +448,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           iconColor: _gold,
           label: '프리미엄 회원',
           labelColor: _gold,
-          subtitle: '광고 제거 이용 중',
+          subtitle: '광고 제거 · AI 분석 · 조건 알림 무제한',
           onTap: () => _push(const SubscriptionScreen()),
         ),
       ]);
@@ -458,7 +458,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         icon: Icons.workspace_premium_outlined,
         iconColor: _gold,
         label: '프리미엄 구독',
-        subtitle: '광고 제거 · AI 분석 추가 혜택',
+        subtitle: '광고 제거 · AI 분석 하루 5회 · 조건 알림 무제한',
         onTap: () => _push(const SubscriptionScreen()),
       ),
       _buildRewardAdRow(),
