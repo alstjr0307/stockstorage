@@ -4650,7 +4650,7 @@ actionReason은 "단정적 매수·매도 권유"로 들리지 않되 방향은 
 exports.generateDailyInstagramAnalysis = onSchedule(
   {
     schedule: '0 10,14,17 * * 1-5', timeZone: 'Asia/Seoul',
-    region: 'asia-northeast3', timeoutSeconds: 1800, memory: '1GiB',
+    region: 'asia-northeast3', timeoutSeconds: 1800, memory: '2GiB',
     maxInstances: 1, concurrency: 1, retryCount: 0,
     secrets: [OPENAI_API_KEY, DART_API_KEY],
   },

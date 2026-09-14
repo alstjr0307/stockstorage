@@ -6,9 +6,10 @@ const {getStorage} = require('firebase-admin/storage');
 const {getApp} = require('firebase-admin/app');
 const {SecretManagerServiceClient} = require('@google-cloud/secret-manager');
 const cheerio = require('cheerio');
-const {renderCards, ACCOUNT} = require('./instagram_content');
+const {ACCOUNT} = require('./instagram_content');
 const {createEditorialSeries}=require('./instagram_editorial');
-const {InstagramGraph,publishSeries} = require('./instagram_graph');
+const {InstagramGraph} = require('./instagram_graph');
+const {renderReel}=require('./instagram_reel');
 const DEFAULT_STOCKS = [
   ['005930','삼성전자','KS',['삼성전자','Samsung Electronics','005930']],
   ['000660','SK하이닉스','KS',['SK하이닉스','하이닉스','SK hynix','000660']],
@@ -99,8 +100,10 @@ async function collectInput(stock, deps, now = new Date(), cachedHistory) {
   if(!/^\d{6}$/.test(stock.ticker) || !['KS','KQ'].includes(stock.market) || !stock.name) throw new Error('INVALID_STOCK_CONFIG');
   const keywords = [...new Set([stock.name, stock.ticker, ...(Array.isArray(stock.keywords)?stock.keywords:[])].filter(Boolean))];
   const newsUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(`("${keywords.join('" OR "')}") 주식 when:7d`)}&hl=ko&gl=KR&ceid=KR:ko`;
-  const [history, rss, quote, integration] = await Promise.all([
+  const annualUrl=`https://m.stock.naver.com/api/stock/${stock.ticker}/finance/annual`;
+  const [history, rss, quote, integration, annual] = await Promise.all([
     cachedHistory||collectHistory(stock,now),getText(newsUrl),deps.fetchQuote(stock.ticker),deps.fetchValuation(stock.ticker),
+    getText(annualUrl).then(JSON.parse).catch(()=>null),
   ]);
   const {candles,historyUrl} = history;
   if(candles.length<120) throw new Error('INSUFFICIENT_CANDLES');
@@ -129,7 +132,7 @@ async function collectInput(stock, deps, now = new Date(), cachedHistory) {
   const currentPrice=quote?.price>0?quote.price:last.close;
   return {stock,price:{currentPrice,change:currentPrice-prev.close,changeRate:(currentPrice/prev.close-1)*100},
     fundamentals:{per:val('per'),pbr:val('pbr'),bps:val('bps'),forwardPer:val('cnsPer')},candles,news,
-    marketDate:last.date,sourcePriceUrl:historyUrl,asOf:history.asOf||null};
+    marketDate:last.date,sourcePriceUrl:historyUrl,asOf:history.asOf||null,annual,annualUrl,high52:quote?.high52w>0?quote.high52w:val('highPriceOf52Weeks')};
 }
 
 function eligibleJob(job, now = Date.now()) {
@@ -249,43 +252,29 @@ async function runDailyInstagram(deps, options = {}) {
         results.push({key,status:'market_closed'});continue;
       }
       const payload=await deps.analyze({...input,requestId:`ig_${key}`});
-      const analysis={...payload,...stock,updatedAt:new Date().toISOString(),analysisPrice:input.price.currentPrice,marketDate:input.marketDate,sourceCandles:input.candles,sourcePriceUrl:input.sourcePriceUrl,intraday:['1000','1400'].includes(slot),marketAsOf:input.asOf};
+      const analysis={...payload,...stock,updatedAt:new Date().toISOString(),analysisPrice:input.price.currentPrice,marketDate:input.marketDate,sourceCandles:input.candles,sourcePriceUrl:input.sourcePriceUrl,sourceAnnualFinance:input.annual,sourceAnnualFinanceUrl:input.annualUrl,sourceHigh52:input.high52,intraday:['1000','1400'].includes(slot),marketAsOf:input.asOf};
       const drafts=await createEditorialSeries(analysis);
-      const imageSets=[];
-      for(const draft of drafts) imageSets.push(await renderCards(draft));
-      await save({status:'draft',analysis,draft:drafts[0],drafts,leaseUntil:new Date(Date.now()+30*60000)});
+      if(drafts.length!==1)throw Error('REEL_REQUIRES_SINGLE_EDITORIAL');
+      await save({status:'draft',analysis,draft:drafts[0],drafts,mediaType:'REELS',leaseUntil:new Date(Date.now()+30*60000)});
+      const reel=await renderReel(drafts[0],analysis,{outputDir:options.draftOnly?options.outputDir:undefined});
+      await save({reel:reel.metadata});
       if(options.draftOnly) {
         if(options.outputDir) {
           const fs=require('node:fs/promises'),path=require('node:path');
-          await fs.mkdir(options.outputDir,{recursive:true});
           await fs.writeFile(path.join(options.outputDir,'analysis.json'),JSON.stringify(analysis,null,2));
-          await fs.writeFile(path.join(options.outputDir,'series.json'),JSON.stringify(drafts,null,2));
-          for(let p=0;p<drafts.length;p++) {
-            const dir=path.join(options.outputDir,`part-${String(p+1).padStart(2,'0')}`);
-            await fs.mkdir(dir,{recursive:true});
-            await fs.writeFile(path.join(dir,'draft.json'),JSON.stringify(drafts[p],null,2));
-            await fs.writeFile(path.join(dir,'caption.txt'),drafts[p].caption);
-            for(let i=0;i<imageSets[p].length;i++) await fs.writeFile(path.join(dir,`${i+1}.jpg`),imageSets[p][i]);
-          }
+          await fs.writeFile(path.join(options.outputDir,'caption.txt'),drafts[0].caption);
         }
         await save({leaseUntil:new Date(0)});
-        results.push({key,status:'draft',parts:drafts.length});continue;
+        results.push({key,status:'draft',mediaType:'REELS',duration:reel.metadata.duration});continue;
       }
       const bucket=getStorage().bucket(config.storageBucket||'stockstorage-13828.firebasestorage.app');
-      const posts=[];
-      for(let p=0;p<drafts.length;p++) {
-        const urls=[];
-        for(let i=0;i<imageSets[p].length;i++) {
-          const name=`instagram/${key}/part-${p+1}/${i+1}.jpg`, token=randomUUID();
-          await bucket.file(name).save(imageSets[p][i],{resumable:false,contentType:'image/jpeg',metadata:{metadata:{firebaseStorageDownloadTokens:token},cacheControl:'public,max-age=86400'}});
-          urls.push(`https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(name)}?alt=media&token=${token}`);
-        }
-        posts.push({urls,caption:drafts[p].caption});
-      }
-      await save({posts,status:'uploading'});
-      const mediaIds=await publishSeries(graph,posts,save);
-      await configRef.set({lastPublishedAt:new Date(),lastJob:key,lastMediaId:mediaIds.at(-1),lastMediaIds:mediaIds},{merge:true});
-      results.push({key,status:'published',mediaIds});
+      const name=`instagram/${key}/${owner}/reel.mp4`, token=randomUUID();
+      await bucket.file(name).save(reel.video,{resumable:false,contentType:'video/mp4',metadata:{metadata:{firebaseStorageDownloadTokens:token},cacheControl:'public,max-age=86400'}});
+      const videoUrl=`https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(name)}?alt=media&token=${token}`;
+      await save({videoUrl,status:'uploading'});
+      const mediaId=await graph.reel(videoUrl,drafts[0].caption,save);
+      await configRef.set({lastPublishedAt:new Date(),lastJob:key,lastMediaId:mediaId,lastMediaIds:[mediaId],lastMediaType:'REELS'},{merge:true});
+      results.push({key,status:'published',mediaType:'REELS',mediaIds:[mediaId]});
     } catch(error) {
       const code=/^[A-Z0-9_]+$/.test(error.message||'')?error.message:'INSTAGRAM_JOB_FAILED';
       // Never downgrade a confirmed publication or clear an uncertain publish.

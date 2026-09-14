@@ -8,8 +8,8 @@
 - Instagram user id: `17841409520140755`
 - Firebase project: `stockstorage-13828`
 - Deployed function: `generateDailyInstagramAnalysis`
-- Schedule: Monday-Friday, 18:30 Asia/Seoul
-- Default volume: 1 stock analysis per run, one 10-card editorial carousel
+- Schedule: Monday-Friday, 10:00 / 14:00 / 17:00 Asia/Seoul
+- Default volume: 1 stock analysis per slot, one 53-second Reel (11 cuts)
 - Posting secret: `INSTAGRAM_ACCESS_TOKEN` in Firebase Secret Manager
 
 The Instagram token is not stored in the repository. It was generated with
@@ -32,10 +32,9 @@ Each run:
    Google News RSS items.
 5. Filters news to items whose article title directly mentions the stock keyword.
 6. Runs the existing AI analysis function.
-7. Edits the analysis into eight visual content cards plus cover and CTA (10 JPEGs).
-8. Uploads the JPEGs to Firebase Storage with tokenized download URLs.
-9. Creates Instagram carousel children, waits for readiness, creates the parent
-   carousel, then publishes it.
+7. Edits the analysis and renders 11 native 1080×1920 scenes, including annual results, with Wanted Sans and the approved ivory/ink/lime palette.
+8. Encodes a 53-second H.264/AAC MP4 with bundled original music and ffmpeg-static, checks decoding, then uploads it to Firebase Storage.
+9. Creates one REELS container, waits for readiness, persists publishing intent, then publishes it. No carousel children are created.
 10. Records job state under `_admin/instagramAutomation/jobs/{date_market_ticker}`.
 
 The final card and caption include:
@@ -87,6 +86,10 @@ firebase functions:secrets:get INSTAGRAM_ACCESS_TOKEN --project stockstorage-138
 Firebase currently warns that Node.js 20 is deprecated and will be
 decommissioned on 2026-10-30. Plan a separate runtime upgrade for the whole
 functions codebase.
+
+## Historical implementation notes
+
+The sections below describe earlier carousel revisions, not the current scheduled publication format.
 
 ## Full analysis carousel design (2026-09-09)
 
@@ -292,3 +295,17 @@ before centering the visible number at (278, 662); /100 is independently
 centered below. Zero and missing scores have no foreground arc. Verified
 0/9/49/50/69/70/72/100/missing with <=0.5px center error and 20 passing tests.
 Actual-data preview: output/instagram-score-fix/actual-score.jpg.
+
+## Automatic Reels (2026-09-15)
+
+`instagram_daily.js` now always calls `renderReel()` and `InstagramGraph.reel()`. A stock produces one 53-second video: 4 seconds each for cover/CTA, 5 seconds each for nine body cuts. It keeps the existing slot selection, account verification, leases, stale-market guards and non-replayable published/uncertain states. No old completed job is republished during migration.
+
+The renderer uses the deployment-bundled `instagram_reel_style.json` and `instagram_assets/WantedSans-*` files. It renders directly at 1080×1920, asserts all text is above y=1550, and checks every frame's lower 370px is uniform. A frame overflow or encoding failure prevents upload. Temporary video files are removed in `finally`. The Linux encoder is installed by the pinned npm dependency during Cloud Build, not copied from a developer laptop. Original music is bundled as `reel-bed.wav`.
+
+The early AI score, company/issue imagery, seven-row annual table, eight daily foreign/institutional observations, 52-week high comparison and peer PER/PBR use the saved app analysis and market responses. Annual values come from the annual NAVER response, not quarterly statements. Missing historical/forecast years are shown as —; no unavailable estimates are invented. Negative or zero prior operating profit does not produce a misleading YoY percentage. A quote's 52-week high is used; a shorter chart history is never labelled as 52 weeks.
+
+Review without publishing: `node tools/instagram_auto_reel_preview.cjs`. The saved fixture is historical and missing unavailable source values by design. `functions/instagram_preview.js` uses the same scheduler callback in draft mode for a live data/AI preview when credentials are configured. No public diagnostic endpoint or scheduler-time test post was introduced.
+
+Tests: `node --test functions/instagram_reel.test.js` checks actual render dimensions and blank safe areas, annual missing/forecast values, PER/PBR, eight flow dates, and publish-intent ordering/uncertain outcomes.
+
+Validation on 2026-09-15: four dedicated Reel tests passed; both historical and saved live-production SK하이닉스 drafts encoded and decoded as 53-second MP4s. The combined suite passed 25/26 tests; the pre-existing legacy full-transcript carousel pagination test fails with CARD_TEXT_OVERFLOW on this macOS environment. The same failure was reproduced using the original HEAD files. That legacy path is not used by the scheduled Reel renderer.

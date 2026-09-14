@@ -30,14 +30,34 @@ class InstagramGraph {
     this.userId = String(me.user_id || me.id);
     return me;
   }
-  async ready(id) {
-    for(let i=0;i<24;i++) {
+  async ready(id, attempts=24) {
+    for(let i=0;i<attempts;i++) {
       const state = await this.request(id,'GET',{fields:'status_code'});
       if(state.status_code === 'FINISHED') return;
       if(['ERROR','EXPIRED','PUBLISHED'].includes(state.status_code)) throw new Error(`INSTAGRAM_CONTAINER_${state.status_code}`);
       await pause(5000);
     }
     throw new Error('INSTAGRAM_CONTAINER_TIMEOUT');
+  }
+  async reel(videoUrl, caption, save) {
+    if(!this.userId) await this.identity();
+    const url=new URL(videoUrl);
+    if(url.protocol!=='https:'||url.hostname!=='firebasestorage.googleapis.com')throw Error('INVALID_VIDEO_HOST');
+    const container=await this.request(`${this.userId}/media`,'POST',{
+      media_type:'REELS',video_url:videoUrl,caption,share_to_feed:'true',thumb_offset:'1000',
+    });
+    if(!container.id)throw Error('MISSING_CONTAINER_ID');
+    await save({containerId:container.id,mediaType:'REELS',status:'processing'});
+    await this.ready(container.id,120);
+    await save({status:'publishing',publishStartedAt:new Date()});
+    const media=await this.request(`${this.userId}/media_publish`,'POST',{creation_id:container.id});
+    if(!media.id)throw Error('MISSING_PUBLISHED_MEDIA_ID');
+    await save({status:'published',mediaId:media.id,mediaIds:[media.id],publishedAt:new Date()});
+    try {
+      const result=await this.request(media.id,'GET',{fields:'permalink,media_product_type'});
+      if(result.permalink)await save({permalink:result.permalink});
+    } catch (_) { /* Confirmed publication must not replay for metadata failure. */ }
+    return media.id;
   }
   async carousel(urls, caption, save) {
     if(!this.userId) await this.identity();
