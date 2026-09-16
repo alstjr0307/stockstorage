@@ -10,6 +10,7 @@ const {ACCOUNT} = require('./instagram_content');
 const {createEditorialSeries}=require('./instagram_editorial');
 const {InstagramGraph} = require('./instagram_graph');
 const {renderReel}=require('./instagram_reel');
+const {ensureSharedAnalysis}=require('./social_analysis');
 const DEFAULT_STOCKS = [
   ['005930','삼성전자','KS',['삼성전자','Samsung Electronics','005930']],
   ['000660','SK하이닉스','KS',['SK하이닉스','하이닉스','SK hynix','000660']],
@@ -228,9 +229,11 @@ async function runDailyInstagram(deps, options = {}) {
     const key=`${day}_${stock.market}_${stock.ticker}${options.draftOnly?'_draft':''}`;
     const ref=db.collection('_admin').doc('instagramAutomation').collection('jobs').doc(key);
     const owner=randomUUID();
+    let priorJob={};
     const claimed=await db.runTransaction(async tx=>{
       const prior=(await tx.get(ref)).data();
       if(!eligibleJob(prior)) return false;
+      priorJob=prior||{};
       tx.set(ref,{status:'generating',owner,stock,day,selection:selection.ranking.find(r=>r.stock.ticker===stock.ticker)||null,startedAt:new Date(),leaseUntil:new Date(Date.now()+35*60000)},{merge:true});
       return true;
     });
@@ -245,14 +248,15 @@ async function runDailyInstagram(deps, options = {}) {
       if(fields.status) phase=fields.status;
     };
     try {
+      const analysis=await ensureSharedAnalysis({prior:priorJob,key,save,allowPriorMarketDay:options.allowPriorMarketDay===true,create:async()=>{
       const input=await collectInput(stock,deps,now,histories.get(stock.ticker));
       // Weekend/holiday/stale feeds never masquerade as today's market analysis.
       if(input.marketDate!==day.replace(/-/g,'') && !options.allowPriorMarketDay) {
-        await save({status:'market_closed',marketDate:input.marketDate,leaseUntil:new Date(0)});
-        results.push({key,status:'market_closed'});continue;
+        throw Error('SOCIAL_MARKET_CLOSED');
       }
       const payload=await deps.analyze({...input,requestId:`ig_${key}`});
-      const analysis={...payload,...stock,updatedAt:new Date().toISOString(),analysisPrice:input.price.currentPrice,marketDate:input.marketDate,sourceCandles:input.candles,sourcePriceUrl:input.sourcePriceUrl,sourceAnnualFinance:input.annual,sourceAnnualFinanceUrl:input.annualUrl,sourceHigh52:input.high52,intraday:['1000','1400'].includes(slot),marketAsOf:input.asOf};
+      return {...payload,...stock,updatedAt:new Date().toISOString(),analysisPrice:input.price.currentPrice,marketDate:input.marketDate,sourceCandles:input.candles,sourcePriceUrl:input.sourcePriceUrl,sourceAnnualFinance:input.annual,sourceAnnualFinanceUrl:input.annualUrl,sourceHigh52:input.high52??null,intraday:['1000','1400'].includes(slot),marketAsOf:input.asOf};
+      }});
       const drafts=await createEditorialSeries(analysis);
       if(drafts.length!==1)throw Error('REEL_REQUIRES_SINGLE_EDITORIAL');
       await save({status:'draft',analysis,draft:drafts[0],drafts,mediaType:'REELS',leaseUntil:new Date(Date.now()+30*60000)});
@@ -276,6 +280,10 @@ async function runDailyInstagram(deps, options = {}) {
       await configRef.set({lastPublishedAt:new Date(),lastJob:key,lastMediaId:mediaId,lastMediaIds:[mediaId],lastMediaType:'REELS'},{merge:true});
       results.push({key,status:'published',mediaType:'REELS',mediaIds:[mediaId]});
     } catch(error) {
+      if(error.message==='SOCIAL_MARKET_CLOSED'){
+        await save({status:'market_closed',leaseUntil:new Date(0)});
+        results.push({key,status:'market_closed'});continue;
+      }
       const code=/^[A-Z0-9_]+$/.test(error.message||'')?error.message:'INSTAGRAM_JOB_FAILED';
       // Never downgrade a confirmed publication or clear an uncertain publish.
       if(phase!=='published') await save({status:phase==='publishing'?'publish_uncertain':'failed',error:code,leaseUntil:new Date(0)});

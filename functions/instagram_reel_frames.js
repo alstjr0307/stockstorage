@@ -3,6 +3,9 @@ const sharp=require('sharp');
 const path=require('node:path');
 const {candleGeometry}=require('./instagram_charts');
 const STYLE=require('./instagram_reel_style.json');
+const SCALE=(STYLE.width-2*STYLE.horizontalMargin)/960;
+const OFFSET_X=STYLE.horizontalMargin-60*SCALE;
+const OFFSET_Y=STYLE.topMargin-52*SCALE;
 const C={paper:STYLE.colors.paper,ink:STYLE.colors.ink,blue:'#547a19',accent:STYLE.colors.lime,muted:STYLE.colors.muted,rule:'#d6d9cd',red:'#C8414F'};
 const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
 const fmt=v=>Math.round(v).toLocaleString('ko-KR');
@@ -11,15 +14,16 @@ const scoreColor=value=>!Number.isFinite(value)?'#64748B':value>=70?'#16845B':va
 async function centeredText(value,cx,cy,w,h,size,color,bold=false) {
   const input=await sharp(await type(value,w,h,size,color,bold)).trim().png().toBuffer();
   const {width,height}=await sharp(input).metadata();
-  return {input,left:Math.round(cx-width/2),top:Math.round(cy-height/2)};
+  return {input,left:Math.round(cx-width/SCALE/2),top:Math.round(cy-height/SCALE/2),nativeText:true};
 }
 async function type(value,w,h,size,color,bold=false) {
+  w=Math.floor(w*SCALE);h=Math.floor(h*SCALE);size*=SCALE;
   const font=bold?'Bold':'Regular';
   const headline=bold&&size>=54;
   const family=headline?'Wanted Sans Black':bold?'Wanted Sans ExtraBold':'Wanted Sans Medium';
   const file=headline?'WantedSans-Black.ttf':bold?'WantedSans-ExtraBold.ttf':'WantedSans-Medium.ttf';
   const joined=String(value).split(/(\s+)/).map(v=>/^\s+$/.test(v)?v:[...v].join('\u2060')).join('');
-  for(let n=size;n>=Math.max(size>=66?54:size-4,Math.min(size,20));n-=2) {
+  for(let n=size;n>=Math.max(size*.75,Math.min(size,16));n-=2) {
     const {data,info}=await sharp({text:{text:`<span foreground="${color}" letter_spacing="${Math.round(n*STYLE.trackingEm*1024)}">${esc(joined)}</span>`,font:`${family} ${n}`,fontfile:path.join(__dirname,'instagram_assets',file),width:w,dpi:72,rgba:true,wrap:'word-char',spacing:Math.round(n*.28)}}).png().toBuffer({resolveWithObject:true});
     if(info.width<=w&&info.height<=h)return data;
   }
@@ -30,7 +34,7 @@ async function render(draft) {
   for(const [i,c] of draft.cards.entries()) {
     const dark=c.cta,fg=dark?C.paper:C.ink,muted=dark?'#A9ADA8':C.muted;
     const overlays=[];let svg='';
-    const put=async(t,x,y,w,h,size,color=fg,bold=false)=>{if(t)overlays.push({input:await type(t,w,h,size,color,bold),left:Math.round(x),top:Math.round(y)});};
+    const put=async(t,x,y,w,h,size,color=fg,bold=false)=>{if(t)overlays.push({input:await type(t,w,h,size,color,bold),left:Math.round(x),top:Math.round(y),nativeText:true});};
     const line=(x,y,w,color=C.rule)=>{svg+=`<path d="M${x} ${y}h${w}" stroke="${color}"/>`;};
     const rect=(x,y,w,h,color)=>{svg+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}"/>`;};
     const panel=(x,y,w,h,color='#e6eadb',radius=24)=>{svg+=`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${radius}" fill="${color}"/>`;};
@@ -218,9 +222,14 @@ async function render(draft) {
 
       }
     }
-    const bg=Buffer.from(`<svg width="1080" height="1920"><rect width="1080" height="1920" fill="${dark?C.ink:C.paper}"/><g transform="translate(0 100)">${svg}</g></svg>`);
+    const bg=Buffer.from(`<svg width="1080" height="1920"><rect width="1080" height="1920" fill="${dark?C.ink:C.paper}"/><g transform="translate(${OFFSET_X} ${OFFSET_Y}) scale(${SCALE})">${svg}</g></svg>`);
     // Render directly at output resolution, preserving the ad-safe region.
-    for(const o of overlays){o.top+=100;const m=await sharp(o.input).metadata();if(o.top+m.height>STYLE.contentBottomExclusive)throw Error('REEL_CONTENT_OVERFLOW');}
+    for(const o of overlays){
+      o.left=Math.round(OFFSET_X+o.left*SCALE);o.top=Math.round(OFFSET_Y+o.top*SCALE);
+      if(!o.nativeText){const m=await sharp(o.input).metadata();o.input=await sharp(o.input).resize(Math.round(m.width*SCALE),Math.round(m.height*SCALE)).png().toBuffer();}
+      delete o.nativeText;
+      const m=await sharp(o.input).metadata();if(o.top+m.height>STYLE.contentBottomExclusive)throw Error('REEL_CONTENT_OVERFLOW');
+    }
     const frame=await sharp(bg).composite(overlays).png().toBuffer();
     const safe=await sharp(frame).extract({left:0,top:STYLE.contentBottomExclusive,width:1080,height:STYLE.safeBottomPx}).png().toBuffer();
     const stats=await sharp(safe).stats();

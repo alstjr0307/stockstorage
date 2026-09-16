@@ -36,6 +36,7 @@ const SECTOR_ART = {
 };
 
 const TICKER_SECTOR = {
+  '126340': 'battery',
   '000660': 'semiconductor',
   '005930': 'semiconductor',
   '003670': 'battery',

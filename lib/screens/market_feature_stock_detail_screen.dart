@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -1151,47 +1149,17 @@ class _NaverBoardPost {
 }
 
 Future<List<_NaverBoardPost>> _fetchNaverPosts(String ticker) async {
-  final uri = Uri.parse(
-    'https://finance.naver.com/item/board.naver?code=$ticker',
-  );
-  final response = await http.get(uri, headers: {
-    'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-        'Chrome/124.0 Safari/537.36',
-    'Accept-Language': 'ko-KR,ko;q=0.9',
-    'Accept': 'text/html,application/xhtml+xml',
-    'Referer': 'https://finance.naver.com/',
-  }).timeout(const Duration(seconds: 10));
-
-  // Content-Type이 UTF-8이라고 해도 실제로는 EUC-KR인 경우가 있음
-  String body;
-  try {
-    body = utf8.decode(response.bodyBytes, allowMalformed: false);
-  } catch (_) {
-    body = latin1.decode(response.bodyBytes, allowInvalid: true);
-  }
-
-  // nid는 URL에 &page=N이 추가로 붙으므로 [^"]* 로 처리
-  // title 속성에서 제목 추출 (줄바꿈·이미지 태그와 무관하게 깔끔하게 파싱됨)
-  final linkRe = RegExp(
-    r'board_read\.naver\?code=[0-9]+&(?:amp;)?nid=([0-9]+)[^"]*"'
-    r'[^>]*title="([^"]+)"',
-  );
-  final dateRe = RegExp(
-    r'<span class="tah p10 gray03">'
-    r'([0-9]{4}\.[0-9]{2}\.[0-9]{2}\s+[0-9]{2}:[0-9]{2})</span>',
-  );
-
-  final links = linkRe.allMatches(body).take(5).toList();
-  final dates = dateRe.allMatches(body).map((m) => m.group(1)!.trim()).toList();
-
-  return List.generate(links.length, (i) {
-    return _NaverBoardPost(
-      title: links[i].group(2)?.trim() ?? '',
-      date: i < dates.length ? dates[i] : '',
-      nid: links[i].group(1) ?? '',
-    );
-  });
+  final posts = await StockPriceService.fetchDiscussionPosts(ticker, 'KS');
+  return posts
+      .take(5)
+      .map(
+        (post) => _NaverBoardPost(
+          title: post.title,
+          date: DateFormat('yyyy.MM.dd HH:mm').format(post.date),
+          nid: post.nid,
+        ),
+      )
+      .toList();
 }
 
 class _NaverBoardSection extends StatefulWidget {
@@ -1206,10 +1174,10 @@ class _NaverBoardSectionState extends State<_NaverBoardSection> {
   late Future<List<_NaverBoardPost>> _future;
 
   String get _boardUrl =>
-      'https://m.stock.naver.com/domestic/stock/${widget.ticker}/discuss';
+      'https://m.stock.naver.com/domestic/stock/${widget.ticker}/discussion';
 
   String _postUrl(String nid) =>
-      'https://m.stock.naver.com/domestic/stock/${widget.ticker}/board/$nid';
+      'https://m.stock.naver.com/domestic/stock/${widget.ticker}/discussion/$nid';
 
   Future<void> _launch(String url) async {
     final uri = Uri.parse(url);

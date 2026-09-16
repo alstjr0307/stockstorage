@@ -5582,176 +5582,94 @@ class JournalFormSheetState extends State<JournalFormSheet> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     );
 
-    return AbsorbPointer(
-      absorbing: _saving,
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-          child: Form(
-            key: _formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 36,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.2)
-                            : Colors.black.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // ── 수량 초과 에러 배너
-                  if (_qtyError != null) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.redAccent.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Colors.redAccent.withValues(alpha: 0.35),
+    return Stack(
+      children: [
+        AbsorbPointer(
+          absorbing: _saving,
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(24),
+                ),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+              child: Form(
+                key: _formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 36,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.2)
+                                : Colors.black.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
                       ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Icon(
-                            Icons.warning_amber_rounded,
-                            size: 16,
-                            color: Colors.redAccent,
+                      const SizedBox(height: 16),
+                      // ── 수량 초과 에러 배너
+                      if (_qtyError != null) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              _qtyError!,
-                              softWrap: true,
-                              style: TextStyle(
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.redAccent.withValues(alpha: 0.35),
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                size: 16,
                                 color: Colors.redAccent,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
                               ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  Text(
-                    widget.existing != null ? '매매일지 수정' : '매매일지 작성',
-                    style: TextStyle(
-                      color: isDark ? Colors.white : Colors.black87,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 17,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  // 매매 구분
-                  Text(
-                    '매매 구분',
-                    style: TextStyle(
-                      color: labelColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: _actions.map((a) {
-                      final selected = _action == a;
-                      final color = a == '매수'
-                          ? const Color(0xFF10B981)
-                          : a == '매도'
-                          ? Colors.redAccent
-                          : Colors.orangeAccent;
-                      // 기존 항목 수정 시 액션 변경 불가
-                      final isLocked =
-                          (widget.existing != null &&
-                              a != widget.existing!.action) ||
-                          (_isActionStockLocked && a != _action);
-                      return Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            if (a == _action || isLocked) return;
-                            setState(() {
-                              _action = a;
-                              if (a == '매도' && widget.existing == null) {
-                                _selectedPick = null;
-                                _stockName = '';
-                                _ticker = '';
-                                _rawMarket = '';
-                                _market = 'KR';
-                                _remainingQty = 0;
-                                _priceResult = null;
-                                _manualMode = false;
-                              }
-                            });
-                          },
-                          child: Container(
-                            margin: EdgeInsets.only(
-                              right: a == _actions.last ? 0 : 8,
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(
-                              color: isLocked
-                                  ? cs.onSurface.withValues(alpha: 0.02)
-                                  : selected
-                                  ? color.withValues(alpha: 0.15)
-                                  : inputFill,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(
-                                color: selected
-                                    ? color.withValues(alpha: 0.5)
-                                    : Colors.transparent,
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                a,
-                                style: TextStyle(
-                                  color: isLocked
-                                      ? cs.onSurface.withValues(alpha: 0.2)
-                                      : selected
-                                      ? color
-                                      : (isDark
-                                            ? Colors.white54
-                                            : Colors.black45),
-                                  fontWeight: selected
-                                      ? FontWeight.w700
-                                      : FontWeight.w400,
-                                  fontSize: 14,
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _qtyError!,
+                                  softWrap: true,
+                                  style: TextStyle(
+                                    color: Colors.redAccent,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
-                            ),
+                            ],
                           ),
                         ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 14),
-                  // 종목 / 매수포지션 선택
-                  if (widget.existing != null || _action != '매도') ...[
-                    // 매도 수정 시 종목 변경 불가 — 잠긴 표시
-                    if (widget.existing != null && _action == '매도') ...[
+                        const SizedBox(height: 12),
+                      ],
                       Text(
-                        '종목',
+                        widget.existing != null ? '매매일지 수정' : '매매일지 작성',
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black87,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 17,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      // 매매 구분
+                      Text(
+                        '매매 구분',
                         style: TextStyle(
                           color: labelColor,
                           fontSize: 12,
@@ -5759,102 +5677,85 @@ class JournalFormSheetState extends State<JournalFormSheet> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: cs.onSurface.withValues(alpha: 0.04),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: cs.onSurface.withValues(alpha: 0.08),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.lock_outline,
-                              size: 14,
-                              color: cs.onSurface.withValues(alpha: 0.3),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _stockName,
-                                style: TextStyle(
-                                  color: cs.onSurface.withValues(alpha: 0.6),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            if (_ticker.isNotEmpty)
-                              Text(
-                                _ticker,
-                                style: TextStyle(
-                                  color: cs.onSurface.withValues(alpha: 0.3),
-                                  fontSize: 12,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ] else if (_isActionStockLocked) ...[
-                      Text(
-                        '종목',
-                        style: TextStyle(
-                          color: labelColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: cs.onSurface.withValues(alpha: 0.04),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: cs.onSurface.withValues(alpha: 0.08),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.lock_outline,
-                              size: 14,
-                              color: cs.onSurface.withValues(alpha: 0.3),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _stockName,
-                                style: TextStyle(
-                                  color: cs.onSurface.withValues(alpha: 0.6),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            if (_ticker.isNotEmpty)
-                              Text(
-                                _ticker,
-                                style: TextStyle(
-                                  color: cs.onSurface.withValues(alpha: 0.3),
-                                  fontSize: 12,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ] else ...[
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
+                        children: _actions.map((a) {
+                          final selected = _action == a;
+                          final color = a == '매수'
+                              ? const Color(0xFF10B981)
+                              : a == '매도'
+                              ? Colors.redAccent
+                              : Colors.orangeAccent;
+                          // 기존 항목 수정 시 액션 변경 불가
+                          final isLocked =
+                              (widget.existing != null &&
+                                  a != widget.existing!.action) ||
+                              (_isActionStockLocked && a != _action);
+                          return Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                if (a == _action || isLocked) return;
+                                setState(() {
+                                  _action = a;
+                                  if (a == '매도' && widget.existing == null) {
+                                    _selectedPick = null;
+                                    _stockName = '';
+                                    _ticker = '';
+                                    _rawMarket = '';
+                                    _market = 'KR';
+                                    _remainingQty = 0;
+                                    _priceResult = null;
+                                    _manualMode = false;
+                                  }
+                                });
+                              },
+                              child: Container(
+                                margin: EdgeInsets.only(
+                                  right: a == _actions.last ? 0 : 8,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isLocked
+                                      ? cs.onSurface.withValues(alpha: 0.02)
+                                      : selected
+                                      ? color.withValues(alpha: 0.15)
+                                      : inputFill,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: selected
+                                        ? color.withValues(alpha: 0.5)
+                                        : Colors.transparent,
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    a,
+                                    style: TextStyle(
+                                      color: isLocked
+                                          ? cs.onSurface.withValues(alpha: 0.2)
+                                          : selected
+                                          ? color
+                                          : (isDark
+                                                ? Colors.white54
+                                                : Colors.black45),
+                                      fontWeight: selected
+                                          ? FontWeight.w700
+                                          : FontWeight.w400,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 14),
+                      // 종목 / 매수포지션 선택
+                      if (widget.existing != null || _action != '매도') ...[
+                        // 매도 수정 시 종목 변경 불가 — 잠긴 표시
+                        if (widget.existing != null && _action == '매도') ...[
                           Text(
                             '종목',
                             style: TextStyle(
@@ -5863,472 +5764,36 @@ class JournalFormSheetState extends State<JournalFormSheet> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          if (_stockName.isNotEmpty || _manualMode)
-                            GestureDetector(
-                              onTap: _clearSelection,
-                              child: Text(
-                                '다시 선택',
-                                style: TextStyle(
-                                  color: cs.onSurface.withValues(alpha: 0.4),
-                                  fontSize: 12,
-                                ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.onSurface.withValues(alpha: 0.04),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: cs.onSurface.withValues(alpha: 0.08),
                               ),
                             ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      // ① 아무것도 선택 안 됐을 때: 두 버튼 노출
-                      if (_stockName.isEmpty && !_manualMode)
-                        Row(
-                          children: [
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: _openStockPicker,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 13,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(
-                                      0xFF10B981,
-                                    ).withValues(alpha: 0.08),
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: const Color(
-                                        0xFF10B981,
-                                      ).withValues(alpha: 0.3),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(
-                                        Icons.star_outline,
-                                        size: 15,
-                                        color: Color(0xFF10B981),
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        '추천주에서 선택',
-                                        style: TextStyle(
-                                          color: const Color(0xFF10B981),
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: () => setState(() => _manualMode = true),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 13,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: inputFill,
-                                    borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                      color: cs.onSurface.withValues(
-                                        alpha: 0.12,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.edit_outlined,
-                                        size: 15,
-                                        color: isDark
-                                            ? Colors.white54
-                                            : Colors.black45,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        '직접 입력',
-                                        style: TextStyle(
-                                          color: isDark
-                                              ? Colors.white54
-                                              : Colors.black45,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        )
-                      // ② 추천주에서 선택된 경우
-                      else if (_selectedPick != null && !_manualMode)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(
-                              0xFF10B981,
-                            ).withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: const Color(
-                                0xFF10B981,
-                              ).withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.star,
-                                size: 14,
-                                color: Color(0xFF10B981),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _stockName,
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? Colors.white
-                                            : Colors.black87,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 15,
-                                      ),
-                                    ),
-                                    if (_ticker.isNotEmpty)
-                                      Text(
-                                        _ticker,
-                                        style: TextStyle(
-                                          color: isDark
-                                              ? Colors.white54
-                                              : Colors.black45,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: cs.onSurface.withValues(alpha: 0.07),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  _market,
-                                  style: TextStyle(
-                                    color: isDark
-                                        ? Colors.white54
-                                        : Colors.black45,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      // ②-1 상세페이지에서 자동 주입된 종목
-                      else if (_stockName.isNotEmpty && !_manualMode)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(
-                              0xFF10B981,
-                            ).withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: const Color(
-                                0xFF10B981,
-                              ).withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.check_circle_outline,
-                                size: 14,
-                                color: Color(0xFF10B981),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      _stockName,
-                                      style: TextStyle(
-                                        color: isDark
-                                            ? Colors.white
-                                            : Colors.black87,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 15,
-                                      ),
-                                    ),
-                                    if (_ticker.isNotEmpty)
-                                      Text(
-                                        _ticker,
-                                        style: TextStyle(
-                                          color: isDark
-                                              ? Colors.white54
-                                              : Colors.black45,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: cs.onSurface.withValues(alpha: 0.07),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  _market,
-                                  style: TextStyle(
-                                    color: isDark
-                                        ? Colors.white54
-                                        : Colors.black45,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      // ③ 직접 입력 모드 (전체 종목 검색)
-                      else
-                        StockSearchField(
-                          initialTicker: _ticker,
-                          initialName: _stockName,
-                          onSelected: (ticker, name, market) {
-                            setState(() {
-                              _ticker = ticker;
-                              _stockName = name;
-                              _rawMarket = market; // KS/KQ/US
-                              _market = market == 'US' ? 'US' : 'KR';
-                              _priceResult = null;
-                            });
-                            _fetchPrice();
-                          },
-                        ),
-                      // 현재가 표시 (종목 선택 후)
-                      if (_ticker.isNotEmpty &&
-                          (_priceResult != null || _fetchingPrice))
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: _fetchingPrice
-                              ? Row(
-                                  children: [
-                                    const SizedBox(
-                                      width: 12,
-                                      height: 12,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 1.5,
-                                        color: Color(0xFF10B981),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      '현재가 조회 중...',
-                                      style: TextStyle(
-                                        color: cs.onSurface.withValues(
-                                          alpha: 0.35,
-                                        ),
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : Row(
-                                  children: [
-                                    Text(
-                                      '현재가:',
-                                      style: TextStyle(
-                                        color: cs.onSurface.withValues(
-                                          alpha: 0.4,
-                                        ),
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      _priceResult!.formattedPrice,
-                                      style: TextStyle(
-                                        color: cs.onSurface.withValues(
-                                          alpha: 0.85,
-                                        ),
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      _priceResult!.formattedChange,
-                                      style: TextStyle(
-                                        color: _priceResult!.isUp
-                                            ? const Color(0xFF10B981)
-                                            : Colors.redAccent,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                        ),
-                    ], // else (일반 종목 선택)
-                  ] else ...[
-                    // 매도 신규: 종목 기준으로 선택
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '종목',
-                          style: TextStyle(
-                            color: labelColor,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (_stockName.isNotEmpty && !_isActionStockLocked)
-                          GestureDetector(
-                            onTap: () => setState(() {
-                              _stockName = '';
-                              _ticker = '';
-                              _rawMarket = '';
-                              _market = 'KR';
-                              _remainingQty = 0;
-                              _priceResult = null;
-                            }),
-                            child: Text(
-                              '다시 선택',
-                              style: TextStyle(
-                                color: cs.onSurface.withValues(alpha: 0.4),
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    if (_stockName.isEmpty && !_isActionStockLocked)
-                      GestureDetector(
-                        onTap: _openSellStockPicker,
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent.withValues(alpha: 0.06),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: Colors.redAccent.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(
-                                Icons.list_alt,
-                                size: 15,
-                                color: Colors.redAccent,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '보유 종목 선택',
-                                style: TextStyle(
-                                  color: Colors.redAccent,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    else if (_stockName.isEmpty && _isActionStockLocked)
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          color: cs.onSurface.withValues(alpha: 0.04),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: cs.onSurface.withValues(alpha: 0.08),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.lock_outline,
-                              size: 14,
-                              color: cs.onSurface.withValues(alpha: 0.35),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '종목 고정',
-                              style: TextStyle(
-                                color: cs.onSurface.withValues(alpha: 0.45),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    else
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent.withValues(alpha: 0.06),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: Colors.redAccent.withValues(alpha: 0.25),
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                            child: Row(
                               children: [
-                                const Icon(
-                                  Icons.sell_outlined,
-                                  size: 13,
-                                  color: Colors.redAccent,
+                                Icon(
+                                  Icons.lock_outline,
+                                  size: 14,
+                                  color: cs.onSurface.withValues(alpha: 0.3),
                                 ),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
                                     _stockName,
                                     style: TextStyle(
-                                      color: isDark
-                                          ? Colors.white
-                                          : Colors.black87,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15,
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.6,
+                                      ),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
@@ -6336,56 +5801,87 @@ class JournalFormSheetState extends State<JournalFormSheet> {
                                   Text(
                                     _ticker,
                                     style: TextStyle(
-                                      color: isDark
-                                          ? Colors.white54
-                                          : Colors.black45,
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.3,
+                                      ),
                                       fontSize: 12,
                                     ),
                                   ),
                               ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '보유 잔량 ${_remainingQty % 1 == 0 ? _remainingQty.toInt() : _remainingQty}주',
-                              style: TextStyle(
-                                color: cs.onSurface.withValues(alpha: 0.5),
-                                fontSize: 12,
+                          ),
+                        ] else if (_isActionStockLocked) ...[
+                          Text(
+                            '종목',
+                            style: TextStyle(
+                              color: labelColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.onSurface.withValues(alpha: 0.04),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: cs.onSurface.withValues(alpha: 0.08),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    if (_ticker.isNotEmpty &&
-                        (_priceResult != null || _fetchingPrice))
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: _fetchingPrice
-                            ? Row(
-                                children: [
-                                  const SizedBox(
-                                    width: 12,
-                                    height: 12,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 1.5,
-                                      color: Color(0xFF10B981),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    '현재가 조회 중...',
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.lock_outline,
+                                  size: 14,
+                                  color: cs.onSurface.withValues(alpha: 0.3),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _stockName,
                                     style: TextStyle(
                                       color: cs.onSurface.withValues(
-                                        alpha: 0.35,
+                                        alpha: 0.6,
+                                      ),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                if (_ticker.isNotEmpty)
+                                  Text(
+                                    _ticker,
+                                    style: TextStyle(
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.3,
                                       ),
                                       fontSize: 12,
                                     ),
                                   ),
-                                ],
-                              )
-                            : Row(
-                                children: [
-                                  Text(
-                                    '현재가:',
+                              ],
+                            ),
+                          ),
+                        ] else ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                '종목',
+                                style: TextStyle(
+                                  color: labelColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (_stockName.isNotEmpty || _manualMode)
+                                GestureDetector(
+                                  onTap: _clearSelection,
+                                  child: Text(
+                                    '다시 선택',
                                     style: TextStyle(
                                       color: cs.onSurface.withValues(
                                         alpha: 0.4,
@@ -6393,142 +5889,755 @@ class JournalFormSheetState extends State<JournalFormSheet> {
                                       fontSize: 12,
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    _priceResult!.formattedPrice,
-                                    style: TextStyle(
-                                      color: cs.onSurface.withValues(
-                                        alpha: 0.85,
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          // ① 아무것도 선택 안 됐을 때: 두 버튼 노출
+                          if (_stockName.isEmpty && !_manualMode)
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: _openStockPicker,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 13,
                                       ),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w700,
+                                      decoration: BoxDecoration(
+                                        color: const Color(
+                                          0xFF10B981,
+                                        ).withValues(alpha: 0.08),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: const Color(
+                                            0xFF10B981,
+                                          ).withValues(alpha: 0.3),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(
+                                            Icons.star_outline,
+                                            size: 15,
+                                            color: Color(0xFF10B981),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            '추천주에서 선택',
+                                            style: TextStyle(
+                                              color: const Color(0xFF10B981),
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () =>
+                                        setState(() => _manualMode = true),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 13,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: inputFill,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: cs.onSurface.withValues(
+                                            alpha: 0.12,
+                                          ),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.edit_outlined,
+                                            size: 15,
+                                            color: isDark
+                                                ? Colors.white54
+                                                : Colors.black45,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            '직접 입력',
+                                            style: TextStyle(
+                                              color: isDark
+                                                  ? Colors.white54
+                                                  : Colors.black45,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          // ② 추천주에서 선택된 경우
+                          else if (_selectedPick != null && !_manualMode)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(
+                                  0xFF10B981,
+                                ).withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFF10B981,
+                                  ).withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.star,
+                                    size: 14,
+                                    color: Color(0xFF10B981),
+                                  ),
                                   const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _stockName,
+                                          style: TextStyle(
+                                            color: isDark
+                                                ? Colors.white
+                                                : Colors.black87,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                        if (_ticker.isNotEmpty)
+                                          Text(
+                                            _ticker,
+                                            style: TextStyle(
+                                              color: isDark
+                                                  ? Colors.white54
+                                                  : Colors.black45,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.07,
+                                      ),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      _market,
+                                      style: TextStyle(
+                                        color: isDark
+                                            ? Colors.white54
+                                            : Colors.black45,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          // ②-1 상세페이지에서 자동 주입된 종목
+                          else if (_stockName.isNotEmpty && !_manualMode)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(
+                                  0xFF10B981,
+                                ).withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: const Color(
+                                    0xFF10B981,
+                                  ).withValues(alpha: 0.3),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.check_circle_outline,
+                                    size: 14,
+                                    color: Color(0xFF10B981),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _stockName,
+                                          style: TextStyle(
+                                            color: isDark
+                                                ? Colors.white
+                                                : Colors.black87,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                        if (_ticker.isNotEmpty)
+                                          Text(
+                                            _ticker,
+                                            style: TextStyle(
+                                              color: isDark
+                                                  ? Colors.white54
+                                                  : Colors.black45,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 3,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.07,
+                                      ),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      _market,
+                                      style: TextStyle(
+                                        color: isDark
+                                            ? Colors.white54
+                                            : Colors.black45,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          // ③ 직접 입력 모드 (전체 종목 검색)
+                          else
+                            StockSearchField(
+                              initialTicker: _ticker,
+                              initialName: _stockName,
+                              onSelected: (ticker, name, market) {
+                                setState(() {
+                                  _ticker = ticker;
+                                  _stockName = name;
+                                  _rawMarket = market; // KS/KQ/US
+                                  _market = market == 'US' ? 'US' : 'KR';
+                                  _priceResult = null;
+                                });
+                                _fetchPrice();
+                              },
+                            ),
+                          // 현재가 표시 (종목 선택 후)
+                          if (_ticker.isNotEmpty &&
+                              (_priceResult != null || _fetchingPrice))
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: _fetchingPrice
+                                  ? Row(
+                                      children: [
+                                        const SizedBox(
+                                          width: 12,
+                                          height: 12,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 1.5,
+                                            color: Color(0xFF10B981),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          '현재가 조회 중...',
+                                          style: TextStyle(
+                                            color: cs.onSurface.withValues(
+                                              alpha: 0.35,
+                                            ),
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : Row(
+                                      children: [
+                                        Text(
+                                          '현재가:',
+                                          style: TextStyle(
+                                            color: cs.onSurface.withValues(
+                                              alpha: 0.4,
+                                            ),
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          _priceResult!.formattedPrice,
+                                          style: TextStyle(
+                                            color: cs.onSurface.withValues(
+                                              alpha: 0.85,
+                                            ),
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          _priceResult!.formattedChange,
+                                          style: TextStyle(
+                                            color: _priceResult!.isUp
+                                                ? const Color(0xFF10B981)
+                                                : Colors.redAccent,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                            ),
+                        ], // else (일반 종목 선택)
+                      ] else ...[
+                        // 매도 신규: 종목 기준으로 선택
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              '종목',
+                              style: TextStyle(
+                                color: labelColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (_stockName.isNotEmpty && !_isActionStockLocked)
+                              GestureDetector(
+                                onTap: () => setState(() {
+                                  _stockName = '';
+                                  _ticker = '';
+                                  _rawMarket = '';
+                                  _market = 'KR';
+                                  _remainingQty = 0;
+                                  _priceResult = null;
+                                }),
+                                child: Text(
+                                  '다시 선택',
+                                  style: TextStyle(
+                                    color: cs.onSurface.withValues(alpha: 0.4),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        if (_stockName.isEmpty && !_isActionStockLocked)
+                          GestureDetector(
+                            onTap: _openSellStockPicker,
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent.withValues(alpha: 0.06),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: Colors.redAccent.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.list_alt,
+                                    size: 15,
+                                    color: Colors.redAccent,
+                                  ),
+                                  const SizedBox(width: 6),
                                   Text(
-                                    _priceResult!.formattedChange,
+                                    '보유 종목 선택',
                                     style: TextStyle(
-                                      color: _priceResult!.isUp
-                                          ? const Color(0xFF10B981)
-                                          : Colors.redAccent,
-                                      fontSize: 12,
+                                      color: Colors.redAccent,
+                                      fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ],
                               ),
-                      ),
-                  ],
-                  const SizedBox(height: 12),
-                  // 가격, 수량 (기타는 생략)
-                  if (_action != '기타')
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _action == '매수'
-                                    ? '매수가'
-                                    : _action == '매도'
-                                    ? '매도가'
-                                    : '가격 (선택)',
-                                style: TextStyle(
-                                  color: labelColor,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            ),
+                          )
+                        else if (_stockName.isEmpty && _isActionStockLocked)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            decoration: BoxDecoration(
+                              color: cs.onSurface.withValues(alpha: 0.04),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: cs.onSurface.withValues(alpha: 0.08),
                               ),
-                              const SizedBox(height: 6),
-                              TextFormField(
-                                key: const ValueKey('journal-price'),
-                                controller: _priceCtrl,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.lock_outline,
+                                  size: 14,
+                                  color: cs.onSurface.withValues(alpha: 0.35),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '종목 고정',
+                                  style: TextStyle(
+                                    color: cs.onSurface.withValues(alpha: 0.45),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.redAccent.withValues(alpha: 0.06),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: Colors.redAccent.withValues(alpha: 0.25),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.sell_outlined,
+                                      size: 13,
+                                      color: Colors.redAccent,
                                     ),
-                                style: TextStyle(
-                                  color: isDark ? Colors.white : Colors.black87,
-                                ),
-                                decoration: inputDeco('0'),
-                                validator: (v) {
-                                  if (v != null &&
-                                      v.trim().isNotEmpty &&
-                                      double.tryParse(v.trim()) == null) {
-                                    return '숫자 입력';
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _action == '매도' && _remainingQty > 0
-                                    ? '수량 (최대 ${_remainingQty % 1 == 0 ? _remainingQty.toInt() : _remainingQty}주)'
-                                    : '수량',
-                                style: TextStyle(
-                                  color: labelColor,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              TextFormField(
-                                key: const ValueKey('journal-quantity'),
-                                controller: _quantityCtrl,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        _stockName,
+                                        style: TextStyle(
+                                          color: isDark
+                                              ? Colors.white
+                                              : Colors.black87,
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 15,
+                                        ),
+                                      ),
                                     ),
-                                style: TextStyle(
-                                  color: isDark ? Colors.white : Colors.black87,
+                                    if (_ticker.isNotEmpty)
+                                      Text(
+                                        _ticker,
+                                        style: TextStyle(
+                                          color: isDark
+                                              ? Colors.white54
+                                              : Colors.black45,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                  ],
                                 ),
-                                decoration: inputDeco('0'),
-                                onChanged: (_) {
-                                  if (_qtyError != null) {
-                                    setState(() => _qtyError = null);
-                                  }
-                                },
-                                validator: (v) {
-                                  final text = v?.trim() ?? '';
-                                  if (text.isEmpty) return '수량 입력';
-                                  final qty = double.tryParse(text);
-                                  if (qty == null) return '숫자 입력';
-                                  if (qty <= 0) return '0보다 크게 입력';
-                                  return null;
-                                },
-                              ),
-                            ],
+                                const SizedBox(height: 4),
+                                Text(
+                                  '보유 잔량 ${_remainingQty % 1 == 0 ? _remainingQty.toInt() : _remainingQty}주',
+                                  style: TextStyle(
+                                    color: cs.onSurface.withValues(alpha: 0.5),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
+                        if (_ticker.isNotEmpty &&
+                            (_priceResult != null || _fetchingPrice))
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: _fetchingPrice
+                                ? Row(
+                                    children: [
+                                      const SizedBox(
+                                        width: 12,
+                                        height: 12,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 1.5,
+                                          color: Color(0xFF10B981),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        '현재가 조회 중...',
+                                        style: TextStyle(
+                                          color: cs.onSurface.withValues(
+                                            alpha: 0.35,
+                                          ),
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : Row(
+                                    children: [
+                                      Text(
+                                        '현재가:',
+                                        style: TextStyle(
+                                          color: cs.onSurface.withValues(
+                                            alpha: 0.4,
+                                          ),
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        _priceResult!.formattedPrice,
+                                        style: TextStyle(
+                                          color: cs.onSurface.withValues(
+                                            alpha: 0.85,
+                                          ),
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        _priceResult!.formattedChange,
+                                        style: TextStyle(
+                                          color: _priceResult!.isUp
+                                              ? const Color(0xFF10B981)
+                                              : Colors.redAccent,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
                       ],
-                    ),
-                  // 거래일 (기타는 생략)
-                  if (_action != '기타') ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      '거래일',
-                      style: TextStyle(
-                        color: labelColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                      const SizedBox(height: 12),
+                      // 가격, 수량 (기타는 생략)
+                      if (_action != '기타')
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _action == '매수'
+                                        ? '매수가'
+                                        : _action == '매도'
+                                        ? '매도가'
+                                        : '가격 (선택)',
+                                    style: TextStyle(
+                                      color: labelColor,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  TextFormField(
+                                    key: const ValueKey('journal-price'),
+                                    controller: _priceCtrl,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                    decoration: inputDeco('0'),
+                                    validator: (v) {
+                                      if (v != null &&
+                                          v.trim().isNotEmpty &&
+                                          double.tryParse(v.trim()) == null) {
+                                        return '숫자 입력';
+                                      }
+                                      return null;
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _action == '매도' && _remainingQty > 0
+                                        ? '수량 (최대 ${_remainingQty % 1 == 0 ? _remainingQty.toInt() : _remainingQty}주)'
+                                        : '수량',
+                                    style: TextStyle(
+                                      color: labelColor,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  TextFormField(
+                                    key: const ValueKey('journal-quantity'),
+                                    controller: _quantityCtrl,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                    decoration: inputDeco('0'),
+                                    onChanged: (_) {
+                                      if (_qtyError != null) {
+                                        setState(() => _qtyError = null);
+                                      }
+                                    },
+                                    validator: (v) {
+                                      final text = v?.trim() ?? '';
+                                      if (text.isEmpty) return '수량 입력';
+                                      final qty = double.tryParse(text);
+                                      if (qty == null) return '숫자 입력';
+                                      if (qty <= 0) return '0보다 크게 입력';
+                                      return null;
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      // 거래일 (기타는 생략)
+                      if (_action != '기타') ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          '거래일',
+                          style: TextStyle(
+                            color: labelColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        GestureDetector(
+                          onTap: _isEditingTradeDateLocked ? null : _pickDate,
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: inputFill,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_today_outlined,
+                                  size: 16,
+                                  color: isDark
+                                      ? Colors.white38
+                                      : Colors.black38,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  DateFormat(
+                                    'yyyy년 MM월 dd일',
+                                  ).format(_tradeDate),
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? Colors.white
+                                        : Colors.black87,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                if (_isEditingTradeDateLocked) ...[
+                                  const SizedBox(width: 8),
+                                  Icon(
+                                    Icons.lock_outline,
+                                    size: 14,
+                                    color: cs.onSurface.withValues(alpha: 0.4),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (_isEditingTradeDateLocked) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            '수정 시 거래일은 변경할 수 없습니다.',
+                            style: TextStyle(
+                              color: cs.onSurface.withValues(alpha: 0.45),
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ],
+                      const SizedBox(height: 12),
+                      // 메모
+                      Text(
+                        '메모 (선택)',
+                        style: TextStyle(
+                          color: labelColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    GestureDetector(
-                      onTap: _isEditingTradeDateLocked ? null : _pickDate,
-                      child: Container(
-                        width: double.infinity,
+                      const SizedBox(height: 6),
+                      TextFormField(
+                        key: const ValueKey('journal-note'),
+                        controller: _noteCtrl,
+                        maxLines: 3,
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black87,
+                          fontSize: 13,
+                        ),
+                        decoration: inputDeco(
+                          '매매 이유, 전략, 느낀 점 등을 적어보세요',
+                        ).copyWith(contentPadding: const EdgeInsets.all(14)),
+                      ),
+                      const SizedBox(height: 14),
+                      // 공개 여부
+                      Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 14,
-                          vertical: 12,
+                          vertical: 10,
                         ),
                         decoration: BoxDecoration(
                           color: inputFill,
@@ -6537,160 +6646,116 @@ class JournalFormSheetState extends State<JournalFormSheet> {
                         child: Row(
                           children: [
                             Icon(
-                              Icons.calendar_today_outlined,
-                              size: 16,
-                              color: isDark ? Colors.white38 : Colors.black38,
+                              Icons.public_outlined,
+                              size: 18,
+                              color: _isPublic
+                                  ? const Color(0xFF10B981)
+                                  : (isDark ? Colors.white38 : Colors.black38),
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              DateFormat('yyyy년 MM월 dd일').format(_tradeDate),
-                              style: TextStyle(
-                                color: isDark ? Colors.white : Colors.black87,
-                                fontSize: 14,
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '커뮤니티에 공유',
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? Colors.white
+                                          : Colors.black87,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    '다른 유저들이 볼 수 있습니다',
+                                    style: TextStyle(
+                                      color: isDark
+                                          ? Colors.white38
+                                          : Colors.black38,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            if (_isEditingTradeDateLocked) ...[
-                              const SizedBox(width: 8),
-                              Icon(
-                                Icons.lock_outline,
-                                size: 14,
-                                color: cs.onSurface.withValues(alpha: 0.4),
-                              ),
-                            ],
+                            Switch(
+                              value: _isPublic,
+                              onChanged: (v) => setState(() => _isPublic = v),
+                              activeThumbColor: const Color(0xFF10B981),
+                              activeTrackColor: const Color(
+                                0xFF10B981,
+                              ).withValues(alpha: 0.4),
+                            ),
                           ],
                         ),
                       ),
-                    ),
-                    if (_isEditingTradeDateLocked) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        '수정 시 거래일은 변경할 수 없습니다.',
-                        style: TextStyle(
-                          color: cs.onSurface.withValues(alpha: 0.45),
-                          fontSize: 11,
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _saving ? null : _save,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B981),
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            disabledBackgroundColor: const Color(
+                              0xFF10B981,
+                            ).withValues(alpha: 0.4),
+                          ),
+                          child: _saving
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.black,
+                                  ),
+                                )
+                              : Text(
+                                  widget.existing != null ? '수정 완료' : '저장',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                  ),
+                                ),
                         ),
                       ),
                     ],
-                  ],
-                  const SizedBox(height: 12),
-                  // 메모
-                  Text(
-                    '메모 (선택)',
-                    style: TextStyle(
-                      color: labelColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
                   ),
-                  const SizedBox(height: 6),
-                  TextFormField(
-                    key: const ValueKey('journal-note'),
-                    controller: _noteCtrl,
-                    maxLines: 3,
-                    style: TextStyle(
-                      color: isDark ? Colors.white : Colors.black87,
-                      fontSize: 13,
-                    ),
-                    decoration: inputDeco(
-                      '매매 이유, 전략, 느낀 점 등을 적어보세요',
-                    ).copyWith(contentPadding: const EdgeInsets.all(14)),
-                  ),
-                  const SizedBox(height: 14),
-                  // 공개 여부
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: inputFill,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.public_outlined,
-                          size: 18,
-                          color: _isPublic
-                              ? const Color(0xFF10B981)
-                              : (isDark ? Colors.white38 : Colors.black38),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '커뮤니티에 공유',
-                                style: TextStyle(
-                                  color: isDark ? Colors.white : Colors.black87,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              Text(
-                                '다른 유저들이 볼 수 있습니다',
-                                style: TextStyle(
-                                  color: isDark
-                                      ? Colors.white38
-                                      : Colors.black38,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Switch(
-                          value: _isPublic,
-                          onChanged: (v) => setState(() => _isPublic = v),
-                          activeThumbColor: const Color(0xFF10B981),
-                          activeTrackColor: const Color(
-                            0xFF10B981,
-                          ).withValues(alpha: 0.4),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      onPressed: _saving ? null : _save,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF10B981),
-                        foregroundColor: Colors.black,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        disabledBackgroundColor: const Color(
-                          0xFF10B981,
-                        ).withValues(alpha: 0.4),
-                      ),
-                      child: _saving
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.black,
-                              ),
-                            )
-                          : Text(
-                              widget.existing != null ? '수정 완료' : '저장',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 15,
-                              ),
-                            ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
         ),
-      ),
+        Positioned(
+          top: 4,
+          right: 12,
+          child: TextButton(
+            key: const ValueKey('journal-cancel'),
+            onPressed: () {
+              FocusManager.instance.primaryFocus?.unfocus();
+              Navigator.of(context).pop();
+              if (_saving) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('화면을 닫아도 요청한 저장은 계속 진행됩니다. 목록에서 결과를 확인해주세요.'),
+                  ),
+                );
+              }
+            },
+            style: TextButton.styleFrom(
+              backgroundColor: bgColor,
+              foregroundColor: labelColor,
+              minimumSize: const Size(48, 48),
+            ),
+            child: Text(_saving ? '닫기' : '취소'),
+          ),
+        ),
+      ],
     );
   }
 }

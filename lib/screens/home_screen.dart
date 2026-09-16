@@ -23,6 +23,8 @@ import '../widgets/banner_ad_widget.dart';
 import '../widgets/premium_membership_card.dart';
 import '../widgets/lazy_indexed_stack.dart';
 import '../widgets/kospi200_max_pain_card.dart';
+import '../widgets/keep_alive_section.dart';
+import '../widgets/ai_brief_presentation.dart';
 import '../widgets/max_pain_badge.dart';
 import '../widgets/options_radar_card.dart';
 import '../widgets/price_alert_section.dart';
@@ -51,6 +53,7 @@ import 'subscription_screen.dart';
 import '../web/web_login_sheet.dart';
 import 'index_detail_screen.dart';
 import 'night_futures_chart_screen.dart';
+import '../services/night_futures_chart_data.dart';
 import '../main.dart' show initAds;
 
 bool _homeLightMode = false;
@@ -789,6 +792,17 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                   ),
                 ),
                 const _HomeCardBreak(),
+                _fixedH(
+                  52,
+                  _HomeReveal(
+                    order: 1,
+                    child: _LatestAnnouncementStrip(
+                      stream: _latestAnnouncementStream,
+                      onTap: widget.openAnnouncements,
+                    ),
+                  ),
+                ),
+                const _HomeCardBreak(),
                 _HomeReveal(
                   order: 1,
                   child: _DarkHomeSection(
@@ -803,17 +817,6 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                       auth: widget.auth,
                       onMore: widget.openFavoriteStocks,
                       onAdd: widget.openStockSearch,
-                    ),
-                  ),
-                ),
-                const _HomeCardBreak(),
-                _fixedH(
-                  52,
-                  _HomeReveal(
-                    order: 1,
-                    child: _LatestAnnouncementStrip(
-                      stream: _latestAnnouncementStream,
-                      onTap: widget.openAnnouncements,
                     ),
                   ),
                 ),
@@ -849,9 +852,13 @@ class _DashboardHomePageState extends State<_DashboardHomePage> {
                   _HomeReveal(order: 4, child: const _AIBriefCard()),
                 ),
                 const _HomeCardBreak(),
-                _HomeReveal(order: 4, child: const Kospi200MaxPainCard()),
+                const KeepAliveSection(
+                  child: _HomeReveal(order: 4, child: Kospi200MaxPainCard()),
+                ),
                 const _HomeCardBreak(),
-                _HomeReveal(order: 4, child: const OptionsRadarCard()),
+                const KeepAliveSection(
+                  child: _HomeReveal(order: 4, child: OptionsRadarCard()),
+                ),
                 const _HomeCardBreak(),
                 _HomeReveal(
                   order: 5,
@@ -2496,21 +2503,6 @@ bool _isNightFuturesSession([DateTime? kstNow]) {
   return false;
 }
 
-// 현재 야간 세션의 시작 시각(실제 UTC). 세션은 KST 18:00에 시작하며,
-// 자정 이후(0~5시)면 전날 18:00에 시작된 세션이다. 세션 경계에서 직전(어제)
-// 세션 데이터가 차트에 섞이지 않도록 이 시각 이전 문서를 걸러내는 데 쓴다.
-DateTime _nightSessionStartUtc([DateTime? kstNow]) {
-  final n = kstNow ?? _nowKstCorrected(); // KST 벽시계값을 담은 DateTime.utc
-  final base = n.hour < 18 ? n.subtract(const Duration(days: 1)) : n;
-  // KST 18:00 = UTC 09:00 → 실제 UTC 순간으로 변환
-  return DateTime.utc(
-    base.year,
-    base.month,
-    base.day,
-    18,
-  ).subtract(const Duration(hours: 9));
-}
-
 class _MarketClock extends StatefulWidget {
   const _MarketClock({required this.builder});
 
@@ -2871,29 +2863,13 @@ class _NightFuturesTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final isLightHome = _syncHomeLightMode(context);
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection(collection)
-          .orderBy('timestamp', descending: true)
-          .limit(40)
-          .snapshots(),
+      stream: nightFuturesChartQuery(collection).snapshots(),
       builder: (context, snapshot) {
-        final allDocs = snapshot.data?.docs ?? const [];
-        // 장중에는 현재 세션만, 장외에는 마지막 기록이 속한 세션을 표시한다.
-        final now = _nowKstCorrected();
-        final inSession = _isNightFuturesSession(now);
-        final latestTimestamp = allDocs.isEmpty
-            ? null
-            : allDocs.first.data()['timestamp'];
-        final sessionStart = _nightSessionStartUtc(
-          !inSession && latestTimestamp is Timestamp
-              ? latestTimestamp.toDate().toUtc().add(const Duration(hours: 9))
-              : now,
+        final docs = selectNightFuturesSession(
+          snapshot.data?.docs.map((doc) => doc.data()) ?? const [],
         );
-        final docs = allDocs.where((d) {
-          final t = d.data()['timestamp'];
-          return t is Timestamp && !t.toDate().toUtc().isBefore(sessionStart);
-        }).toList();
-        final latest = docs.isNotEmpty ? docs.first.data() : null;
+        final inSession = _isNightFuturesSession();
+        final latest = docs.isNotEmpty ? docs.last : null;
         final price = (latest?['price'] as num?)?.toDouble();
         final change = (latest?['change'] as num?)?.toDouble() ?? 0;
         final rate = (latest?['changeRate'] as num?)?.toDouble() ?? 0;
@@ -2904,9 +2880,8 @@ class _NightFuturesTile extends StatelessWidget {
             : (isUp ? _homeUp : _homeDown);
 
         // 과거→현재 순서의 가격들로 스파크라인
-        final spark = docs.reversed
-            .map((d) => (d.data()['price'] as num?)?.toDouble() ?? 0)
-            .where((v) => v > 0)
+        final spark = docs
+            .map((d) => (d['price'] as num).toDouble())
             .toList();
 
         String timeText = snapshot.hasError
@@ -3093,7 +3068,6 @@ class _AIBriefCard extends StatelessWidget {
             : null;
 
         final brief = data?['brief'] as String?;
-        final slotLabel = data?['slotLabel'] as String?;
         final sections = data?['sections'] as Map<String, dynamic>?;
         final summary = (sections?['summary'] as String?)?.trim();
         final indexBrief = (sections?['index'] as String?)?.trim();
@@ -3136,7 +3110,7 @@ class _AIBriefCard extends StatelessWidget {
             ),
             const SizedBox(width: 9),
             Text(
-              'AI 시황 분석',
+              'AI 브리핑',
               style: _homeText(
                 color: headerColor,
                 fontSize: 14,
@@ -3186,7 +3160,7 @@ class _AIBriefCard extends StatelessWidget {
                 ],
                 const Spacer(),
                 Text(
-                  '장중 시황을 준비하고 있어요',
+                  'AI 브리핑을 준비하고 있어요',
                   style: _homeText(color: _homeFaint, fontSize: 12),
                 ),
               ],
@@ -3194,7 +3168,7 @@ class _AIBriefCard extends StatelessWidget {
           );
         }
 
-        final timeLabel = slotLabel != null ? '오늘 $slotLabel' : '';
+        final timeLabel = aiBriefTimeLabel(data);
         final hasSummary = summary != null && summary.isNotEmpty;
         final preview = (indexBrief != null && indexBrief.isNotEmpty)
             ? indexBrief
@@ -3277,7 +3251,7 @@ class _AIBriefDetailScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'AI 시황 분석',
+          'AI 브리핑',
           style: TextStyle(fontWeight: FontWeight.w800),
         ),
       ),
@@ -3294,7 +3268,8 @@ class _AIBriefDetailScreen extends StatelessWidget {
               ? snapshot.data!.data() as Map<String, dynamic>?
               : null;
           final brief = data?['brief'] as String?;
-          final slotLabel = data?['slotLabel'] as String?;
+          final timeLabel = aiBriefTimeLabel(data);
+          final morning = isMorningAiBrief(data);
           final sections = data?['sections'] as Map<String, dynamic>?;
 
           String s(String k) => (sections?[k] as String?)?.trim() ?? '';
@@ -3312,7 +3287,7 @@ class _AIBriefDetailScreen extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
               children: [
                 Text(
-                  brief ?? '표시할 AI 시황이 없습니다.',
+                  brief ?? '표시할 AI 브리핑이 없습니다.',
                   style: TextStyle(
                     height: 1.6,
                     fontSize: 15,
@@ -3327,11 +3302,11 @@ class _AIBriefDetailScreen extends StatelessWidget {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
-              if (slotLabel != null)
+              if (timeLabel.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(left: 4, bottom: 10),
                   child: Text(
-                    '오늘 $slotLabel 기준',
+                    '$timeLabel 기준',
                     style: TextStyle(
                       fontSize: 12,
                       color: cs.onSurface.withValues(alpha: 0.5),
@@ -3343,35 +3318,35 @@ class _AIBriefDetailScreen extends StatelessWidget {
               if (news.isNotEmpty)
                 _BriefSection(
                   icon: Icons.article_outlined,
-                  title: '주요뉴스',
+                  title: morning ? '밤사이 핵심 이슈' : '주요뉴스',
                   accent: const Color(0xFF3B82F6),
                   child: _newsList(cs, news),
                 ),
               if (s('index').isNotEmpty)
                 _BriefSection(
                   icon: Icons.show_chart_rounded,
-                  title: '지수 시황',
+                  title: morning ? '글로벌 시장' : '지수 시황',
                   accent: const Color(0xFF10B981),
                   child: _paragraph(cs, s('index')),
                 ),
               if (s('sector').isNotEmpty)
                 _BriefSection(
                   icon: Icons.donut_large_rounded,
-                  title: '업종별 분석',
+                  title: morning ? '국내장 연결 포인트' : '업종별 분석',
                   accent: const Color(0xFF8B5CF6),
                   child: _paragraph(cs, s('sector')),
                 ),
               if (s('flow').isNotEmpty)
                 _BriefSection(
                   icon: Icons.swap_vert_rounded,
-                  title: '수급·시장 폭',
+                  title: morning ? '환율·금리·유가' : '수급·시장 폭',
                   accent: const Color(0xFFF59E0B),
                   child: _paragraph(cs, s('flow')),
                 ),
               if (s('checkpoint').isNotEmpty)
                 _BriefSection(
                   icon: Icons.flag_rounded,
-                  title: '체크포인트',
+                  title: morning ? '주요 일정과 체크포인트' : '체크포인트',
                   accent: const Color(0xFF6366F1),
                   child: _paragraph(cs, s('checkpoint')),
                 ),

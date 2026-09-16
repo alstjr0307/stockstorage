@@ -21,5 +21,7 @@ class PastedPart {
 }
 
 /// 클립보드 붙여넣기 구독. 해제하려면 반환된 함수를 호출한다.
-void Function() listenPastedContent(void Function(List<PastedPart>) onPasted) =>
-    impl.listenPastedContent(onPasted);
+void Function() listenPastedContent(
+  void Function(List<PastedPart>) onPasted, {
+  bool Function()? shouldHandle,
+}) => impl.listenPastedContent(onPasted, shouldHandle: shouldHandle);

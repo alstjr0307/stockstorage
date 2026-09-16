@@ -199,6 +199,7 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   // 종목토론방
   List<DiscussionPost> _discussionPosts = [];
   bool _loadingDiscussion = true;
+  bool _discussionFailed = false;
 
   // Max Pain (미국주식 전용)
   MaxPainResult? _maxPain;
@@ -319,15 +320,20 @@ class _StockDetailScreenState extends State<StockDetailScreen>
   }
 
   Future<void> _loadDiscussion() async {
-    final posts = await StockPriceService.fetchDiscussionPosts(
-      widget.pick.ticker,
-      widget.pick.market,
-    );
-    if (mounted) {
-      setState(() {
-        _discussionPosts = posts;
-        _loadingDiscussion = false;
-      });
+    setState(() {
+      _loadingDiscussion = true;
+      _discussionFailed = false;
+    });
+    try {
+      final posts = await StockPriceService.fetchDiscussionPosts(
+        widget.pick.ticker,
+        widget.pick.market,
+      );
+      if (mounted) setState(() => _discussionPosts = posts);
+    } catch (_) {
+      if (mounted) setState(() => _discussionFailed = true);
+    } finally {
+      if (mounted) setState(() => _loadingDiscussion = false);
     }
   }
 
@@ -2888,6 +2894,11 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                 color: Color(0xFF10B981),
               ),
             ),
+          )
+        else if (_discussionFailed)
+          TextButton(
+            onPressed: _loadDiscussion,
+            child: const Text('게시글을 불러오지 못했습니다 · 다시 시도'),
           )
         else if (posts.isEmpty)
           Padding(

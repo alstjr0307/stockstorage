@@ -267,6 +267,11 @@ service cloud.firestore {
 
     // Trading journal
     match /trading_journal/{journalId} {
+      // New clients check a preallocated ID before creating the document.
+      // Missing documents have no owner fields; existing private records still
+      // require the owner/public read condition below.
+      allow get: if isLoggedIn()
+        && !exists(/databases/$(database)/documents/trading_journal/$(journalId));
       allow read: if resource.data.get('isPublic', false) == true || (isLoggedIn() && resource.data.uid == request.auth.uid);
       allow create: if isLoggedIn() && request.resource.data.uid == request.auth.uid;
       allow update: if isLoggedIn() && (

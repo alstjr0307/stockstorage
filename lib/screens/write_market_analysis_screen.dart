@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import '../utils/local_image.dart';
+import '../utils/paste_image.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/market_analysis.dart';
 import '../services/firestore_service.dart';
@@ -48,6 +49,7 @@ class _WriteMarketAnalysisScreenState extends State<WriteMarketAnalysisScreen> {
   final List<String> _deletedUrls = [];
 
   bool _saving = false;
+  void Function()? _pasteSubscription;
   static const _maxImages = 5;
 
   @override
@@ -60,10 +62,19 @@ class _WriteMarketAnalysisScreenState extends State<WriteMarketAnalysisScreen> {
     } else {
       _blocks.add(_listenedTextBlock());
     }
+    _pasteSubscription = listenPastedContent(
+      _onPasted,
+      shouldHandle: () =>
+          mounted &&
+          !_saving &&
+          ModalRoute.of(context)?.isCurrent == true &&
+          _blocks.whereType<_TextBlock>().any((b) => b.focus.hasFocus),
+    );
   }
 
   @override
   void dispose() {
+    _pasteSubscription?.call();
     _titleCtrl.dispose();
     for (final b in _blocks) {
       if (b is _TextBlock) b.dispose();
@@ -199,6 +210,60 @@ class _WriteMarketAnalysisScreenState extends State<WriteMarketAnalysisScreen> {
   }
 
   // ── 이미지 ────────────────────────────────────────────────────────────────
+
+  void _onPasted(List<PastedPart> parts) {
+    if (!mounted || _saving || parts.isEmpty) return;
+    final block = _blocks
+        .whereType<_TextBlock>()
+        .where((b) => b.focus.hasFocus)
+        .firstOrNull;
+    if (block == null) return;
+
+    var remaining = _maxImages - _imageCount;
+    var skipped = false;
+    final accepted = parts.where((part) {
+      if (part.isText) return true;
+      if (remaining <= 0) {
+        skipped = true;
+        return false;
+      }
+      remaining--;
+      return true;
+    }).toList();
+    if (accepted.isNotEmpty) {
+      setState(() {
+        final text = block.ctrl.text;
+        final selection = block.ctrl.selection;
+        final start = selection.isValid ? selection.start : text.length;
+        final end = selection.isValid ? selection.end : text.length;
+        final tail = text.substring(end);
+        block.ctrl.text = text.substring(0, start);
+        var current = block;
+        var index = _blocks.indexOf(block);
+        for (final part in accepted) {
+          if (part.isText) {
+            current.ctrl.text += part.text!;
+          } else {
+            _blocks.insert(
+              ++index,
+              _ImageBlock(file: part.file, url: part.imageUrl),
+            );
+            current = _listenedTextBlock();
+            _blocks.insert(++index, current);
+          }
+        }
+        final offset = current.ctrl.text.length;
+        current.ctrl.text += tail;
+        current.ctrl.selection = TextSelection.collapsed(offset: offset);
+        _lastFocused = current;
+        final target = current;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _blocks.contains(target)) target.focus.requestFocus();
+        });
+      });
+    }
+    if (skipped) _showMaxSnack();
+  }
 
   Future<void> _pickImages() async {
     final remaining = _maxImages - _imageCount;

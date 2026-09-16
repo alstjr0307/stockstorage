@@ -6,6 +6,7 @@
 // index.js 의 onSchedule 래퍼에서 호출한다 (runAiBriefGeneration 패턴과 동일).
 
 const axios = require('axios');
+const { fetchOfficialCalendars } = require('./market_calendar_official');
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const FRED_BASE = 'https://api.stlouisfed.org/fred';
@@ -31,6 +32,12 @@ const FRED_RELEASE_MAP = [
   { match: /job openings and labor turnover/i, label: '미국 JOLTS (구인)', importance: 2 },
   { match: /^industrial production/i, label: '미국 산업생산', importance: 1 },
   { match: /university of michigan/i, label: '미시간대 소비자심리', importance: 1 },
+  { match: /unemployment insurance weekly claims/i, label: '미국 신규 실업수당 청구', importance: 2 },
+  { match: /new residential construction/i, label: '미국 주택착공·건축허가', importance: 2 },
+  { match: /new residential sales/i, label: '미국 신규주택 판매', importance: 2 },
+  { match: /existing home sales/i, label: '미국 기존주택 판매', importance: 2 },
+  { match: /durable goods|advance report on durable/i, label: '미국 내구재 수주', importance: 2 },
+  { match: /international trade in goods and services/i, label: '미국 무역수지', importance: 2 },
 ];
 
 // ── 유틸 ────────────────────────────────────────────────────────────────────
@@ -62,7 +69,8 @@ async function fetchEarnings(finnhubKey, from, to) {
     params: { from, to, token: finnhubKey },
     timeout: 20000,
   });
-  const list = Array.isArray(data?.earningsCalendar) ? data.earningsCalendar : [];
+  if (!Array.isArray(data?.earningsCalendar)) throw new Error('Invalid Finnhub earnings response');
+  const list = data.earningsCalendar;
   const events = [];
   for (const e of list) {
     const symbol = String(e.symbol || '').trim().toUpperCase();
@@ -101,7 +109,8 @@ async function fetchIpo(finnhubKey, from, to) {
     params: { from, to, token: finnhubKey },
     timeout: 20000,
   });
-  const list = Array.isArray(data?.ipoCalendar) ? data.ipoCalendar : [];
+  if (!Array.isArray(data?.ipoCalendar)) throw new Error('Invalid Finnhub IPO response');
+  const list = data.ipoCalendar;
   const events = [];
   for (const e of list) {
     const symbol = String(e.symbol || '').trim().toUpperCase();
@@ -130,18 +139,39 @@ async function fetchIpo(finnhubKey, from, to) {
 
 // ── 거시지표 (FRED 릴리스 일정) ──────────────────────────────────────────────
 async function fetchEconomic(fredKey, from, to) {
-  const { data } = await axios.get(`${FRED_BASE}/releases/dates`, {
-    params: {
-      api_key: fredKey,
-      file_type: 'json',
-      include_release_dates_with_no_data: 'true', // 미래 예정일 포함
-      sort_order: 'asc',
-      realtime_start: from,
-      realtime_end: '9999-12-31',
-    },
-    timeout: 20000,
-  });
-  const list = Array.isArray(data?.release_dates) ? data.release_dates : [];
+  const list = [];
+  const deadline = Date.now() + 45000;
+  for (let offset = 0; ; offset += 1000) {
+    if (offset >= 10000) throw new Error('FRED pagination exceeded safe limit');
+    let response;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) throw new Error('FRED collection deadline exceeded');
+      try {
+        response = await axios.get(`${FRED_BASE}/releases/dates`, {
+          params: {
+            api_key: fredKey,
+            file_type: 'json',
+            include_release_dates_with_no_data: 'true', // 미래 예정일 포함
+            sort_order: 'asc',
+            realtime_start: from,
+            realtime_end: '9999-12-31',
+            limit: 1000,
+            offset,
+          },
+          timeout: Math.min(15000, remaining),
+        });
+        break;
+      } catch (e) {
+        const transient = !e.response || e.response.status >= 500;
+        if (attempt === 1 || !transient) throw e;
+      }
+    }
+    const { data } = response;
+    if (!Array.isArray(data?.release_dates)) throw new Error('Invalid FRED response');
+    list.push(...data.release_dates);
+    if (data.release_dates.some(r => r.date > to) || data.release_dates.length < 1000 || offset + 1000 >= Number(data.count)) break;
+  }
   const events = [];
   const seen = new Set();
   for (const r of list) {
@@ -170,28 +200,35 @@ async function fetchEconomic(fredKey, from, to) {
 }
 
 // ── 전체 동기화 ──────────────────────────────────────────────────────────────
-// keys 중 없는 것은 건너뛴다 (키 미설정 시 안전하게 no-op).
-async function runCalendarSync(db, { finnhubKey, fredKey } = {}) {
-  const now = new Date();
+// 키가 없는 공급자는 건너뛰고 공식 일정은 키 없이 수집한다.
+async function runCalendarSync(db, { finnhubKey, fredKey, now = new Date(), officialFetcher = fetchOfficialCalendars } = {}) {
   const from = ymd(now, 'America/New_York');
   const to = ymd(addDays(now, WINDOW_DAYS), 'America/New_York');
+  const economicTo = ymd(addDays(now, 90), 'America/New_York');
 
   const collected = [];
-  const result = { earnings: 0, economic: 0, ipo: 0, deleted: 0, skipped: [] };
+  const result = { earnings: 0, economic: 0, ipo: 0, deleted: 0, skipped: [], errors: [], official: {} };
+  const refreshed = new Set();
+  // Official calendars do not need API keys; begin requests alongside vendor calls.
+  const officialPromise = officialFetcher(from, economicTo);
 
   if (finnhubKey) {
     try {
       const earnings = await fetchEarnings(finnhubKey, from, to);
       collected.push(...earnings);
       result.earnings = earnings.length;
+      refreshed.add('finnhub:earnings');
     } catch (e) {
+      result.errors.push('finnhub:earnings');
       console.error('[Calendar] 실적 수집 실패:', e?.message || e);
     }
     try {
       const ipo = await fetchIpo(finnhubKey, from, to);
       collected.push(...ipo);
       result.ipo = ipo.length;
+      refreshed.add('finnhub:ipo');
     } catch (e) {
+      result.errors.push('finnhub:ipo');
       console.error('[Calendar] IPO 수집 실패:', e?.message || e);
     }
   } else {
@@ -200,14 +237,28 @@ async function runCalendarSync(db, { finnhubKey, fredKey } = {}) {
 
   if (fredKey) {
     try {
-      const econ = await fetchEconomic(fredKey, from, to);
+      const econ = await fetchEconomic(fredKey, from, economicTo);
       collected.push(...econ);
       result.economic = econ.length;
+      refreshed.add('fred:economic');
     } catch (e) {
+      result.errors.push('fred:economic');
       console.error('[Calendar] 거시지표 수집 실패:', e?.message || e);
     }
   } else {
     result.skipped.push('fred(키 없음)');
+  }
+
+  for (const feed of await officialPromise) {
+    if (feed.error) {
+      result.errors.push(`${feed.source}: ${feed.error}`);
+      console.error(`[Calendar] ${feed.source} 수집 실패: ${feed.error}`);
+      continue;
+    }
+    refreshed.add(`${feed.source}:economic`);
+    collected.push(...feed.events);
+    result.official[feed.source] = feed.events.length;
+    result.economic += feed.events.length;
   }
 
   const col = db.collection('market_calendar');
@@ -228,7 +279,9 @@ async function runCalendarSync(db, { finnhubKey, fredKey } = {}) {
 
   for (const doc of existingSnap.docs) {
     const d = doc.data();
-    const stale = (d.date && d.date < today) || !newIds.has(doc.id);
+    // Failed/missing feeds must not erase their previously fetched future events.
+    const stale = (d.date && d.date < today) ||
+      (refreshed.has(`${d.source}:${d.type}`) && !newIds.has(doc.id));
     if (stale) {
       batch.delete(doc.ref);
       ops++;
@@ -248,6 +301,7 @@ async function runCalendarSync(db, { finnhubKey, fredKey } = {}) {
   }
 
   if (ops > 0) await batch.commit();
+  await db.collection('market_calendar_meta').doc('last_sync').set({ ...result, updatedAt: now });
 
   console.log(
     `[Calendar] 동기화 완료 — 실적 ${result.earnings}, 지표 ${result.economic}, IPO ${result.ipo}, 삭제 ${result.deleted}` +
@@ -289,7 +343,7 @@ async function notifyTodayEvents(db) {
     .map((e) => (e.type === 'earnings' && e.symbol ? `${e.symbol} 실적` : e.name))
     .filter(Boolean);
   const extra = items.length > labels.length ? ` 외 ${items.length - labels.length}건` : '';
-  const body = `오늘 밤 ${labels.join(', ')}${extra} 예정. 캘린더에서 확인하세요 →`;
+  const body = `오늘의 주요 일정: ${labels.join(', ')}${extra}. 캘린더에서 확인하세요 →`;
 
   await db.collection('notification_queue').add({
     title: '📅 오늘의 주요 일정',
@@ -303,4 +357,4 @@ async function notifyTodayEvents(db) {
   return { count: items.length };
 }
 
-module.exports = { runCalendarSync, notifyTodayEvents };
+module.exports = { runCalendarSync, notifyTodayEvents, fetchEconomic };

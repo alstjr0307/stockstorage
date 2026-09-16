@@ -9,6 +9,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import '../services/analytics_service.dart';
+import '../services/night_futures_chart_data.dart';
 
 class NightFuturesChartScreen extends StatefulWidget {
   final double initialPrice;
@@ -69,10 +70,7 @@ class _NightFuturesChartScreenState extends State<NightFuturesChartScreen> {
   }
 
   void _subscribe() {
-    _sub = FirebaseFirestore.instance
-        .collection(widget.collection)
-        .orderBy('timestamp', descending: true)
-        .limit(720)
+    _sub = nightFuturesChartQuery(widget.collection)
         .snapshots()
         .listen(
           _onSnapshot,
@@ -84,11 +82,16 @@ class _NightFuturesChartScreenState extends State<NightFuturesChartScreen> {
 
   void _onSnapshot(QuerySnapshot<Map<String, dynamic>> snap) {
     if (!mounted) return;
-    final docs = snap.docs.reversed.toList();
+    final docs = selectNightFuturesSession(
+      snap.docs.map((doc) => doc.data()),
+    );
     if (docs.isEmpty) {
       setState(() {
         _loading = false;
         _empty = true;
+        _spots.clear();
+        _vols.clear();
+        _times.clear();
       });
       return;
     }
@@ -100,26 +103,12 @@ class _NightFuturesChartScreenState extends State<NightFuturesChartScreen> {
     double lo = double.infinity;
     double? prevCum;
 
-    // 최신 데이터가 속한 야간세션(18:00~익일 05:00)의 시작 시각(KST). 그 이전
-    // 세션 데이터는 제외해서 어제 세션이 섞여 보이지 않게 한다.
-    DateTime? sessionStartKst;
-    final latestTs = docs.last.data()['timestamp'];
-    if (latestTs is Timestamp) {
-      sessionStartKst = _sessionStartKst(
-        latestTs.toDate().toUtc().add(const Duration(hours: 9)),
-      );
-    }
-
-    for (var i = 0; i < docs.length; i++) {
-      final d = docs[i].data();
-      final ts = d['timestamp'];
-      final tsKst = ts is Timestamp
-          ? ts.toDate().toUtc().add(const Duration(hours: 9))
-          : DateTime.now().toUtc().add(const Duration(hours: 9));
-      // 이전 세션 데이터는 건너뛴다.
-      if (sessionStartKst != null && tsKst.isBefore(sessionStartKst)) continue;
-      final p = (d['price'] as num?)?.toDouble();
-      if (p == null || p <= 0) continue;
+    for (final d in docs) {
+      final tsKst = (d['timestamp'] as Timestamp)
+          .toDate()
+          .toUtc()
+          .add(const Duration(hours: 9));
+      final p = (d['price'] as num).toDouble();
       spots.add(FlSpot(spots.length.toDouble(), p));
       if (p > hi) hi = p;
       if (p < lo) lo = p;
@@ -139,7 +128,7 @@ class _NightFuturesChartScreenState extends State<NightFuturesChartScreen> {
       times.add(tsKst);
     }
 
-    final latest = docs.last.data();
+    final latest = docs.last;
     final ts = latest['timestamp'];
 
     setState(() {
@@ -163,15 +152,6 @@ class _NightFuturesChartScreenState extends State<NightFuturesChartScreen> {
       if (lo.isFinite) _low = lo;
       if (ts is Timestamp) _lastTime = ts.toDate();
     });
-  }
-
-  // 야간세션은 18:00~익일 05:00(KST). 주어진 KST 시각이 속한 세션의 시작(18:00)을 반환.
-  DateTime _sessionStartKst(DateTime tKst) {
-    final base = DateTime(tKst.year, tKst.month, tKst.day);
-    // 18:00 이후면 당일 18:00, 그 외(00:00~05:00)면 전날 18:00.
-    return tKst.hour >= 18
-        ? base.add(const Duration(hours: 18))
-        : base.subtract(const Duration(hours: 6));
   }
 
   @override
@@ -710,8 +690,7 @@ class _NightFuturesChartScreenState extends State<NightFuturesChartScreen> {
         lineBarsData: [
           LineChartBarData(
             spots: _spots,
-            isCurved: true,
-            curveSmoothness: 0.25,
+            isCurved: false,
             color: c,
             barWidth: 2.5,
             dotData: const FlDotData(show: false),

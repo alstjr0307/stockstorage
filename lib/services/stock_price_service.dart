@@ -2090,59 +2090,52 @@ class StockPriceService {
     String market,
   ) async {
     if (market != 'KS' && market != 'KQ') return [];
-    try {
-      final uri = Uri.parse(
-        'https://finance.naver.com/item/board.nhn?code=$ticker&ordertype=&searchtype=&page=1',
-      );
-      final response = await _pget(
-            uri,
-            headers: {
-              'User-Agent': 'Mozilla/5.0',
-              'Referer': 'https://finance.naver.com',
-            },
-          )
-          .timeout(const Duration(seconds: 8));
-      if (response.statusCode != 200) return [];
-
-      // latin1로 디코딩 (EUC-KR 페이지를 latin1로 읽으면 한글 깨짐 → utf8 시도)
-      String body;
-      try {
-        body = utf8.decode(response.bodyBytes);
-      } catch (_) {
-        body = response.body;
-      }
-
-      final rowPattern = RegExp(
-        r'<tr onMouseOver[^>]*>[\s\S]*?'
-        r'<span class="tah p10 gray03">(\d{4}\.\d{2}\.\d{2} \d{2}:\d{2})</span>'
-        r'[\s\S]*?nid=(\d+)[^"]*"[^>]*title="([^"]+)"'
-        r'[\s\S]*?<td><span class="tah p10 gray03">(\d+)</span></td>',
-      );
-
-      final posts = <DiscussionPost>[];
-      for (final m in rowPattern.allMatches(body)) {
-        final dateParts = m.group(1)!.split(RegExp(r'[. :]'));
-        final date = DateTime(
-          int.parse(dateParts[0]),
-          int.parse(dateParts[1]),
-          int.parse(dateParts[2]),
-          int.parse(dateParts[3]),
-          int.parse(dateParts[4]),
-        );
-        posts.add(
-          DiscussionPost(
-            nid: m.group(2)!,
-            title: m.group(3)!,
-            date: date,
-            viewCount: int.tryParse(m.group(4)!) ?? 0,
-            ticker: ticker,
-          ),
-        );
-      }
-      return posts;
-    } catch (_) {
-      return [];
+    final uri = Uri.https('m.stock.naver.com', '/front-api/discussion/list', {
+      'discussionType': 'domesticStock',
+      'itemCode': ticker,
+      'pageSize': '20',
+    });
+    final response = await getFinanceResponse(uri);
+    if (response.statusCode != 200) {
+      throw const FormatException('Discussion request failed');
     }
+    return parseDiscussionPosts(utf8.decode(response.bodyBytes), ticker);
+  }
+
+  /// Parse the mobile JSON feed; an upstream error must not look like no posts.
+  static List<DiscussionPost> parseDiscussionPosts(String body, String ticker) {
+    final data = jsonDecode(body);
+    if (data is! Map ||
+        data['isSuccess'] != true ||
+        data['result'] is! Map ||
+        data['result']['posts'] is! List) {
+      throw const FormatException('Invalid discussion response');
+    }
+    final posts = <DiscussionPost>[];
+    for (final row in data['result']['posts'] as List) {
+      if (row is! Map) continue;
+      final id = row['id']?.toString();
+      final title = row['title'];
+      final date = DateTime.tryParse(row['writtenAt']?.toString() ?? '');
+      if (id == null ||
+          id.isEmpty ||
+          title is! String ||
+          title.trim().isEmpty ||
+          date == null) {
+        continue;
+      }
+      posts.add(
+        DiscussionPost(
+          nid: id,
+          title: title,
+          date: date,
+          viewCount: int.tryParse(row['viewCount']?.toString() ?? '') ?? 0,
+          ticker: ticker,
+        ),
+      );
+      if (posts.length == 20) break;
+    }
+    return posts;
   }
 
   /// Yahoo Finance 실적 발표 예정일 (US 종목만)
@@ -2357,11 +2350,10 @@ class DiscussionPost {
     required this.ticker,
   });
 
-  String get readUrl =>
-      'https://finance.naver.com/item/board_read.naver?code=$ticker&nid=$nid&page=1';
+  String get readUrl => mobileReadUrl;
 
   String get mobileReadUrl =>
-      'https://m.stock.naver.com/discussion/domestic/$ticker/posts/$nid';
+      'https://m.stock.naver.com/domestic/stock/$ticker/discussion/$nid';
 }
 
 class StockNews {

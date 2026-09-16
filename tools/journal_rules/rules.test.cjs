@@ -13,6 +13,21 @@ before(async () => {
 });
 after(async () => env?.cleanup());
 const trade = (uid, quantity = 10) => ({uid, price: 100, quantity, action: '매수', isPublic: false, likes: 0});
+test('new app transaction can check unused journal ID before creating it', async () => {
+  const db = env.authenticatedContext('new-app').firestore();
+  const ref = doc(db, 'trading_journal/new-app-first');
+  await assertSucceeds(runTransaction(db, async tx => {
+    const gate = doc(db, 'journal_revisions/new-app');
+    const revision = (await tx.get(gate)).data()?.revision ?? 0;
+    const existing = await tx.get(ref);
+    assert.equal(existing.exists(), false);
+    tx.set(ref, trade('new-app'));
+    tx.set(gate, {revision: revision + 1, journalId: ref.id});
+  }));
+  await assertSucceeds(getDoc(ref));
+  await assertFails(getDoc(doc(env.authenticatedContext('other-reader').firestore(), ref.path)));
+  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'trading_journal/missing')));
+});
 test('legacy CRUD works without revision; owner data stays protected', async () => {
   const db = env.authenticatedContext('owner').firestore();
   const ref = doc(db, 'trading_journal/first');

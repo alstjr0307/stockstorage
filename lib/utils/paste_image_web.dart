@@ -7,17 +7,40 @@ import 'package:web/web.dart' as web;
 import 'paste_image.dart';
 
 const _blockTags = {
-  'ADDRESS', 'ARTICLE', 'BLOCKQUOTE', 'DIV', 'FIGCAPTION', 'FIGURE', 'FOOTER',
-  'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'HEADER', 'LI', 'P', 'PRE', 'SECTION',
-  'TR', 'UL', 'OL', 'TABLE',
+  'ADDRESS',
+  'ARTICLE',
+  'BLOCKQUOTE',
+  'DIV',
+  'FIGCAPTION',
+  'FIGURE',
+  'FOOTER',
+  'H1',
+  'H2',
+  'H3',
+  'H4',
+  'H5',
+  'H6',
+  'HEADER',
+  'LI',
+  'P',
+  'PRE',
+  'SECTION',
+  'TR',
+  'UL',
+  'OL',
+  'TABLE',
 };
 
 /// document 의 paste 이벤트에서 사진과 글을 순서대로 뽑아 전달한다.
 /// - 사진 파일(스크린샷 등) → 새로 올릴 사진
 /// - 사진이 들어간 글(HTML) → 글과 사진을 원래 순서대로
 /// - 글만 있을 때는 가로채지 않고 Flutter 기본 붙여넣기에 맡긴다.
-void Function() listenPastedContent(void Function(List<PastedPart>) onPasted) {
+void Function() listenPastedContent(
+  void Function(List<PastedPart>) onPasted, {
+  bool Function()? shouldHandle,
+}) {
   void handle(web.Event event) {
+    if (event.defaultPrevented || !(shouldHandle?.call() ?? true)) return;
     final clipboard = (event as web.ClipboardEvent).clipboardData;
     if (clipboard == null) return;
 
@@ -137,10 +160,7 @@ PastedPart? _imagePart(String src) {
   final mime = url.substring(5, url.indexOf(';'));
   try {
     final bytes = base64Decode(url.substring(comma + 1));
-    final blob = web.Blob(
-      [bytes.toJS].toJS,
-      web.BlobPropertyBag(type: mime),
-    );
+    final blob = web.Blob([bytes.toJS].toJS, web.BlobPropertyBag(type: mime));
     return PastedPart.file(
       XFile(
         web.URL.createObjectURL(blob),

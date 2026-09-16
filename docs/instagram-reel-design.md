@@ -9,7 +9,7 @@ User request: 앞으로 인스타 업로드 되는 종목분석 릴스도 이런
 - Wanted Sans Black/ExtraBold headlines; Medium/SemiBold supporting text; Regular secondary text. Fonts and OFL: `functions/instagram_assets/WantedSans-*`.
 - Palette: ivory #f4f3ec, ink #151813, lime #c6f45b, muted #777c73. Alternate light and dark cuts for rhythm; lime highlights only key text/actions.
 - Large, left-aligned typography, tight tracking (-0.035em), clear weight hierarchy, generous whitespace and thin separators. Avoid unnecessary nested decorative cards.
-- At least 72px side margins. All visible content including captions, sources, logos, progress indicators and download buttons must remain above y=1550. Keep the bottom 370px blank. Check through the shared `assert_safe_bottom` helper before publication.
+- At least 120px side margins and 200px top margin. All visible content including captions, sources, logos, progress indicators and download buttons must remain above y=1550. Keep the bottom 370px blank. Check through the shared `assert_safe_bottom` helper before publication.
 - Use `functions/instagram_reel_style.json` as the deployable source of truth; the local Python helper reads that same file. The current approved promo renderer imports them.
 
 ## Stock-analysis content to retain

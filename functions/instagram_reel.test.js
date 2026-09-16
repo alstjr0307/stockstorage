@@ -22,6 +22,7 @@ test('every Reel cut is native 1080x1920 with the bottom 370 pixels clear',async
   assert.equal(prepared.reelPeers[0].pbr,1.36);assert.equal(prepared.reelHigh52,null);
   const frames=await render(prepared);assert.equal(frames.length,11);
   for(const frame of frames){const m=await sharp(frame).metadata();assert.equal(m.width,1080);assert.equal(m.height,1920);
+    for(const zone of [{left:0,top:0,width:1080,height:200},{left:0,top:0,width:120,height:1920},{left:961,top:0,width:119,height:1920}]){const stats=await sharp(await sharp(frame).extract(zone).png().toBuffer()).stats();assert.ok(stats.channels.every(c=>c.min===c.max));}
     const blank=await sharp(frame).extract({left:0,top:1550,width:1080,height:370}).png().toBuffer();
     const stats=await sharp(blank).stats();assert.ok(stats.channels.every(c=>c.min===c.max));}
 });

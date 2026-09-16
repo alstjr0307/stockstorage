@@ -33,6 +33,31 @@ class _Repository implements JournalV2Repository {
 }
 
 void main() {
+  testWidgets('cancel dismisses the actual journal sheet without saving', (tester) async {
+    final repository = _Repository();
+    final old = trade('cancel', 1, '매수', 100, 10, market: 'KR');
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: Builder(
+      builder: (context) => TextButton(
+        onPressed: () => showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          builder: (_) => JournalFormSheet(
+            uid: old.uid, nickname: old.nickname, existing: old,
+            firestoreService: _Backend(), repository: repository,
+          ),
+        ),
+        child: const Text('open'),
+      ),
+    ))));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('journal-price')), '120');
+    await tester.tap(find.byKey(const ValueKey('journal-cancel')));
+    await tester.pumpAndSettle();
+    expect(find.byType(JournalFormSheet), findsNothing);
+    expect(repository.calls, 0);
+    expect(tester.takeException(), isNull);
+  });
   test('editing past price recomputes realized profit and remaining cost', () {
     final old = trade('a', 1, '매수', 100, 10);
     final next = trade('a', 1, '매수', 120, 10);

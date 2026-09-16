@@ -160,4 +160,4 @@ async function renderCards(draft) {
   return images;
 }
 
-module.exports = {CTA, ACCOUNT, createDraft, createSeries, paginateSection, renderCards};
+module.exports = {CTA, ACCOUNT, createDraft, createSeries, paginateSection, renderCards, textImage};

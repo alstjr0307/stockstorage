@@ -1,12 +1,12 @@
 {
-  "version": 1,
+  "version": 2,
   "approvedReference": "output/app-promo-reel/hd-v8/stockstorage-app-promo-hd-v8.mp4",
   "width": 1080,
   "height": 1920,
   "fps": 30,
   "safeBottomPx": 370,
   "contentBottomExclusive": 1550,
-  "horizontalMargin": 72,
+  "horizontalMargin": 120,
   "fontFamily": "Wanted Sans",
   "trackingEm": -0.035,
   "colors": {
@@ -14,5 +14,6 @@
     "ink": "#151813",
     "lime": "#c6f45b",
     "muted": "#777c73"
-  }
+  },
+  "topMargin": 200
 }
