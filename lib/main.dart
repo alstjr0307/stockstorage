@@ -13,7 +13,9 @@ import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/stock_detail_screen.dart';
 import 'services/analytics_service.dart';
+import 'services/presence_service.dart';
 import 'services/subscription_service.dart';
 import 'web/web_shell.dart';
 import 'firebase_options.dart';
@@ -50,6 +52,7 @@ void main() async {
   );
 
   AnalyticsService.instance.init();
+  PresenceService.instance.start();
   // Store/network requests must not hold up the first frame. Ad initialization
   // waits for this same future before allowing any ad requests.
   unawaited(SubscriptionService.instance.initialize());
@@ -176,7 +179,25 @@ class _RootGate extends StatelessWidget {
           );
         }
         return snapshot.data == true
-            ? const OnboardingScreen()
+            ? OnboardingScreen(
+                onComplete: (stock) {
+                  final navigator = Navigator.of(context);
+                  navigator.pushReplacement(
+                    MaterialPageRoute(builder: (_) => const HomeScreen()),
+                  );
+                  if (stock != null) {
+                    navigator.push(
+                      stockDetailRoute(
+                        stockPickFromSearchResult(stock),
+                        enablePickFeatures: false,
+                        settings: const RouteSettings(
+                          name: '/onboarding/stock',
+                        ),
+                      ),
+                    );
+                  }
+                },
+              )
             : const HomeScreen();
       },
     );

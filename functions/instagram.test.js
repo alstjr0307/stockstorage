@@ -202,7 +202,8 @@ test('ten-card layout includes a separate daily flow page and company imagery',a
   assert.equal(d.cards[2].layout,'score');
   assert.equal(d.cards[2].points.length,2);
   assert.deepEqual(d.cards[8].checklist.points,require('../tools/instagram_human_sample.json').cards[7].points);
-  assert.ok(d.caption.includes('https://tofusoft-software.github.io/Stockstorage/'));
+  assert.ok(d.caption.includes('프로필 링크에서 다운로드하세요.'));
+  assert.doesNotMatch(d.caption, /https?:\/\/|AI 분석은 오류/);
   assert.ok(!d.caption.includes('회사 이미지:'));
   assert.ok(!d.caption.includes('분석 기준:'));
   assert.equal((await renderCards(d)).length,10);

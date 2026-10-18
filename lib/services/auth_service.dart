@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:kakao_flutter_sdk_user/kakao_flutter_sdk_user.dart' as kakao;
 import 'analytics_service.dart';
+import 'presence_service.dart';
 
 class AuthService {
   final _auth = FirebaseAuth.instance;
@@ -156,7 +157,12 @@ class AuthService {
     } catch (_) {
       // 카카오로 로그인하지 않은 경우 무시
     }
-    await _auth.signOut();
+    await PresenceService.instance.leave();
+    try {
+      await _auth.signOut();
+    } finally {
+      PresenceService.instance.resume();
+    }
   }
 
   /// 계정 삭제: Firestore 사용자 데이터 + Firebase Auth 계정 모두 삭제
@@ -197,6 +203,11 @@ class AuthService {
     } catch (_) {}
 
     // 5. Firebase Auth 계정 삭제
-    await user.delete();
+    await PresenceService.instance.leave();
+    try {
+      await user.delete();
+    } finally {
+      PresenceService.instance.resume();
+    }
   }
 }

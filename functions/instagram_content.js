@@ -31,8 +31,7 @@ function createDraft(analysis, now = new Date()) {
   ];
   const caption = [
     '기업 소개부터 재무·차트·수급·주요 재료·시나리오·리스크까지, 앱 AI 분석을 카드로 읽어보세요.',
-    `${CTA}\n주식저장소 앱 다운로드\nhttps://tofusoft-software.github.io/Stockstorage/\n@${ACCOUNT} 프로필 링크에서도 확인할 수 있어요.`,
-    'AI 분석은 오류가 있을 수 있으며 투자 판단의 참고 자료입니다. 차트 기준과 원문 출처는 앱 분석에서 확인할 수 있습니다.',
+    `${CTA}\n주식저장소 앱은 @${ACCOUNT} 프로필 링크에서 다운로드하세요.`,
     '#주식저장소 #AI종목분석 #종목분석 #주식공부',
   ].join('\n\n');
   if ([...caption].length > 2000) throw new Error('CAPTION_TOO_LONG');

@@ -10,6 +10,8 @@ import '../services/firestore_service.dart';
 import '../services/stock_price_service.dart';
 import '../utils/bot_profiles.dart';
 import '../widgets/stock_search_field.dart';
+import '../widgets/admin_presence_tab.dart';
+import '../widgets/admin_admob_tab.dart';
 import 'write_market_analysis_screen.dart';
 
 /// 관리자 패널. [embedded] 는 웹 셸 안에 탭으로 붙일 때 뒤로가기 버튼을 숨긴다.
@@ -29,7 +31,7 @@ class _AdminScreenState extends State<AdminScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 8, vsync: this);
+    _tabController = TabController(length: 10, vsync: this);
   }
 
   @override
@@ -81,13 +83,15 @@ class _AdminScreenState extends State<AdminScreen>
             Tab(text: '시황 분석'),
             Tab(text: '알림 발송'),
             Tab(text: '유저 목록'),
+            Tab(text: '실시간 접속'),
+            Tab(text: '애드몹 수익'),
             Tab(text: '신고 관리'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: const [
+        children: [
           _UploadTab(),
           _ManageTab(),
           _AnnouncementTab(),
@@ -95,6 +99,17 @@ class _AdminScreenState extends State<AdminScreen>
           _MarketAnalysisAdminTab(),
           _PushNotificationTab(),
           _UsersTab(),
+          AdminPresenceTab(
+            onOpenUser: (uid, user) {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      _AdminUserDetailScreen(uid: uid, initialUser: user),
+                ),
+              );
+            },
+          ),
+          const AdminAdmobTab(),
           _ReportsTab(),
         ],
       ),

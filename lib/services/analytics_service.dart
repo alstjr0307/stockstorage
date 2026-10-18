@@ -91,6 +91,9 @@ class AnalyticsService {
   Future<void> logSearch(String query) =>
       _analytics.logSearch(searchTerm: query);
 
+  Future<void> logOnboarding(String event, Map<String, Object> parameters) =>
+      _analytics.logEvent(name: event, parameters: parameters);
+
   /// Growth events are best effort: measurement failures must not block saving.
   Future<void> logStockJourney(
     String event, {

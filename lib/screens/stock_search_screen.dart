@@ -14,6 +14,8 @@ class StockSearchScreen extends StatefulWidget {
     this.subtitle,
     this.onPick,
     this.searchStocks = StockPriceService.searchStocks,
+    this.onBack,
+    this.backLabel,
   });
 
   /// 화면 상단 큰 제목.
@@ -21,6 +23,8 @@ class StockSearchScreen extends StatefulWidget {
 
   /// 제목 아래 보조 안내.
   final String? subtitle;
+  final VoidCallback? onBack;
+  final String? backLabel;
 
   /// 비어있으면 종목 상세로 이동 (기본 동작).
   /// 지정하면 결과를 콜백으로 넘기고 그 외 동작은 호출 측에 위임.
@@ -184,7 +188,8 @@ class _StockSearchScreenState extends State<StockSearchScreen> {
               title: widget.title,
               subtitle: widget.subtitle,
               isDark: isDark,
-              onBack: () => Navigator.maybePop(context),
+              onBack: widget.onBack ?? () => Navigator.maybePop(context),
+              backLabel: widget.backLabel,
             ),
             const SizedBox(height: 8),
             Padding(
@@ -259,12 +264,14 @@ class _Header extends StatelessWidget {
     required this.subtitle,
     required this.isDark,
     required this.onBack,
+    this.backLabel,
   });
 
   final String title;
   final String? subtitle;
   final bool isDark;
   final VoidCallback onBack;
+  final String? backLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -276,13 +283,16 @@ class _Header extends StatelessWidget {
         children: [
           Row(
             children: [
-              IconButton(
-                onPressed: onBack,
-                style: IconButton.styleFrom(
-                  foregroundColor: cs.onSurface.withValues(alpha: 0.8),
+              if (backLabel != null)
+                TextButton(onPressed: onBack, child: Text(backLabel!))
+              else
+                IconButton(
+                  onPressed: onBack,
+                  style: IconButton.styleFrom(
+                    foregroundColor: cs.onSurface.withValues(alpha: 0.8),
+                  ),
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
                 ),
-                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-              ),
               const Spacer(),
             ],
           ),

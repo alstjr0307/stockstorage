@@ -15,6 +15,23 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Private foreground heartbeats. Only the owner can write a session;
+    // server timestamps prevent clients from extending presence into the future.
+    match /presence_sessions/{sessionId} {
+      allow read: if isAdmin();
+      allow create: if isLoggedIn() &&
+        request.resource.data.uid == request.auth.uid && validPresence();
+      allow update: if isLoggedIn() && resource.data.uid == request.auth.uid &&
+        request.resource.data.uid == request.auth.uid && validPresence();
+      allow delete: if isLoggedIn() && resource.data.uid == request.auth.uid;
+
+      function validPresence() {
+        return request.resource.data.keys().hasOnly(['uid', 'platform', 'lastSeen']) &&
+          request.resource.data.platform in ['web', 'android', 'iOS', 'macOS', 'windows', 'linux', 'fuchsia'] &&
+          request.resource.data.lastSeen == request.time;
+      }
+    }
+
     // Admin-only config
     match /_admin/{docId} {
       allow read, write: if isAdmin();

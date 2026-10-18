@@ -90,7 +90,7 @@ class Kospi200MaxPainScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(
-            '아직 계산된 데이터가 없어요.\n장중(09:00~15:45)에 갱신됩니다.',
+            '검증된 옵션 데이터가 아직 없어요.\n데이터 확인 후 다시 표시됩니다.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.5),
@@ -142,10 +142,7 @@ class Kospi200MaxPainScreen extends StatelessWidget {
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 3,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: _accent.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(8),
@@ -178,7 +175,7 @@ class Kospi200MaxPainScreen extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
-                  '현재 ${ref.toStringAsFixed(1)} 대비 ${up ? '↑' : '↓'}${pct.abs().toStringAsFixed(1)}%',
+                  '기준 ${ref.toStringAsFixed(1)} 대비 ${up ? '↑' : '↓'}${pct.abs().toStringAsFixed(1)}%',
                   style: TextStyle(
                     color: deltaColor,
                     fontSize: 13,
@@ -240,7 +237,7 @@ class Kospi200MaxPainScreen extends StatelessWidget {
               _legend('Max Pain', _accent, cs),
               const Spacer(),
               Text(
-                '현재 ${mp.referenceLevel.toStringAsFixed(1)}',
+                '기준 ${mp.referenceLevel.toStringAsFixed(1)}',
                 style: TextStyle(
                   color: cs.onSurface.withValues(alpha: 0.4),
                   fontSize: 11,
@@ -359,10 +356,10 @@ class Kospi200MaxPainScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '옵션 만기일에 옵션 매수자 전체의 손실이 최대가 되는(=매도자 이익이 최대가 되는) '
-            '코스피200 지수 레벨입니다. 만기일에 지수가 이 근처로 수렴하려는 경향이 있다는 '
-            '이론이 있으나 통계적 경향일 뿐이며, 최근월 옵션 미결제약정(OI) 기준으로 '
-            '장중 갱신됩니다. 투자 판단의 참고 지표로만 활용하세요.',
+            '최근월 콜·풋 옵션의 미결제약정(OI)을 기준으로, 만기 시 총 내재가치 지급액이 '
+            '최소가 되는 코스피200 지수 수준입니다. 전체 상장 행사가의 데이터를 '
+            '확인한 경우에만 표시하며 평일 16:10부터 하루 한 번 갱신합니다. '
+            '만기 예상 지수나 상승·하락 목표가를 의미하지 않습니다.',
             style: TextStyle(
               color: cs.onSurface.withValues(alpha: 0.6),
               fontSize: 12.5,

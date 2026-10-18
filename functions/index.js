@@ -28,6 +28,11 @@ const { corsProxy } = require('./cors_proxy');
 
 initializeApp();
 
+exports.getAdminAdmobRevenue = onCall(
+  {region: 'asia-northeast3', timeoutSeconds: 60, maxInstances: 2},
+  require('./admob_revenue').createRevenueHandler(),
+);
+
 // Application scheduler, disabled unless the server-owned config enables it.
 // Default enabled mode writes review drafts; live publication is explicit.
 exports.runCommunityCharacters = onSchedule(
@@ -1455,6 +1460,7 @@ async function getKisApprovalKey(appKey, appSecret) {
 }
 
 const { collectNightFuturesQuotes } = require('./night_futures_stream');
+const { isNightFuturesSession } = require('./night_futures_session');
 
 // 야간선물 시세 1건을 받아 지정 컬렉션에 기록 (매분 호출)
 async function recordNightFuturesTo(db, collection, symbol, q) {
@@ -1487,12 +1493,13 @@ async function recordNightFuturesTo(db, collection, symbol, q) {
 
 // ── 야간선물 가격 1분마다 Firestore에 기록 (KOSPI200 + KOSDAQ150) ────────────
 exports.recordNightFuturesPrice = onSchedule(
-  // 야간세션(18:00~04:59 KST)에만 매분 실행 — 주간 시간대 불필요 호출 제거.
-  { schedule: '* 18-23,0-4 * * *', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 90, maxInstances: 1, concurrency: 1 },
+  // 일요일 호출 제외. 월요일 새벽/토요일 저녁은 아래 세션 검사에서 즉시 종료.
+  // WebSocket 대기가 대부분이므로 수신 시간을 줄이지 않고 CPU 할당을 절감한다.
+  { schedule: '* 18-23,0-4 * * 1-6', timeZone: 'Asia/Seoul', region: 'asia-northeast3',
+    memory: '256MiB', cpu: 'gcf_gen1', timeoutSeconds: 90,
+    minInstances: 0, maxInstances: 1, concurrency: 1, retryCount: 0 },
   async () => {
-    const kst = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
-    const kstHour = kst.getUTCHours();
-    if (kstHour >= 5 && kstHour < 18) return; // 안전장치: 야간세션(18:00~05:00 KST)만 기록
+    if (!isNightFuturesSession()) return;
 
     const config = await getKisConfig();
     if (!config) return;
@@ -4394,166 +4401,46 @@ exports.evaluatePriceAlertsNow = onRequest(
 );
 
 // ── 코스피200 옵션 Max Pain 계산·캐시 ────────────────────────────────────────
-// KIS 국내옵션 전광판(display-board-callput)에서 최근월 콜/풋 미결제약정을 받아
-// Max Pain(만기 수렴가)을 계산해 Firestore kospi200_maxpain/latest 에 캐시한다.
-// KIS는 서버 인증 API라 클라이언트가 직접 못 부르므로 서버 캐시 방식.
-
-/** 해당 연/월(1-12)의 두 번째 목요일 일(day) 반환 — KOSPI200 월물 만기일. */
-function secondThursdayDay(year, month) {
-  const firstDow = new Date(Date.UTC(year, month - 1, 1)).getUTCDay(); // 0=일
-  const firstThu = ((4 - firstDow + 7) % 7) + 1; // 첫 목요일 날짜
-  return firstThu + 7;
-}
-
-/** 현재(KST) 기준 최근월 옵션 만기 'YYYYMM'. 만기일 지났으면 다음달. */
-function frontMonthExpiry(kstNow) {
-  let y = kstNow.getUTCFullYear();
-  let m = kstNow.getUTCMonth() + 1;
-  const d = kstNow.getUTCDate();
-  if (d > secondThursdayDay(y, m)) {
-    m += 1;
-    if (m > 12) { m = 1; y += 1; }
-  }
-  return `${y}${String(m).padStart(2, '0')}`;
-}
-
-/** 네이버 모바일에서 코스피200 현재 지수 조회. 실패 시 null. */
-async function fetchKospi200Spot() {
-  try {
-    const res = await axios.get(
-      'https://m.stock.naver.com/api/index/KPI200/basic',
-      { headers: NAVER_MOBILE_HEADERS, timeout: 8000 }
-    );
-    const v = Number(String(res.data?.closePrice ?? '').replace(/,/g, ''));
-    return isFinite(v) && v > 0 ? v : null;
-  } catch (e) {
-    console.warn('[kospi200Spot] 실패:', e.message);
-    return null;
-  }
-}
-
-/** KIS 옵션 전광판에서 최근월 콜/풋 체인 조회. */
-async function fetchKospi200Chain(expiry, appKey, appSecret, token) {
-  const res = await axios.get(
-    'https://openapi.koreainvestment.com:9443/uapi/domestic-futureoption/v1/quotations/display-board-callput',
-    {
-      params: {
-        FID_COND_MRKT_DIV_CODE: 'O',
-        FID_COND_SCR_DIV_CODE: '20503',
-        FID_MRKT_CLS_CODE: 'CO',
-        FID_MTRT_CNT: expiry,
-        FID_MRKT_CLS_CODE1: 'PO',
-        FID_COND_MRKT_CLS_CODE: '',
-      },
-      headers: {
-        authorization: `Bearer ${token}`,
-        appkey: appKey, appsecret: appSecret,
-        tr_id: 'FHPIF05030100', custtype: 'P',
-      },
-      timeout: 12000,
-    }
-  );
-  if (res.data?.rt_cd !== '0') {
-    throw new Error(`KIS rt_cd=${res.data?.rt_cd} ${res.data?.msg1}`);
-  }
-  return { calls: res.data.output1 || [], puts: res.data.output2 || [] };
-}
+const { collect: collectKospi200MaxPain } = require('./kospi200_maxpain');
 
 async function computeKospi200MaxPainImpl() {
-  const config = await getKisConfig();
-  if (!config) throw new Error('KIS config 없음');
-  const token = await getKisToken(config.appKey, config.appSecret);
-
-  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  const expiry = frontMonthExpiry(kst);
-  const [chain, spot] = await Promise.all([
-    fetchKospi200Chain(expiry, config.appKey, config.appSecret, token),
-    fetchKospi200Spot(),
-  ]);
-  const { calls, puts } = chain;
-  if (calls.length === 0 && puts.length === 0) {
-    throw new Error('옵션 체인이 비어있음');
-  }
-
-  // strike -> [callOI, putOI]
-  const oi = new Map();
-  let atmStrike = null;
-  // 콜 ITM/OTM 경계로 ATM 추정 (전광판이 ATM 라벨을 명시하지 않는 경우 대비).
-  // 콜은 행사가 오름차순으로 ITM → OTM 전환. 전환점 부근이 기초자산(≈ATM).
-  let lastItmCall = null;
-  let firstOtmCall = null;
-  const add = (rows, idx) => {
-    for (const r of rows) {
-      const s = Number(r.acpr);
-      const q = Number(r.hts_otst_stpl_qty) || 0;
-      if (!isFinite(s) || s <= 0) continue;
-      if (!oi.has(s)) oi.set(s, [0, 0]);
-      oi.get(s)[idx] += q;
-      const cls = String(r.atm_cls_name || '').trim().toUpperCase();
-      if (idx === 0) {
-        if (cls === 'ATM') atmStrike = s;
-        if (cls === 'ITM' && (lastItmCall === null || s > lastItmCall)) {
-          lastItmCall = s;
-        }
-        if (cls === 'OTM' && (firstOtmCall === null || s < firstOtmCall)) {
-          firstOtmCall = s;
-        }
-      }
-    }
-  };
-  add(calls, 0);
-  add(puts, 1);
-  // 명시 ATM이 없으면 ITM/OTM 경계 중간값 사용
-  if (atmStrike === null && lastItmCall !== null && firstOtmCall !== null) {
-    atmStrike = (lastItmCall + firstOtmCall) / 2;
-  }
-
-  const strikes = Array.from(oi.keys()).sort((a, b) => a - b);
-  let maxPain = null;
-  let minPain = Infinity;
-  for (const s of strikes) {
-    let pain = 0;
-    for (const k of strikes) {
-      const [c, p] = oi.get(k);
-      if (s > k) pain += c * (s - k);
-      if (k > s) pain += p * (k - s);
-    }
-    if (pain < minPain) { minPain = pain; maxPain = s; }
-  }
-
-  let totalCallOi = 0;
-  let totalPutOi = 0;
-  const strikeArr = strikes.map((s) => {
-    const [c, p] = oi.get(s);
-    totalCallOi += c;
-    totalPutOi += p;
-    return { strike: s, callOi: c, putOi: p };
+  const db = getFirestore();
+  const lock = db.doc('_admin/kospi200MaxPainRun');
+  const owner = require('node:crypto').randomUUID();
+  const acquired = await db.runTransaction(async tx => {
+    const old = (await tx.get(lock)).data();
+    if (old?.leaseUntil?.toMillis() > Date.now()) return false;
+    tx.set(lock, { owner, leaseUntil: new Date(Date.now() + 540000) });
+    return true;
   });
-
-  const doc = {
-    expiry,
-    expiryDate: `${expiry.slice(0, 4)}-${expiry.slice(4, 6)}-${String(
-      secondThursdayDay(Number(expiry.slice(0, 4)), Number(expiry.slice(4, 6)))
-    ).padStart(2, '0')}`,
-    maxPain,
-    atmStrike,
-    currentLevel: spot,
-    totalCallOi,
-    totalPutOi,
-    putCallRatio: totalCallOi > 0 ? totalPutOi / totalCallOi : null,
-    strikes: strikeArr,
-    updatedAt: new Date(),
-  };
-  await getFirestore().collection('kospi200_maxpain').doc('latest').set(doc);
-  return {
-    expiry, maxPain, atmStrike, currentLevel: spot, totalCallOi, totalPutOi,
-    strikeCount: strikeArr.length,
-  };
+  if (!acquired) return { skipped: 'already_running' };
+  try {
+    const config = await getKisConfig();
+    if (!config) throw Error('KIS_CONFIG_MISSING');
+    const token = await getKisToken(config.appKey, config.appSecret);
+    const doc = await collectKospi200MaxPain({ axios, AdmZip, ...config, token });
+    await db.doc('kospi200_maxpain/latest').set(doc);
+    return { expiry: doc.expiry, maxPain: doc.maxPain, currentLevel: doc.currentLevel,
+      totalCallOi: doc.totalCallOi, totalPutOi: doc.totalPutOi,
+      strikeCount: doc.strikes.length, fetchedContracts: doc.fetchedContracts };
+  } catch (e) {
+    // Clear the old value as well: old app versions hide an empty chain.
+    await db.doc('kospi200_maxpain/latest').set({ status: 'unavailable',
+      reason: 'OPTION_CHAIN_NOT_VERIFIED', maxPain: null, strikes: [], updatedAt: new Date() });
+    throw Error('KOSPI200_CHAIN_UNAVAILABLE');
+  } finally {
+    await db.runTransaction(async tx => {
+      const current = (await tx.get(lock)).data();
+      if (current?.owner === owner) tx.delete(lock);
+    });
+  }
 }
 
-// 장중(09:00~15:50 KST 평일) 10분마다 계산.
+// 평일 장 마감 후 16:10 KST에 한 번 계산. 이용자는 저장된 결과를 공유한다.
 exports.computeKospi200MaxPain = onSchedule(
-  { schedule: '*/10 9-15 * * 1-5', timeZone: 'Asia/Seoul', region: 'asia-northeast3', timeoutSeconds: 60 },
+  { schedule: '10 16 * * 1-5', timeZone: 'Asia/Seoul', region: 'asia-northeast3',
+    memory: '256MiB', cpu: 'gcf_gen1', minInstances: 0,
+    timeoutSeconds: 540, maxInstances: 1, concurrency: 1, retryCount: 0 },
   async () => {
     try {
       const r = await computeKospi200MaxPainImpl();
@@ -4566,7 +4453,8 @@ exports.computeKospi200MaxPain = onSchedule(
 
 // 수동 트리거 (검증용).
 exports.computeKospi200MaxPainNow = onRequest(
-  { region: 'asia-northeast3', timeoutSeconds: 60 },
+  { region: 'asia-northeast3', memory: '256MiB', cpu: 'gcf_gen1', minInstances: 0,
+    timeoutSeconds: 540, maxInstances: 1, concurrency: 1 },
   async (req, res) => {
     try {
       const r = await computeKospi200MaxPainImpl();

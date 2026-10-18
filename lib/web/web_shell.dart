@@ -15,6 +15,8 @@ import '../screens/stock_ai_analysis_list_screen.dart';
 import '../services/auth_service.dart';
 import '../widgets/lazy_indexed_stack.dart';
 import '../models/shared_stock_link.dart';
+import '../models/shared_post_link.dart';
+import '../services/shared_post_navigation.dart';
 import '../screens/stock_detail_screen.dart';
 import '../services/analytics_service.dart';
 import 'web_login_sheet.dart';
@@ -44,13 +46,22 @@ class _WebShellState extends State<WebShell> {
     _auth = widget.auth ?? FirebaseAuth.instance;
     _userId = _auth.currentUser?.uid;
     _isAdmin = _adminUid(_auth.currentUser);
+    final sharedPost = SharedPostLink.parse(
+      Uri.https('stockstorage-web.web.app', '/', Uri.base.queryParameters),
+      webEntry: true,
+    );
+    if (sharedPost != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(openSharedPost(context, sharedPost.postId));
+      });
+    }
     // Parse the current app's query also on preview/custom domains. External
     // native links still require the exact public host in SharedStockLink.
     final sharedStock = SharedStockLink.parse(
       Uri.https('stockstorage-web.web.app', '/', Uri.base.queryParameters),
       webEntry: true,
     );
-    if (sharedStock != null) {
+    if (sharedStock != null && sharedPost == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         unawaited(

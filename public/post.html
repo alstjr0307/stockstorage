@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>자유게시판 · 주식저장소</title>
+  <meta name="description" content="주식저장소에서 공유한 자유게시판 글을 확인하세요.">
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0e1a;
+      color: #fff; display: grid; place-items: center; min-height: 100vh; margin: 0; padding: 24px; }
+    main { max-width: 420px; text-align: center; }
+    h1 { font-size: 26px; } p { color: #b9c0ce; line-height: 1.7; }
+    a { display: block; padding: 16px 24px; margin: 12px 0; border-radius: 12px;
+      background: #4ade80; color: #07130b; font-weight: 700; text-decoration: none; }
+    .secondary { background: #202938; color: #fff; }
+    [hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>주식저장소 자유게시판</h1>
+    <p id="message">공유받은 글을 확인해보세요.<br>앱이 없어도 웹에서 읽을 수 있어요.</p>
+    <a id="web-link" hidden>웹에서 글 보기</a>
+    <a id="store-link" class="secondary" href="https://play.google.com/store/apps/details?id=www.stockstorage.stockdiary">앱 다운로드</a>
+    <noscript><p>글을 열려면 브라우저의 JavaScript를 활성화해주세요.</p></noscript>
+  </main>
+  <script>
+    const parts = location.pathname.split('/');
+    let postId = '';
+    try {
+      if (parts.length === 3 && parts[1] === 'post') postId = decodeURIComponent(parts[2]);
+    } catch (_) {}
+    if (postId && postId.length <= 1500 && postId !== '.' && postId !== '..' && !/[/\\\x00-\x1f]/.test(postId)) {
+      const webUrl = new URL('https://stockstorage-web.web.app/');
+      webUrl.searchParams.set('postId', postId);
+      const link = document.getElementById('web-link');
+      link.href = webUrl.href;
+      link.hidden = false;
+    } else {
+      document.getElementById('message').textContent = '올바르지 않은 게시글 링크입니다. 공유한 사람에게 링크를 다시 받아주세요.';
+    }
+    if (/iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+      document.getElementById('store-link').href = 'https://apps.apple.com/kr/app/id1577127218';
+    }
+  </script>
+</body>
+</html>

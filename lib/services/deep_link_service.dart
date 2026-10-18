@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import '../models/market_analysis.dart';
 import '../models/stock_pick.dart';
 import '../models/shared_stock_link.dart';
+import '../models/shared_post_link.dart';
+import 'shared_post_navigation.dart';
 import 'analytics_service.dart';
 import '../screens/market_analysis_detail_screen.dart';
 import '../screens/stock_detail_screen.dart';
@@ -29,6 +31,11 @@ class DeepLinkService {
 
   static void _handleUri(Uri uri) {
     if (uri.host != _host) return;
+    final post = SharedPostLink.parse(uri);
+    if (post != null) {
+      unawaited(_navigateToPost(post.postId));
+      return;
+    }
     final stock = SharedStockLink.parse(uri);
     if (stock != null) {
       openSharedStock(stock);
@@ -72,10 +79,25 @@ class DeepLinkService {
     );
   }
 
+  static Future<void> _navigateToPost(String postId) async {
+    // Cold-start links may arrive before the root Navigator is mounted.
+    for (
+      var attempt = 0;
+      attempt < 100 && navigatorKey.currentState == null;
+      attempt++
+    ) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    final context = navigatorKey.currentState?.overlay?.context;
+    if (context != null && context.mounted) {
+      await openSharedPost(context, postId);
+    }
+  }
+
   static Future<void> _navigateToPick(String pickId) async {
     final pick = await _fs.getStockPickOnce(pickId);
     final ctx = navigatorKey.currentContext;
-    if (ctx == null) return;
+    if (ctx == null || !ctx.mounted) return;
 
     if (pick == null) {
       ScaffoldMessenger.of(
@@ -90,7 +112,7 @@ class DeepLinkService {
   static Future<void> _navigateToAnalysis(String analysisId) async {
     final analysis = await _fs.getMarketAnalysisOnce(analysisId);
     final ctx = navigatorKey.currentContext;
-    if (ctx == null) return;
+    if (ctx == null || !ctx.mounted) return;
 
     if (analysis == null) {
       ScaffoldMessenger.of(

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import '../models/shared_post_link.dart';
 import '../models/comment.dart';
 import '../models/post.dart';
 import '../providers/auth_provider.dart';
@@ -350,6 +352,31 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           ),
           centerTitle: true,
           actions: [
+            Builder(
+              builder: (buttonContext) => IconButton(
+                tooltip: '게시글 공유',
+                icon: Icon(Icons.share_outlined, size: 20, color: cs.onSurface),
+                onPressed: () async {
+                  final box = buttonContext.findRenderObject() as RenderBox?;
+                  try {
+                    await Share.share(
+                      '${widget.post.title}\n\n주식저장소 자유게시판\n${SharedPostLink(widget.post.id).toUri()}',
+                      subject: widget.post.title,
+                      sharePositionOrigin: box == null
+                          ? null
+                          : box.localToGlobal(Offset.zero) & box.size,
+                    );
+                  } catch (_) {
+                    if (!buttonContext.mounted) return;
+                    ScaffoldMessenger.of(buttonContext).showSnackBar(
+                      const SnackBar(
+                        content: Text('공유를 실행하지 못했습니다. 다시 시도해주세요.'),
+                      ),
+                    );
+                  }
+                },
+              ),
+            ),
             if (auth.isLoggedIn && auth.user!.uid == widget.post.uid)
               IconButton(
                 icon: StreamBuilder<bool>(

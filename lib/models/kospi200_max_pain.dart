@@ -28,7 +28,9 @@ class Kospi200MaxPain {
 
   static Kospi200MaxPain? fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final d = doc.data();
-    if (d == null) return null;
+    if (d == null || d['status'] != 'valid' || d['coverage'] != 'complete') {
+      return null;
+    }
     final rawStrikes = (d['strikes'] as List?) ?? const [];
     return Kospi200MaxPain(
       expiry: (d['expiry'] as String?) ?? '',
@@ -52,9 +54,8 @@ class Kospi200MaxPain {
     );
   }
 
-  /// 차트/괴리율 기준선. 옵션 체인과 정합하도록 ATM 행사가를 우선 사용
-  /// (외부 지수는 소스가 달라 어긋날 수 있음). ATM → 현재가 → Max Pain 폴백.
-  double get referenceLevel => atmStrike ?? currentLevel ?? maxPain;
+  /// 동일 KIS 옵션 시세 응답의 실제 코스피200 지수를 기준으로 비교한다.
+  double get referenceLevel => currentLevel ?? atmStrike ?? maxPain;
 
   /// 만기까지 D-day (음수면 당일/경과).
   int get daysToExpiry {

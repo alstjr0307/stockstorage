@@ -124,7 +124,7 @@ class Kospi200MaxPainCard extends StatelessWidget {
                       Padding(
                         padding: const EdgeInsets.only(bottom: 2),
                         child: Text(
-                          '현재 ${ref.toStringAsFixed(1)} · ${up ? '↑' : '↓'}${pct.abs().toStringAsFixed(1)}%',
+                          '기준 ${ref.toStringAsFixed(1)} · ${up ? '↑' : '↓'}${pct.abs().toStringAsFixed(1)}%',
                           style: TextStyle(
                             color: deltaColor,
                             fontSize: 11.5,
