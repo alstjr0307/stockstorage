@@ -1,3 +1,8 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
+import '../services/storage_service.dart';
+import '../utils/local_image.dart';
+import '../widgets/post_image_viewer.dart';
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -137,6 +142,10 @@ class _UploadTabState extends State<_UploadTab> {
   late final TextEditingController _targetPriceController;
   late final TextEditingController _reasonController;
 
+  final List<String> _imageUrls = [];
+  final List<XFile> _imageFiles = [];
+  final Map<XFile, String> _uploadedImages = {};
+
   String _market = 'KS';
   bool _isPremium = false;
   bool _isLoading = false;
@@ -158,6 +167,7 @@ class _UploadTabState extends State<_UploadTab> {
     );
     _reasonController = TextEditingController(text: p?.reason ?? '');
     if (p != null) {
+      _imageUrls.addAll(p.allImageUrls);
       _market = p.market;
       _isPremium = p.isPremium;
       _earningsDate = p.earningsDate;
@@ -213,6 +223,8 @@ class _UploadTabState extends State<_UploadTab> {
             hint: '매수 근거를 입력하세요...',
             maxLines: 5,
           ),
+          const SizedBox(height: 14),
+          _buildImages(),
           const SizedBox(height: 14),
           _buildEarningsDatePicker(),
           const SizedBox(height: 20),
@@ -405,11 +417,94 @@ class _UploadTabState extends State<_UploadTab> {
     );
   }
 
+  Widget _buildImages() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      OutlinedButton.icon(
+        onPressed: _isLoading || _imageUrls.length + _imageFiles.length >= 5
+            ? null
+            : _pickImages,
+        icon: const Icon(Icons.add_photo_alternate_outlined),
+        label: Text('이미지 첨부 (${_imageUrls.length + _imageFiles.length}/5)'),
+      ),
+      const Text('최대 5장까지 첨부할 수 있습니다.'),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final url in _imageUrls)
+            _imagePreview(
+              PostImage(url: url),
+              () => setState(() => _imageUrls.remove(url)),
+            ),
+          for (final file in _imageFiles)
+            _imagePreview(
+              localImage(file.path, fit: BoxFit.cover),
+              () => setState(() => _imageFiles.remove(file)),
+            ),
+        ],
+      ),
+    ],
+  );
+
+  Widget _imagePreview(Widget image, VoidCallback remove) => SizedBox(
+    width: 120,
+    height: 120,
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        image,
+        Positioned(
+          top: 0,
+          right: 0,
+          child: IconButton.filled(
+            tooltip: '이미지 삭제',
+            onPressed: _isLoading ? null : remove,
+            icon: const Icon(Icons.close, size: 18),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Future<void> _pickImages() async {
+    try {
+      final files = await StorageService.pickImages(
+        maxImages: 5 - _imageUrls.length - _imageFiles.length,
+      );
+      if (mounted) {
+        setState(
+          () => _imageFiles.addAll(
+            files.take(5 - _imageUrls.length - _imageFiles.length),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('이미지를 선택하지 못했습니다. 사진 접근 권한을 확인해 주세요.')),
+        );
+      }
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
     try {
+      final urls = [..._imageUrls];
+      for (final file in List<XFile>.of(_imageFiles)) {
+        final url =
+            _uploadedImages[file] ??
+            await StorageService.uploadImage(
+              file: file,
+              folder: 'stock_picks',
+              uid: FirebaseAuth.instance.currentUser!.uid,
+            );
+        _uploadedImages[file] = url;
+        urls.add(url);
+      }
       final pick = StockPick(
         id: widget.editPick?.id ?? '',
         ticker: _tickerController.text.trim().toUpperCase(),
@@ -419,7 +514,13 @@ class _UploadTabState extends State<_UploadTab> {
           _targetPriceController.text.replaceAll(',', ''),
         ),
         reason: _reasonController.text.trim(),
-        category: '',
+        category: widget.editPick?.category ?? '',
+        imageUrl: urls.isEmpty ? null : urls.first,
+        imageUrls: urls,
+        status: widget.editPick?.status ?? 'active',
+        closedPrice: widget.editPick?.closedPrice,
+        closedAt: widget.editPick?.closedAt,
+        currentPrice: widget.editPick?.currentPrice,
         market: _market,
         isPremium: _isPremium,
         createdAt: widget.editPick?.createdAt ?? DateTime.now(),
@@ -461,6 +562,9 @@ class _UploadTabState extends State<_UploadTab> {
           setState(() {
             _isPremium = false;
             _earningsDate = null;
+            _imageUrls.clear();
+            _imageFiles.clear();
+            _uploadedImages.clear();
           });
         }
       }

@@ -1,3 +1,4 @@
+import '../widgets/post_image_viewer.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
@@ -1474,6 +1475,14 @@ class _StockDetailScreenState extends State<StockDetailScreen>
                                               color: cs.onSurface,
                                               fontSize: 14,
                                               height: 1.8,
+                                            ),
+                                          ),
+                                          ...pick.allImageUrls.map(
+                                            (url) => Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 14,
+                                              ),
+                                              child: PostImage(url: url),
                                             ),
                                           ),
                                         ],

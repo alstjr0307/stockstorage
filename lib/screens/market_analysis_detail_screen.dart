@@ -1,3 +1,4 @@
+import '../widgets/post_image_viewer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -459,12 +460,15 @@ class _HeroHeader extends StatelessWidget {
               ),
               child: AspectRatio(
                 aspectRatio: 16 / 9,
-                child: CachedNetworkImage(
-                  imageUrl: coverImage!,
-                  fit: BoxFit.cover,
-                  placeholder: (_, _) =>
-                      _imagePlaceholder(context, height: double.infinity),
-                  errorWidget: (_, _, _) => _imageError(context),
+                child: GestureDetector(
+                  onTap: () => showPostImage(context, coverImage!),
+                  child: CachedNetworkImage(
+                    imageUrl: coverImage!,
+                    fit: BoxFit.cover,
+                    placeholder: (_, _) =>
+                        _imagePlaceholder(context, height: double.infinity),
+                    errorWidget: (_, _, _) => _imageError(context),
+                  ),
                 ),
               ),
             ),
@@ -1082,12 +1086,15 @@ class _InlineImage extends StatelessWidget {
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
-      child: CachedNetworkImage(
-        imageUrl: url,
-        width: double.infinity,
-        fit: BoxFit.cover,
-        placeholder: (_, _) => _imagePlaceholder(context),
-        errorWidget: (_, _, _) => _imageError(context),
+      child: GestureDetector(
+        onTap: () => showPostImage(context, url),
+        child: CachedNetworkImage(
+          imageUrl: url,
+          width: double.infinity,
+          fit: BoxFit.cover,
+          placeholder: (_, _) => _imagePlaceholder(context),
+          errorWidget: (_, _, _) => _imageError(context),
+        ),
       ),
     );
   }

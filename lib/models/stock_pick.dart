@@ -12,6 +12,12 @@ class StockPick {
   final bool isPremium;
   final DateTime createdAt;
   final String? imageUrl;
+  final List<String> imageUrls;
+
+  List<String> get allImageUrls => {
+    ...imageUrls,
+    if (imageUrl != null && imageUrl!.isNotEmpty) imageUrl!,
+  }.toList();
   double? currentPrice;
   final String status; // active, completed
   final double? closedPrice;
@@ -32,6 +38,7 @@ class StockPick {
     required this.isPremium,
     required this.createdAt,
     this.imageUrl,
+    this.imageUrls = const [],
     this.currentPrice,
     this.status = 'active',
     this.closedPrice,
@@ -68,6 +75,7 @@ class StockPick {
       isPremium: data['isPremium'] ?? false,
       createdAt: (data['createdAt'] as Timestamp).toDate(),
       imageUrl: data['imageUrl'],
+      imageUrls: List<String>.from(data['imageUrls'] ?? const []),
       currentPrice: data['currentPrice']?.toDouble(),
       status: data['status'] ?? 'active',
       closedPrice: data['closedPrice']?.toDouble(),
@@ -90,6 +98,7 @@ class StockPick {
       'isPremium': isPremium,
       'createdAt': Timestamp.fromDate(createdAt),
       'imageUrl': imageUrl,
+      'imageUrls': imageUrls,
       'currentPrice': currentPrice,
       'status': status,
       if (closedPrice != null) 'closedPrice': closedPrice,

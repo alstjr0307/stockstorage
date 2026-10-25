@@ -1,3 +1,4 @@
+import '../widgets/post_image_viewer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -2242,7 +2243,10 @@ class _PostCardState extends State<_PostCard> {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final post = widget.post;
-    final imageUrls = _extractImageUrls(post.content);
+    final imageUrls = {
+      ..._extractImageUrls(post.content),
+      ...post.imageUrls,
+    }.toList();
     final textContent = _stripImages(post.content);
 
     return GestureDetector(
@@ -2376,12 +2380,15 @@ class _PostCardState extends State<_PostCard> {
                     borderRadius: BorderRadius.circular(10),
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxHeight: 220),
-                      child: Image.network(
-                        imageUrls.first,
-                        fit: BoxFit.contain,
-                        width: double.infinity,
-                        errorBuilder: (context, e, s) =>
-                            const SizedBox.shrink(),
+                      child: GestureDetector(
+                        onTap: () => showPostImage(context, imageUrls.first),
+                        child: Image.network(
+                          imageUrls.first,
+                          fit: BoxFit.contain,
+                          width: double.infinity,
+                          errorBuilder: (context, e, s) =>
+                              const SizedBox.shrink(),
+                        ),
                       ),
                     ),
                   ),

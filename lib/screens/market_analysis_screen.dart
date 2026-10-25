@@ -1,3 +1,4 @@
+import '../widgets/post_image_viewer.dart';
 import '../utils/share_capture.dart';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -1912,111 +1913,114 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                 if (thumbUrl != null)
                   AspectRatio(
                     aspectRatio: 16 / 9,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Container(
-                          color: cs.onSurface.withValues(alpha: 0.05),
-                          child: CachedNetworkImage(
-                            imageUrl: thumbUrl,
-                            fit: BoxFit.cover,
-                            fadeInDuration: const Duration(milliseconds: 180),
-                            placeholder: (context, url) => Center(
-                              child: SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: accent,
+                    child: GestureDetector(
+                      onTap: () => showPostImage(context, thumbUrl),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Container(
+                            color: cs.onSurface.withValues(alpha: 0.05),
+                            child: CachedNetworkImage(
+                              imageUrl: thumbUrl,
+                              fit: BoxFit.cover,
+                              fadeInDuration: const Duration(milliseconds: 180),
+                              placeholder: (context, url) => Center(
+                                child: SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: accent,
+                                  ),
+                                ),
+                              ),
+                              errorWidget: (context, url, e) => Center(
+                                child: Icon(
+                                  Icons.image_not_supported_outlined,
+                                  size: 28,
+                                  color: cs.onSurface.withValues(alpha: 0.25),
                                 ),
                               ),
                             ),
-                            errorWidget: (context, url, e) => Center(
-                              child: Icon(
-                                Icons.image_not_supported_outlined,
-                                size: 28,
-                                color: cs.onSurface.withValues(alpha: 0.25),
-                              ),
-                            ),
                           ),
-                        ),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: Container(
-                            height: 60,
-                            decoration: const BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.transparent,
-                                  Color(0x66000000),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        if (imageCount > 1)
                           Positioned(
-                            right: 10,
-                            bottom: 10,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
                             child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
+                              height: 60,
+                              decoration: const BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    Color(0x66000000),
+                                  ],
+                                ),
                               ),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.55),
-                                borderRadius: BorderRadius.circular(9999),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.photo_library_rounded,
-                                    size: 12,
-                                    color: Colors.white,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '$imageCount',
-                                    style: const TextStyle(
+                            ),
+                          ),
+                          if (imageCount > 1)
+                            Positioned(
+                              right: 10,
+                              bottom: 10,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.55),
+                                  borderRadius: BorderRadius.circular(9999),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.photo_library_rounded,
+                                      size: 12,
                                       color: Colors.white,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        if (isRecent)
-                          Positioned(
-                            left: 10,
-                            top: 10,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFEF4444),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: const Text(
-                                'NEW',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: 0.5,
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '$imageCount',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
-                          ),
-                      ],
+                          if (isRecent)
+                            Positioned(
+                              left: 10,
+                              top: 10,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFEF4444),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'NEW',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 Padding(
@@ -2041,8 +2045,9 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                                   vertical: 3,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFEF4444)
-                                      .withValues(alpha: 0.12),
+                                  color: const Color(
+                                    0xFFEF4444,
+                                  ).withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: const Text(
@@ -2092,8 +2097,9 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  DateFormat('HH:mm')
-                                      .format(analysis.createdAt),
+                                  DateFormat(
+                                    'HH:mm',
+                                  ).format(analysis.createdAt),
                                   style: TextStyle(
                                     color: cs.onSurface.withValues(alpha: 0.5),
                                     fontSize: 12,
@@ -2111,8 +2117,9 @@ class _MarketAnalysisScreenState extends State<MarketAnalysisScreen> {
                                   Text(
                                     '$imageCount',
                                     style: TextStyle(
-                                      color:
-                                          cs.onSurface.withValues(alpha: 0.45),
+                                      color: cs.onSurface.withValues(
+                                        alpha: 0.45,
+                                      ),
                                       fontSize: 12,
                                       fontWeight: FontWeight.w500,
                                     ),
